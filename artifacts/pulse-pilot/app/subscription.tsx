@@ -90,7 +90,7 @@ export default function SubscriptionScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={[styles.subtitle, { color: c.mutedForeground }]}>
-          Unlock the full power of your personal AI health coach
+          Unlock the full Viva experience
         </Text>
 
         {plans.map((plan) => (

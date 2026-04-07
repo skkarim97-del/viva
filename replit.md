@@ -15,7 +15,7 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
-- **Mobile**: Expo (React Native) - PulsePilot app
+- **Mobile**: Expo (React Native) - Viva app
 - **AI**: OpenAI via Replit AI Integrations (gpt-4o-mini for coaching chat)
 
 ## Key Commands
@@ -26,9 +26,9 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
 
-## PulsePilot App
+## Viva App
 
-Mobile-first AI health, fitness, recovery, and nutrition coaching app built with Expo/React Native. Premium consumer product — feels like a personal trainer with clinical judgment, not a data dashboard.
+Mobile-first AI health and wellness coaching app built with Expo/React Native. Covers physical health, mental well-being, energy, stress, sleep, and daily habits. Premium, calm, intelligent — feels like a trusted daily guide, not a data dashboard.
 
 ### Design Philosophy
 - **Optimize for**: clarity, confidence, simplicity, action
@@ -44,7 +44,7 @@ Mobile-first AI health, fitness, recovery, and nutrition coaching app built with
 - **Dividers**: hairlineWidth only, using background color rather than border color
 
 ### Features
-- **Onboarding**: 4-step flow (Welcome, Goals, Profile, Integrations)
+- **Onboarding**: 9-step premium flow (Welcome, Goals, Profile, Activity Level, Training Time, Energy Baseline, Sleep Habits, Device Integration, Personalization Summary)
 - **Dashboard (Today tab)**: Readiness ring (96px) → Feeling input (5 chips) → Optional Energy/Stress sub-inputs → Adaptive headline + summary → Daily Focus card → Today's Plan card (Recovery & Mind section) → Why bullets → Sleep Intelligence card → Metric tiles → Ask your coach
 - **Wellness Inputs**: Feeling (Great/Good/Tired/Exhausted/Stressed), Energy (High/Medium/Low), Stress (Low/Moderate/High). One-tap chips, all optional. Feeling selection reveals energy/stress sub-inputs. All three influence the daily plan adaptively.
 - **Daily Focus**: Single-line contextual focus label ("Focus on recovery", "Good day to push performance", "Focus on reducing stress", "Focus on consistency") with color-coded dot. Summarizes the day's intent.
@@ -85,10 +85,12 @@ Mobile-first AI health, fitness, recovery, and nutrition coaching app built with
 - Modal: Subscription screen
 - Stack: Onboarding flow, Metric detail drill-down
 
-### Coaching Tone
-- Professional, calm, direct. Short sentences. No hype, slang, jargon, or emojis.
+### Brand: Viva
+- **Tagline**: "Your Health & Wellness Coach"
+- **Tone**: Calm confidence, simplicity, clarity, human. No hype, slang, jargon, or emojis.
+- **Positioning**: Not just a fitness app — a daily health and wellness coach for body, mind, energy, stress, and habits.
+- **Feel**: Premium, calm, modern, human, intelligent, trustworthy.
 - Every sentence either explains meaning or tells the user what to do.
-- Tighter copy: "Train today. Keep it steady." not "Go moderate today. Stay consistent without overdoing it."
-- "Why this plan" bullets sound like expert judgment, not generic reporting.
+- Copy examples: "Train today. Keep it steady." / "Focus on recovery today." / "Your body needs a lighter day."
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.

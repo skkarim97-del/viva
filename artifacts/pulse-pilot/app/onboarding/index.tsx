@@ -239,10 +239,10 @@ export default function OnboardingScreen() {
               <View style={[styles.heroIcon, { backgroundColor: c.primary + "12" }]}>
                 <Feather name="activity" size={44} color={c.primary} />
               </View>
-              <Text style={[styles.welcomeTitle, { color: c.foreground }]}>PulsePilot</Text>
-              <Text style={[styles.welcomeTagline, { color: c.foreground }]}>Your daily health and{"\n"}performance coach</Text>
+              <Text style={[styles.welcomeTitle, { color: c.foreground }]}>Viva</Text>
+              <Text style={[styles.welcomeTagline, { color: c.foreground }]}>Your Health &{"\n"}Wellness Coach</Text>
               <Text style={[styles.welcomeSub, { color: c.mutedForeground }]}>
-                Personalized guidance for fitness, recovery, sleep, and mental well-being.
+                Personalized daily guidance for your body, mind, and habits.
               </Text>
             </View>
           )}

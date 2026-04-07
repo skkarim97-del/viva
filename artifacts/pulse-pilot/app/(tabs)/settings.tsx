@@ -47,7 +47,7 @@ export default function SettingsScreen() {
         </View>
         <View style={styles.profileInfo}>
           <Text style={[styles.profileName, { color: c.foreground }]}>
-            {profile.name || "PulsePilot User"}
+            {profile.name || "Viva User"}
           </Text>
           <View style={[styles.tierBadge, { backgroundColor: c.primary + "10" }]}>
             <Text style={[styles.tierText, { color: c.primary }]}>{tierLabel}</Text>
@@ -160,7 +160,7 @@ export default function SettingsScreen() {
       </Pressable>
 
       <Text style={[styles.disclaimer, { color: c.mutedForeground }]}>
-        PulsePilot is for wellness purposes only and does not provide medical advice.
+        Viva is for wellness purposes only and does not provide medical advice.
       </Text>
 
       <View style={{ height: 100 }} />

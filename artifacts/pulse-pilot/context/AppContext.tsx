@@ -54,9 +54,9 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const PROFILE_KEY = "@pulsepilot_profile";
-const CHAT_KEY = "@pulsepilot_chat";
-const WELLNESS_KEY = "@pulsepilot_wellness";
+const PROFILE_KEY = "@viva_profile";
+const CHAT_KEY = "@viva_chat";
+const WELLNESS_KEY = "@viva_wellness";
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<UserProfile>(defaultProfile);
