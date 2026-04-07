@@ -16,16 +16,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
-import colors from "@/constants/colors";
 import type { ChatMessage } from "@/types";
 
 const quickActions = [
-  { label: "Should I work out today?", key: "workout" },
-  { label: "Why is my recovery low?", key: "hrv" },
-  { label: "What should I eat today?", key: "eat" },
-  { label: "Should I fast today?", key: "fast" },
-  { label: "Am I overtraining?", key: "overtraining" },
-  { label: "Plan my week", key: "week" },
+  "Should I work out today?",
+  "What should I eat today?",
+  "Why is my recovery low?",
+  "Am I overtraining?",
+  "Plan my week",
 ];
 
 const API_BASE = Platform.OS === "web"
@@ -40,60 +38,48 @@ export default function CoachScreen() {
   const [isTyping, setIsTyping] = useState(false);
   const [streamingText, setStreamingText] = useState("");
   const flatListRef = useRef<FlatList>(null);
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const topPad = Platform.OS === "web" ? 60 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   const buildHealthContext = useCallback(() => {
     if (!todayMetrics) return undefined;
-
-    const ctx: any = {};
-
-    ctx.todayMetrics = {
-      hrv: todayMetrics.hrv,
-      restingHeartRate: todayMetrics.restingHeartRate,
-      sleepDuration: todayMetrics.sleepDuration,
-      sleepQuality: todayMetrics.sleepQuality,
-      steps: todayMetrics.steps,
-      recoveryScore: todayMetrics.recoveryScore,
-      weight: todayMetrics.weight,
-      strain: todayMetrics.strain,
-      caloriesBurned: todayMetrics.caloriesBurned,
-      activeCalories: todayMetrics.activeCalories,
+    return {
+      todayMetrics: {
+        hrv: todayMetrics.hrv,
+        restingHeartRate: todayMetrics.restingHeartRate,
+        sleepDuration: todayMetrics.sleepDuration,
+        sleepQuality: todayMetrics.sleepQuality,
+        steps: todayMetrics.steps,
+        recoveryScore: todayMetrics.recoveryScore,
+        weight: todayMetrics.weight,
+        strain: todayMetrics.strain,
+        caloriesBurned: todayMetrics.caloriesBurned,
+        activeCalories: todayMetrics.activeCalories,
+      },
+      profile: {
+        age: profile.age,
+        sex: profile.sex,
+        weight: profile.weight,
+        goalWeight: profile.goalWeight,
+        goals: profile.goals,
+        workoutPreference: profile.workoutPreference,
+        dietaryPreference: profile.dietaryPreference,
+        fastingEnabled: profile.fastingEnabled,
+        injuries: profile.injuries,
+        availableWorkoutTime: profile.availableWorkoutTime,
+        daysAvailableToTrain: profile.daysAvailableToTrain,
+      },
+      recentTrends: trends.length > 0
+        ? {
+            weightTrend: trends.find((t) => t.label === "Weight")?.summary || "",
+            hrvTrend: trends.find((t) => t.label === "HRV")?.summary || "",
+            sleepTrend: trends.find((t) => t.label === "Sleep")?.summary || "",
+            stepsTrend: trends.find((t) => t.label === "Steps")?.summary || "",
+          }
+        : undefined,
+      readinessScore: dailyPlan?.readinessScore,
+      readinessLabel: dailyPlan?.readinessLabel,
     };
-
-    ctx.profile = {
-      age: profile.age,
-      sex: profile.sex,
-      weight: profile.weight,
-      goalWeight: profile.goalWeight,
-      goals: profile.goals,
-      workoutPreference: profile.workoutPreference,
-      dietaryPreference: profile.dietaryPreference,
-      fastingEnabled: profile.fastingEnabled,
-      injuries: profile.injuries,
-      availableWorkoutTime: profile.availableWorkoutTime,
-      daysAvailableToTrain: profile.daysAvailableToTrain,
-    };
-
-    if (trends.length > 0) {
-      const trendMap: Record<string, string> = {};
-      for (const t of trends) {
-        trendMap[t.label] = `${t.trend} — ${t.summary}`;
-      }
-      ctx.recentTrends = {
-        weightTrend: trendMap["Weight"] || "unknown",
-        hrvTrend: trendMap["HRV"] || "unknown",
-        sleepTrend: trendMap["Sleep"] || "unknown",
-        stepsTrend: trendMap["Steps"] || "unknown",
-      };
-    }
-
-    if (dailyPlan) {
-      ctx.readinessScore = dailyPlan.readinessScore;
-      ctx.readinessLabel = dailyPlan.readinessLabel;
-    }
-
-    return ctx;
   }, [todayMetrics, profile, trends, dailyPlan]);
 
   const sendMessage = useCallback(async (text: string) => {
@@ -131,9 +117,7 @@ export default function CoachScreen() {
         }),
       });
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`API error: ${response.status}`);
 
       const reader = response.body?.getReader();
       if (!reader) throw new Error("No stream reader");
@@ -159,45 +143,36 @@ export default function CoachScreen() {
                 setStreamingText(fullText);
               }
               if (data.done) {
-                const botMsg: ChatMessage = {
+                addChatMessage({
                   id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
                   role: "assistant",
                   content: fullText,
                   timestamp: Date.now(),
-                };
-                addChatMessage(botMsg);
+                });
                 setStreamingText("");
                 setIsTyping(false);
                 return;
               }
-              if (data.error) {
-                throw new Error(data.error);
-              }
-            } catch (parseErr) {
-              // skip malformed SSE lines
-            }
+            } catch {}
           }
         }
       }
 
       if (fullText) {
-        const botMsg: ChatMessage = {
+        addChatMessage({
           id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
           role: "assistant",
           content: fullText,
           timestamp: Date.now(),
-        };
-        addChatMessage(botMsg);
+        });
       }
-    } catch (err) {
-      console.error("Coach chat error:", err);
-      const errorMsg: ChatMessage = {
+    } catch {
+      addChatMessage({
         id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
         role: "assistant",
         content: "I was not able to connect right now. Please try again in a moment.",
         timestamp: Date.now(),
-      };
-      addChatMessage(errorMsg);
+      });
     } finally {
       setStreamingText("");
       setIsTyping(false);
@@ -223,26 +198,15 @@ export default function CoachScreen() {
           style={[
             styles.msgBubble,
             isUser
-              ? { backgroundColor: c.primary, borderBottomRightRadius: 4 }
-              : { backgroundColor: c.card, borderColor: c.border, borderWidth: 1, borderBottomLeftRadius: 4 },
+              ? { backgroundColor: c.primary }
+              : { backgroundColor: c.card },
           ]}
         >
-          <Text
-            style={[
-              styles.msgText,
-              { color: isUser ? c.primaryForeground : c.foreground },
-            ]}
-          >
-            {item.content}
-            {isStreaming ? "▍" : ""}
+          <Text style={[styles.msgText, { color: isUser ? c.primaryForeground : c.foreground }]}>
+            {item.content}{isStreaming ? "\u258D" : ""}
           </Text>
           {!isStreaming && (
-            <Text
-              style={[
-                styles.msgTime,
-                { color: isUser ? c.primaryForeground + "88" : c.mutedForeground },
-              ]}
-            >
+            <Text style={[styles.msgTime, { color: isUser ? c.primaryForeground + "77" : c.mutedForeground }]}>
               {formatTime(item.timestamp)}
             </Text>
           )}
@@ -259,37 +223,28 @@ export default function CoachScreen() {
       behavior="padding"
       keyboardVerticalOffset={0}
     >
-      <View style={[styles.header, { paddingTop: topPad + 12 }]}>
+      <View style={[styles.header, { paddingTop: topPad + 16 }]}>
         <Text style={[styles.headerTitle, { color: c.foreground }]}>Coach</Text>
-        <Text style={[styles.headerSubtitle, { color: c.mutedForeground }]}>
-          AI-powered advice based on your data.
-        </Text>
       </View>
 
       {showQuickActions ? (
-        <ScrollView style={styles.quickActionsContainer} contentContainerStyle={styles.quickInner} showsVerticalScrollIndicator={false}>
-          <Text style={[styles.quickPrompt, { color: c.mutedForeground }]}>
-            Ask me anything about your health, training, or nutrition. I have access to all your metrics.
+        <ScrollView style={styles.quickArea} contentContainerStyle={styles.quickInner} showsVerticalScrollIndicator={false}>
+          <Text style={[styles.quickIntro, { color: c.mutedForeground }]}>
+            Ask me anything about your health, training, or nutrition.
           </Text>
-          <View style={styles.quickGrid}>
-            {quickActions.map((action) => (
-              <Pressable
-                key={action.key}
-                onPress={() => sendMessage(action.label)}
-                style={({ pressed }) => [
-                  styles.quickCard,
-                  {
-                    backgroundColor: c.card,
-                    borderColor: c.border,
-                    opacity: pressed ? 0.8 : 1,
-                  },
-                ]}
-              >
-                <Text style={[styles.quickLabel, { color: c.foreground }]}>{action.label}</Text>
-                <Feather name="arrow-right" size={14} color={c.mutedForeground} />
-              </Pressable>
-            ))}
-          </View>
+          {quickActions.map((label) => (
+            <Pressable
+              key={label}
+              onPress={() => sendMessage(label)}
+              style={({ pressed }) => [
+                styles.quickBtn,
+                { backgroundColor: c.card, opacity: pressed ? 0.7 : 1 },
+              ]}
+            >
+              <Text style={[styles.quickLabel, { color: c.foreground }]}>{label}</Text>
+              <Feather name="arrow-right" size={14} color={c.mutedForeground} />
+            </Pressable>
+          ))}
         </ScrollView>
       ) : (
         <FlatList
@@ -302,12 +257,12 @@ export default function CoachScreen() {
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
             isTyping && !streamingText ? (
-              <View style={[styles.msgRow]}>
-                <View style={[styles.typingBubble, { backgroundColor: c.card, borderColor: c.border }]}>
+              <View style={styles.msgRow}>
+                <View style={[styles.typingBubble, { backgroundColor: c.card }]}>
                   <View style={styles.typingDots}>
                     <View style={[styles.dot, { backgroundColor: c.mutedForeground }]} />
-                    <View style={[styles.dot, { backgroundColor: c.mutedForeground, opacity: 0.6 }]} />
-                    <View style={[styles.dot, { backgroundColor: c.mutedForeground, opacity: 0.3 }]} />
+                    <View style={[styles.dot, { backgroundColor: c.mutedForeground, opacity: 0.5 }]} />
+                    <View style={[styles.dot, { backgroundColor: c.mutedForeground, opacity: 0.25 }]} />
                   </View>
                 </View>
               </View>
@@ -316,17 +271,8 @@ export default function CoachScreen() {
         />
       )}
 
-      <View
-        style={[
-          styles.inputContainer,
-          {
-            backgroundColor: c.background,
-            borderTopColor: c.border,
-            paddingBottom: bottomPad + 8,
-          },
-        ]}
-      >
-        <View style={[styles.inputRow, { backgroundColor: c.card, borderColor: c.border }]}>
+      <View style={[styles.inputArea, { backgroundColor: c.background, paddingBottom: bottomPad + 8 }]}>
+        <View style={[styles.inputRow, { backgroundColor: c.card }]}>
           <TextInput
             style={[styles.input, { color: c.foreground }]}
             value={input}
@@ -340,7 +286,7 @@ export default function CoachScreen() {
           <Pressable
             onPress={() => sendMessage(input)}
             disabled={isTyping || !input.trim()}
-            style={[styles.sendButton, { backgroundColor: input.trim() && !isTyping ? c.primary : c.muted }]}
+            style={[styles.sendBtn, { backgroundColor: input.trim() && !isTyping ? c.primary : c.muted }]}
           >
             <Feather name="arrow-up" size={18} color={input.trim() && !isTyping ? c.primaryForeground : c.mutedForeground} />
           </Pressable>
@@ -354,48 +300,38 @@ function formatTime(ts: number): string {
   const d = new Date(ts);
   const h = d.getHours();
   const m = d.getMinutes().toString().padStart(2, "0");
-  const ampm = h >= 12 ? "PM" : "AM";
-  return `${h % 12 || 12}:${m} ${ampm}`;
+  return `${h % 12 || 12}:${m} ${h >= 12 ? "PM" : "AM"}`;
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     paddingBottom: 12,
-    gap: 2,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontFamily: "Inter_700Bold",
+    letterSpacing: -0.5,
   },
-  headerSubtitle: {
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
-  },
-  quickActionsContainer: {
-    flex: 1,
-  },
+  quickArea: { flex: 1 },
   quickInner: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    gap: 12,
+    paddingHorizontal: 24,
+    paddingTop: 8,
+    gap: 10,
   },
-  quickPrompt: {
-    fontSize: 14,
+  quickIntro: {
+    fontSize: 15,
     fontFamily: "Inter_400Regular",
-    lineHeight: 20,
+    lineHeight: 22,
+    marginBottom: 8,
   },
-  quickGrid: {
-    gap: 8,
-  },
-  quickCard: {
+  quickBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     padding: 16,
-    borderRadius: colors.radius,
-    borderWidth: 1,
+    borderRadius: 14,
   },
   quickLabel: {
     fontSize: 15,
@@ -416,10 +352,10 @@ const styles = StyleSheet.create({
     flexDirection: "row-reverse",
   },
   msgBubble: {
-    maxWidth: "82%",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 18,
+    maxWidth: "80%",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 20,
   },
   msgText: {
     fontSize: 15,
@@ -433,23 +369,20 @@ const styles = StyleSheet.create({
     alignSelf: "flex-end",
   },
   typingBubble: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderBottomLeftRadius: 4,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    borderRadius: 20,
   },
   typingDots: {
     flexDirection: "row",
-    gap: 4,
+    gap: 5,
   },
   dot: {
-    width: 8,
-    height: 8,
+    width: 7,
+    height: 7,
     borderRadius: 4,
   },
-  inputContainer: {
-    borderTopWidth: 1,
+  inputArea: {
     paddingTop: 8,
     paddingHorizontal: 16,
   },
@@ -457,20 +390,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     borderRadius: 24,
-    borderWidth: 1,
-    paddingLeft: 16,
-    paddingRight: 4,
+    paddingLeft: 18,
+    paddingRight: 5,
   },
   input: {
     flex: 1,
     fontSize: 15,
     fontFamily: "Inter_400Regular",
-    paddingVertical: 12,
+    paddingVertical: 14,
   },
-  sendButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+  sendBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
   },

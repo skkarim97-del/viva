@@ -15,7 +15,6 @@ import Svg, { Polyline } from "react-native-svg";
 
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
-import colors from "@/constants/colors";
 import type { MetricKey } from "@/types";
 
 const metricKeyMap: Record<string, MetricKey> = {
@@ -30,10 +29,8 @@ const metricKeyMap: Record<string, MetricKey> = {
 export default function TrendsScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
-  const { trends } = useApp();
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
-
-  const trendColors = [c.accent, c.success, c.destructive, c.info, c.primary, c.warning];
+  const { trends, insights } = useApp();
+  const topPad = Platform.OS === "web" ? 60 : insets.top;
 
   const openDetail = (label: string) => {
     const key = metricKeyMap[label];
@@ -47,19 +44,21 @@ export default function TrendsScreen() {
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: c.background }]}
-      contentContainerStyle={[styles.content, { paddingTop: topPad + 16 }]}
+      contentContainerStyle={[styles.content, { paddingTop: topPad + 20 }]}
       showsVerticalScrollIndicator={false}
     >
       <Text style={[styles.title, { color: c.foreground }]}>Trends</Text>
-      <Text style={[styles.subtitle, { color: c.mutedForeground }]}>
-        Tap any metric for a detailed breakdown.
-      </Text>
 
-      {trends.map((trend, i) => {
+      {insights && (
+        <View style={[styles.summaryCard, { backgroundColor: c.card }]}>
+          <Text style={[styles.summaryText, { color: c.mutedForeground }]}>{insights.weekSummary}</Text>
+        </View>
+      )}
+
+      {trends.map((trend) => {
         const latest = trend.data[trend.data.length - 1];
-        const chartColor = trendColors[i % trendColors.length];
-        const width = 280;
-        const height = 56;
+        const width = 260;
+        const height = 48;
         const values = trend.data.map((d) => d.value);
         const min = Math.min(...values);
         const max = Math.max(...values);
@@ -72,28 +71,17 @@ export default function TrendsScreen() {
           })
           .join(" ");
 
-        const isPositive =
-          (trend.label === "Weight" || trend.label === "Resting HR")
-            ? trend.trend === "down"
-            : trend.trend === "up";
-        const trendColor = isPositive ? c.success : trend.trend === "stable" ? c.mutedForeground : c.destructive;
-        const trendArrow = trend.trend === "up" ? "\u2191" : trend.trend === "down" ? "\u2193" : "\u2192";
-
         return (
           <Pressable
             key={trend.label}
             onPress={() => openDetail(trend.label)}
             style={({ pressed }) => [
               styles.card,
-              {
-                backgroundColor: c.card,
-                borderColor: c.border,
-                opacity: pressed ? 0.9 : 1,
-              },
+              { backgroundColor: c.card, opacity: pressed ? 0.7 : 1 },
             ]}
           >
-            <View style={styles.cardHeader}>
-              <View style={styles.cardLeft}>
+            <View style={styles.cardTop}>
+              <View>
                 <Text style={[styles.label, { color: c.mutedForeground }]}>{trend.label}</Text>
                 <View style={styles.valueRow}>
                   <Text style={[styles.value, { color: c.foreground }]}>
@@ -104,20 +92,18 @@ export default function TrendsScreen() {
                       : latest.value.toString()}
                   </Text>
                   <Text style={[styles.unit, { color: c.mutedForeground }]}>{trend.unit}</Text>
-                  <Text style={[styles.trendArrow, { color: trendColor }]}>{trendArrow}</Text>
                 </View>
               </View>
-              <Feather name="chevron-right" size={18} color={c.mutedForeground} />
+              <Feather name="chevron-right" size={16} color={c.mutedForeground} />
             </View>
             <Svg width={width} height={height} style={styles.chart}>
-              <Polyline points={points} fill="none" stroke={chartColor} strokeWidth={2} />
+              <Polyline points={points} fill="none" stroke={c.primary} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
-            <Text style={[styles.summary, { color: c.mutedForeground }]}>{trend.summary}</Text>
           </Pressable>
         );
       })}
 
-      <View style={{ height: 100 }} />
+      <View style={{ height: 110 }} />
     </ScrollView>
   );
 }
@@ -125,60 +111,54 @@ export default function TrendsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: {
-    paddingHorizontal: 20,
-    gap: 14,
+    paddingHorizontal: 24,
+    gap: 12,
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontFamily: "Inter_700Bold",
+    letterSpacing: -0.5,
+    marginBottom: 4,
   },
-  subtitle: {
+  summaryCard: {
+    padding: 16,
+    borderRadius: 14,
+  },
+  summaryText: {
     fontSize: 14,
     fontFamily: "Inter_400Regular",
-    marginBottom: 4,
+    lineHeight: 20,
   },
   card: {
     padding: 16,
-    borderRadius: colors.radius,
-    borderWidth: 1,
+    borderRadius: 16,
     gap: 12,
   },
-  cardHeader: {
+  cardTop: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  cardLeft: {
-    gap: 2,
-  },
   label: {
     fontSize: 13,
     fontFamily: "Inter_500Medium",
+    marginBottom: 2,
   },
   valueRow: {
     flexDirection: "row",
     alignItems: "baseline",
-    gap: 4,
+    gap: 3,
   },
   value: {
-    fontSize: 24,
+    fontSize: 22,
     fontFamily: "Inter_700Bold",
+    letterSpacing: -0.5,
   },
   unit: {
     fontSize: 14,
     fontFamily: "Inter_400Regular",
   },
-  trendArrow: {
-    fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
-    marginLeft: 4,
-  },
   chart: {
     alignSelf: "center",
-  },
-  summary: {
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
-    lineHeight: 18,
   },
 });

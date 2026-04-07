@@ -15,15 +15,14 @@ import Svg, { Polyline } from "react-native-svg";
 import { useApp } from "@/context/AppContext";
 import { getMetricDetail } from "@/data/mockData";
 import { useColors } from "@/hooks/useColors";
-import colors from "@/constants/colors";
 import type { MetricKey } from "@/types";
 
 export default function MetricDetailScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const { key } = useLocalSearchParams<{ key: MetricKey }>();
-  const { todayMetrics, metrics } = useApp();
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const { todayMetrics, metrics, insights } = useApp();
+  const topPad = Platform.OS === "web" ? 60 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   if (!key || !todayMetrics || metrics.length === 0) {
@@ -35,8 +34,8 @@ export default function MetricDetailScreen() {
   }
 
   const detail = getMetricDetail(key as MetricKey, todayMetrics, metrics);
-  const chartWidth = 320;
-  const chartHeight = 120;
+  const chartWidth = 300;
+  const chartHeight = 100;
 
   const values = detail.trend.data.map((d) => d.value);
   const min = Math.min(...values);
@@ -57,60 +56,78 @@ export default function MetricDetailScreen() {
       : detail.trend.trend === "up";
   const trendColor = isPositive ? c.success : detail.trend.trend === "stable" ? c.mutedForeground : c.destructive;
 
+  const insightDetail = getInsightForMetric(key as MetricKey, insights);
+
   return (
     <View style={[styles.container, { backgroundColor: c.background }]}>
       <View style={[styles.header, { paddingTop: topPad + 12 }]}>
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <Feather name="arrow-left" size={22} color={c.foreground} />
+        <Pressable onPress={() => router.back()} style={styles.backBtn}>
+          <Feather name="chevron-left" size={24} color={c.foreground} />
         </Pressable>
         <Text style={[styles.headerTitle, { color: c.foreground }]}>{detail.title}</Text>
-        <View style={{ width: 22 }} />
+        <View style={{ width: 24 }} />
       </View>
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: bottomPad + 24 }]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.valueCard, { backgroundColor: c.card, borderColor: c.border }]}>
-          <View style={styles.valueRow}>
-            <Text style={[styles.currentValue, { color: c.foreground }]}>{detail.currentValue}</Text>
-            <Text style={[styles.currentUnit, { color: c.mutedForeground }]}>{detail.unit}</Text>
-            <Text style={[styles.trendArrow, { color: trendColor }]}>{trendArrow}</Text>
+        <View style={styles.heroSection}>
+          <View style={styles.heroValueRow}>
+            <Text style={[styles.heroValue, { color: c.foreground }]}>{detail.currentValue}</Text>
+            <Text style={[styles.heroUnit, { color: c.mutedForeground }]}>{detail.unit}</Text>
+            <Text style={[styles.heroTrend, { color: trendColor }]}>{trendArrow}</Text>
           </View>
-          <Text style={[styles.headlineText, { color: c.foreground }]}>{detail.headline}</Text>
+          <Text style={[styles.heroHeadline, { color: c.foreground }]}>{detail.headline}</Text>
         </View>
 
-        <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
-          <Text style={[styles.cardTitle, { color: c.foreground }]}>Current Status</Text>
-          <Text style={[styles.cardBody, { color: c.mutedForeground }]}>{detail.explanation}</Text>
+        <View style={[styles.section, { backgroundColor: c.card }]}>
+          <Text style={[styles.sectionBody, { color: c.mutedForeground }]}>{detail.explanation}</Text>
         </View>
 
-        <View style={[styles.chartCard, { backgroundColor: c.card, borderColor: c.border }]}>
-          <Text style={[styles.cardTitle, { color: c.foreground }]}>30-Day Trend</Text>
+        <View style={[styles.section, { backgroundColor: c.card }]}>
+          <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>30-day trend</Text>
           <Svg width={chartWidth} height={chartHeight} style={styles.chart}>
-            <Polyline points={points} fill="none" stroke={c.primary} strokeWidth={2.5} />
+            <Polyline points={points} fill="none" stroke={c.primary} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
           <View style={styles.chartLabels}>
-            <Text style={[styles.chartLabel, { color: c.mutedForeground }]}>30 days ago</Text>
+            <Text style={[styles.chartLabel, { color: c.mutedForeground }]}>30d ago</Text>
             <Text style={[styles.chartLabel, { color: c.mutedForeground }]}>Today</Text>
           </View>
         </View>
 
-        <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
-          <Text style={[styles.cardTitle, { color: c.foreground }]}>What This Means</Text>
-          <Text style={[styles.cardBody, { color: c.mutedForeground }]}>{detail.whatItMeans}</Text>
+        <View style={[styles.section, { backgroundColor: c.card }]}>
+          <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>What this means</Text>
+          <Text style={[styles.sectionBody, { color: c.foreground }]}>{detail.whatItMeans}</Text>
         </View>
 
-        <View style={[styles.recommendCard, { backgroundColor: c.primary + "08", borderColor: c.primary + "25" }]}>
-          <View style={styles.recommendHeader}>
-            <Feather name="check-circle" size={18} color={c.primary} />
-            <Text style={[styles.cardTitle, { color: c.foreground }]}>Recommendation</Text>
+        {insightDetail && (
+          <View style={[styles.section, { backgroundColor: c.card }]}>
+            <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>Deep analysis</Text>
+            <Text style={[styles.sectionBody, { color: c.foreground }]}>{insightDetail}</Text>
           </View>
-          <Text style={[styles.cardBody, { color: c.foreground }]}>{detail.recommendation}</Text>
+        )}
+
+        <View style={[styles.recommendSection, { backgroundColor: c.primary + "08" }]}>
+          <Feather name="check-circle" size={16} color={c.primary} />
+          <Text style={[styles.recommendText, { color: c.foreground }]}>{detail.recommendation}</Text>
         </View>
       </ScrollView>
     </View>
   );
+}
+
+function getInsightForMetric(key: MetricKey, insights: any): string | null {
+  if (!insights) return null;
+  switch (key) {
+    case "sleep": return insights.sleepDebt.detail;
+    case "hrv": return insights.hrvBaseline.detail;
+    case "recovery": return insights.recoveryTrend.detail;
+    case "steps": return insights.calorieBalance.detail;
+    case "weight": return insights.weightProjection.detail;
+    case "restingHR": return insights.trainingLoad.detail;
+    default: return null;
+  }
 }
 
 const styles = StyleSheet.create({
@@ -121,66 +138,60 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingBottom: 12,
+    paddingBottom: 8,
   },
-  backButton: { padding: 4 },
+  backBtn: { padding: 4 },
   headerTitle: {
-    fontSize: 18,
-    fontFamily: "Inter_700Bold",
+    fontSize: 17,
+    fontFamily: "Inter_600SemiBold",
   },
   content: {
-    paddingHorizontal: 20,
-    gap: 14,
+    paddingHorizontal: 24,
+    gap: 12,
   },
-  valueCard: {
-    padding: 20,
-    borderRadius: colors.radius,
-    borderWidth: 1,
+  heroSection: {
+    paddingVertical: 12,
     gap: 8,
   },
-  valueRow: {
+  heroValueRow: {
     flexDirection: "row",
     alignItems: "baseline",
     gap: 6,
   },
-  currentValue: {
-    fontSize: 40,
+  heroValue: {
+    fontSize: 48,
     fontFamily: "Inter_700Bold",
+    letterSpacing: -1.5,
   },
-  currentUnit: {
-    fontSize: 18,
+  heroUnit: {
+    fontSize: 20,
     fontFamily: "Inter_400Regular",
   },
-  trendArrow: {
-    fontSize: 22,
+  heroTrend: {
+    fontSize: 24,
     fontFamily: "Inter_600SemiBold",
     marginLeft: 4,
   },
-  headlineText: {
-    fontSize: 16,
+  heroHeadline: {
+    fontSize: 17,
     fontFamily: "Inter_500Medium",
-    lineHeight: 22,
+    lineHeight: 24,
   },
-  card: {
-    padding: 16,
-    borderRadius: colors.radius,
-    borderWidth: 1,
-    gap: 8,
+  section: {
+    padding: 18,
+    borderRadius: 16,
+    gap: 10,
   },
-  cardTitle: {
+  sectionLabel: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  sectionBody: {
     fontSize: 15,
-    fontFamily: "Inter_700Bold",
-  },
-  cardBody: {
-    fontSize: 14,
     fontFamily: "Inter_400Regular",
-    lineHeight: 21,
-  },
-  chartCard: {
-    padding: 16,
-    borderRadius: colors.radius,
-    borderWidth: 1,
-    gap: 12,
+    lineHeight: 22,
   },
   chart: {
     alignSelf: "center",
@@ -193,15 +204,17 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: "Inter_400Regular",
   },
-  recommendCard: {
-    padding: 16,
-    borderRadius: colors.radius,
-    borderWidth: 1,
-    gap: 8,
-  },
-  recommendHeader: {
+  recommendSection: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+    alignItems: "flex-start",
+    padding: 18,
+    borderRadius: 16,
+    gap: 12,
+  },
+  recommendText: {
+    fontSize: 15,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 22,
+    flex: 1,
   },
 });
