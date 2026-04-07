@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ReadinessRing } from "@/components/ReadinessRing";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
-import type { MetricKey, FeelingType, EnergyLevel, StressLevel, ChatMessage } from "@/types";
+import type { MetricKey, FeelingType, EnergyLevel, StressLevel, ChatMessage, DailyState } from "@/types";
 
 const FEELINGS: { key: NonNullable<FeelingType>; label: string }[] = [
   { key: "great", label: "Great" },
@@ -38,6 +38,13 @@ const STRESS_LEVELS: { key: NonNullable<StressLevel>; label: string }[] = [
   { key: "moderate", label: "Moderate" },
   { key: "high", label: "High" },
 ];
+
+const STATE_CONFIG: Record<DailyState, { label: string; icon: keyof typeof Feather.glyphMap }> = {
+  recover: { label: "Recover", icon: "battery-charging" },
+  maintain: { label: "Maintain", icon: "minus" },
+  build: { label: "Build", icon: "trending-up" },
+  push: { label: "Push", icon: "zap" },
+};
 
 const API_BASE = Platform.OS === "web"
   ? "/api"
@@ -143,6 +150,7 @@ export default function DashboardScreen() {
               goals: profile.goals,
             },
             readinessScore: dailyPlan?.readinessScore,
+            dailyState: dailyPlan?.dailyState,
             userFeeling: feeling,
             userEnergy: energy,
             userStress: stress,
@@ -222,13 +230,18 @@ export default function DashboardScreen() {
     { key: "restingHR", label: "Heart Rate", value: `${todayMetrics.restingHeartRate}`, unit: "bpm" },
   ];
 
-  const focusColor = dailyPlan.dailyFocus.includes("push") || dailyPlan.dailyFocus.includes("performance")
-    ? c.success
-    : dailyPlan.dailyFocus.includes("recovery")
-    ? c.info
-    : dailyPlan.dailyFocus.includes("stress")
-    ? c.warning
-    : c.primary;
+  const stateConfig = STATE_CONFIG[dailyPlan.dailyState];
+  const stateColor = dailyPlan.dailyState === "push" ? c.success
+    : dailyPlan.dailyState === "build" ? c.primary
+    : dailyPlan.dailyState === "recover" ? c.info
+    : c.mutedForeground;
+
+  const DAY_ITEMS: { key: keyof typeof dailyPlan.yourDay; label: string; icon: keyof typeof Feather.glyphMap; color: string }[] = [
+    { key: "move", label: "Move", icon: "activity", color: c.primary },
+    { key: "fuel", label: "Fuel", icon: "coffee", color: c.warning },
+    { key: "recover", label: "Recover", icon: "battery-charging", color: c.info },
+    { key: "mind", label: "Mind", icon: "sun", color: c.accent },
+  ];
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={0}>
@@ -240,6 +253,10 @@ export default function DashboardScreen() {
       >
         <View style={styles.statusSection}>
           <ReadinessRing score={dailyPlan.readinessScore} label={dailyPlan.readinessLabel} size={96} />
+          <View style={[styles.stateBadge, { backgroundColor: stateColor + "14" }]}>
+            <Feather name={stateConfig.icon} size={13} color={stateColor} />
+            <Text style={[styles.stateLabel, { color: stateColor }]}>{stateConfig.label}</Text>
+          </View>
         </View>
 
         <View style={styles.feelingSection}>
@@ -329,18 +346,25 @@ export default function DashboardScreen() {
           <Text style={[styles.summary, { color: c.mutedForeground }]}>{dailyPlan.summary}</Text>
         </View>
 
-        <View style={[styles.focusCard, { backgroundColor: focusColor + "10" }]}>
-          <View style={[styles.focusDot, { backgroundColor: focusColor }]} />
+        <View style={[styles.focusPill, { backgroundColor: stateColor + "10" }]}>
+          <View style={[styles.focusDot, { backgroundColor: stateColor }]} />
           <Text style={[styles.focusText, { color: c.foreground }]}>{dailyPlan.dailyFocus}</Text>
         </View>
 
-        <View style={[styles.planCard, { backgroundColor: c.card }]}>
-          <Text style={[styles.planTitle, { color: c.foreground }]}>Today's Plan</Text>
-          <View style={[styles.planDivider, { backgroundColor: c.border }]} />
-          <PlanRow icon="target" iconColor={c.primary} label="Workout" value={dailyPlan.todaysPlan.workout} foreground={c.foreground} muted={c.mutedForeground} />
-          <PlanRow icon="navigation" iconColor={c.accent} label="Movement" value={dailyPlan.todaysPlan.movement} foreground={c.foreground} muted={c.mutedForeground} />
-          <PlanRow icon="coffee" iconColor={c.warning} label="Nutrition" value={dailyPlan.todaysPlan.nutrition} foreground={c.foreground} muted={c.mutedForeground} />
-          <PlanRow icon="moon" iconColor={c.info} label="Recovery & Mind" value={dailyPlan.todaysPlan.recoveryMind} foreground={c.foreground} muted={c.mutedForeground} />
+        <View style={[styles.dayCard, { backgroundColor: c.card }]}>
+          <Text style={[styles.dayTitle, { color: c.foreground }]}>Your Day</Text>
+          <View style={[styles.dayDivider, { backgroundColor: c.border }]} />
+          {DAY_ITEMS.map((item) => (
+            <DayRow
+              key={item.key}
+              icon={item.icon}
+              iconColor={item.color}
+              label={item.label}
+              value={dailyPlan.yourDay[item.key]}
+              foreground={c.foreground}
+              muted={c.mutedForeground}
+            />
+          ))}
         </View>
 
         <View style={styles.whySection}>
@@ -352,17 +376,6 @@ export default function DashboardScreen() {
             </View>
           ))}
         </View>
-
-        {insights?.sleepIntelligence && (
-          <View style={[styles.sleepCard, { backgroundColor: c.card }]}>
-            <View style={styles.sleepHeader}>
-              <Feather name="moon" size={14} color={c.info} />
-              <Text style={[styles.sleepTitle, { color: c.foreground }]}>Sleep Intelligence</Text>
-            </View>
-            <Text style={[styles.sleepInsight, { color: c.foreground }]}>{insights.sleepIntelligence.insight}</Text>
-            <Text style={[styles.sleepRec, { color: c.mutedForeground }]}>{insights.sleepIntelligence.recommendation}</Text>
-          </View>
-        )}
 
         <View style={styles.metricsRow}>
           {metricItems.map((item) => (
@@ -395,7 +408,7 @@ export default function DashboardScreen() {
           </View>
           <View style={styles.askContent}>
             <Text style={[styles.askTitle, { color: c.foreground }]}>Ask your coach</Text>
-            <Text style={[styles.askSub, { color: c.mutedForeground }]}>Follow up on your plan, sleep, stress, or nutrition</Text>
+            <Text style={[styles.askSub, { color: c.mutedForeground }]}>Follow up on your day, sleep, stress, or nutrition</Text>
           </View>
           <Feather name={showAsk ? "chevron-up" : "chevron-down"} size={16} color={c.mutedForeground + "60"} />
         </Pressable>
@@ -443,7 +456,7 @@ export default function DashboardScreen() {
                 style={[styles.askInputField, { color: c.foreground }]}
                 value={askInput}
                 onChangeText={setAskInput}
-                placeholder="Ask about today's plan..."
+                placeholder="Ask about your day..."
                 placeholderTextColor={c.mutedForeground + "80"}
                 onSubmitEditing={() => sendAskMessage(askInput)}
                 returnKeyType="send"
@@ -478,7 +491,7 @@ export default function DashboardScreen() {
   );
 }
 
-function PlanRow({ icon, iconColor, label, value, foreground, muted }: {
+function DayRow({ icon, iconColor, label, value, foreground, muted }: {
   icon: keyof typeof Feather.glyphMap;
   iconColor: string;
   label: string;
@@ -487,13 +500,13 @@ function PlanRow({ icon, iconColor, label, value, foreground, muted }: {
   muted: string;
 }) {
   return (
-    <View style={styles.planRow}>
-      <View style={[styles.planIconWrap, { backgroundColor: iconColor + "12" }]}>
+    <View style={styles.dayRow}>
+      <View style={[styles.dayIconWrap, { backgroundColor: iconColor + "12" }]}>
         <Feather name={icon} size={15} color={iconColor} />
       </View>
-      <View style={styles.planRowContent}>
-        <Text style={[styles.planRowLabel, { color: muted }]}>{label}</Text>
-        <Text style={[styles.planRowValue, { color: foreground }]}>{value}</Text>
+      <View style={styles.dayRowContent}>
+        <Text style={[styles.dayRowLabel, { color: muted }]}>{label}</Text>
+        <Text style={[styles.dayRowValue, { color: foreground }]}>{value}</Text>
       </View>
     </View>
   );
@@ -511,6 +524,20 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 4,
     marginBottom: 16,
+    gap: 10,
+  },
+  stateBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  stateLabel: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 0.2,
   },
 
   feelingSection: {
@@ -589,7 +616,7 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
 
-  focusCard: {
+  focusPill: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
@@ -610,45 +637,45 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
   },
 
-  planCard: {
+  dayCard: {
     borderRadius: 20,
     padding: 20,
     gap: 16,
     marginBottom: 24,
   },
-  planTitle: {
+  dayTitle: {
     fontSize: 15,
     fontFamily: "Inter_600SemiBold",
     letterSpacing: -0.1,
   },
-  planDivider: {
+  dayDivider: {
     height: StyleSheet.hairlineWidth,
     marginHorizontal: -4,
   },
-  planRow: {
+  dayRow: {
     flexDirection: "row",
     gap: 12,
     alignItems: "flex-start",
   },
-  planIconWrap: {
+  dayIconWrap: {
     width: 32,
     height: 32,
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
-  planRowContent: {
+  dayRowContent: {
     flex: 1,
     gap: 2,
     paddingTop: 2,
   },
-  planRowLabel: {
+  dayRowLabel: {
     fontSize: 11,
     fontFamily: "Inter_600SemiBold",
     textTransform: "uppercase",
     letterSpacing: 0.6,
   },
-  planRowValue: {
+  dayRowValue: {
     fontSize: 14,
     fontFamily: "Inter_400Regular",
     lineHeight: 20,
@@ -683,33 +710,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     flex: 1,
     opacity: 0.75,
-  },
-
-  sleepCard: {
-    borderRadius: 16,
-    padding: 16,
-    gap: 8,
-    marginBottom: 20,
-  },
-  sleepHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  sleepTitle: {
-    fontSize: 13,
-    fontFamily: "Inter_600SemiBold",
-  },
-  sleepInsight: {
-    fontSize: 14,
-    fontFamily: "Inter_400Regular",
-    lineHeight: 20,
-  },
-  sleepRec: {
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
-    lineHeight: 19,
-    opacity: 0.7,
   },
 
   metricsRow: {

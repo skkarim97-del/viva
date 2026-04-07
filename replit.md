@@ -45,12 +45,11 @@ Mobile-first AI health and wellness coaching app built with Expo/React Native. C
 
 ### Features
 - **Onboarding**: 9-step premium flow (Welcome, Goals, Profile, Activity Level, Training Time, Energy Baseline, Sleep Habits, Device Integration, Personalization Summary)
-- **Dashboard (Today tab)**: Readiness ring (96px) → Feeling input (5 chips) → Optional Energy/Stress sub-inputs → Adaptive headline + summary → Daily Focus card → Today's Plan card (Recovery & Mind section) → Why bullets → Sleep Intelligence card → Metric tiles → Ask your coach
-- **Wellness Inputs**: Feeling (Great/Good/Tired/Exhausted/Stressed), Energy (High/Medium/Low), Stress (Low/Moderate/High). One-tap chips, all optional. Feeling selection reveals energy/stress sub-inputs. All three influence the daily plan adaptively.
-- **Daily Focus**: Single-line contextual focus label ("Focus on recovery", "Good day to push performance", "Focus on reducing stress", "Focus on consistency") with color-coded dot. Summarizes the day's intent.
-- **Adaptive Logic**: If user-reported feeling/energy/stress conflicts with data, the plan prioritizes user subjective state. Updates headline, summary, plan, why, and focus instantly on input change.
-- **Recovery & Mind**: Renamed from "Recovery". Now includes sleep guidance, mental recovery actions, stress reduction suggestions (breathing exercises, meditation, wind-down routines, reduced stimulation).
-- **Sleep Intelligence**: Computed from 14-day wearable data. Analyzes avg duration, bedtime consistency, sleep quality trends. Surfaces plain-English insights and actionable recommendations on the Today screen.
+- **Dashboard (Today tab)**: Readiness ring (96px) → Daily State badge (Recover/Maintain/Build/Push) → Feeling input (5 chips) → Energy/Stress sub-inputs → Headline + summary → Daily Focus pill → Your Day card (Move/Fuel/Recover/Mind) → Why bullets → Metric tiles → Ask your coach
+- **Daily State**: One of Recover, Maintain, Build, or Push. Summarizes the user's overall condition at a glance. Drives the entire plan.
+- **Your Day**: Unified plan card replacing siloed categories. Four integrated sections: Move (activity), Fuel (nutrition as simple guidance), Recover (sleep + recovery as behavior), Mind (mental/emotional guidance). Each item is short and actionable.
+- **Wellness Inputs**: Feeling (Great/Good/Tired/Exhausted/Stressed), Energy (High/Medium/Low), Stress (Low/Moderate/High). One-tap chips, all optional. All three influence the daily state and plan adaptively.
+- **Adaptive Logic**: All inputs (wearable data + feeling + energy + stress) combine into one unified output. User subjective state overrides data when in conflict. Updates instantly on change.
 - **AI Coach (contextual)**: Integrated into Today screen as expandable "Ask your coach" card. Inline chat with streaming SSE responses, suggested questions, and full health context including energy/stress/sleep intelligence.
 - **Weekly Plan**: Summary card at top, day cards with Today badge, adaptive tags (build day/recovery day/steady effort), adjustment notes
 - **Trends**: 30-day trend charts with plain-English takeaway per card, press-to-drill-down

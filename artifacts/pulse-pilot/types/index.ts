@@ -69,18 +69,21 @@ export interface WorkoutEntry {
   notes?: string;
 }
 
+export type DailyState = "recover" | "maintain" | "build" | "push";
+
 export interface DailyPlan {
   date: string;
   readinessScore: number;
   readinessLabel: "Low" | "Moderate" | "Good" | "Excellent";
+  dailyState: DailyState;
   headline: string;
   summary: string;
   dailyFocus: string;
-  todaysPlan: {
-    workout: string;
-    movement: string;
-    nutrition: string;
-    recoveryMind: string;
+  yourDay: {
+    move: string;
+    fuel: string;
+    recover: string;
+    mind: string;
   };
   whyThisPlan: string[];
   optional?: string;
