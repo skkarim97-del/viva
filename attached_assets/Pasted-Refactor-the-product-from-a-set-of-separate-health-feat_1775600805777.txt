@@ -1,0 +1,143 @@
+Refactor the product from a set of separate health features into a unified daily health system.
+
+## Core Product Concept
+
+Viva is a daily health and wellness coach that produces ONE unified output:
+
+* the user’s daily state
+* their daily focus
+* a single integrated plan
+
+Do NOT present fitness, sleep, nutrition, and mental health as separate systems.
+
+All inputs should be combined into one clear daily recommendation.
+
+---
+
+## Replace “Today’s Plan” with “Your Day”
+
+Remove siloed categories like:
+
+* Workout
+* Nutrition
+* Recovery
+* Sleep
+
+Replace with:
+
+Your Day:
+
+* Move
+* Fuel
+* Recover
+* Mind
+
+Each item should:
+
+* be short
+* be actionable
+* reflect the user’s overall condition
+
+---
+
+## Add Daily State
+
+At the top of the screen, show one of:
+
+* Recover
+* Maintain
+* Build
+* Push
+
+This should summarize the user’s current condition.
+
+---
+
+## Add Daily Focus
+
+Add one short line describing the intention of the day.
+
+Examples:
+
+* Focus on recovery
+* Stay consistent today
+* Good day to build
+* You can push today
+
+---
+
+## Integrate all systems
+
+The system should combine:
+
+* wearable data
+* sleep data
+* recovery data
+* activity
+* nutrition goals
+* user-reported feeling
+* stress level
+
+Into one unified output.
+
+---
+
+## Mental health integration
+
+Do not create a separate mental health section.
+
+Instead, integrate mental and emotional guidance into the “Mind” section.
+
+Examples:
+
+* take a short walk outside
+* reduce stimulation tonight
+* do a short breathing exercise
+* keep stress low today
+
+---
+
+## Sleep integration
+
+Do not present sleep as raw data on the main screen.
+
+Translate it into behavior:
+
+* go to bed earlier
+* keep bedtime consistent
+* prioritize rest tonight
+
+---
+
+## Nutrition integration
+
+Do not present complex macros.
+
+Translate into simple guidance:
+
+* eat balanced meals
+* prioritize protein
+* stay hydrated
+
+---
+
+## UX requirement
+
+The Today screen must feel like:
+
+* one cohesive story
+* one clear plan
+* one decision system
+
+Not multiple separate systems.
+
+---
+
+## Final goal
+
+When the user opens the app, they should feel:
+
+“I understand my day in 5 seconds.”
+
+Not:
+“I need to interpret multiple metrics.”

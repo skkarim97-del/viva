@@ -19,6 +19,12 @@ export interface UserProfile {
   fastingEnabled: boolean;
   fastingProtocol?: string;
   units: "imperial" | "metric";
+  activityLevel?: "inactive" | "light" | "moderate" | "very_active";
+  trainingTime?: "under_30" | "30_60" | "60_90" | "90_plus";
+  energyBaseline?: "energized" | "good" | "tired" | "stressed" | "burnt_out";
+  sleepHabit?: "7_8" | "6_7" | "under_6" | "inconsistent";
+  usualBedtime?: string;
+  usualWakeTime?: string;
 }
 
 export type HealthGoal =
@@ -28,7 +34,10 @@ export type HealthGoal =
   | "improved_energy"
   | "better_recovery"
   | "general_wellness"
-  | "endurance";
+  | "endurance"
+  | "improve_fitness"
+  | "reduce_stress"
+  | "stay_consistent";
 
 export type SubscriptionTier = "free" | "premium" | "premium_plus";
 

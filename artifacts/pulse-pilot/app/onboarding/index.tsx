@@ -1,6 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import * as Haptics from "expo-haptics";
+import React, { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -8,26 +9,70 @@ import {
   Pressable,
   ScrollView,
   Platform,
+  Animated,
+  TextInput,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
-import colors from "@/constants/colors";
 import type { HealthGoal } from "@/types";
 
-const STEPS = ["welcome", "goals", "profile", "integrations"] as const;
+const STEPS = [
+  "welcome",
+  "goals",
+  "profile",
+  "activity",
+  "training",
+  "energy",
+  "sleep",
+  "integrations",
+  "summary",
+] as const;
 type Step = (typeof STEPS)[number];
 
-const goalOptions: { id: HealthGoal; label: string; icon: keyof typeof Feather.glyphMap }[] = [
+const GOAL_OPTIONS: { id: HealthGoal; label: string; icon: keyof typeof Feather.glyphMap }[] = [
   { id: "fat_loss", label: "Lose weight", icon: "trending-down" },
   { id: "muscle_gain", label: "Build muscle", icon: "zap" },
+  { id: "improve_fitness", label: "Improve fitness", icon: "activity" },
+  { id: "improved_energy", label: "Increase energy", icon: "sun" },
   { id: "better_sleep", label: "Sleep better", icon: "moon" },
-  { id: "improved_energy", label: "More energy", icon: "sun" },
-  { id: "better_recovery", label: "Recover faster", icon: "battery-charging" },
+  { id: "reduce_stress", label: "Reduce stress", icon: "wind" },
+  { id: "stay_consistent", label: "Stay consistent", icon: "check-circle" },
   { id: "general_wellness", label: "General health", icon: "heart" },
-  { id: "endurance", label: "Build endurance", icon: "wind" },
 ];
+
+const ACTIVITY_OPTIONS = [
+  { key: "inactive" as const, label: "Mostly inactive", sub: "Desk job, minimal exercise" },
+  { key: "light" as const, label: "Lightly active", sub: "Walking, occasional workouts" },
+  { key: "moderate" as const, label: "Moderately active", sub: "3-4 workouts per week" },
+  { key: "very_active" as const, label: "Very active", sub: "5+ workouts per week" },
+];
+
+const TRAINING_OPTIONS = [
+  { key: "under_30" as const, label: "Under 30 min/day" },
+  { key: "30_60" as const, label: "30-60 min/day" },
+  { key: "60_90" as const, label: "60-90 min/day" },
+  { key: "90_plus" as const, label: "90+ min/day" },
+];
+
+const ENERGY_OPTIONS = [
+  { key: "energized" as const, label: "Consistently energized", icon: "zap" as const },
+  { key: "good" as const, label: "Generally good", icon: "sun" as const },
+  { key: "tired" as const, label: "Often tired", icon: "cloud" as const },
+  { key: "stressed" as const, label: "Frequently stressed", icon: "alert-circle" as const },
+  { key: "burnt_out" as const, label: "Burnt out", icon: "battery" as const },
+];
+
+const SLEEP_OPTIONS = [
+  { key: "7_8" as const, label: "7-8 hours consistently" },
+  { key: "6_7" as const, label: "6-7 hours" },
+  { key: "under_6" as const, label: "Under 6 hours" },
+  { key: "inconsistent" as const, label: "Inconsistent schedule" },
+];
+
+const BEDTIME_OPTIONS = ["9:00 PM", "9:30 PM", "10:00 PM", "10:30 PM", "11:00 PM", "11:30 PM", "12:00 AM", "12:30 AM"];
+const WAKE_OPTIONS = ["5:00 AM", "5:30 AM", "6:00 AM", "6:30 AM", "7:00 AM", "7:30 AM", "8:00 AM", "8:30 AM"];
 
 export default function OnboardingScreen() {
   const c = useColors();
@@ -35,273 +80,663 @@ export default function OnboardingScreen() {
   const { updateProfile, completeOnboarding, toggleIntegration, integrations } = useApp();
   const [step, setStep] = useState<Step>("welcome");
   const [selectedGoals, setSelectedGoals] = useState<HealthGoal[]>([]);
-  const [name, setName] = useState("");
+  const [age, setAge] = useState("32");
+  const [sex, setSex] = useState<"male" | "female" | "other">("male");
+  const [height, setHeight] = useState("70");
+  const [weight, setWeight] = useState("185");
+  const [goalWeight, setGoalWeight] = useState("170");
+  const [activityLevel, setActivityLevel] = useState<"inactive" | "light" | "moderate" | "very_active" | null>(null);
+  const [trainingTime, setTrainingTime] = useState<"under_30" | "30_60" | "60_90" | "90_plus" | null>(null);
+  const [energyBaseline, setEnergyBaseline] = useState<"energized" | "good" | "tired" | "stressed" | "burnt_out" | null>(null);
+  const [sleepHabit, setSleepHabit] = useState<"7_8" | "6_7" | "under_6" | "inconsistent" | null>(null);
+  const [bedtime, setBedtime] = useState<string | null>(null);
+  const [wakeTime, setWakeTime] = useState<string | null>(null);
+
+  const fadeAnim = useRef(new Animated.Value(1)).current;
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   const currentIndex = STEPS.indexOf(step);
 
-  const next = () => {
-    if (currentIndex < STEPS.length - 1) {
-      setStep(STEPS[currentIndex + 1]);
-    } else {
-      updateProfile({ goals: selectedGoals, name, onboardingComplete: true });
-      completeOnboarding();
-      router.replace("/(tabs)");
+  const haptic = () => {
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
   };
 
+  const animateTransition = (nextStep: Step) => {
+    Animated.timing(fadeAnim, { toValue: 0, duration: 120, useNativeDriver: true }).start(() => {
+      setStep(nextStep);
+      Animated.timing(fadeAnim, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+    });
+  };
+
+  const next = () => {
+    haptic();
+    if (currentIndex < STEPS.length - 1) {
+      animateTransition(STEPS[currentIndex + 1]);
+    } else {
+      finishOnboarding();
+    }
+  };
+
+  const back = () => {
+    haptic();
+    if (currentIndex > 0) {
+      animateTransition(STEPS[currentIndex - 1]);
+    }
+  };
+
+  const finishOnboarding = () => {
+    const showGoalWeight = selectedGoals.includes("fat_loss") || selectedGoals.includes("muscle_gain");
+    const daysMap: Record<string, number> = { under_30: 3, "30_60": 4, "60_90": 5, "90_plus": 6 };
+    const timeMap: Record<string, number> = { under_30: 25, "30_60": 45, "60_90": 75, "90_plus": 100 };
+
+    updateProfile({
+      age: parseInt(age) || 32,
+      sex,
+      height: parseInt(height) || 70,
+      weight: parseInt(weight) || 185,
+      goalWeight: showGoalWeight ? (parseInt(goalWeight) || 170) : parseInt(weight) || 185,
+      goals: selectedGoals.length > 0 ? selectedGoals : ["general_wellness"],
+      activityLevel: activityLevel || "moderate",
+      trainingTime: trainingTime || "30_60",
+      energyBaseline: energyBaseline || "good",
+      sleepHabit: sleepHabit || "6_7",
+      usualBedtime: bedtime || undefined,
+      usualWakeTime: wakeTime || undefined,
+      daysAvailableToTrain: daysMap[trainingTime || "30_60"] || 4,
+      availableWorkoutTime: timeMap[trainingTime || "30_60"] || 45,
+      onboardingComplete: true,
+    });
+    completeOnboarding();
+    router.replace("/(tabs)");
+  };
+
   const toggleGoal = (g: HealthGoal) => {
+    haptic();
     setSelectedGoals((prev) =>
       prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g]
     );
   };
 
+  const showGoalWeight = selectedGoals.includes("fat_loss") || selectedGoals.includes("muscle_gain");
+
+  const canProceed = () => {
+    switch (step) {
+      case "goals": return selectedGoals.length > 0;
+      case "profile": return true;
+      case "activity": return activityLevel !== null;
+      case "training": return trainingTime !== null;
+      case "energy": return energyBaseline !== null;
+      case "sleep": return sleepHabit !== null;
+      default: return true;
+    }
+  };
+
+  const getSummaryGoals = () => {
+    const goalLabels: Record<string, string> = {
+      fat_loss: "Lose weight",
+      muscle_gain: "Build muscle",
+      improve_fitness: "Improve fitness",
+      improved_energy: "Increase energy",
+      better_sleep: "Sleep better",
+      reduce_stress: "Reduce stress",
+      stay_consistent: "Stay consistent",
+      general_wellness: "General health",
+    };
+    return selectedGoals.map((g) => goalLabels[g] || g).join(", ");
+  };
+
+  const getSummaryPlan = () => {
+    const intensityLabel = activityLevel === "very_active" ? "Active" : activityLevel === "moderate" ? "Moderate" : "Building up";
+    const timeLabel = trainingTime === "90_plus" ? "90+ min sessions" : trainingTime === "60_90" ? "60-90 min sessions" : trainingTime === "30_60" ? "30-60 min sessions" : "Short sessions";
+    return `${intensityLabel} training, ${timeLabel.toLowerCase()}`;
+  };
+
+  const getSummaryFocus = () => {
+    if (energyBaseline === "burnt_out" || energyBaseline === "stressed") return "Rebuild energy and reduce stress first";
+    if (energyBaseline === "tired") return "Gradually increase activity with rest priority";
+    if (selectedGoals.includes("fat_loss")) return "Sustainable fat loss with consistent habits";
+    if (selectedGoals.includes("muscle_gain")) return "Progressive training with recovery focus";
+    if (selectedGoals.includes("better_sleep")) return "Optimize sleep quality and consistency";
+    return "Build sustainable daily wellness habits";
+  };
+
+  const ctaText = step === "welcome" ? "Get Started"
+    : step === "summary" ? "Start Your Plan"
+    : step === "integrations" ? "Continue"
+    : "Continue";
+
   return (
     <View style={[styles.container, { backgroundColor: c.background, paddingTop: topPad, paddingBottom: bottomPad }]}>
-      <View style={styles.progress}>
-        {STEPS.map((s, i) => (
-          <View
-            key={s}
-            style={[
-              styles.progressDot,
-              {
-                backgroundColor: i <= currentIndex ? c.primary : c.muted,
-                width: i === currentIndex ? 24 : 8,
-              },
-            ]}
-          />
-        ))}
-      </View>
-
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentInner} showsVerticalScrollIndicator={false}>
-        {step === "welcome" && (
-          <View style={styles.section}>
-            <View style={[styles.heroIcon, { backgroundColor: c.primary + "15" }]}>
-              <Feather name="activity" size={48} color={c.primary} />
-            </View>
-            <Text style={[styles.heroTitle, { color: c.foreground }]}>Welcome to PulsePilot</Text>
-            <Text style={[styles.heroSubtitle, { color: c.mutedForeground }]}>
-              Your personal AI health coach. We'll translate your body's data into simple, actionable daily guidance.
-            </Text>
-            <View style={styles.valueProps}>
-              {[
-                { icon: "compass" as const, text: "Know exactly what to do each day" },
-                { icon: "bar-chart-2" as const, text: "Track progress with zero complexity" },
-                { icon: "message-circle" as const, text: "Chat with your AI coach anytime" },
-              ].map((item) => (
-                <View key={item.text} style={styles.valueProp}>
-                  <View style={[styles.vpIcon, { backgroundColor: c.primary + "12" }]}>
-                    <Feather name={item.icon} size={18} color={c.primary} />
-                  </View>
-                  <Text style={[styles.vpText, { color: c.foreground }]}>{item.text}</Text>
-                </View>
-              ))}
+      {step !== "welcome" && (
+        <View style={styles.header}>
+          {currentIndex > 0 && step !== "summary" && (
+            <Pressable onPress={back} style={styles.backBtn} hitSlop={12}>
+              <Feather name="arrow-left" size={20} color={c.foreground} />
+            </Pressable>
+          )}
+          <View style={styles.progressBar}>
+            <View style={[styles.progressTrack, { backgroundColor: c.muted }]}>
+              <View style={[styles.progressFill, { backgroundColor: c.primary, width: `${((currentIndex) / (STEPS.length - 1)) * 100}%` }]} />
             </View>
           </View>
-        )}
+          <View style={{ width: 32 }} />
+        </View>
+      )}
 
-        {step === "goals" && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: c.foreground }]}>What are your goals?</Text>
-            <Text style={[styles.sectionSubtitle, { color: c.mutedForeground }]}>
-              Select all that apply. We'll personalize everything for you.
-            </Text>
-            <View style={styles.goalGrid}>
-              {goalOptions.map((goal) => {
-                const selected = selectedGoals.includes(goal.id);
-                return (
+      <Animated.View style={[styles.contentWrap, { opacity: fadeAnim }]}>
+        <ScrollView
+          style={styles.scrollContent}
+          contentContainerStyle={styles.contentInner}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {step === "welcome" && (
+            <View style={styles.welcomeSection}>
+              <View style={[styles.heroIcon, { backgroundColor: c.primary + "12" }]}>
+                <Feather name="activity" size={44} color={c.primary} />
+              </View>
+              <Text style={[styles.welcomeTitle, { color: c.foreground }]}>PulsePilot</Text>
+              <Text style={[styles.welcomeTagline, { color: c.foreground }]}>Your daily health and{"\n"}performance coach</Text>
+              <Text style={[styles.welcomeSub, { color: c.mutedForeground }]}>
+                Personalized guidance for fitness, recovery, sleep, and mental well-being.
+              </Text>
+            </View>
+          )}
+
+          {step === "goals" && (
+            <View style={styles.section}>
+              <Text style={[styles.stepTitle, { color: c.foreground }]}>What do you want{"\n"}to improve?</Text>
+              <Text style={[styles.stepSub, { color: c.mutedForeground }]}>Select all that apply</Text>
+              <View style={styles.goalGrid}>
+                {GOAL_OPTIONS.map((goal) => {
+                  const selected = selectedGoals.includes(goal.id);
+                  return (
+                    <Pressable
+                      key={goal.id}
+                      onPress={() => toggleGoal(goal.id)}
+                      style={({ pressed }) => [
+                        styles.goalCard,
+                        {
+                          backgroundColor: selected ? c.primary + "12" : c.card,
+                          borderColor: selected ? c.primary : "transparent",
+                          borderWidth: selected ? 1.5 : 1.5,
+                          opacity: pressed ? 0.8 : 1,
+                          transform: [{ scale: pressed ? 0.97 : 1 }],
+                        },
+                      ]}
+                    >
+                      <View style={[styles.goalIconWrap, { backgroundColor: selected ? c.primary + "18" : c.muted }]}>
+                        <Feather name={goal.icon} size={18} color={selected ? c.primary : c.mutedForeground} />
+                      </View>
+                      <Text style={[styles.goalLabel, { color: selected ? c.primary : c.foreground }]}>{goal.label}</Text>
+                      {selected && (
+                        <View style={[styles.goalCheck, { backgroundColor: c.primary }]}>
+                          <Feather name="check" size={10} color={c.primaryForeground} />
+                        </View>
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
+          {step === "profile" && (
+            <View style={styles.section}>
+              <Text style={[styles.stepTitle, { color: c.foreground }]}>Set your starting point</Text>
+              <Text style={[styles.stepSub, { color: c.mutedForeground }]}>We'll adapt this over time</Text>
+
+              <View style={styles.profileGroup}>
+                <View style={styles.sexRow}>
+                  {(["male", "female", "other"] as const).map((s) => (
+                    <Pressable
+                      key={s}
+                      onPress={() => { haptic(); setSex(s); }}
+                      style={[styles.sexChip, { backgroundColor: sex === s ? c.primary : c.card }]}
+                    >
+                      <Text style={[styles.sexLabel, { color: sex === s ? c.primaryForeground : c.foreground }]}>
+                        {s === "male" ? "Male" : s === "female" ? "Female" : "Other"}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+
+                <ProfileInput label="Age" value={age} onChange={setAge} unit="" colors={c} optional />
+                <ProfileInput label="Height" value={height} onChange={setHeight} unit="in" colors={c} />
+                <ProfileInput label="Current weight" value={weight} onChange={setWeight} unit="lbs" colors={c} />
+                {showGoalWeight && (
+                  <ProfileInput label="Goal weight" value={goalWeight} onChange={setGoalWeight} unit="lbs" colors={c} />
+                )}
+              </View>
+            </View>
+          )}
+
+          {step === "activity" && (
+            <View style={styles.section}>
+              <Text style={[styles.stepTitle, { color: c.foreground }]}>How active are you{"\n"}right now?</Text>
+              <View style={styles.optionList}>
+                {ACTIVITY_OPTIONS.map((opt) => (
                   <Pressable
-                    key={goal.id}
-                    onPress={() => toggleGoal(goal.id)}
-                    style={[
-                      styles.goalCard,
+                    key={opt.key}
+                    onPress={() => { haptic(); setActivityLevel(opt.key); }}
+                    style={({ pressed }) => [
+                      styles.optionCard,
                       {
-                        backgroundColor: selected ? c.primary + "12" : c.card,
-                        borderColor: selected ? c.primary : c.border,
-                        borderWidth: selected ? 2 : 1,
+                        backgroundColor: activityLevel === opt.key ? c.primary + "10" : c.card,
+                        borderColor: activityLevel === opt.key ? c.primary : "transparent",
+                        borderWidth: 1.5,
+                        opacity: pressed ? 0.8 : 1,
                       },
                     ]}
                   >
-                    <Feather name={goal.icon} size={22} color={selected ? c.primary : c.mutedForeground} />
-                    <Text
-                      style={[
-                        styles.goalLabel,
-                        { color: selected ? c.primary : c.foreground },
-                      ]}
-                    >
-                      {goal.label}
-                    </Text>
+                    <View style={styles.optionContent}>
+                      <Text style={[styles.optionLabel, { color: activityLevel === opt.key ? c.primary : c.foreground }]}>{opt.label}</Text>
+                      <Text style={[styles.optionSub, { color: c.mutedForeground }]}>{opt.sub}</Text>
+                    </View>
+                    {activityLevel === opt.key && (
+                      <View style={[styles.optionCheck, { backgroundColor: c.primary }]}>
+                        <Feather name="check" size={12} color={c.primaryForeground} />
+                      </View>
+                    )}
                   </Pressable>
-                );
-              })}
+                ))}
+              </View>
             </View>
-          </View>
-        )}
+          )}
 
-        {step === "profile" && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: c.foreground }]}>Quick profile</Text>
-            <Text style={[styles.sectionSubtitle, { color: c.mutedForeground }]}>
-              This helps us calibrate your coaching. You can update these anytime.
-            </Text>
-            <View style={styles.profileFields}>
-              {[
-                { label: "Age", value: "32", key: "age" },
-                { label: "Weight (lbs)", value: "185", key: "weight" },
-                { label: "Goal weight (lbs)", value: "170", key: "goalWeight" },
-                { label: "Height (inches)", value: "70", key: "height" },
-                { label: "Days to train / week", value: "4", key: "daysAvailableToTrain" },
-              ].map((field) => (
-                <View key={field.key} style={[styles.profileField, { borderColor: c.border }]}>
-                  <Text style={[styles.fieldLabel, { color: c.mutedForeground }]}>{field.label}</Text>
-                  <Text style={[styles.fieldValue, { color: c.foreground }]}>{field.value}</Text>
+          {step === "training" && (
+            <View style={styles.section}>
+              <Text style={[styles.stepTitle, { color: c.foreground }]}>How much time can{"\n"}you train?</Text>
+              <View style={styles.optionList}>
+                {TRAINING_OPTIONS.map((opt) => (
+                  <Pressable
+                    key={opt.key}
+                    onPress={() => { haptic(); setTrainingTime(opt.key); }}
+                    style={({ pressed }) => [
+                      styles.optionCard,
+                      {
+                        backgroundColor: trainingTime === opt.key ? c.primary + "10" : c.card,
+                        borderColor: trainingTime === opt.key ? c.primary : "transparent",
+                        borderWidth: 1.5,
+                        opacity: pressed ? 0.8 : 1,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.optionLabel, { color: trainingTime === opt.key ? c.primary : c.foreground }]}>{opt.label}</Text>
+                    {trainingTime === opt.key && (
+                      <View style={[styles.optionCheck, { backgroundColor: c.primary }]}>
+                        <Feather name="check" size={12} color={c.primaryForeground} />
+                      </View>
+                    )}
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {step === "energy" && (
+            <View style={styles.section}>
+              <Text style={[styles.stepTitle, { color: c.foreground }]}>How have you been{"\n"}feeling recently?</Text>
+              <Text style={[styles.stepSub, { color: c.mutedForeground }]}>This helps us understand your baseline</Text>
+              <View style={styles.optionList}>
+                {ENERGY_OPTIONS.map((opt) => (
+                  <Pressable
+                    key={opt.key}
+                    onPress={() => { haptic(); setEnergyBaseline(opt.key); }}
+                    style={({ pressed }) => [
+                      styles.optionCard,
+                      {
+                        backgroundColor: energyBaseline === opt.key ? c.primary + "10" : c.card,
+                        borderColor: energyBaseline === opt.key ? c.primary : "transparent",
+                        borderWidth: 1.5,
+                        opacity: pressed ? 0.8 : 1,
+                      },
+                    ]}
+                  >
+                    <View style={[styles.energyIcon, { backgroundColor: energyBaseline === opt.key ? c.primary + "18" : c.muted }]}>
+                      <Feather name={opt.icon} size={16} color={energyBaseline === opt.key ? c.primary : c.mutedForeground} />
+                    </View>
+                    <Text style={[styles.optionLabel, { color: energyBaseline === opt.key ? c.primary : c.foreground, flex: 1 }]}>{opt.label}</Text>
+                    {energyBaseline === opt.key && (
+                      <View style={[styles.optionCheck, { backgroundColor: c.primary }]}>
+                        <Feather name="check" size={12} color={c.primaryForeground} />
+                      </View>
+                    )}
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {step === "sleep" && (
+            <View style={styles.section}>
+              <Text style={[styles.stepTitle, { color: c.foreground }]}>What does your sleep{"\n"}look like?</Text>
+              <View style={styles.optionList}>
+                {SLEEP_OPTIONS.map((opt) => (
+                  <Pressable
+                    key={opt.key}
+                    onPress={() => { haptic(); setSleepHabit(opt.key); }}
+                    style={({ pressed }) => [
+                      styles.optionCard,
+                      {
+                        backgroundColor: sleepHabit === opt.key ? c.primary + "10" : c.card,
+                        borderColor: sleepHabit === opt.key ? c.primary : "transparent",
+                        borderWidth: 1.5,
+                        opacity: pressed ? 0.8 : 1,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.optionLabel, { color: sleepHabit === opt.key ? c.primary : c.foreground }]}>{opt.label}</Text>
+                    {sleepHabit === opt.key && (
+                      <View style={[styles.optionCheck, { backgroundColor: c.primary }]}>
+                        <Feather name="check" size={12} color={c.primaryForeground} />
+                      </View>
+                    )}
+                  </Pressable>
+                ))}
+              </View>
+
+              <Text style={[styles.timeLabel, { color: c.mutedForeground }]}>Typical bedtime</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.timeScroll}>
+                <View style={styles.timeRow}>
+                  {BEDTIME_OPTIONS.map((t) => (
+                    <Pressable
+                      key={t}
+                      onPress={() => { haptic(); setBedtime(bedtime === t ? null : t); }}
+                      style={[styles.timeChip, { backgroundColor: bedtime === t ? c.primary : c.card }]}
+                    >
+                      <Text style={[styles.timeChipText, { color: bedtime === t ? c.primaryForeground : c.foreground }]}>{t}</Text>
+                    </Pressable>
+                  ))}
                 </View>
-              ))}
-            </View>
-          </View>
-        )}
+              </ScrollView>
 
-        {step === "integrations" && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: c.foreground }]}>Connect your devices</Text>
-            <Text style={[styles.sectionSubtitle, { color: c.mutedForeground }]}>
-              Link your wearable for automatic data sync. You can always add these later.
-            </Text>
-            <View style={styles.integrationList}>
-              {integrations.map((integration) => (
-                <Pressable
-                  key={integration.id}
-                  onPress={() => toggleIntegration(integration.id)}
-                  style={[
-                    styles.integrationCard,
-                    {
-                      backgroundColor: integration.connected ? c.primary + "10" : c.card,
-                      borderColor: integration.connected ? c.primary : c.border,
-                    },
-                  ]}
-                >
-                  <View style={[styles.integrationIcon, { backgroundColor: c.primary + "12" }]}>
-                    <Feather name={integration.icon as keyof typeof Feather.glyphMap} size={22} color={c.primary} />
-                  </View>
-                  <View style={styles.integrationInfo}>
-                    <Text style={[styles.integrationName, { color: c.foreground }]}>
-                      {integration.name}
-                    </Text>
-                    <Text style={[styles.integrationStatus, { color: c.mutedForeground }]}>
-                      {integration.connected ? "Connected" : "Tap to connect"}
-                    </Text>
-                  </View>
-                  <Feather
-                    name={integration.connected ? "check-circle" : "plus-circle"}
-                    size={22}
-                    color={integration.connected ? c.success : c.mutedForeground}
-                  />
-                </Pressable>
-              ))}
+              <Text style={[styles.timeLabel, { color: c.mutedForeground }]}>Typical wake time</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.timeScroll}>
+                <View style={styles.timeRow}>
+                  {WAKE_OPTIONS.map((t) => (
+                    <Pressable
+                      key={t}
+                      onPress={() => { haptic(); setWakeTime(wakeTime === t ? null : t); }}
+                      style={[styles.timeChip, { backgroundColor: wakeTime === t ? c.primary : c.card }]}
+                    >
+                      <Text style={[styles.timeChipText, { color: wakeTime === t ? c.primaryForeground : c.foreground }]}>{t}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </ScrollView>
             </View>
-          </View>
-        )}
-      </ScrollView>
+          )}
+
+          {step === "integrations" && (
+            <View style={styles.section}>
+              <Text style={[styles.stepTitle, { color: c.foreground }]}>Connect your devices</Text>
+              <Text style={[styles.stepSub, { color: c.mutedForeground }]}>
+                This helps personalize your daily recommendations automatically.
+              </Text>
+              <View style={styles.optionList}>
+                {integrations.map((integration) => (
+                  <Pressable
+                    key={integration.id}
+                    onPress={() => { haptic(); toggleIntegration(integration.id); }}
+                    style={[
+                      styles.integrationCard,
+                      {
+                        backgroundColor: integration.connected ? c.primary + "10" : c.card,
+                        borderColor: integration.connected ? c.primary : "transparent",
+                        borderWidth: 1.5,
+                      },
+                    ]}
+                  >
+                    <View style={[styles.integrationIcon, { backgroundColor: c.primary + "12" }]}>
+                      <Feather name={integration.icon as keyof typeof Feather.glyphMap} size={20} color={c.primary} />
+                    </View>
+                    <Text style={[styles.optionLabel, { color: c.foreground, flex: 1 }]}>{integration.name}</Text>
+                    <Feather
+                      name={integration.connected ? "check-circle" : "plus-circle"}
+                      size={20}
+                      color={integration.connected ? c.success : c.mutedForeground}
+                    />
+                  </Pressable>
+                ))}
+              </View>
+              <Pressable onPress={next} style={styles.skipBtn}>
+                <Text style={[styles.skipText, { color: c.mutedForeground }]}>Skip for now</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {step === "summary" && (
+            <View style={styles.summarySection}>
+              <View style={[styles.summaryIconWrap, { backgroundColor: c.success + "15" }]}>
+                <Feather name="check" size={36} color={c.success} />
+              </View>
+              <Text style={[styles.summaryTitle, { color: c.foreground }]}>You're set up</Text>
+              <Text style={[styles.summarySub, { color: c.mutedForeground }]}>Here's your personalized starting point</Text>
+
+              <View style={[styles.summaryCard, { backgroundColor: c.card }]}>
+                <SummaryRow label="Goals" value={getSummaryGoals()} colors={c} />
+                <View style={[styles.summaryDivider, { backgroundColor: c.border }]} />
+                <SummaryRow label="Plan" value={getSummaryPlan()} colors={c} />
+                <View style={[styles.summaryDivider, { backgroundColor: c.border }]} />
+                <SummaryRow label="Focus" value={getSummaryFocus()} colors={c} />
+              </View>
+
+              <Text style={[styles.summaryNote, { color: c.mutedForeground }]}>
+                Your plan will adapt as we learn more about your body and habits.
+              </Text>
+            </View>
+          )}
+        </ScrollView>
+      </Animated.View>
 
       <Pressable
         onPress={next}
+        disabled={!canProceed()}
         style={({ pressed }) => [
-          styles.nextButton,
+          styles.ctaButton,
           {
-            backgroundColor: c.primary,
-            opacity: pressed ? 0.9 : 1,
+            backgroundColor: canProceed() ? c.primary : c.muted,
+            opacity: pressed && canProceed() ? 0.9 : 1,
+            transform: [{ scale: pressed && canProceed() ? 0.98 : 1 }],
           },
         ]}
       >
-        <Text style={[styles.nextButtonText, { color: c.primaryForeground }]}>
-          {step === "integrations" ? "Get Started" : "Continue"}
+        <Text style={[styles.ctaText, { color: canProceed() ? c.primaryForeground : c.mutedForeground }]}>
+          {ctaText}
         </Text>
-        <Feather name="arrow-right" size={18} color={c.primaryForeground} />
+        {step !== "summary" && <Feather name="arrow-right" size={18} color={canProceed() ? c.primaryForeground : c.mutedForeground} />}
       </Pressable>
     </View>
   );
 }
 
+function ProfileInput({ label, value, onChange, unit, colors: c, optional }: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  unit: string;
+  colors: ReturnType<typeof import("@/hooks/useColors").useColors>;
+  optional?: boolean;
+}) {
+  return (
+    <View style={[pStyles.field, { backgroundColor: c.card }]}>
+      <Text style={[pStyles.fieldLabel, { color: c.mutedForeground }]}>
+        {label}{optional ? " (optional)" : ""}
+      </Text>
+      <View style={pStyles.fieldRight}>
+        <TextInput
+          style={[pStyles.fieldInput, { color: c.foreground }]}
+          value={value}
+          onChangeText={onChange}
+          keyboardType="numeric"
+          selectTextOnFocus
+        />
+        {unit ? <Text style={[pStyles.fieldUnit, { color: c.mutedForeground }]}>{unit}</Text> : null}
+      </View>
+    </View>
+  );
+}
+
+function SummaryRow({ label, value, colors: c }: {
+  label: string;
+  value: string;
+  colors: ReturnType<typeof import("@/hooks/useColors").useColors>;
+}) {
+  return (
+    <View style={sumStyles.row}>
+      <Text style={[sumStyles.label, { color: c.mutedForeground }]}>{label}</Text>
+      <Text style={[sumStyles.value, { color: c.foreground }]}>{value}</Text>
+    </View>
+  );
+}
+
+const pStyles = StyleSheet.create({
+  field: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 14,
+  },
+  fieldLabel: {
+    fontSize: 15,
+    fontFamily: "Inter_400Regular",
+  },
+  fieldRight: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 4,
+  },
+  fieldInput: {
+    fontSize: 18,
+    fontFamily: "Inter_600SemiBold",
+    textAlign: "right",
+    minWidth: 50,
+    paddingVertical: 0,
+  },
+  fieldUnit: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+  },
+});
+
+const sumStyles = StyleSheet.create({
+  row: {
+    gap: 4,
+    paddingVertical: 2,
+  },
+  label: {
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  value: {
+    fontSize: 15,
+    fontFamily: "Inter_500Medium",
+    lineHeight: 22,
+  },
+});
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  progress: {
+  header: {
     flexDirection: "row",
     alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    gap: 12,
+  },
+  backBtn: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    paddingVertical: 16,
   },
-  progressDot: {
-    height: 8,
-    borderRadius: 4,
+  progressBar: {
+    flex: 1,
   },
-  content: {
+  progressTrack: {
+    height: 4,
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 2,
+  },
+  contentWrap: {
+    flex: 1,
+  },
+  scrollContent: {
     flex: 1,
   },
   contentInner: {
     paddingHorizontal: 24,
     paddingBottom: 24,
   },
-  section: {
+
+  welcomeSection: {
+    alignItems: "center",
     gap: 16,
+    paddingTop: 80,
   },
   heroIcon: {
-    width: 88,
-    height: 88,
+    width: 80,
+    height: 80,
     borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
-    alignSelf: "center",
-    marginTop: 24,
     marginBottom: 8,
   },
-  heroTitle: {
-    fontSize: 28,
+  welcomeTitle: {
+    fontSize: 18,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+    opacity: 0.5,
+  },
+  welcomeTagline: {
+    fontSize: 30,
     fontFamily: "Inter_700Bold",
     textAlign: "center",
+    lineHeight: 38,
+    letterSpacing: -0.5,
   },
-  heroSubtitle: {
+  welcomeSub: {
     fontSize: 16,
     fontFamily: "Inter_400Regular",
     textAlign: "center",
     lineHeight: 24,
-    paddingHorizontal: 12,
+    paddingHorizontal: 20,
+    marginTop: 4,
   },
-  valueProps: {
-    gap: 14,
-    marginTop: 20,
+
+  section: {
+    gap: 16,
+    paddingTop: 8,
   },
-  valueProp: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  vpIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  vpText: {
-    fontSize: 15,
-    fontFamily: "Inter_500Medium",
-    flex: 1,
-  },
-  sectionTitle: {
-    fontSize: 24,
+  stepTitle: {
+    fontSize: 28,
     fontFamily: "Inter_700Bold",
-    marginTop: 12,
+    lineHeight: 36,
+    letterSpacing: -0.4,
   },
-  sectionSubtitle: {
+  stepSub: {
     fontSize: 15,
     fontFamily: "Inter_400Regular",
     lineHeight: 22,
+    marginTop: -8,
   },
+
   goalGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -311,70 +746,185 @@ const styles = StyleSheet.create({
   goalCard: {
     width: "47%",
     flexGrow: 1,
-    paddingVertical: 16,
-    paddingHorizontal: 14,
-    borderRadius: colors.radius,
+    flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    gap: 10,
+  },
+  goalIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
   },
   goalLabel: {
     fontSize: 14,
     fontFamily: "Inter_600SemiBold",
-    textAlign: "center",
+    flex: 1,
   },
-  profileFields: {
-    gap: 10,
-    marginTop: 4,
-  },
-  profileField: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  goalCheck: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     alignItems: "center",
-    paddingVertical: 14,
+    justifyContent: "center",
+  },
+
+  profileGroup: {
+    gap: 8,
+  },
+  sexRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 4,
+  },
+  sexChip: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignItems: "center",
+  },
+  sexLabel: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+  },
+
+  optionList: {
+    gap: 8,
+  },
+  optionCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 16,
     paddingHorizontal: 16,
-    borderWidth: 1,
-    borderRadius: colors.radius,
+    borderRadius: 16,
+    gap: 12,
   },
-  fieldLabel: {
-    fontSize: 15,
-    fontFamily: "Inter_400Regular",
+  optionContent: {
+    flex: 1,
+    gap: 2,
   },
-  fieldValue: {
+  optionLabel: {
     fontSize: 16,
     fontFamily: "Inter_600SemiBold",
   },
-  integrationList: {
-    gap: 10,
-    marginTop: 4,
+  optionSub: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
   },
+  optionCheck: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  energyIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  timeLabel: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginTop: 8,
+  },
+  timeScroll: {
+    marginHorizontal: -24,
+    paddingHorizontal: 0,
+  },
+  timeRow: {
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 4,
+  },
+  timeChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+  },
+  timeChipText: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+  },
+
   integrationCard: {
     flexDirection: "row",
     alignItems: "center",
     padding: 16,
-    borderRadius: colors.radius,
-    borderWidth: 1,
+    borderRadius: 16,
     gap: 12,
   },
   integrationIcon: {
-    width: 44,
-    height: 44,
+    width: 42,
+    height: 42,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
-  integrationInfo: {
-    flex: 1,
-    gap: 2,
+
+  skipBtn: {
+    alignSelf: "center",
+    paddingVertical: 8,
+    marginTop: 4,
   },
-  integrationName: {
-    fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
+  skipText: {
+    fontSize: 14,
+    fontFamily: "Inter_500Medium",
   },
-  integrationStatus: {
+
+  summarySection: {
+    alignItems: "center",
+    gap: 16,
+    paddingTop: 40,
+  },
+  summaryIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  summaryTitle: {
+    fontSize: 28,
+    fontFamily: "Inter_700Bold",
+    letterSpacing: -0.3,
+  },
+  summarySub: {
+    fontSize: 15,
+    fontFamily: "Inter_400Regular",
+    marginTop: -8,
+  },
+  summaryCard: {
+    width: "100%",
+    borderRadius: 20,
+    padding: 20,
+    gap: 14,
+    marginTop: 8,
+  },
+  summaryDivider: {
+    height: StyleSheet.hairlineWidth,
+  },
+  summaryNote: {
     fontSize: 13,
     fontFamily: "Inter_400Regular",
+    textAlign: "center",
+    lineHeight: 20,
+    paddingHorizontal: 20,
+    marginTop: 8,
   },
-  nextButton: {
+
+  ctaButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -382,10 +932,10 @@ const styles = StyleSheet.create({
     marginHorizontal: 24,
     marginBottom: 16,
     paddingVertical: 16,
-    borderRadius: colors.radius,
+    borderRadius: 16,
   },
-  nextButtonText: {
-    fontSize: 16,
+  ctaText: {
+    fontSize: 17,
     fontFamily: "Inter_600SemiBold",
   },
 });
