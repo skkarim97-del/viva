@@ -35,7 +35,7 @@ export default function MetricDetailScreen() {
 
   const detail = getMetricDetail(key as MetricKey, todayMetrics, metrics);
   const chartWidth = 300;
-  const chartHeight = 100;
+  const chartHeight = 90;
 
   const values = detail.trend.data.map((d) => d.value);
   const min = Math.min(...values);
@@ -61,7 +61,7 @@ export default function MetricDetailScreen() {
   return (
     <View style={[styles.container, { backgroundColor: c.background }]}>
       <View style={[styles.header, { paddingTop: topPad + 12 }]}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
+        <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.backBtn, { opacity: pressed ? 0.6 : 1 }]}>
           <Feather name="chevron-left" size={24} color={c.foreground} />
         </Pressable>
         <Text style={[styles.headerTitle, { color: c.foreground }]}>{detail.title}</Text>
@@ -109,7 +109,7 @@ export default function MetricDetailScreen() {
         )}
 
         <View style={[styles.recommendSection, { backgroundColor: c.primary + "08" }]}>
-          <Feather name="check-circle" size={16} color={c.primary} />
+          <Text style={[styles.recommendLabel, { color: c.primary }]}>What to do</Text>
           <Text style={[styles.recommendText, { color: c.foreground }]}>{detail.recommendation}</Text>
         </View>
       </ScrollView>
@@ -150,8 +150,8 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   heroSection: {
-    paddingVertical: 12,
-    gap: 8,
+    paddingVertical: 16,
+    gap: 10,
   },
   heroValueRow: {
     flexDirection: "row",
@@ -161,21 +161,22 @@ const styles = StyleSheet.create({
   heroValue: {
     fontSize: 48,
     fontFamily: "Inter_700Bold",
-    letterSpacing: -1.5,
+    letterSpacing: -2,
   },
   heroUnit: {
-    fontSize: 20,
+    fontSize: 18,
     fontFamily: "Inter_400Regular",
   },
   heroTrend: {
-    fontSize: 24,
+    fontSize: 22,
     fontFamily: "Inter_600SemiBold",
     marginLeft: 4,
   },
   heroHeadline: {
-    fontSize: 17,
+    fontSize: 16,
     fontFamily: "Inter_500Medium",
-    lineHeight: 24,
+    lineHeight: 23,
+    opacity: 0.85,
   },
   section: {
     padding: 18,
@@ -183,10 +184,10 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   sectionLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: "Inter_600SemiBold",
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
   },
   sectionBody: {
     fontSize: 15,
@@ -205,16 +206,19 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
   },
   recommendSection: {
-    flexDirection: "row",
-    alignItems: "flex-start",
     padding: 18,
     borderRadius: 16,
-    gap: 12,
+    gap: 8,
+  },
+  recommendLabel: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
   },
   recommendText: {
     fontSize: 15,
     fontFamily: "Inter_400Regular",
     lineHeight: 22,
-    flex: 1,
   },
 });

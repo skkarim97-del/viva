@@ -8,18 +8,16 @@ import {
   ScrollView,
   Pressable,
   Platform,
-  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
-import colors from "@/constants/colors";
 
 export default function SettingsScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
-  const { profile, integrations, toggleIntegration, upgradeTier } = useApp();
+  const { profile, integrations, toggleIntegration } = useApp();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   const tierLabel =
@@ -41,8 +39,8 @@ export default function SettingsScreen() {
     >
       <Text style={[styles.title, { color: c.foreground }]}>Settings</Text>
 
-      <View style={[styles.profileCard, { backgroundColor: c.card, borderColor: c.border }]}>
-        <View style={[styles.profileAvatar, { backgroundColor: c.primary + "15" }]}>
+      <View style={[styles.profileCard, { backgroundColor: c.card }]}>
+        <View style={[styles.profileAvatar, { backgroundColor: c.primary + "12" }]}>
           <Text style={[styles.profileInitial, { color: c.primary }]}>
             {profile.name ? profile.name[0].toUpperCase() : "P"}
           </Text>
@@ -51,30 +49,31 @@ export default function SettingsScreen() {
           <Text style={[styles.profileName, { color: c.foreground }]}>
             {profile.name || "PulsePilot User"}
           </Text>
-          <View style={[styles.tierBadge, { backgroundColor: c.primary + "15" }]}>
+          <View style={[styles.tierBadge, { backgroundColor: c.primary + "10" }]}>
             <Text style={[styles.tierText, { color: c.primary }]}>{tierLabel}</Text>
           </View>
         </View>
         {profile.tier === "free" ? (
-          <Pressable onPress={handleUpgrade}>
+          <Pressable onPress={handleUpgrade} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
             <Feather name="arrow-up-circle" size={22} color={c.primary} />
           </Pressable>
         ) : null}
       </View>
 
       <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>Connected Devices</Text>
-      <View style={[styles.section, { backgroundColor: c.card, borderColor: c.border }]}>
+      <View style={[styles.section, { backgroundColor: c.card }]}>
         {integrations.map((integration, i) => (
           <Pressable
             key={integration.id}
             onPress={() => toggleIntegration(integration.id)}
-            style={[
+            style={({ pressed }) => [
               styles.settingRow,
-              i < integrations.length - 1 && { borderBottomColor: c.border, borderBottomWidth: 1 },
+              i < integrations.length - 1 && [styles.settingRowBorder, { borderBottomColor: c.background }],
+              { opacity: pressed ? 0.8 : 1 },
             ]}
           >
-            <View style={[styles.settingIcon, { backgroundColor: c.primary + "12" }]}>
-              <Feather name={integration.icon as keyof typeof Feather.glyphMap} size={18} color={c.primary} />
+            <View style={[styles.settingIcon, { backgroundColor: c.primary + "10" }]}>
+              <Feather name={integration.icon as keyof typeof Feather.glyphMap} size={16} color={c.primary} />
             </View>
             <Text style={[styles.settingLabel, { color: c.foreground }]}>{integration.name}</Text>
             <View
@@ -91,7 +90,7 @@ export default function SettingsScreen() {
       </View>
 
       <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>Profile</Text>
-      <View style={[styles.section, { backgroundColor: c.card, borderColor: c.border }]}>
+      <View style={[styles.section, { backgroundColor: c.card }]}>
         {[
           { label: "Weight", value: `${profile.weight} lbs`, icon: "trending-down" as const },
           { label: "Goal Weight", value: `${profile.goalWeight} lbs`, icon: "target" as const },
@@ -106,11 +105,11 @@ export default function SettingsScreen() {
             key={item.label}
             style={[
               styles.settingRow,
-              i < 3 && { borderBottomColor: c.border, borderBottomWidth: 1 },
+              i < 3 && [styles.settingRowBorder, { borderBottomColor: c.background }],
             ]}
           >
-            <View style={[styles.settingIcon, { backgroundColor: c.primary + "12" }]}>
-              <Feather name={item.icon} size={18} color={c.primary} />
+            <View style={[styles.settingIcon, { backgroundColor: c.primary + "10" }]}>
+              <Feather name={item.icon} size={16} color={c.primary} />
             </View>
             <Text style={[styles.settingLabel, { color: c.foreground }]}>{item.label}</Text>
             <Text style={[styles.settingValue, { color: c.mutedForeground }]} numberOfLines={1}>
@@ -121,7 +120,7 @@ export default function SettingsScreen() {
       </View>
 
       <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>Preferences</Text>
-      <View style={[styles.section, { backgroundColor: c.card, borderColor: c.border }]}>
+      <View style={[styles.section, { backgroundColor: c.card }]}>
         {[
           { label: "Units", value: profile.units === "imperial" ? "Imperial" : "Metric", icon: "sliders" as const },
           { label: "Coaching Tone", value: profile.coachingTone, icon: "mic" as const },
@@ -131,11 +130,11 @@ export default function SettingsScreen() {
             key={item.label}
             style={[
               styles.settingRow,
-              i < 2 && { borderBottomColor: c.border, borderBottomWidth: 1 },
+              i < 2 && [styles.settingRowBorder, { borderBottomColor: c.background }],
             ]}
           >
-            <View style={[styles.settingIcon, { backgroundColor: c.primary + "12" }]}>
-              <Feather name={item.icon} size={18} color={c.primary} />
+            <View style={[styles.settingIcon, { backgroundColor: c.primary + "10" }]}>
+              <Feather name={item.icon} size={16} color={c.primary} />
             </View>
             <Text style={[styles.settingLabel, { color: c.foreground }]}>{item.label}</Text>
             <Text style={[styles.settingValue, { color: c.mutedForeground }]}>{item.value}</Text>
@@ -143,26 +142,25 @@ export default function SettingsScreen() {
         ))}
       </View>
 
-      <Pressable onPress={handleUpgrade}>
+      <Pressable onPress={handleUpgrade} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}>
         <View style={[styles.upgradeCard, { backgroundColor: c.primary }]}>
-          <Feather name="star" size={20} color={c.primaryForeground} />
+          <Feather name="star" size={18} color={c.primaryForeground} />
           <View style={styles.upgradeInfo}>
             <Text style={[styles.upgradeTitle, { color: c.primaryForeground }]}>
               {profile.tier === "free" ? "Upgrade to Premium" : "Manage Subscription"}
             </Text>
-            <Text style={[styles.upgradeDesc, { color: c.primaryForeground + "CC" }]}>
+            <Text style={[styles.upgradeDesc, { color: c.primaryForeground + "BB" }]}>
               {profile.tier === "free"
-                ? "Unlock full AI coaching, weekly plans, and more"
+                ? "Full AI coaching, weekly plans, and more"
                 : "View or change your current plan"}
             </Text>
           </View>
-          <Feather name="chevron-right" size={20} color={c.primaryForeground} />
+          <Feather name="chevron-right" size={18} color={c.primaryForeground + "80"} />
         </View>
       </Pressable>
 
       <Text style={[styles.disclaimer, { color: c.mutedForeground }]}>
         PulsePilot is for wellness purposes only and does not provide medical advice.
-        Always consult a healthcare professional for medical concerns.
       </Text>
 
       <View style={{ height: 100 }} />
@@ -171,25 +169,23 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   content: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     gap: 12,
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontFamily: "Inter_700Bold",
+    letterSpacing: -0.5,
     marginBottom: 4,
   },
   profileCard: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 16,
-    borderRadius: colors.radius,
-    borderWidth: 1,
-    gap: 12,
+    padding: 18,
+    borderRadius: 20,
+    gap: 14,
   },
   profileAvatar: {
     width: 48,
@@ -213,36 +209,39 @@ const styles = StyleSheet.create({
   tierBadge: {
     alignSelf: "flex-start",
     paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
   tierText: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: "Inter_600SemiBold",
   },
   sectionLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: "Inter_600SemiBold",
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
     marginTop: 8,
+    paddingLeft: 4,
   },
   section: {
-    borderRadius: colors.radius,
-    borderWidth: 1,
+    borderRadius: 16,
     overflow: "hidden",
   },
   settingRow: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 14,
-    paddingHorizontal: 14,
-    gap: 10,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  settingRowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   settingIcon: {
     width: 32,
     height: 32,
-    borderRadius: 8,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -268,14 +267,14 @@ const styles = StyleSheet.create({
   upgradeCard: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 16,
-    borderRadius: colors.radius,
-    gap: 12,
+    padding: 18,
+    borderRadius: 16,
+    gap: 14,
     marginTop: 4,
   },
   upgradeInfo: {
     flex: 1,
-    gap: 2,
+    gap: 3,
   },
   upgradeTitle: {
     fontSize: 16,
@@ -290,7 +289,8 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     lineHeight: 18,
     textAlign: "center",
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     marginTop: 12,
+    opacity: 0.6,
   },
 });

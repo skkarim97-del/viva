@@ -19,11 +19,11 @@ import { useColors } from "@/hooks/useColors";
 import type { ChatMessage } from "@/types";
 
 const quickActions = [
-  "Should I work out today?",
-  "What should I eat today?",
-  "Why is my recovery low?",
-  "Am I overtraining?",
-  "Plan my week",
+  { label: "Should I work out today?", icon: "target" as const },
+  { label: "Why is my recovery low?", icon: "heart" as const },
+  { label: "What should I eat today?", icon: "coffee" as const },
+  { label: "Am I overtraining?", icon: "alert-circle" as const },
+  { label: "How should I train this week?", icon: "calendar" as const },
 ];
 
 const API_BASE = Platform.OS === "web"
@@ -206,7 +206,7 @@ export default function CoachScreen() {
             {item.content}{isStreaming ? "\u258D" : ""}
           </Text>
           {!isStreaming && (
-            <Text style={[styles.msgTime, { color: isUser ? c.primaryForeground + "77" : c.mutedForeground }]}>
+            <Text style={[styles.msgTime, { color: isUser ? c.primaryForeground + "66" : c.mutedForeground }]}>
               {formatTime(item.timestamp)}
             </Text>
           )}
@@ -225,24 +225,27 @@ export default function CoachScreen() {
     >
       <View style={[styles.header, { paddingTop: topPad + 16 }]}>
         <Text style={[styles.headerTitle, { color: c.foreground }]}>Coach</Text>
+        <Text style={[styles.headerSub, { color: c.mutedForeground }]}>
+          Ask about your training, recovery, nutrition, or trends.
+        </Text>
       </View>
 
       {showQuickActions ? (
         <ScrollView style={styles.quickArea} contentContainerStyle={styles.quickInner} showsVerticalScrollIndicator={false}>
-          <Text style={[styles.quickIntro, { color: c.mutedForeground }]}>
-            Ask me anything about your health, training, or nutrition.
-          </Text>
-          {quickActions.map((label) => (
+          {quickActions.map(({ label, icon }) => (
             <Pressable
               key={label}
               onPress={() => sendMessage(label)}
               style={({ pressed }) => [
                 styles.quickBtn,
-                { backgroundColor: c.card, opacity: pressed ? 0.7 : 1 },
+                { backgroundColor: c.card, opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
               ]}
             >
+              <View style={[styles.quickIconWrap, { backgroundColor: c.primary + "10" }]}>
+                <Feather name={icon} size={16} color={c.primary} />
+              </View>
               <Text style={[styles.quickLabel, { color: c.foreground }]}>{label}</Text>
-              <Feather name="arrow-right" size={14} color={c.mutedForeground} />
+              <Feather name="chevron-right" size={14} color={c.mutedForeground + "60"} />
             </Pressable>
           ))}
         </ScrollView>
@@ -278,7 +281,7 @@ export default function CoachScreen() {
             value={input}
             onChangeText={setInput}
             placeholder="Ask your coach..."
-            placeholderTextColor={c.mutedForeground}
+            placeholderTextColor={c.mutedForeground + "80"}
             onSubmitEditing={() => sendMessage(input)}
             returnKeyType="send"
             editable={!isTyping}
@@ -286,9 +289,12 @@ export default function CoachScreen() {
           <Pressable
             onPress={() => sendMessage(input)}
             disabled={isTyping || !input.trim()}
-            style={[styles.sendBtn, { backgroundColor: input.trim() && !isTyping ? c.primary : c.muted }]}
+            style={({ pressed }) => [
+              styles.sendBtn,
+              { backgroundColor: input.trim() && !isTyping ? c.primary : c.muted, opacity: pressed ? 0.8 : 1 },
+            ]}
           >
-            <Feather name="arrow-up" size={18} color={input.trim() && !isTyping ? c.primaryForeground : c.mutedForeground} />
+            <Feather name="arrow-up" size={16} color={input.trim() && !isTyping ? c.primaryForeground : c.mutedForeground} />
           </Pressable>
         </View>
       </View>
@@ -308,30 +314,38 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 24,
     paddingBottom: 12,
+    gap: 4,
   },
   headerTitle: {
     fontSize: 28,
     fontFamily: "Inter_700Bold",
     letterSpacing: -0.5,
   },
+  headerSub: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 20,
+    opacity: 0.7,
+  },
   quickArea: { flex: 1 },
   quickInner: {
     paddingHorizontal: 24,
-    paddingTop: 8,
-    gap: 10,
-  },
-  quickIntro: {
-    fontSize: 15,
-    fontFamily: "Inter_400Regular",
-    lineHeight: 22,
-    marginBottom: 8,
+    paddingTop: 12,
+    gap: 8,
   },
   quickBtn: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    borderRadius: 14,
+    padding: 14,
+    borderRadius: 16,
+    gap: 12,
+  },
+  quickIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
   },
   quickLabel: {
     fontSize: 15,
@@ -341,7 +355,7 @@ const styles = StyleSheet.create({
   messageList: {
     paddingHorizontal: 16,
     paddingTop: 8,
-    gap: 6,
+    gap: 8,
   },
   msgRow: {
     flexDirection: "row",
@@ -352,7 +366,7 @@ const styles = StyleSheet.create({
     flexDirection: "row-reverse",
   },
   msgBubble: {
-    maxWidth: "80%",
+    maxWidth: "78%",
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 20,
@@ -365,7 +379,7 @@ const styles = StyleSheet.create({
   msgTime: {
     fontSize: 11,
     fontFamily: "Inter_400Regular",
-    marginTop: 4,
+    marginTop: 6,
     alignSelf: "flex-end",
   },
   typingBubble: {
@@ -400,9 +414,9 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   sendBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
   },

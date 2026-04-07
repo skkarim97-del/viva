@@ -51,14 +51,14 @@ export default function TrendsScreen() {
 
       {insights && (
         <View style={[styles.summaryCard, { backgroundColor: c.card }]}>
-          <Text style={[styles.summaryText, { color: c.mutedForeground }]}>{insights.weekSummary}</Text>
+          <Text style={[styles.summaryText, { color: c.foreground }]}>{insights.weekSummary}</Text>
         </View>
       )}
 
       {trends.map((trend) => {
         const latest = trend.data[trend.data.length - 1];
         const width = 260;
-        const height = 48;
+        const height = 44;
         const values = trend.data.map((d) => d.value);
         const min = Math.min(...values);
         const max = Math.max(...values);
@@ -77,11 +77,11 @@ export default function TrendsScreen() {
             onPress={() => openDetail(trend.label)}
             style={({ pressed }) => [
               styles.card,
-              { backgroundColor: c.card, opacity: pressed ? 0.7 : 1 },
+              { backgroundColor: c.card, opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
             ]}
           >
             <View style={styles.cardTop}>
-              <View>
+              <View style={styles.cardMeta}>
                 <Text style={[styles.label, { color: c.mutedForeground }]}>{trend.label}</Text>
                 <View style={styles.valueRow}>
                   <Text style={[styles.value, { color: c.foreground }]}>
@@ -94,11 +94,12 @@ export default function TrendsScreen() {
                   <Text style={[styles.unit, { color: c.mutedForeground }]}>{trend.unit}</Text>
                 </View>
               </View>
-              <Feather name="chevron-right" size={16} color={c.mutedForeground} />
+              <Feather name="chevron-right" size={16} color={c.mutedForeground + "50"} />
             </View>
             <Svg width={width} height={height} style={styles.chart}>
               <Polyline points={points} fill="none" stroke={c.primary} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
+            <Text style={[styles.takeaway, { color: c.mutedForeground }]}>{trend.summary}</Text>
           </Pressable>
         );
       })}
@@ -122,12 +123,13 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     padding: 16,
-    borderRadius: 14,
+    borderRadius: 16,
   },
   summaryText: {
     fontSize: 14,
     fontFamily: "Inter_400Regular",
-    lineHeight: 20,
+    lineHeight: 21,
+    opacity: 0.75,
   },
   card: {
     padding: 16,
@@ -139,10 +141,13 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
+  cardMeta: {
+    gap: 2,
+  },
   label: {
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: "Inter_500Medium",
-    marginBottom: 2,
+    letterSpacing: 0.2,
   },
   valueRow: {
     flexDirection: "row",
@@ -155,10 +160,16 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   unit: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: "Inter_400Regular",
   },
   chart: {
     alignSelf: "center",
+  },
+  takeaway: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 18,
+    opacity: 0.7,
   },
 });

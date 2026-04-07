@@ -38,52 +38,48 @@ export default function DashboardScreen() {
     router.push({ pathname: "/metric-detail", params: { key } });
   };
 
-  const metricItems: { key: MetricKey; label: string; value: string; unit: string; color: string }[] = [
+  const metricItems: { key: MetricKey; label: string; value: string; unit: string }[] = [
     {
       key: "sleep",
       label: "Sleep",
       value: todayMetrics.sleepDuration.toFixed(1),
       unit: "hrs",
-      color: c.info,
     },
     {
       key: "recovery",
       label: "Recovery",
       value: `${todayMetrics.recoveryScore}`,
       unit: "%",
-      color: c.success,
     },
     {
       key: "steps",
       label: "Steps",
       value: todayMetrics.steps >= 1000 ? `${(todayMetrics.steps / 1000).toFixed(1)}` : `${todayMetrics.steps}`,
       unit: todayMetrics.steps >= 1000 ? "k" : "",
-      color: c.accent,
     },
     {
       key: "restingHR",
       label: "Heart Rate",
       value: `${todayMetrics.restingHeartRate}`,
       unit: "bpm",
-      color: c.destructive,
     },
   ];
 
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: c.background }]}
-      contentContainerStyle={[styles.content, { paddingTop: topPad + 20 }]}
+      contentContainerStyle={[styles.content, { paddingTop: topPad + 16 }]}
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.statusSection}>
-        <ReadinessRing score={dailyPlan.readinessScore} label={dailyPlan.readinessLabel} size={120} />
+        <ReadinessRing score={dailyPlan.readinessScore} label={dailyPlan.readinessLabel} size={96} />
         <Text style={[styles.headline, { color: c.foreground }]}>{dailyPlan.headline}</Text>
         <Text style={[styles.summary, { color: c.mutedForeground }]}>{dailyPlan.summary}</Text>
       </View>
 
       <View style={[styles.planCard, { backgroundColor: c.card }]}>
         <Text style={[styles.planTitle, { color: c.foreground }]}>Today's Plan</Text>
-
+        <View style={[styles.planDivider, { backgroundColor: c.border }]} />
         <PlanRow icon="target" iconColor={c.primary} label="Workout" value={dailyPlan.todaysPlan.workout} foreground={c.foreground} muted={c.mutedForeground} />
         <PlanRow icon="navigation" iconColor={c.accent} label="Movement" value={dailyPlan.todaysPlan.movement} foreground={c.foreground} muted={c.mutedForeground} />
         <PlanRow icon="coffee" iconColor={c.warning} label="Nutrition" value={dailyPlan.todaysPlan.nutrition} foreground={c.foreground} muted={c.mutedForeground} />
@@ -93,7 +89,10 @@ export default function DashboardScreen() {
       <View style={styles.whySection}>
         <Text style={[styles.whyTitle, { color: c.mutedForeground }]}>Why this plan</Text>
         {dailyPlan.whyThisPlan.slice(0, 3).map((reason, i) => (
-          <Text key={i} style={[styles.whyText, { color: c.mutedForeground }]}>{reason}</Text>
+          <View key={i} style={styles.whyRow}>
+            <View style={[styles.whyDot, { backgroundColor: c.primary + "40" }]} />
+            <Text style={[styles.whyText, { color: c.foreground }]}>{reason}</Text>
+          </View>
         ))}
       </View>
 
@@ -104,7 +103,7 @@ export default function DashboardScreen() {
             onPress={() => openMetric(item.key)}
             style={({ pressed }) => [
               styles.metricTile,
-              { backgroundColor: c.card, opacity: pressed ? 0.7 : 1 },
+              { backgroundColor: c.card, opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] },
             ]}
           >
             <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>{item.label}</Text>
@@ -131,7 +130,9 @@ function PlanRow({ icon, iconColor, label, value, foreground, muted }: {
 }) {
   return (
     <View style={styles.planRow}>
-      <Feather name={icon} size={18} color={iconColor} style={styles.planRowIcon} />
+      <View style={[styles.planIconWrap, { backgroundColor: iconColor + "12" }]}>
+        <Feather name={icon} size={15} color={iconColor} />
+      </View>
       <View style={styles.planRowContent}>
         <Text style={[styles.planRowLabel, { color: muted }]}>{label}</Text>
         <Text style={[styles.planRowValue, { color: foreground }]}>{value}</Text>
@@ -149,78 +150,102 @@ const styles = StyleSheet.create({
 
   statusSection: {
     alignItems: "center",
-    paddingVertical: 8,
-    gap: 16,
-    marginBottom: 32,
+    paddingTop: 8,
+    paddingBottom: 4,
+    gap: 14,
+    marginBottom: 28,
   },
   headline: {
-    fontSize: 22,
+    fontSize: 20,
     fontFamily: "Inter_700Bold",
     textAlign: "center",
-    lineHeight: 28,
-    letterSpacing: -0.3,
-    paddingHorizontal: 16,
+    lineHeight: 26,
+    letterSpacing: -0.4,
+    paddingHorizontal: 20,
+    marginTop: 2,
   },
   summary: {
     fontSize: 15,
     fontFamily: "Inter_400Regular",
     textAlign: "center",
     lineHeight: 22,
-    paddingHorizontal: 8,
+    paddingHorizontal: 12,
+    opacity: 0.8,
   },
 
   planCard: {
     borderRadius: 20,
     padding: 20,
-    gap: 20,
+    gap: 16,
     marginBottom: 24,
   },
   planTitle: {
-    fontSize: 17,
+    fontSize: 15,
     fontFamily: "Inter_600SemiBold",
-    letterSpacing: -0.2,
+    letterSpacing: -0.1,
+  },
+  planDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: -4,
   },
   planRow: {
     flexDirection: "row",
-    gap: 14,
+    gap: 12,
     alignItems: "flex-start",
   },
-  planRowIcon: {
-    marginTop: 2,
-    width: 20,
+  planIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
   },
   planRowContent: {
     flex: 1,
-    gap: 3,
+    gap: 2,
+    paddingTop: 2,
   },
   planRowLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: "Inter_600SemiBold",
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
   },
   planRowValue: {
-    fontSize: 15,
+    fontSize: 14,
     fontFamily: "Inter_400Regular",
-    lineHeight: 21,
+    lineHeight: 20,
   },
 
   whySection: {
     paddingHorizontal: 4,
-    gap: 8,
-    marginBottom: 32,
+    gap: 10,
+    marginBottom: 28,
   },
   whyTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: "Inter_600SemiBold",
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
     marginBottom: 2,
+  },
+  whyRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  whyDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginTop: 7,
   },
   whyText: {
     fontSize: 14,
     fontFamily: "Inter_400Regular",
     lineHeight: 20,
+    flex: 1,
+    opacity: 0.75,
   },
 
   metricsRow: {
@@ -231,12 +256,12 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 16,
     padding: 14,
-    gap: 6,
+    gap: 8,
   },
   metricLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: "Inter_500Medium",
-    letterSpacing: 0.1,
+    letterSpacing: 0.2,
   },
   metricValueRow: {
     flexDirection: "row",
@@ -249,7 +274,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   metricUnit: {
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: "Inter_400Regular",
   },
 });
