@@ -78,7 +78,6 @@ export default function DashboardScreen() {
     trainingIntent, setTrainingIntent,
     chatMessages, addChatMessage, profile,
   } = useApp();
-  const topPad = Platform.OS === "web" ? 60 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   const [showAsk, setShowAsk] = useState(false);
@@ -86,6 +85,7 @@ export default function DashboardScreen() {
   const [askMessages, setAskMessages] = useState<ChatMessage[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [streamingText, setStreamingText] = useState("");
+  const [showRefine, setShowRefine] = useState(false);
 
   if (!todayMetrics || !dailyPlan) {
     return (
@@ -289,17 +289,9 @@ export default function DashboardScreen() {
             <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
             <Text style={[styles.statusLabel, { color: statusColor }]}>{dailyPlan.statusLabel}</Text>
           </View>
-          <Text style={[styles.guidanceText, { color: c.foreground }]}>{dailyPlan.guidance}</Text>
-          <View style={styles.driversRow}>
-            {dailyPlan.statusDrivers.map((driver, i) => (
-              <View key={i} style={styles.driverItem}>
-                <View style={[styles.driverDot, { backgroundColor: c.mutedForeground + "40" }]} />
-                <Text style={[styles.driverText, { color: c.mutedForeground }]}>{driver}</Text>
-              </View>
-            ))}
-          </View>
-          <Text style={[styles.scoreSecondary, { color: c.mutedForeground }]}>
-            Score: {dailyPlan.readinessScore}
+          <Text style={[styles.headline, { color: c.foreground }]}>{dailyPlan.headline}</Text>
+          <Text style={[styles.driversInline, { color: c.mutedForeground }]}>
+            {dailyPlan.statusDrivers.join("  ·  ")}
           </Text>
         </View>
 
@@ -315,13 +307,13 @@ export default function DashboardScreen() {
                   style={({ pressed }) => [
                     styles.feelingChip,
                     {
-                      backgroundColor: isSelected ? c.primary : c.card,
+                      backgroundColor: isSelected ? c.foreground : c.card,
                       opacity: pressed ? 0.8 : 1,
                       transform: [{ scale: pressed ? 0.97 : 1 }],
                     },
                   ]}
                 >
-                  <Text style={[styles.feelingLabel, { color: isSelected ? c.primaryForeground : c.foreground }]}>
+                  <Text style={[styles.feelingLabel, { color: isSelected ? c.background : c.mutedForeground }]}>
                     {label}
                   </Text>
                 </Pressable>
@@ -329,152 +321,147 @@ export default function DashboardScreen() {
             })}
           </View>
 
-          <View style={styles.subInputs}>
-            <View style={styles.subInputRow}>
-              <Text style={[styles.subInputLabel, { color: c.mutedForeground }]}>Energy</Text>
-              <View style={styles.subChipRow}>
-                {ENERGY_LEVELS.map(({ key, label }) => {
-                  const isSelected = energy === key;
-                  return (
-                    <Pressable
-                      key={key}
-                      onPress={() => selectEnergy(key)}
-                      style={({ pressed }) => [
-                        styles.subChip,
-                        {
-                          backgroundColor: isSelected ? c.primary : c.card,
-                          opacity: pressed ? 0.8 : 1,
-                        },
-                      ]}
-                    >
-                      <Text style={[styles.subChipLabel, { color: isSelected ? c.primaryForeground : c.foreground }]}>
-                        {label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
+          <Pressable
+            onPress={() => { haptic(); setShowRefine(!showRefine); }}
+            style={styles.refineToggle}
+          >
+            <Text style={[styles.refineText, { color: c.mutedForeground }]}>Refine your day</Text>
+            <Feather name={showRefine ? "chevron-up" : "chevron-down"} size={14} color={c.mutedForeground + "80"} />
+          </Pressable>
+
+          {showRefine && (
+            <View style={styles.refineSection}>
+              <View style={styles.refineRow}>
+                <Text style={[styles.refineLabel, { color: c.mutedForeground }]}>Energy</Text>
+                <View style={styles.refineChipRow}>
+                  {ENERGY_LEVELS.map(({ key, label }) => {
+                    const isSelected = energy === key;
+                    return (
+                      <Pressable
+                        key={key}
+                        onPress={() => selectEnergy(key)}
+                        style={({ pressed }) => [
+                          styles.refineChip,
+                          {
+                            backgroundColor: isSelected ? c.foreground : c.card,
+                            opacity: pressed ? 0.8 : 1,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.refineChipLabel, { color: isSelected ? c.background : c.mutedForeground }]}>
+                          {label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+              <View style={styles.refineRow}>
+                <Text style={[styles.refineLabel, { color: c.mutedForeground }]}>Stress</Text>
+                <View style={styles.refineChipRow}>
+                  {STRESS_LEVELS.map(({ key, label }) => {
+                    const isSelected = stress === key;
+                    return (
+                      <Pressable
+                        key={key}
+                        onPress={() => selectStress(key)}
+                        style={({ pressed }) => [
+                          styles.refineChip,
+                          {
+                            backgroundColor: isSelected ? c.foreground : c.card,
+                            opacity: pressed ? 0.8 : 1,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.refineChipLabel, { color: isSelected ? c.background : c.mutedForeground }]}>
+                          {label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+              <View style={styles.refineRow}>
+                <Text style={[styles.refineLabel, { color: c.mutedForeground }]}>Hydration</Text>
+                <View style={styles.refineChipRow}>
+                  {HYDRATION_LEVELS.map(({ key, label }) => {
+                    const isSelected = hydration === key;
+                    return (
+                      <Pressable
+                        key={key}
+                        onPress={() => selectHydration(key)}
+                        style={({ pressed }) => [
+                          styles.refineChip,
+                          {
+                            backgroundColor: isSelected ? c.foreground : c.card,
+                            opacity: pressed ? 0.8 : 1,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.refineChipLabel, { color: isSelected ? c.background : c.mutedForeground }]}>
+                          {label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+              <View style={styles.refineRow}>
+                <Text style={[styles.refineLabel, { color: c.mutedForeground }]}>Life Load</Text>
+                <View style={styles.refineChipRow}>
+                  {LIFE_LOADS.map(({ key, label }) => {
+                    const isSelected = lifeLoad === key;
+                    return (
+                      <Pressable
+                        key={key}
+                        onPress={() => selectLifeLoad(key)}
+                        style={({ pressed }) => [
+                          styles.refineChip,
+                          {
+                            backgroundColor: isSelected ? c.foreground : c.card,
+                            opacity: pressed ? 0.8 : 1,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.refineChipLabel, { color: isSelected ? c.background : c.mutedForeground }]}>
+                          {label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+              <View style={styles.refineRow}>
+                <Text style={[styles.refineLabel, { color: c.mutedForeground }]}>Training</Text>
+                <View style={styles.refineChipRow}>
+                  {TRAINING_INTENTS.map(({ key, label }) => {
+                    const isSelected = trainingIntent === key;
+                    return (
+                      <Pressable
+                        key={key}
+                        onPress={() => selectTrainingIntent(key)}
+                        style={({ pressed }) => [
+                          styles.refineChip,
+                          {
+                            backgroundColor: isSelected ? c.foreground : c.card,
+                            opacity: pressed ? 0.8 : 1,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.refineChipLabel, { color: isSelected ? c.background : c.mutedForeground }]}>
+                          {label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
               </View>
             </View>
-            <View style={styles.subInputRow}>
-              <Text style={[styles.subInputLabel, { color: c.mutedForeground }]}>Stress</Text>
-              <View style={styles.subChipRow}>
-                {STRESS_LEVELS.map(({ key, label }) => {
-                  const isSelected = stress === key;
-                  return (
-                    <Pressable
-                      key={key}
-                      onPress={() => selectStress(key)}
-                      style={({ pressed }) => [
-                        styles.subChip,
-                        {
-                          backgroundColor: isSelected ? c.primary : c.card,
-                          opacity: pressed ? 0.8 : 1,
-                        },
-                      ]}
-                    >
-                      <Text style={[styles.subChipLabel, { color: isSelected ? c.primaryForeground : c.foreground }]}>
-                        {label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.contextSection}>
-          <Text style={[styles.contextTitle, { color: c.mutedForeground }]}>Today's Context</Text>
-          <View style={styles.contextRow}>
-            <Text style={[styles.contextLabel, { color: c.mutedForeground }]}>Hydration</Text>
-            <View style={styles.contextChipRow}>
-              {HYDRATION_LEVELS.map(({ key, label }) => {
-                const isSelected = hydration === key;
-                return (
-                  <Pressable
-                    key={key}
-                    onPress={() => selectHydration(key)}
-                    style={({ pressed }) => [
-                      styles.contextChip,
-                      {
-                        backgroundColor: isSelected ? c.primary : c.card,
-                        opacity: pressed ? 0.8 : 1,
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.contextChipLabel, { color: isSelected ? c.primaryForeground : c.foreground }]}>
-                      {label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-          <View style={styles.contextRow}>
-            <Text style={[styles.contextLabel, { color: c.mutedForeground }]}>Life Load</Text>
-            <View style={styles.contextChipRow}>
-              {LIFE_LOADS.map(({ key, label }) => {
-                const isSelected = lifeLoad === key;
-                return (
-                  <Pressable
-                    key={key}
-                    onPress={() => selectLifeLoad(key)}
-                    style={({ pressed }) => [
-                      styles.contextChip,
-                      {
-                        backgroundColor: isSelected ? c.primary : c.card,
-                        opacity: pressed ? 0.8 : 1,
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.contextChipLabel, { color: isSelected ? c.primaryForeground : c.foreground }]}>
-                      {label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-          <View style={styles.contextRow}>
-            <Text style={[styles.contextLabel, { color: c.mutedForeground }]}>Training</Text>
-            <View style={styles.contextChipRow}>
-              {TRAINING_INTENTS.map(({ key, label }) => {
-                const isSelected = trainingIntent === key;
-                return (
-                  <Pressable
-                    key={key}
-                    onPress={() => selectTrainingIntent(key)}
-                    style={({ pressed }) => [
-                      styles.contextChip,
-                      {
-                        backgroundColor: isSelected ? c.primary : c.card,
-                        opacity: pressed ? 0.8 : 1,
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.contextChipLabel, { color: isSelected ? c.primaryForeground : c.foreground }]}>
-                      {label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.coachingSection}>
-          <Text style={[styles.headline, { color: c.foreground }]}>{dailyPlan.headline}</Text>
-          <Text style={[styles.summary, { color: c.mutedForeground }]}>{dailyPlan.summary}</Text>
-        </View>
-
-        <View style={[styles.focusPill, { backgroundColor: statusColor + "10" }]}>
-          <View style={[styles.focusDot, { backgroundColor: statusColor }]} />
-          <Text style={[styles.focusText, { color: c.foreground }]}>{dailyPlan.dailyFocus}</Text>
+          )}
         </View>
 
         <View style={[styles.dayCard, { backgroundColor: c.card }]}>
           <Text style={[styles.dayTitle, { color: c.foreground }]}>Your Day</Text>
-          <View style={[styles.dayDivider, { backgroundColor: c.border }]} />
           {DAY_ITEMS.map((item) => (
             <DayRow
               key={item.key}
@@ -485,16 +472,6 @@ export default function DashboardScreen() {
               foreground={c.foreground}
               muted={c.mutedForeground}
             />
-          ))}
-        </View>
-
-        <View style={styles.whySection}>
-          <Text style={[styles.whyTitle, { color: c.mutedForeground }]}>Why this plan</Text>
-          {dailyPlan.whyThisPlan.slice(0, 3).map((reason, i) => (
-            <View key={i} style={styles.whyRow}>
-              <View style={[styles.whyDot, { backgroundColor: c.primary + "40" }]} />
-              <Text style={[styles.whyText, { color: c.foreground }]}>{reason}</Text>
-            </View>
           ))}
         </View>
 
@@ -642,66 +619,49 @@ const styles = StyleSheet.create({
 
   statusSection: {
     alignItems: "center",
-    paddingTop: 12,
-    paddingBottom: 4,
-    marginBottom: 20,
-    gap: 8,
+    paddingTop: 16,
+    paddingBottom: 8,
+    marginBottom: 28,
+    gap: 10,
   },
   statusIndicator: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
     borderRadius: 20,
   },
   statusDot: {
-    width: 8,
-    height: 8,
+    width: 7,
+    height: 7,
     borderRadius: 4,
   },
   statusLabel: {
-    fontSize: 15,
+    fontSize: 13,
     fontFamily: "Inter_600SemiBold",
-    letterSpacing: 0.2,
+    letterSpacing: 0.3,
   },
-  guidanceText: {
-    fontSize: 24,
+  headline: {
+    fontSize: 26,
     fontFamily: "Inter_700Bold",
-    letterSpacing: -0.5,
+    letterSpacing: -0.6,
     textAlign: "center",
+    lineHeight: 32,
     marginTop: 4,
+    paddingHorizontal: 16,
   },
-  driversRow: {
-    gap: 4,
-    marginTop: 6,
-    alignItems: "center",
-  },
-  driverItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  driverDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-  },
-  driverText: {
+  driversInline: {
     fontSize: 13,
     fontFamily: "Inter_400Regular",
-    lineHeight: 18,
-  },
-  scoreSecondary: {
-    fontSize: 12,
-    fontFamily: "Inter_500Medium",
-    marginTop: 4,
-    opacity: 0.6,
+    textAlign: "center",
+    marginTop: 2,
+    opacity: 0.7,
   },
 
   feelingSection: {
-    marginBottom: 24,
-    gap: 10,
+    marginBottom: 32,
+    gap: 14,
   },
   feelingPrompt: {
     fontSize: 13,
@@ -720,132 +680,61 @@ const styles = StyleSheet.create({
   },
   feelingLabel: {
     fontSize: 13,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Inter_500Medium",
   },
 
-  subInputs: {
-    gap: 10,
-    marginTop: 4,
-  },
-  subInputRow: {
+  refineToggle: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
+    gap: 4,
+    paddingVertical: 4,
   },
-  subInputLabel: {
-    fontSize: 12,
-    fontFamily: "Inter_500Medium",
-    width: 50,
-    textAlign: "right",
-  },
-  subChipRow: {
-    flexDirection: "row",
-    gap: 6,
-  },
-  subChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  subChipLabel: {
+  refineText: {
     fontSize: 12,
     fontFamily: "Inter_500Medium",
   },
-
-  contextSection: {
-    marginBottom: 24,
-    gap: 10,
+  refineSection: {
+    gap: 12,
+    marginTop: 4,
   },
-  contextTitle: {
-    fontSize: 13,
-    fontFamily: "Inter_500Medium",
-    textAlign: "center",
-    marginBottom: 2,
-  },
-  contextRow: {
+  refineRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
   },
-  contextLabel: {
+  refineLabel: {
     fontSize: 12,
     fontFamily: "Inter_500Medium",
     width: 70,
     textAlign: "right",
   },
-  contextChipRow: {
+  refineChipRow: {
     flexDirection: "row",
     gap: 6,
     flex: 1,
   },
-  contextChip: {
+  refineChip: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
   },
-  contextChipLabel: {
+  refineChipLabel: {
     fontSize: 12,
     fontFamily: "Inter_500Medium",
   },
 
-  coachingSection: {
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 16,
-  },
-  headline: {
-    fontSize: 20,
-    fontFamily: "Inter_700Bold",
-    textAlign: "center",
-    lineHeight: 26,
-    letterSpacing: -0.4,
-    paddingHorizontal: 20,
-  },
-  summary: {
-    fontSize: 15,
-    fontFamily: "Inter_400Regular",
-    textAlign: "center",
-    lineHeight: 22,
-    paddingHorizontal: 12,
-    opacity: 0.8,
-  },
-
-  focusPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 14,
-    marginBottom: 24,
-    alignSelf: "center",
-  },
-  focusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  focusText: {
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
-    letterSpacing: -0.1,
-  },
-
   dayCard: {
     borderRadius: 20,
-    padding: 20,
-    gap: 16,
-    marginBottom: 24,
+    padding: 24,
+    gap: 18,
+    marginBottom: 28,
   },
   dayTitle: {
     fontSize: 15,
     fontFamily: "Inter_600SemiBold",
     letterSpacing: -0.1,
-  },
-  dayDivider: {
-    height: StyleSheet.hairlineWidth,
-    marginHorizontal: -4,
+    marginBottom: -4,
   },
   dayRow: {
     flexDirection: "row",
@@ -874,37 +763,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Inter_400Regular",
     lineHeight: 20,
-  },
-
-  whySection: {
-    paddingHorizontal: 4,
-    gap: 10,
-    marginBottom: 24,
-  },
-  whyTitle: {
-    fontSize: 12,
-    fontFamily: "Inter_600SemiBold",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-    marginBottom: 2,
-  },
-  whyRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-  },
-  whyDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginTop: 7,
-  },
-  whyText: {
-    fontSize: 14,
-    fontFamily: "Inter_400Regular",
-    lineHeight: 20,
-    flex: 1,
-    opacity: 0.75,
   },
 
   metricsRow: {

@@ -1,0 +1,195 @@
+Redesign the Today screen to be significantly cleaner, more minimal, and more premium by reducing visible elements and using progressive disclosure.
+
+## Core principle
+
+The screen should:
+
+* show fewer things at once
+* prioritize output over input
+* reduce visual clutter
+* feel calm and intentional
+
+---
+
+## Remove stacked inputs
+
+Currently, the screen shows:
+
+* feeling
+* energy
+* stress
+* hydration
+* life load
+* training
+
+All at once.
+
+This must be changed.
+
+---
+
+## New interaction model
+
+### Default view (collapsed)
+
+Show ONLY:
+
+1. Daily State
+2. Headline
+3. One-line drivers
+4. Feeling input (single row)
+5. Your Day plan
+
+Do NOT show:
+
+* energy
+* stress
+* hydration
+* life load
+* training
+
+by default.
+
+---
+
+## Add “Refine” interaction
+
+Below feeling input, add:
+
+“Refine your day”
+
+When tapped:
+
+* expand a hidden section
+* reveal additional inputs
+
+---
+
+## Expanded section (progressive disclosure)
+
+Show:
+
+* Energy
+* Stress
+* Hydration
+* Life Load
+* Training Intent
+
+Each should:
+
+* be in clean grouped rows
+* have more spacing
+* feel secondary
+
+---
+
+## Visual grouping
+
+Group inputs like this:
+
+### Primary
+
+“How are you feeling?”
+
+### Secondary (hidden by default)
+
+Refine your day:
+
+* Energy
+* Stress
+* Hydration
+* Life Load
+* Training
+
+---
+
+## Reduce text
+
+Remove:
+
+* bullet lists under headline
+* duplicate explanation text
+* long descriptive sentences
+
+Replace with:
+
+* short phrases
+* one-line summaries
+
+Example:
+“Sleep solid · Recovery moderate · Energy high”
+
+---
+
+## Typography improvements
+
+* Increase size of headline
+* Reduce size of supporting text
+* Use fewer text styles overall
+* Increase spacing between sections
+
+---
+
+## Button / chip styling
+
+* reduce size slightly
+* increase spacing between chips
+* use softer backgrounds
+* avoid heavy outlines
+* selected state should be subtle, not bright
+
+---
+
+## Color usage
+
+* limit to 1–2 accent colors
+* use blue or green only for selection
+* avoid mixing too many colors in one view
+
+---
+
+## Card simplification
+
+“Your Day” card:
+
+* increase padding
+* reduce text
+* simplify wording
+
+Example:
+“50 min strength · full body”
+
+instead of long descriptions.
+
+---
+
+## Spacing
+
+* increase vertical spacing between sections
+* avoid stacking elements tightly
+* give each section breathing room
+
+---
+
+## Remove visual noise
+
+* remove unnecessary dividers
+* reduce icon usage
+* avoid multiple emphasis styles
+
+---
+
+## Final goal
+
+The screen should feel:
+
+* minimal
+* premium
+* calm
+* focused
+
+The user should:
+
+* understand their day instantly
+* not feel overwhelmed
+* not see too many decisions at once
