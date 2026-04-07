@@ -1,0 +1,183 @@
+Refactor Viva to focus on a small set of core health metrics and a proprietary interpretation layer.
+
+## Core Product Philosophy
+
+Viva should not rely on dozens of integrations or metrics.
+
+Instead:
+
+* use a small set of core inputs
+* interpret them intelligently
+* produce simple, actionable outputs
+
+The goal is:
+Few inputs → strong interpretation → clear daily guidance
+
+---
+
+## Core Inputs
+
+Use only the following inputs for MVP:
+
+### Objective data (from device or manual entry)
+
+* sleep (duration and consistency)
+* steps / activity
+* heart rate (resting and trend)
+* HRV (if available)
+* calories burned (optional)
+
+### Subjective data (user input)
+
+* energy level
+* stress level
+* mood / overall feeling
+
+These inputs must be sufficient to generate all recommendations.
+
+---
+
+## Do NOT rely on third-party scores
+
+Do not use:
+
+* Garmin Body Battery
+* Apple readiness scores
+* WHOOP strain scores
+
+Instead:
+
+* create a proprietary interpretation layer
+
+---
+
+## Create internal signals
+
+Normalize raw inputs into simple internal scores:
+
+* sleep score
+* activity score
+* recovery score (HRV + heart rate)
+* stress score (user input + signals)
+* consistency score
+
+These scores should NOT be directly shown to the user.
+
+They are used internally.
+
+---
+
+## Create Daily State
+
+Use internal signals to assign a Daily State:
+
+* Recover
+* Maintain
+* Build
+* Push
+
+This is the primary output shown to users.
+
+---
+
+## Create Key Drivers
+
+Identify the top 2–3 reasons driving the Daily State.
+
+Examples:
+
+* Sleep is strong
+* Activity has been consistent
+* Recovery is slightly lower than usual
+* Stress is elevated
+
+These must be simple and easy to understand.
+
+---
+
+## AI as interpretation layer
+
+Use the ChatGPT API as the central intelligence layer.
+
+Provide the model with:
+
+* normalized signals
+* user goals
+* recent trends
+* user inputs (energy, stress, mood)
+
+The model should generate:
+
+1. Daily headline
+2. Daily focus
+3. Your Day plan:
+
+   * Move
+   * Fuel
+   * Recover
+   * Mind
+4. Why explanation
+
+---
+
+## AI response rules
+
+Responses must be:
+
+* short
+* clear
+* actionable
+* based on actual user data
+
+Avoid:
+
+* generic advice
+* long paragraphs
+* technical jargon
+
+---
+
+## Example output
+
+Daily State:
+Maintain
+
+Headline:
+Stay consistent today
+
+Your Day:
+
+* Move: 30–45 min moderate activity
+* Fuel: Eat balanced meals, prioritize protein
+* Recover: Wind down earlier tonight
+* Mind: Keep stress low and avoid overstimulation
+
+Why:
+
+* Sleep was solid
+* Activity has been consistent
+* Recovery is slightly below peak
+
+---
+
+## Manual-first support
+
+If no wearable is connected:
+
+* allow manual input for sleep, activity, mood, stress
+* still generate meaningful recommendations
+
+The app must work fully without a wearable.
+
+---
+
+## Product goal
+
+Viva should feel like:
+
+* a simple daily health coach
+* not a complex data tracker
+* not dependent on external scoring systems
+
+The user should feel:
+“I understand what to do today based on my body and how I feel.”

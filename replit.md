@@ -45,8 +45,9 @@ Mobile-first AI health and wellness coaching app built with Expo/React Native. C
 
 ### Features
 - **Onboarding**: 9-step premium flow (Welcome, Goals, Profile, Activity Level, Training Time, Energy Baseline, Sleep Habits, Device Integration, Personalization Summary)
-- **Dashboard (Today tab)**: Readiness ring (96px) → Daily State badge (Recover/Maintain/Build/Push) → Feeling input (5 chips) → Energy/Stress sub-inputs → Headline + summary → Daily Focus pill → Your Day card (Move/Fuel/Recover/Mind) → Why bullets → Metric tiles → Ask your coach
-- **Daily State**: One of Recover, Maintain, Build, or Push. Summarizes the user's overall condition at a glance. Drives the entire plan.
+- **Dashboard (Today tab)**: Status pill (Strong Day/On Track/Slightly Off Track/Off Track) → Guidance headline → Key drivers (2-3 short reasons) → Secondary score → Feeling input (5 chips) → Energy/Stress sub-inputs → Headline + summary → Daily Focus pill → Your Day card (Move/Fuel/Recover/Mind) → Why bullets → Metric tiles → Ask your coach
+- **Daily Status**: Qualitative status-first system. Users see "On Track" or "Off Track" with short reasons why, not a raw number. Status labels: "Strong Day" (push), "On Track" (build), "Slightly Off Track" (maintain), "Off Track" (recover). Numeric score kept as small secondary element.
+- **Daily State**: One of Recover, Maintain, Build, or Push. Maps to status labels. Drives the entire plan.
 - **Your Day**: Unified plan card replacing siloed categories. Four integrated sections: Move (activity), Fuel (nutrition as simple guidance), Recover (sleep + recovery as behavior), Mind (mental/emotional guidance). Each item is short and actionable.
 - **Wellness Inputs**: Feeling (Great/Good/Tired/Exhausted/Stressed), Energy (High/Medium/Low), Stress (Low/Moderate/High). One-tap chips, all optional. All three influence the daily state and plan adaptively.
 - **Adaptive Logic**: All inputs (wearable data + feeling + energy + stress) combine into one unified output. User subjective state overrides data when in conflict. Updates instantly on change.
@@ -63,7 +64,7 @@ Mobile-first AI health and wellness coaching app built with Expo/React Native. C
 - **Frontend**: Expo/React Native with AsyncStorage for persistence
 - **Data**: Computed insights engine (`data/insights.ts`) calculates sleep debt, training load, recovery trends, weight projections, TDEE, consistency scores, HRV baselines, and risk flags
 - **State**: Context-based state management (AppContext) with computed DailyInsights
-- **Components**: VivaSymbol (SVG brand mark), VivaWordmark (symbol + text), ScreenHeader (consistent tab header), ReadinessRing (minimal SVG arc), plan rows with icon squares, metric tiles with drill-down
+- **Components**: VivaSymbol (SVG brand mark), VivaWordmark (symbol + text), ScreenHeader (consistent tab header), plan rows with icon squares, metric tiles with drill-down
 
 ### Key Files
 - `artifacts/pulse-pilot/app/(tabs)/index.tsx` — Today dashboard (feeling input + inline coach chat)

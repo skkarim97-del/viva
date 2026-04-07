@@ -71,11 +71,16 @@ export interface WorkoutEntry {
 
 export type DailyState = "recover" | "maintain" | "build" | "push";
 
+export type DailyStatusLabel = "Strong Day" | "On Track" | "Slightly Off Track" | "Off Track";
+
 export interface DailyPlan {
   date: string;
   readinessScore: number;
   readinessLabel: "Low" | "Moderate" | "Good" | "Excellent";
   dailyState: DailyState;
+  statusLabel: DailyStatusLabel;
+  statusDrivers: string[];
+  guidance: string;
   headline: string;
   summary: string;
   dailyFocus: string;

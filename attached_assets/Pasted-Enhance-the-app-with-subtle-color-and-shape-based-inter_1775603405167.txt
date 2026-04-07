@@ -1,0 +1,167 @@
+Enhance the app with subtle color and shape-based interactivity to make the UI feel more alive and premium.
+
+## Core principle
+
+Use color and shapes to communicate meaning, not decoration.
+
+The UI should feel:
+
+* interactive
+* responsive
+* modern
+* premium
+* calm
+
+Not:
+
+* flashy
+* gamified
+* overly colorful
+
+---
+
+## Color system
+
+Use a simple state-based system:
+
+* Green: positive / strong / ready / push
+* Amber: moderate / maintain
+* Red: low / recover / off track
+
+Use color sparingly and intentionally.
+
+Do NOT:
+
+* fill entire screens with color
+* use bright or neon tones
+* overuse multiple colors
+
+---
+
+## Daily State styling
+
+Display the Daily State as a small pill or badge:
+
+Example:
+[ ● Strong Day ]
+
+* small colored dot
+* subtle background tint
+* rounded shape
+
+This should be clean and minimal.
+
+---
+
+## Key Drivers
+
+Add subtle color indicators:
+
+Example:
+
+* Sleep ● (green)
+* Recovery ● (green)
+* Stress ● (red)
+
+Keep indicators:
+
+* small
+* minimal
+* consistent
+
+---
+
+## Feeling input interaction
+
+When a user selects a feeling:
+
+* apply a subtle color highlight
+* animate selection smoothly
+* update the plan in real time
+
+Examples:
+
+* “Great” → slight green emphasis
+* “Exhausted” → slight red emphasis
+
+Animations should be:
+
+* fast
+* smooth
+* minimal
+
+---
+
+## Your Day section
+
+Use soft color accents per category:
+
+* Move → subtle blue
+* Fuel → subtle orange
+* Recover → subtle green
+* Mind → subtle neutral or purple
+
+Colors should be:
+
+* muted
+* not dominant
+* used only for icons or small accents
+
+---
+
+## Background and layout
+
+Optionally apply very subtle background tinting based on state:
+
+* Strong Day → faint green tint
+* Recover → faint warm / neutral tint
+
+Keep it extremely subtle.
+
+---
+
+## Micro-interactions
+
+Add:
+
+* soft button press animations
+* slight scaling on tap
+* smooth transitions when content updates
+* subtle loading states
+
+Avoid:
+
+* large animations
+* distracting motion
+
+---
+
+## Shapes
+
+Use:
+
+* rounded pills
+* soft cards
+* minimal dividers
+* small dots for indicators
+
+Avoid:
+
+* sharp edges
+* heavy boxes
+* cluttered layouts
+
+---
+
+## Final goal
+
+The app should feel:
+
+* responsive
+* intelligent
+* alive
+* calm
+* premium
+
+Users should feel:
+“The app reacts to me and understands my state.”

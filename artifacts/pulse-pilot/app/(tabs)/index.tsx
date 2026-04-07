@@ -14,11 +14,10 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { ReadinessRing } from "@/components/ReadinessRing";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
-import type { MetricKey, FeelingType, EnergyLevel, StressLevel, ChatMessage, DailyState } from "@/types";
+import type { MetricKey, FeelingType, EnergyLevel, StressLevel, ChatMessage, DailyStatusLabel } from "@/types";
 
 const FEELINGS: { key: NonNullable<FeelingType>; label: string }[] = [
   { key: "great", label: "Great" },
@@ -40,11 +39,11 @@ const STRESS_LEVELS: { key: NonNullable<StressLevel>; label: string }[] = [
   { key: "high", label: "High" },
 ];
 
-const STATE_CONFIG: Record<DailyState, { label: string; icon: keyof typeof Feather.glyphMap }> = {
-  recover: { label: "Recover", icon: "battery-charging" },
-  maintain: { label: "Maintain", icon: "minus" },
-  build: { label: "Build", icon: "trending-up" },
-  push: { label: "Push", icon: "zap" },
+const STATUS_COLOR_MAP: Record<DailyStatusLabel, (c: ReturnType<typeof useColors>) => string> = {
+  "Strong Day": (c) => c.success,
+  "On Track": (c) => c.primary,
+  "Slightly Off Track": (c) => c.warning,
+  "Off Track": (c) => c.destructive,
 };
 
 const API_BASE = Platform.OS === "web"
@@ -231,11 +230,7 @@ export default function DashboardScreen() {
     { key: "restingHR", label: "Heart Rate", value: `${todayMetrics.restingHeartRate}`, unit: "bpm" },
   ];
 
-  const stateConfig = STATE_CONFIG[dailyPlan.dailyState];
-  const stateColor = dailyPlan.dailyState === "push" ? c.success
-    : dailyPlan.dailyState === "build" ? c.primary
-    : dailyPlan.dailyState === "recover" ? c.info
-    : c.mutedForeground;
+  const statusColor = STATUS_COLOR_MAP[dailyPlan.statusLabel](c);
 
   const DAY_ITEMS: { key: keyof typeof dailyPlan.yourDay; label: string; icon: keyof typeof Feather.glyphMap; color: string }[] = [
     { key: "move", label: "Move", icon: "activity", color: c.primary },
@@ -254,11 +249,22 @@ export default function DashboardScreen() {
       >
         <ScreenHeader />
         <View style={styles.statusSection}>
-          <ReadinessRing score={dailyPlan.readinessScore} label={dailyPlan.readinessLabel} size={96} />
-          <View style={[styles.stateBadge, { backgroundColor: stateColor + "14" }]}>
-            <Feather name={stateConfig.icon} size={13} color={stateColor} />
-            <Text style={[styles.stateLabel, { color: stateColor }]}>{stateConfig.label}</Text>
+          <View style={[styles.statusIndicator, { backgroundColor: statusColor + "14" }]}>
+            <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+            <Text style={[styles.statusLabel, { color: statusColor }]}>{dailyPlan.statusLabel}</Text>
           </View>
+          <Text style={[styles.guidanceText, { color: c.foreground }]}>{dailyPlan.guidance}</Text>
+          <View style={styles.driversRow}>
+            {dailyPlan.statusDrivers.map((driver, i) => (
+              <View key={i} style={styles.driverItem}>
+                <View style={[styles.driverDot, { backgroundColor: c.mutedForeground + "40" }]} />
+                <Text style={[styles.driverText, { color: c.mutedForeground }]}>{driver}</Text>
+              </View>
+            ))}
+          </View>
+          <Text style={[styles.scoreSecondary, { color: c.mutedForeground }]}>
+            Score: {dailyPlan.readinessScore}
+          </Text>
         </View>
 
         <View style={styles.feelingSection}>
@@ -348,8 +354,8 @@ export default function DashboardScreen() {
           <Text style={[styles.summary, { color: c.mutedForeground }]}>{dailyPlan.summary}</Text>
         </View>
 
-        <View style={[styles.focusPill, { backgroundColor: stateColor + "10" }]}>
-          <View style={[styles.focusDot, { backgroundColor: stateColor }]} />
+        <View style={[styles.focusPill, { backgroundColor: statusColor + "10" }]}>
+          <View style={[styles.focusDot, { backgroundColor: statusColor }]} />
           <Text style={[styles.focusText, { color: c.foreground }]}>{dailyPlan.dailyFocus}</Text>
         </View>
 
@@ -523,23 +529,61 @@ const styles = StyleSheet.create({
 
   statusSection: {
     alignItems: "center",
-    paddingTop: 8,
+    paddingTop: 12,
     paddingBottom: 4,
-    marginBottom: 16,
-    gap: 10,
+    marginBottom: 20,
+    gap: 8,
   },
-  stateBadge: {
+  statusIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusLabel: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 0.2,
+  },
+  guidanceText: {
+    fontSize: 24,
+    fontFamily: "Inter_700Bold",
+    letterSpacing: -0.5,
+    textAlign: "center",
+    marginTop: 4,
+  },
+  driversRow: {
+    gap: 4,
+    marginTop: 6,
+    alignItems: "center",
+  },
+  driverItem: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
   },
-  stateLabel: {
+  driverDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+  },
+  driverText: {
     fontSize: 13,
-    fontFamily: "Inter_600SemiBold",
-    letterSpacing: 0.2,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 18,
+  },
+  scoreSecondary: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    marginTop: 4,
+    opacity: 0.6,
   },
 
   feelingSection: {

@@ -328,11 +328,43 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     recoverySummary = "Recovery is low. Rest today will help you come back stronger.";
   }
 
+  const statusLabel: import("@/types").DailyStatusLabel =
+    dailyState === "push" ? "Strong Day"
+    : dailyState === "build" ? "On Track"
+    : dailyState === "maintain" ? "Slightly Off Track"
+    : "Off Track";
+
+  const statusDrivers: string[] = [];
+  if (sleepHours >= 7.5) statusDrivers.push("You slept well");
+  else if (sleepHours >= 6.5) statusDrivers.push("Sleep was adequate");
+  else statusDrivers.push("Sleep was poor");
+
+  if (metrics.recoveryScore >= 70) statusDrivers.push("Recovery is solid");
+  else if (metrics.recoveryScore >= 50) statusDrivers.push("Recovery is moderate");
+  else statusDrivers.push("Recovery is lower than usual");
+
+  if (feeling === "great" || energy === "high") statusDrivers.push("You're feeling strong");
+  else if (feeling === "exhausted") statusDrivers.push("You feel exhausted");
+  else if (feeling === "tired") statusDrivers.push("You're feeling tired");
+  else if (feeling === "stressed" || stress === "high") statusDrivers.push("Stress is elevated");
+  else if (energy === "low") statusDrivers.push("Energy is low");
+  else if (metrics.steps >= 8000) statusDrivers.push("Your activity is consistent");
+  else statusDrivers.push("Activity has been light");
+
+  const guidance =
+    dailyState === "push" ? "Good day to push"
+    : dailyState === "build" ? "Stay consistent today"
+    : dailyState === "maintain" ? "Take it easy today"
+    : "Focus on recovery today";
+
   return {
     date: metrics.date,
     readinessScore,
     readinessLabel,
     dailyState,
+    statusLabel,
+    statusDrivers: statusDrivers.slice(0, 3),
+    guidance,
     headline,
     summary,
     dailyFocus,
