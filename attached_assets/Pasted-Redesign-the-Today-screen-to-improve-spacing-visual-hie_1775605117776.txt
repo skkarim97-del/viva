@@ -1,0 +1,146 @@
+Redesign the Today screen to improve spacing, visual hierarchy, and color-based interactivity.
+
+## Core goal
+
+The UI should feel:
+
+* spacious
+* calm
+* premium
+* clearly structured
+* emotionally responsive
+
+---
+
+## Layout structure
+
+Convert the screen into distinct card-based sections:
+
+1. Status card
+2. Feeling card
+3. Refine card (expandable)
+4. Your Day card
+
+Each card should:
+
+* have clear boundaries
+* have generous padding
+* feel visually separate
+
+---
+
+## Spacing
+
+* 24–32px vertical spacing between cards
+* 16–20px padding inside each card
+* consistent horizontal margins
+
+Avoid tight stacking of elements.
+
+---
+
+## Color system
+
+Introduce a state-based color system.
+
+### Energy
+
+* Excellent → deep green
+* High → soft green
+* Medium → neutral gray
+* Exhausted → soft red
+
+### Stress
+
+* Low → green
+* Moderate → amber
+* High → orange
+* Very High → red
+
+### Hydration
+
+* Well Hydrated → blue-green
+* Good → soft blue
+* Low → amber
+* Dehydrated → red
+
+### Training
+
+* None → gray
+* Light → soft blue
+* Moderate → blue
+* Intense → deep blue
+
+---
+
+## Selection behavior
+
+* color is only applied when selected
+* unselected options remain neutral
+* selected state should be:
+
+  * subtle background tint
+  * slight color accent
+  * not overly bright
+
+---
+
+## Interaction
+
+When a user selects an option:
+
+* apply a smooth animation
+* slight scale effect (1.02x)
+* subtle color transition
+
+Avoid:
+
+* harsh color changes
+* aggressive animations
+
+---
+
+## Refine section
+
+Each category (Energy, Stress, Hydration, Training):
+
+* displayed as its own row
+* clearly separated with spacing
+* not visually crowded
+
+---
+
+## Typography
+
+* increase size of main headlines
+* reduce size of secondary text
+* improve contrast between hierarchy levels
+
+---
+
+## Visual tone
+
+The UI should feel:
+
+* clean
+* modern
+* calm
+* intentional
+
+Not:
+
+* crowded
+* overly colorful
+* busy
+* noisy
+
+---
+
+## Final goal
+
+The user should feel:
+
+* relaxed using the app
+* guided, not overwhelmed
+* that each section is clear and easy to understand
+* that the app responds to their inputs visually

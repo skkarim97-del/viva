@@ -45,13 +45,15 @@ Mobile-first AI health and wellness coaching app built with Expo/React Native. C
 
 ### Features
 - **Onboarding**: 9-step premium flow (Welcome, Goals, Profile, Activity Level, Training Time, Energy Baseline, Sleep Habits, Device Integration, Personalization Summary)
-- **Dashboard (Today tab)**: Status pill → Bold headline → Inline drivers (dot-separated) → Feeling chips → "Refine your day" toggle → Your Day card → Metric tiles → Ask your coach. Minimal, calm, output-focused.
-- **Progressive disclosure**: Only feeling input visible by default. Energy, Stress, Hydration, Life Load, and Training hidden behind "Refine your day" toggle. Reduces visual clutter.
+- **Dashboard (Today tab)**: Card-based layout — Status card → Feeling card → Refine card (expandable) → Your Day card → Metric tiles → Ask your coach. 24px spacing between all cards. Minimal, calm, output-focused.
+- **Progressive disclosure**: Only feeling input visible by default. Energy, Stress, Hydration, Life Load, and Training hidden behind "Refine your day" card toggle. Reduces visual clutter.
+- **State-based color system**: Refine chips use semantic colors when selected. Energy: high=green, medium=gray, low=red. Stress: low=green, moderate=amber, high=red. Hydration: good=blue, low=amber. Life Load: light=green, normal=gray, busy=amber, overwhelmed=red. Training: none=gray, light=light-blue, training=blue. Selected state = tinted background (18% opacity) + colored border (40% opacity) + colored text. Unselected = neutral.
+- **Selection animations**: Subtle scale (1.02x selected, 0.96x pressed) on both feeling and refine chips. No harsh transitions.
 - **Daily Status**: Status pill with label ("Strong Day", "On Track", "Slightly Off Track", "Off Track"). Drivers shown as inline dot-separated text (not stacked bullets).
 - **Daily State**: One of Recover, Maintain, Build, or Push. Maps to status labels. Drives the entire plan.
-- **Your Day**: Clean card with increased padding, no divider. Four sections: Move, Fuel, Recover, Mind.
-- **Wellness Inputs**: Feeling (Great/Good/Tired/Exhausted/Stressed) always visible. Energy/Stress hidden behind "Refine your day".
-- **Today's Context**: Hydration (Good/Low), Life Load (Light/Normal/Busy/Overwhelmed), Training Intent (None/Light/Training). Hidden behind "Refine your day". Small rounded pills, subtle foreground/background selected state.
+- **Your Day**: Clean card with 24px padding, 20px gap, no divider. Four sections: Move, Fuel, Recover, Mind.
+- **Wellness Inputs**: Feeling (Great/Good/Tired/Exhausted/Stressed) always visible in its own card. Energy/Stress hidden behind "Refine your day".
+- **Today's Context**: Hydration (Good/Low), Life Load (Light/Normal/Busy/Overwhelmed), Training Intent (None/Light/Training). Hidden behind "Refine your day". RefineRow component handles semantic colors.
 - **Adaptive Logic**: All inputs (wearable data + feeling + energy + stress + hydration + life load + training intent) combine into one unified output. Overwhelmed → recovery-focused. Busy → shorter plan. Low hydration → hydration guidance. None training → rest day emphasis. User subjective state overrides data when in conflict. Updates instantly on change. Missing inputs treated as unknown — plan remains flexible and non-aggressive.
 - **No weather**: The product does not use weather data. All inputs are user-relevant and controllable.
 - **AI Coach (contextual)**: Integrated into Today screen as expandable "Ask your coach" card. Inline chat with streaming SSE responses, suggested questions, and full health context including energy/stress/sleep intelligence.

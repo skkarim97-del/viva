@@ -27,34 +27,34 @@ const FEELINGS: { key: NonNullable<FeelingType>; label: string }[] = [
   { key: "stressed", label: "Stressed" },
 ];
 
-const ENERGY_LEVELS: { key: NonNullable<EnergyLevel>; label: string }[] = [
-  { key: "high", label: "High" },
-  { key: "medium", label: "Medium" },
-  { key: "low", label: "Low" },
+const ENERGY_LEVELS: { key: NonNullable<EnergyLevel>; label: string; color: string }[] = [
+  { key: "high", label: "High", color: "#34C759" },
+  { key: "medium", label: "Medium", color: "#86868B" },
+  { key: "low", label: "Low", color: "#FF6B6B" },
 ];
 
-const STRESS_LEVELS: { key: NonNullable<StressLevel>; label: string }[] = [
-  { key: "low", label: "Low" },
-  { key: "moderate", label: "Moderate" },
-  { key: "high", label: "High" },
+const STRESS_LEVELS: { key: NonNullable<StressLevel>; label: string; color: string }[] = [
+  { key: "low", label: "Low", color: "#34C759" },
+  { key: "moderate", label: "Moderate", color: "#FF9500" },
+  { key: "high", label: "High", color: "#FF6B6B" },
 ];
 
-const HYDRATION_LEVELS: { key: NonNullable<HydrationLevel>; label: string }[] = [
-  { key: "good", label: "Good" },
-  { key: "low", label: "Low" },
+const HYDRATION_LEVELS: { key: NonNullable<HydrationLevel>; label: string; color: string }[] = [
+  { key: "good", label: "Good", color: "#5AC8FA" },
+  { key: "low", label: "Low", color: "#FF9500" },
 ];
 
-const LIFE_LOADS: { key: NonNullable<LifeLoad>; label: string }[] = [
-  { key: "light", label: "Light" },
-  { key: "normal", label: "Normal" },
-  { key: "busy", label: "Busy" },
-  { key: "overwhelmed", label: "Overwhelmed" },
+const LIFE_LOADS: { key: NonNullable<LifeLoad>; label: string; color: string }[] = [
+  { key: "light", label: "Light", color: "#34C759" },
+  { key: "normal", label: "Normal", color: "#86868B" },
+  { key: "busy", label: "Busy", color: "#FF9500" },
+  { key: "overwhelmed", label: "Overwhelmed", color: "#FF6B6B" },
 ];
 
-const TRAINING_INTENTS: { key: NonNullable<TrainingIntent>; label: string }[] = [
-  { key: "none", label: "None" },
-  { key: "light", label: "Light" },
-  { key: "training", label: "Training" },
+const TRAINING_INTENTS: { key: NonNullable<TrainingIntent>; label: string; color: string }[] = [
+  { key: "none", label: "None", color: "#86868B" },
+  { key: "light", label: "Light", color: "#5AC8FA" },
+  { key: "training", label: "Training", color: "#1A5CFF" },
 ];
 
 const STATUS_COLOR_MAP: Record<DailyStatusLabel, (c: ReturnType<typeof useColors>) => string> = {
@@ -284,7 +284,8 @@ export default function DashboardScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <ScreenHeader />
-        <View style={styles.statusSection}>
+
+        <View style={[styles.statusCard, { backgroundColor: c.card }]}>
           <View style={[styles.statusIndicator, { backgroundColor: statusColor + "14" }]}>
             <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
             <Text style={[styles.statusLabel, { color: statusColor }]}>{dailyPlan.statusLabel}</Text>
@@ -295,7 +296,7 @@ export default function DashboardScreen() {
           </Text>
         </View>
 
-        <View style={styles.feelingSection}>
+        <View style={[styles.feelingCard, { backgroundColor: c.card }]}>
           <Text style={[styles.feelingPrompt, { color: c.mutedForeground }]}>How are you feeling?</Text>
           <View style={styles.feelingRow}>
             {FEELINGS.map(({ key, label }) => {
@@ -307,9 +308,9 @@ export default function DashboardScreen() {
                   style={({ pressed }) => [
                     styles.feelingChip,
                     {
-                      backgroundColor: isSelected ? c.foreground : c.card,
+                      backgroundColor: isSelected ? c.foreground : c.background,
                       opacity: pressed ? 0.8 : 1,
-                      transform: [{ scale: pressed ? 0.97 : 1 }],
+                      transform: [{ scale: pressed ? 0.96 : isSelected ? 1.02 : 1 }],
                     },
                   ]}
                 >
@@ -320,142 +321,59 @@ export default function DashboardScreen() {
               );
             })}
           </View>
+        </View>
 
+        <View style={[styles.refineCard, { backgroundColor: c.card }]}>
           <Pressable
             onPress={() => { haptic(); setShowRefine(!showRefine); }}
             style={styles.refineToggle}
           >
-            <Text style={[styles.refineText, { color: c.mutedForeground }]}>Refine your day</Text>
-            <Feather name={showRefine ? "chevron-up" : "chevron-down"} size={14} color={c.mutedForeground + "80"} />
+            <Text style={[styles.refineText, { color: c.foreground }]}>Refine your day</Text>
+            <Feather name={showRefine ? "chevron-up" : "chevron-down"} size={14} color={c.mutedForeground} />
           </Pressable>
 
           {showRefine && (
             <View style={styles.refineSection}>
-              <View style={styles.refineRow}>
-                <Text style={[styles.refineLabel, { color: c.mutedForeground }]}>Energy</Text>
-                <View style={styles.refineChipRow}>
-                  {ENERGY_LEVELS.map(({ key, label }) => {
-                    const isSelected = energy === key;
-                    return (
-                      <Pressable
-                        key={key}
-                        onPress={() => selectEnergy(key)}
-                        style={({ pressed }) => [
-                          styles.refineChip,
-                          {
-                            backgroundColor: isSelected ? c.foreground : c.card,
-                            opacity: pressed ? 0.8 : 1,
-                          },
-                        ]}
-                      >
-                        <Text style={[styles.refineChipLabel, { color: isSelected ? c.background : c.mutedForeground }]}>
-                          {label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-              <View style={styles.refineRow}>
-                <Text style={[styles.refineLabel, { color: c.mutedForeground }]}>Stress</Text>
-                <View style={styles.refineChipRow}>
-                  {STRESS_LEVELS.map(({ key, label }) => {
-                    const isSelected = stress === key;
-                    return (
-                      <Pressable
-                        key={key}
-                        onPress={() => selectStress(key)}
-                        style={({ pressed }) => [
-                          styles.refineChip,
-                          {
-                            backgroundColor: isSelected ? c.foreground : c.card,
-                            opacity: pressed ? 0.8 : 1,
-                          },
-                        ]}
-                      >
-                        <Text style={[styles.refineChipLabel, { color: isSelected ? c.background : c.mutedForeground }]}>
-                          {label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-              <View style={styles.refineRow}>
-                <Text style={[styles.refineLabel, { color: c.mutedForeground }]}>Hydration</Text>
-                <View style={styles.refineChipRow}>
-                  {HYDRATION_LEVELS.map(({ key, label }) => {
-                    const isSelected = hydration === key;
-                    return (
-                      <Pressable
-                        key={key}
-                        onPress={() => selectHydration(key)}
-                        style={({ pressed }) => [
-                          styles.refineChip,
-                          {
-                            backgroundColor: isSelected ? c.foreground : c.card,
-                            opacity: pressed ? 0.8 : 1,
-                          },
-                        ]}
-                      >
-                        <Text style={[styles.refineChipLabel, { color: isSelected ? c.background : c.mutedForeground }]}>
-                          {label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-              <View style={styles.refineRow}>
-                <Text style={[styles.refineLabel, { color: c.mutedForeground }]}>Life Load</Text>
-                <View style={styles.refineChipRow}>
-                  {LIFE_LOADS.map(({ key, label }) => {
-                    const isSelected = lifeLoad === key;
-                    return (
-                      <Pressable
-                        key={key}
-                        onPress={() => selectLifeLoad(key)}
-                        style={({ pressed }) => [
-                          styles.refineChip,
-                          {
-                            backgroundColor: isSelected ? c.foreground : c.card,
-                            opacity: pressed ? 0.8 : 1,
-                          },
-                        ]}
-                      >
-                        <Text style={[styles.refineChipLabel, { color: isSelected ? c.background : c.mutedForeground }]}>
-                          {label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-              <View style={styles.refineRow}>
-                <Text style={[styles.refineLabel, { color: c.mutedForeground }]}>Training</Text>
-                <View style={styles.refineChipRow}>
-                  {TRAINING_INTENTS.map(({ key, label }) => {
-                    const isSelected = trainingIntent === key;
-                    return (
-                      <Pressable
-                        key={key}
-                        onPress={() => selectTrainingIntent(key)}
-                        style={({ pressed }) => [
-                          styles.refineChip,
-                          {
-                            backgroundColor: isSelected ? c.foreground : c.card,
-                            opacity: pressed ? 0.8 : 1,
-                          },
-                        ]}
-                      >
-                        <Text style={[styles.refineChipLabel, { color: isSelected ? c.background : c.mutedForeground }]}>
-                          {label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
+              <RefineRow
+                label="Energy"
+                items={ENERGY_LEVELS}
+                selected={energy}
+                onSelect={selectEnergy}
+                cardBg={c.background}
+                mutedColor={c.mutedForeground}
+              />
+              <RefineRow
+                label="Stress"
+                items={STRESS_LEVELS}
+                selected={stress}
+                onSelect={selectStress}
+                cardBg={c.background}
+                mutedColor={c.mutedForeground}
+              />
+              <RefineRow
+                label="Hydration"
+                items={HYDRATION_LEVELS}
+                selected={hydration}
+                onSelect={selectHydration}
+                cardBg={c.background}
+                mutedColor={c.mutedForeground}
+              />
+              <RefineRow
+                label="Life Load"
+                items={LIFE_LOADS}
+                selected={lifeLoad}
+                onSelect={selectLifeLoad}
+                cardBg={c.background}
+                mutedColor={c.mutedForeground}
+              />
+              <RefineRow
+                label="Training"
+                items={TRAINING_INTENTS}
+                selected={trainingIntent}
+                onSelect={selectTrainingIntent}
+                cardBg={c.background}
+                mutedColor={c.mutedForeground}
+              />
             </View>
           )}
         </View>
@@ -589,6 +507,46 @@ export default function DashboardScreen() {
   );
 }
 
+function RefineRow<T extends string>({ label, items, selected, onSelect, cardBg, mutedColor }: {
+  label: string;
+  items: { key: T; label: string; color: string }[];
+  selected: T | null;
+  onSelect: (key: T) => void;
+  cardBg: string;
+  mutedColor: string;
+}) {
+  return (
+    <View style={styles.refineRow}>
+      <Text style={[styles.refineLabel, { color: mutedColor }]}>{label}</Text>
+      <View style={styles.refineChipRow}>
+        {items.map(({ key, label: chipLabel, color }) => {
+          const isSelected = selected === key;
+          return (
+            <Pressable
+              key={key}
+              onPress={() => onSelect(key)}
+              style={({ pressed }) => [
+                styles.refineChip,
+                {
+                  backgroundColor: isSelected ? color + "18" : cardBg,
+                  borderWidth: 1,
+                  borderColor: isSelected ? color + "40" : "transparent",
+                  opacity: pressed ? 0.8 : 1,
+                  transform: [{ scale: pressed ? 0.96 : isSelected ? 1.02 : 1 }],
+                },
+              ]}
+            >
+              <Text style={[styles.refineChipLabel, { color: isSelected ? color : mutedColor }]}>
+                {chipLabel}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 function DayRow({ icon, iconColor, label, value, foreground, muted }: {
   icon: keyof typeof Feather.glyphMap;
   iconColor: string;
@@ -617,11 +575,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
 
-  statusSection: {
+  statusCard: {
     alignItems: "center",
-    paddingTop: 16,
-    paddingBottom: 8,
-    marginBottom: 28,
+    paddingTop: 20,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    marginBottom: 24,
+    borderRadius: 20,
     gap: 10,
   },
   statusIndicator: {
@@ -649,7 +609,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 32,
     marginTop: 4,
-    paddingHorizontal: 16,
+    paddingHorizontal: 8,
   },
   driversInline: {
     fontSize: 13,
@@ -659,8 +619,11 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
 
-  feelingSection: {
-    marginBottom: 32,
+  feelingCard: {
+    borderRadius: 20,
+    paddingVertical: 18,
+    paddingHorizontal: 16,
+    marginBottom: 24,
     gap: 14,
   },
   feelingPrompt: {
@@ -683,25 +646,31 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_500Medium",
   },
 
+  refineCard: {
+    borderRadius: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    marginBottom: 24,
+  },
   refineToggle: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
-    paddingVertical: 4,
+    justifyContent: "space-between",
+    paddingVertical: 2,
   },
   refineText: {
-    fontSize: 12,
+    fontSize: 14,
     fontFamily: "Inter_500Medium",
   },
   refineSection: {
-    gap: 12,
-    marginTop: 4,
+    gap: 16,
+    marginTop: 16,
+    paddingBottom: 4,
   },
   refineRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 12,
   },
   refineLabel: {
     fontSize: 12,
@@ -711,12 +680,12 @@ const styles = StyleSheet.create({
   },
   refineChipRow: {
     flexDirection: "row",
-    gap: 6,
+    gap: 8,
     flex: 1,
   },
   refineChip: {
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderRadius: 16,
   },
   refineChipLabel: {
@@ -727,8 +696,8 @@ const styles = StyleSheet.create({
   dayCard: {
     borderRadius: 20,
     padding: 24,
-    gap: 18,
-    marginBottom: 28,
+    gap: 20,
+    marginBottom: 24,
   },
   dayTitle: {
     fontSize: 15,
@@ -768,7 +737,7 @@ const styles = StyleSheet.create({
   metricsRow: {
     flexDirection: "row",
     gap: 10,
-    marginBottom: 16,
+    marginBottom: 24,
   },
   metricTile: {
     flex: 1,
