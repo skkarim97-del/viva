@@ -1,0 +1,337 @@
+Build a polished, mobile-first cross-platform app for iPhone and Android called PulsePilot.
+
+Product concept
+
+PulsePilot is a subscription-based AI health, fitness, recovery, and nutrition coach for everyday consumers. It connects to wearable and health data platforms like Apple Health, Garmin, and WHOOP, then translates that data into simple, science-backed daily guidance.
+
+The product should feel easy enough for the average American to use every day, even if they know nothing about HRV, Zone 2, aerobic vs anaerobic training, recovery metrics, fasting protocols, macros, or training periodization.
+
+All of the complexity should happen in the background. The user experience should be extremely simple, clear, and actionable.
+
+Core promise
+
+The app should help users answer:
+
+What should I do today for my health?
+Should I push hard, go easy, or recover?
+What should I eat today based on my goals and activity?
+Should I fast today or not?
+Am I moving in the right direction?
+What habits are helping or hurting my progress?
+Target user
+
+This app is for the mainstream consumer, not just athletes or hardcore biohackers.
+
+Examples:
+
+Someone trying to lose weight
+Someone trying to build consistency
+Someone trying to get healthier and improve sleep
+Someone trying to balance workouts, recovery, and nutrition
+Someone who wants expert-level guidance without needing to understand technical fitness jargon
+Positioning
+
+The app should feel like:
+
+A simple daily coach
+Data-driven and personalized
+Scientific and credible
+Friendly and easy to understand
+Premium but not intimidating
+
+It should not feel like:
+
+A hardcore bodybuilding app
+A medical diagnostic tool
+A dashboard that overwhelms the user with metrics
+Business model
+
+Design the product around a monthly subscription model with tiered access.
+
+Tier 1: Free
+Basic onboarding
+Manual goal input
+Sample dashboard
+Limited daily coaching
+Limited trend insights
+Tier 2: Premium
+Full wearable integrations
+Full daily AI coaching
+Weekly workout and recovery plan
+Nutrition coaching
+Fasting recommendations
+Trend analysis
+Chat with coach
+Smart alerts and recommendations
+Tier 3: Premium Plus
+More advanced personalization
+Goal-specific protocols such as fat loss, muscle gain, endurance, metabolic health
+Deeper trend analysis
+More proactive coaching
+Habit planning and accountability layer
+Advanced recovery and training logic
+Integrations
+
+Build the app so it can connect to:
+
+Apple Health / Apple Fitness
+Garmin
+WHOOP
+
+If live integrations are difficult, create clean mocked integration layers and sample data models so the app still feels real and investor-demo ready.
+
+Data inputs
+
+The app should ingest or allow manual entry for:
+
+Age
+Sex
+Height
+Weight
+Goal weight
+Body fat percentage if available
+Steps
+Calories burned
+Active calories
+Sleep duration
+Sleep quality
+Resting heart rate
+HRV
+Workout history
+Training load
+Recovery score
+Strain
+Distance
+Pace
+VO2 max if available
+Fasting schedule
+Dietary preference
+Workout preference
+Injuries or limitations
+Available workout time
+Days available to train
+Health goals
+Coaching tone preference
+Core AI coaching engine
+
+Build an AI engine that uses user data, goals, trends, and recent behavior to generate personalized wellness coaching.
+
+The coaching engine should include:
+
+Fitness guidance
+Recovery guidance
+Nutrition guidance
+Fasting guidance
+Habit formation guidance
+Trend analysis
+Readiness-based workout suggestions
+
+The logic should account for:
+
+HRV relative to baseline
+Resting heart rate changes
+Sleep quality and sleep debt
+Recent training load
+Step count and general activity
+Weight and body composition trends
+Goal type such as fat loss, muscle gain, general wellness, endurance, or consistency
+Examples of coaching logic
+If HRV is down, resting HR is elevated, and sleep is poor, recommend lower intensity, more recovery, hydration, and earlier bedtime
+If recovery is strong and recent strain is low, recommend a harder workout
+If the user is trying to lose weight and activity is low, increase movement targets and tighten calorie guidance
+If the user is trying to gain muscle, increase protein targets and emphasize strength training progression
+If the user is fasting but recovery is poor, suggest modifying the fasting window
+If the user is accumulating fatigue, explain that simply and suggest a recovery day
+If the user is doing too much high intensity work, recommend more Zone 2
+If the user is undertraining for endurance, increase aerobic volume gradually
+If the user is overdoing volume, reduce intensity or add rest
+Scientific but simple communication style
+
+The app should be deeply evidence-based in logic, but explain things in plain English.
+
+Examples:
+Do not say:
+
+“Your autonomic nervous system markers indicate sympathetic dominance and insufficient parasympathetic recovery.”
+
+Say:
+
+“Your body looks more stressed than usual today. A lighter workout or recovery day is likely the better move.”
+
+Do not overwhelm the user with technical jargon on the main screen. Keep advanced explanations secondary or optional.
+
+Main product features
+1. Onboarding
+Welcome screen
+Clear value proposition
+Goal setup
+Profile setup
+Integration connection flow
+Select preferences like fat loss, muscle gain, better sleep, improved energy, better recovery, or general wellness
+2. Daily Home Dashboard
+
+Show:
+
+Today’s readiness
+Recovery summary
+Sleep summary
+Steps
+Weight trend
+Workout recommendation
+Nutrition target
+Fasting guidance if relevant
+One simple “Today’s plan” card
+One simple “Why this plan” section
+3. AI Coach Chat
+
+Create a chat interface where users can ask:
+
+Should I work out today?
+Why is my HRV down?
+What should I eat today?
+Should I fast today?
+Why am I not losing weight?
+Am I overtraining?
+How should I train this week?
+
+The AI must answer using the user’s own data, goals, and recent history, not generic advice.
+
+4. Weekly Plan Screen
+
+Generate:
+
+Weekly training plan
+Rest and recovery days
+Step goals
+Nutrition priorities
+Fasting schedule if enabled
+Adjustments based on how the week is going
+5. Trends Screen
+
+Show simple trend charts and plain-English summaries for:
+
+Weight
+HRV
+Resting heart rate
+Sleep
+Steps
+Training load
+Recovery
+6. Subscription and Paywall
+
+Include:
+
+Free vs paid comparison
+Trial flow
+Upgrade prompts
+Subscription management UI
+7. Settings and Integrations
+Manage connected platforms
+Manage goals
+Manage reminders
+Manage privacy controls
+Units and preferences
+Manage fasting protocol preferences
+UX and UI direction
+
+The app should feel:
+
+Extremely intuitive
+Clean and premium
+Minimal clutter
+Card-based
+Mobile-first
+Friendly and calm
+Similar in quality to leading wellness apps
+
+Important:
+
+Do not overload users with data
+Prioritize one clear takeaway per screen
+Make recommendations feel obvious and helpful
+Use charts only where they improve understanding
+Keep navigation simple
+Technical stack
+
+Please build the app using:
+
+React Native or Expo for cross-platform mobile support
+A backend with authentication
+A database for users, goals, wearable data, AI outputs, subscriptions, and chat history
+API architecture for third-party integrations
+Mock integration adapters if real APIs are not fully connected yet
+AI architecture
+
+Use OpenAI APIs for the intelligence layer.
+
+Implement:
+
+Structured outputs for coaching summaries, plans, alerts, and explanations
+Function calling or tool-based architecture so the model can pull user metrics and trends before generating responses
+Prompt logic that grounds recommendations in actual user data
+Guardrails so the model avoids making medical diagnoses
+Clear response schema for daily plan, weekly plan, nutrition targets, and recovery recommendations
+Suggested backend AI flow
+Pull latest user health data
+Normalize and summarize trends
+Calculate readiness and context signals
+Send structured context into OpenAI
+Receive structured coaching output
+Render that output cleanly in the app UI
+Data model
+
+Create clean schemas for:
+
+Users
+Goals
+Preferences
+Health metrics
+Sleep data
+Workout data
+Recovery data
+Nutrition targets
+Fasting protocols
+Daily recommendations
+Weekly plans
+Chat history
+Subscription tier
+Notifications
+
+Support optional notifications such as:
+
+Recovery day suggestion
+Time to move
+Time to eat
+Fasting window reminder
+Sleep wind-down reminder
+Weekly plan ready
+You’re ready to push harder today
+Safety
+
+This product is for wellness and informational purposes only.
+Do not position it as medical advice.
+Do not diagnose disease.
+When patterns are concerning, encourage the user to speak with a medical professional.
+
+MVP priorities
+
+Focus first on:
+
+Great onboarding
+Dashboard
+Goal engine
+Mocked or real Apple Health, Garmin, and WHOOP data flow
+AI daily coaching
+Weekly plan generation
+Trend visualization
+Subscription flow
+Final build goal
+
+Make the app feel polished, consumer-friendly, and good enough for:
+
+Investor demos
+Early beta testers
+App prototype validation
+Subscription testing
+
+If needed, use realistic mock data and placeholders so the product feels complete even before all integrations are live.
