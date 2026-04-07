@@ -10,6 +10,7 @@ import {
   generateTrendData,
   integrations as defaultIntegrations,
 } from "@/data/mockData";
+import { computeInsights, type DailyInsights } from "@/data/insights";
 import type {
   UserProfile,
   HealthMetrics,
@@ -39,6 +40,7 @@ interface AppContextType {
   toggleIntegration: (id: string) => void;
   isLoading: boolean;
   upgradeTier: (tier: SubscriptionTier) => void;
+  insights: DailyInsights | null;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -57,6 +59,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [integrationsState, setIntegrationsState] = useState<IntegrationStatus[]>(defaultIntegrations);
   const [isLoading, setIsLoading] = useState(true);
+  const [insights, setInsights] = useState<DailyInsights | null>(null);
 
   useEffect(() => {
     loadData();
@@ -82,7 +85,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setDailyPlan(generateDailyPlan(today));
       setWeeklyPlan(generateWeeklyPlan());
       setTrends(generateTrendData());
-      setWorkouts(generateMockWorkouts());
+      const allWorkouts = generateMockWorkouts();
+      setWorkouts(allWorkouts);
+
+      const savedProfileData = savedProfile ? JSON.parse(savedProfile) : defaultProfile;
+      setInsights(computeInsights(allMetrics, today, allWorkouts, savedProfileData));
     } catch {
       // silently fail
     } finally {
@@ -141,6 +148,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         toggleIntegration,
         isLoading,
         upgradeTier,
+        insights,
       }}
     >
       {children}

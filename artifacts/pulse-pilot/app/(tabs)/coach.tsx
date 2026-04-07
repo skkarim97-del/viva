@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   FlatList,
   TextInput,
   Pressable,
+  ScrollView,
   Platform,
   KeyboardAvoidingView,
 } from "react-native";
@@ -15,7 +16,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
-import { coachResponses } from "@/data/mockData";
 import colors from "@/constants/colors";
 import type { ChatMessage } from "@/types";
 
@@ -28,18 +28,76 @@ const quickActions = [
   { label: "Plan my week", key: "week" },
 ];
 
+const API_BASE = Platform.OS === "web"
+  ? "/api"
+  : `https://${process.env.EXPO_PUBLIC_DOMAIN}/api`;
+
 export default function CoachScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
-  const { chatMessages, addChatMessage, profile } = useApp();
+  const { chatMessages, addChatMessage, todayMetrics, profile, trends, dailyPlan } = useApp();
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [streamingText, setStreamingText] = useState("");
   const flatListRef = useRef<FlatList>(null);
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
-  const sendMessage = (text: string) => {
-    if (!text.trim()) return;
+  const buildHealthContext = useCallback(() => {
+    if (!todayMetrics) return undefined;
+
+    const ctx: any = {};
+
+    ctx.todayMetrics = {
+      hrv: todayMetrics.hrv,
+      restingHeartRate: todayMetrics.restingHeartRate,
+      sleepDuration: todayMetrics.sleepDuration,
+      sleepQuality: todayMetrics.sleepQuality,
+      steps: todayMetrics.steps,
+      recoveryScore: todayMetrics.recoveryScore,
+      weight: todayMetrics.weight,
+      strain: todayMetrics.strain,
+      caloriesBurned: todayMetrics.caloriesBurned,
+      activeCalories: todayMetrics.activeCalories,
+    };
+
+    ctx.profile = {
+      age: profile.age,
+      sex: profile.sex,
+      weight: profile.weight,
+      goalWeight: profile.goalWeight,
+      goals: profile.goals,
+      workoutPreference: profile.workoutPreference,
+      dietaryPreference: profile.dietaryPreference,
+      fastingEnabled: profile.fastingEnabled,
+      injuries: profile.injuries,
+      availableWorkoutTime: profile.availableWorkoutTime,
+      daysAvailableToTrain: profile.daysAvailableToTrain,
+    };
+
+    if (trends.length > 0) {
+      const trendMap: Record<string, string> = {};
+      for (const t of trends) {
+        trendMap[t.label] = `${t.trend} — ${t.summary}`;
+      }
+      ctx.recentTrends = {
+        weightTrend: trendMap["Weight"] || "unknown",
+        hrvTrend: trendMap["HRV"] || "unknown",
+        sleepTrend: trendMap["Sleep"] || "unknown",
+        stepsTrend: trendMap["Steps"] || "unknown",
+      };
+    }
+
+    if (dailyPlan) {
+      ctx.readinessScore = dailyPlan.readinessScore;
+      ctx.readinessLabel = dailyPlan.readinessLabel;
+    }
+
+    return ctx;
+  }, [todayMetrics, profile, trends, dailyPlan]);
+
+  const sendMessage = useCallback(async (text: string) => {
+    if (!text.trim() || isTyping) return;
 
     const userMsg: ChatMessage = {
       id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
@@ -55,29 +113,110 @@ export default function CoachScreen() {
     }
 
     setIsTyping(true);
-    const lower = text.toLowerCase();
-    let responseKey = "workout";
-    if (lower.includes("hrv") || lower.includes("recovery")) responseKey = "hrv";
-    else if (lower.includes("eat") || lower.includes("nutrition") || lower.includes("food")) responseKey = "eat";
-    else if (lower.includes("fast")) responseKey = "fast";
-    else if (lower.includes("weight") || lower.includes("losing")) responseKey = "weight";
-    else if (lower.includes("overtrain")) responseKey = "overtraining";
-    else if (lower.includes("week") || lower.includes("plan")) responseKey = "week";
+    setStreamingText("");
 
-    setTimeout(() => {
-      const botMsg: ChatMessage = {
+    const conversationHistory = chatMessages.slice(-10).map((m) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    }));
+
+    try {
+      const response = await fetch(`${API_BASE}/coach/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: text.trim(),
+          healthContext: buildHealthContext(),
+          conversationHistory,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("No stream reader");
+
+      const decoder = new TextDecoder();
+      let fullText = "";
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.content) {
+                fullText += data.content;
+                setStreamingText(fullText);
+              }
+              if (data.done) {
+                const botMsg: ChatMessage = {
+                  id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                  role: "assistant",
+                  content: fullText,
+                  timestamp: Date.now(),
+                };
+                addChatMessage(botMsg);
+                setStreamingText("");
+                setIsTyping(false);
+                return;
+              }
+              if (data.error) {
+                throw new Error(data.error);
+              }
+            } catch (parseErr) {
+              // skip malformed SSE lines
+            }
+          }
+        }
+      }
+
+      if (fullText) {
+        const botMsg: ChatMessage = {
+          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+          role: "assistant",
+          content: fullText,
+          timestamp: Date.now(),
+        };
+        addChatMessage(botMsg);
+      }
+    } catch (err) {
+      console.error("Coach chat error:", err);
+      const errorMsg: ChatMessage = {
         id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
         role: "assistant",
-        content: coachResponses[responseKey] || coachResponses.workout,
+        content: "I was not able to connect right now. Please try again in a moment.",
         timestamp: Date.now(),
       };
-      addChatMessage(botMsg);
+      addChatMessage(errorMsg);
+    } finally {
+      setStreamingText("");
       setIsTyping(false);
-    }, 800);
-  };
+    }
+  }, [isTyping, chatMessages, addChatMessage, buildHealthContext]);
+
+  const displayMessages = [...chatMessages];
+  if (streamingText) {
+    displayMessages.push({
+      id: "streaming",
+      role: "assistant",
+      content: streamingText,
+      timestamp: Date.now(),
+    });
+  }
 
   const renderMessage = ({ item }: { item: ChatMessage }) => {
     const isUser = item.role === "user";
+    const isStreaming = item.id === "streaming";
     return (
       <View style={[styles.msgRow, isUser && styles.msgRowUser]}>
         <View
@@ -95,21 +234,24 @@ export default function CoachScreen() {
             ]}
           >
             {item.content}
+            {isStreaming ? "▍" : ""}
           </Text>
-          <Text
-            style={[
-              styles.msgTime,
-              { color: isUser ? c.primaryForeground + "88" : c.mutedForeground },
-            ]}
-          >
-            {formatTime(item.timestamp)}
-          </Text>
+          {!isStreaming && (
+            <Text
+              style={[
+                styles.msgTime,
+                { color: isUser ? c.primaryForeground + "88" : c.mutedForeground },
+              ]}
+            >
+              {formatTime(item.timestamp)}
+            </Text>
+          )}
         </View>
       </View>
     );
   };
 
-  const showQuickActions = chatMessages.length === 0;
+  const showQuickActions = chatMessages.length === 0 && !isTyping;
 
   return (
     <KeyboardAvoidingView
@@ -120,14 +262,14 @@ export default function CoachScreen() {
       <View style={[styles.header, { paddingTop: topPad + 12 }]}>
         <Text style={[styles.headerTitle, { color: c.foreground }]}>Coach</Text>
         <Text style={[styles.headerSubtitle, { color: c.mutedForeground }]}>
-          Personalized advice based on your data.
+          AI-powered advice based on your data.
         </Text>
       </View>
 
       {showQuickActions ? (
         <ScrollView style={styles.quickActionsContainer} contentContainerStyle={styles.quickInner} showsVerticalScrollIndicator={false}>
           <Text style={[styles.quickPrompt, { color: c.mutedForeground }]}>
-            Ask me anything about your health, training, or nutrition.
+            Ask me anything about your health, training, or nutrition. I have access to all your metrics.
           </Text>
           <View style={styles.quickGrid}>
             {quickActions.map((action) => (
@@ -152,14 +294,14 @@ export default function CoachScreen() {
       ) : (
         <FlatList
           ref={flatListRef}
-          data={[...chatMessages].reverse()}
+          data={[...displayMessages].reverse()}
           renderItem={renderMessage}
           keyExtractor={(item) => item.id}
           inverted
           contentContainerStyle={styles.messageList}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
-            isTyping ? (
+            isTyping && !streamingText ? (
               <View style={[styles.msgRow]}>
                 <View style={[styles.typingBubble, { backgroundColor: c.card, borderColor: c.border }]}>
                   <View style={styles.typingDots}>
@@ -193,12 +335,14 @@ export default function CoachScreen() {
             placeholderTextColor={c.mutedForeground}
             onSubmitEditing={() => sendMessage(input)}
             returnKeyType="send"
+            editable={!isTyping}
           />
           <Pressable
             onPress={() => sendMessage(input)}
-            style={[styles.sendButton, { backgroundColor: input.trim() ? c.primary : c.muted }]}
+            disabled={isTyping || !input.trim()}
+            style={[styles.sendButton, { backgroundColor: input.trim() && !isTyping ? c.primary : c.muted }]}
           >
-            <Feather name="arrow-up" size={18} color={input.trim() ? c.primaryForeground : c.mutedForeground} />
+            <Feather name="arrow-up" size={18} color={input.trim() && !isTyping ? c.primaryForeground : c.mutedForeground} />
           </Pressable>
         </View>
       </View>
