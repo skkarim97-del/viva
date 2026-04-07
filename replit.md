@@ -45,8 +45,9 @@ Mobile-first AI health, fitness, recovery, and nutrition coaching app built with
 
 ### Features
 - **Onboarding**: 4-step flow (Welcome, Goals, Profile, Integrations)
-- **Dashboard (Today tab)**: Minimal readiness ring (96px, slim 5px stroke) → short confident headline → 1-2 sentence summary → Today's Plan card (icons in rounded squares) → Why bullets (dot indicators) → 4 metric tiles
-- **AI Coach**: Real-time chat powered by OpenAI (gpt-4o-mini) via SSE streaming. Header with subtitle, 5 quick actions with icons, polished input bar. Sends full user health context with every message.
+- **Dashboard (Today tab)**: Readiness ring (96px) → Feeling input (5 chips: Great/Good/Tired/Exhausted/Stressed) → Adaptive headline + summary → Today's Plan card → Why bullets → Metric tiles → Ask your coach (inline expandable chat)
+- **Feeling Input**: One-tap chips that influence the entire daily plan. If user-reported feeling conflicts with data (e.g. data is good but user feels exhausted), the plan prioritizes the user's subjective feeling and explains why.
+- **AI Coach (contextual)**: Integrated into Today screen as expandable "Ask your coach" card. Inline chat with streaming SSE responses, suggested questions, and full health context. No longer a separate tab.
 - **Weekly Plan**: Summary card at top, day cards with Today badge, adaptive tags (build day/recovery day/steady effort), adjustment notes
 - **Trends**: 30-day trend charts with plain-English takeaway per card, press-to-drill-down
 - **Metric Drill-Down**: Large value + headline → explanation → 30-day chart → "What this means" → deep analysis (from insights engine) → "What to do" section
@@ -62,20 +63,21 @@ Mobile-first AI health, fitness, recovery, and nutrition coaching app built with
 - **Components**: ReadinessRing (minimal SVG arc), plan rows with icon squares, metric tiles with drill-down
 
 ### Key Files
-- `artifacts/pulse-pilot/app/(tabs)/index.tsx` — Today dashboard
-- `artifacts/pulse-pilot/app/(tabs)/coach.tsx` — AI coach chat (OpenAI streaming)
+- `artifacts/pulse-pilot/app/(tabs)/index.tsx` — Today dashboard (feeling input + inline coach chat)
+- `artifacts/pulse-pilot/app/(tabs)/coach.tsx` — Legacy coach screen (hidden from tabs, kept for reference)
 - `artifacts/pulse-pilot/app/(tabs)/plan.tsx` — Weekly plan with adaptive tags
 - `artifacts/pulse-pilot/app/(tabs)/trends.tsx` — Trends with takeaways
 - `artifacts/pulse-pilot/app/(tabs)/settings.tsx` — Premium settings
 - `artifacts/pulse-pilot/app/metric-detail.tsx` — Metric drill-down with deep analysis
 - `artifacts/pulse-pilot/data/insights.ts` — Computed insights engine
-- `artifacts/pulse-pilot/data/mockData.ts` — Mock health data and daily plan generation
+- `artifacts/pulse-pilot/data/mockData.ts` — Mock health data and adaptive daily plan generation (feeling-aware)
 - `artifacts/pulse-pilot/constants/colors.ts` — Design system colors
-- `artifacts/pulse-pilot/context/AppContext.tsx` — Global state with insights computation
+- `artifacts/pulse-pilot/context/AppContext.tsx` — Global state with feeling state, auto-regenerates plan on feeling change
 - `artifacts/api-server/src/routes/coach/index.ts` — OpenAI coaching endpoint (SSE)
 
 ### Navigation
-- Tab bar: Today, Coach, Plan, Trends, Settings (borderless, blur on iOS)
+- Tab bar: Today, Plan, Trends, Settings (4 tabs, borderless, blur on iOS)
+- Coach: Integrated into Today screen as expandable inline panel (not a tab)
 - Modal: Subscription screen
 - Stack: Onboarding flow, Metric detail drill-down
 

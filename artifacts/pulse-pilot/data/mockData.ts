@@ -8,6 +8,7 @@ import type {
   IntegrationStatus,
   MetricDetail,
   MetricKey,
+  FeelingType,
 } from "@/types";
 
 export const defaultProfile: UserProfile = {
@@ -88,15 +89,23 @@ export function getTodayMetrics(): HealthMetrics {
   return all[0];
 }
 
-export function generateDailyPlan(metrics: HealthMetrics): DailyPlan {
-  const readinessScore = Math.round(
+export function generateDailyPlan(metrics: HealthMetrics, feeling?: FeelingType): DailyPlan {
+  let readinessScore = Math.round(
     metrics.recoveryScore * 0.3 +
     metrics.sleepQuality * 0.3 +
     (metrics.hrv / 60) * 100 * 0.2 +
     (1 - Math.min(metrics.restingHeartRate, 80) / 80) * 100 * 0.2
   );
 
+  if (feeling === "exhausted") readinessScore = Math.min(readinessScore, 35);
+  else if (feeling === "tired") readinessScore = Math.min(readinessScore, 55);
+  else if (feeling === "stressed") readinessScore = Math.min(readinessScore, 50);
+  else if (feeling === "great") readinessScore = Math.max(readinessScore, 75);
+
   const readinessLabel = readinessScore >= 80 ? "Excellent" : readinessScore >= 65 ? "Good" : readinessScore >= 45 ? "Moderate" : "Low";
+
+  const feelingOverride = feeling === "exhausted" || feeling === "tired" || feeling === "stressed";
+  const dataIsGood = metrics.recoveryScore >= 65 && metrics.sleepQuality >= 70;
 
   let headline = "";
   let summary = "";
@@ -108,20 +117,85 @@ export function generateDailyPlan(metrics: HealthMetrics): DailyPlan {
   let workoutDuration = 40;
   let workoutDesc = "";
 
-  if (readinessScore >= 75) {
-    headline = "Push today. Your body is ready.";
-    summary = "Recovery is strong, sleep was solid. A good day to train hard.";
+  if (feelingOverride && dataIsGood) {
+    if (feeling === "exhausted") {
+      headline = "Take it easy. You know your body best.";
+      summary = "Your data looks solid, but you feel exhausted. Subjective fatigue matters. Rest today.";
+      todaysPlan = {
+        workout: "Active recovery only. Gentle stretching, 15 min.",
+        movement: "Light walk if you feel like it. No pressure.",
+        nutrition: "1,900 cal. Comfort foods that nourish. Stay hydrated.",
+        recovery: "Prioritize sleep. In bed early tonight.",
+      };
+      whyThisPlan = [
+        "Your data says go, but your body says stop. We listen to both.",
+        "Training while mentally exhausted rarely produces good results.",
+        "One rest day protects the rest of your week.",
+      ];
+      workoutType = "Active Recovery";
+      workoutIntensity = "low";
+      workoutDuration = 15;
+      workoutDesc = "Gentle stretching and mobility only.";
+    } else if (feeling === "tired") {
+      headline = "Go light today. Save your energy.";
+      summary = "Your metrics look decent, but you feel tired. A lighter session is the smarter call.";
+      todaysPlan = {
+        workout: "Easy walk or light yoga, 30 min.",
+        movement: "6,000 steps. No need to push.",
+        nutrition: "2,000 cal. Balanced, easy meals.",
+        recovery: "Wind down early. Extra sleep helps more than an extra set.",
+      };
+      whyThisPlan = [
+        "Fatigue you can feel often shows up in data tomorrow.",
+        "A light day now prevents a forced rest day later.",
+        "Consistency beats intensity when you are running low.",
+      ];
+      workoutType = "Light Activity";
+      workoutIntensity = "low";
+      workoutDuration = 30;
+      workoutDesc = "Easy walk or gentle yoga.";
+    } else {
+      headline = "Dial it back. Manage your stress first.";
+      summary = "Your body could handle training, but stress changes the equation. Go easy.";
+      todaysPlan = {
+        workout: "Zone 2 walk or yoga, 30 min. Nothing intense.",
+        movement: "Move gently. Fresh air helps.",
+        nutrition: "2,000 cal. Avoid skipping meals under stress.",
+        recovery: "10 min breathing exercise. Limit caffeine after noon.",
+      };
+      whyThisPlan = [
+        "Stress raises cortisol. Adding hard training raises it more.",
+        "Low-intensity movement actually helps reduce stress.",
+        "Protecting your nervous system is the priority today.",
+      ];
+      workoutType = "Stress Relief";
+      workoutIntensity = "low";
+      workoutDuration = 30;
+      workoutDesc = "Gentle movement focused on stress relief.";
+    }
+    optional = "If you start feeling better, you can increase intensity slightly. But no obligation.";
+  } else if (readinessScore >= 75) {
+    headline = feeling === "great" ? "Let's go. You feel it and your data confirms it." : "Push today. Your body is ready.";
+    summary = feeling === "great"
+      ? "You feel great and your recovery backs it up. Make this session count."
+      : "Recovery is strong, sleep was solid. A good day to train hard.";
     todaysPlan = {
       workout: "Strength, 50 min. Compound lifts, full body.",
       movement: "8,000 steps outside your workout.",
       nutrition: "2,200 cal. Protein and carbs before training.",
       recovery: "Stretch 10 min post-session. 96oz water.",
     };
-    whyThisPlan = [
-      "Your body is fully recharged from last night.",
-      "Heart rate and recovery signals are strong.",
-      "A hard session will produce real gains today.",
-    ];
+    whyThisPlan = feeling === "great"
+      ? [
+          "You feel great and your body data agrees.",
+          "Recovery signals are strong across the board.",
+          "Days like this are when real progress happens.",
+        ]
+      : [
+          "Your body is fully recharged from last night.",
+          "Heart rate and recovery signals are strong.",
+          "A hard session will produce real gains today.",
+        ];
     optional = "If you feel fatigued mid-session, drop to moderate. No need to force it.";
     workoutType = "Strength Training";
     workoutIntensity = "high";

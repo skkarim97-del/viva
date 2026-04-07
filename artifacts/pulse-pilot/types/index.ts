@@ -138,6 +138,8 @@ export interface IntegrationStatus {
   lastSync?: string;
 }
 
+export type FeelingType = "great" | "good" | "tired" | "exhausted" | "stressed" | null;
+
 export type MetricKey = "sleep" | "hrv" | "steps" | "restingHR" | "recovery" | "weight";
 
 export interface MetricDetail {

@@ -22,6 +22,7 @@ import type {
   IntegrationStatus,
   HealthGoal,
   SubscriptionTier,
+  FeelingType,
 } from "@/types";
 
 interface AppContextType {
@@ -41,12 +42,15 @@ interface AppContextType {
   isLoading: boolean;
   upgradeTier: (tier: SubscriptionTier) => void;
   insights: DailyInsights | null;
+  feeling: FeelingType;
+  setFeeling: (feeling: FeelingType) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const PROFILE_KEY = "@pulsepilot_profile";
 const CHAT_KEY = "@pulsepilot_chat";
+const FEELING_KEY = "@pulsepilot_feeling";
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<UserProfile>(defaultProfile);
@@ -60,6 +64,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [integrationsState, setIntegrationsState] = useState<IntegrationStatus[]>(defaultIntegrations);
   const [isLoading, setIsLoading] = useState(true);
   const [insights, setInsights] = useState<DailyInsights | null>(null);
+  const [feeling, setFeelingState] = useState<FeelingType>(null);
+  const [metricsRef, setMetricsRef] = useState<HealthMetrics | null>(null);
 
   useEffect(() => {
     loadData();
@@ -77,12 +83,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setChatMessages(JSON.parse(savedChat));
       }
 
+      const savedFeeling = await AsyncStorage.getItem(FEELING_KEY);
+      const todayDate = new Date().toISOString().split("T")[0];
+      let currentFeeling: FeelingType = null;
+      if (savedFeeling) {
+        const parsed = JSON.parse(savedFeeling);
+        if (parsed.date === todayDate) {
+          currentFeeling = parsed.feeling;
+          setFeelingState(currentFeeling);
+        }
+      }
+
       const allMetrics = generateMockMetrics(30);
       setMetrics(allMetrics);
 
       const today = allMetrics[allMetrics.length - 1];
       setTodayMetrics(today);
-      setDailyPlan(generateDailyPlan(today));
+      setMetricsRef(today);
+      setDailyPlan(generateDailyPlan(today, currentFeeling));
       setWeeklyPlan(generateWeeklyPlan());
       setTrends(generateTrendData());
       const allWorkouts = generateMockWorkouts();
@@ -91,11 +109,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const savedProfileData = savedProfile ? JSON.parse(savedProfile) : defaultProfile;
       setInsights(computeInsights(allMetrics, today, allWorkouts, savedProfileData));
     } catch {
-      // silently fail
     } finally {
       setIsLoading(false);
     }
   };
+
+  const setFeeling = useCallback((newFeeling: FeelingType) => {
+    setFeelingState(newFeeling);
+    const todayDate = new Date().toISOString().split("T")[0];
+    AsyncStorage.setItem(FEELING_KEY, JSON.stringify({ date: todayDate, feeling: newFeeling }));
+
+    if (metricsRef) {
+      setDailyPlan(generateDailyPlan(metricsRef, newFeeling));
+    }
+  }, [metricsRef]);
 
   const updateProfile = useCallback((updates: Partial<UserProfile>) => {
     setProfile((prev) => {
@@ -149,6 +176,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         upgradeTier,
         insights,
+        feeling,
+        setFeeling,
       }}
     >
       {children}
