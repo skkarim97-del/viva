@@ -64,13 +64,21 @@ export interface DailyPlan {
   date: string;
   readinessScore: number;
   readinessLabel: "Low" | "Moderate" | "Good" | "Excellent";
+  headline: string;
+  summary: string;
+  todaysPlan: {
+    workout: string;
+    movement: string;
+    nutrition: string;
+    recovery: string;
+  };
+  whyThisPlan: string[];
+  optional?: string;
   recoverySummary: string;
   sleepSummary: string;
   workoutRecommendation: WorkoutRecommendation;
   nutritionTarget: NutritionTarget;
   fastingGuidance?: string;
-  whyThisPlan: string;
-  todaysPlanSummary: string;
 }
 
 export interface WorkoutRecommendation {
@@ -128,4 +136,18 @@ export interface IntegrationStatus {
   icon: string;
   connected: boolean;
   lastSync?: string;
+}
+
+export type MetricKey = "sleep" | "hrv" | "steps" | "restingHR" | "recovery" | "weight";
+
+export interface MetricDetail {
+  key: MetricKey;
+  title: string;
+  headline: string;
+  explanation: string;
+  whatItMeans: string;
+  recommendation: string;
+  currentValue: string;
+  unit: string;
+  trend: TrendData;
 }

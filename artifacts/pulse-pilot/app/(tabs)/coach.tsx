@@ -20,9 +20,9 @@ import colors from "@/constants/colors";
 import type { ChatMessage } from "@/types";
 
 const quickActions = [
-  { label: "Should I work out?", key: "workout" },
-  { label: "Why is my HRV down?", key: "hrv" },
-  { label: "What should I eat?", key: "eat" },
+  { label: "Should I work out today?", key: "workout" },
+  { label: "Why is my recovery low?", key: "hrv" },
+  { label: "What should I eat today?", key: "eat" },
   { label: "Should I fast today?", key: "fast" },
   { label: "Am I overtraining?", key: "overtraining" },
   { label: "Plan my week", key: "week" },
@@ -57,7 +57,7 @@ export default function CoachScreen() {
     setIsTyping(true);
     const lower = text.toLowerCase();
     let responseKey = "workout";
-    if (lower.includes("hrv")) responseKey = "hrv";
+    if (lower.includes("hrv") || lower.includes("recovery")) responseKey = "hrv";
     else if (lower.includes("eat") || lower.includes("nutrition") || lower.includes("food")) responseKey = "eat";
     else if (lower.includes("fast")) responseKey = "fast";
     else if (lower.includes("weight") || lower.includes("losing")) responseKey = "weight";
@@ -73,24 +73,19 @@ export default function CoachScreen() {
       };
       addChatMessage(botMsg);
       setIsTyping(false);
-    }, 1200);
+    }, 800);
   };
 
   const renderMessage = ({ item }: { item: ChatMessage }) => {
     const isUser = item.role === "user";
     return (
       <View style={[styles.msgRow, isUser && styles.msgRowUser]}>
-        {!isUser ? (
-          <View style={[styles.avatar, { backgroundColor: c.primary + "15" }]}>
-            <Feather name="cpu" size={16} color={c.primary} />
-          </View>
-        ) : null}
         <View
           style={[
             styles.msgBubble,
             isUser
-              ? { backgroundColor: c.primary }
-              : { backgroundColor: c.card, borderColor: c.border, borderWidth: 1 },
+              ? { backgroundColor: c.primary, borderBottomRightRadius: 4 }
+              : { backgroundColor: c.card, borderColor: c.border, borderWidth: 1, borderBottomLeftRadius: 4 },
           ]}
         >
           <Text
@@ -100,6 +95,14 @@ export default function CoachScreen() {
             ]}
           >
             {item.content}
+          </Text>
+          <Text
+            style={[
+              styles.msgTime,
+              { color: isUser ? c.primaryForeground + "88" : c.mutedForeground },
+            ]}
+          >
+            {formatTime(item.timestamp)}
           </Text>
         </View>
       </View>
@@ -115,22 +118,16 @@ export default function CoachScreen() {
       keyboardVerticalOffset={0}
     >
       <View style={[styles.header, { paddingTop: topPad + 12 }]}>
-        <View style={[styles.headerIcon, { backgroundColor: c.primary + "15" }]}>
-          <Feather name="message-circle" size={20} color={c.primary} />
-        </View>
-        <View>
-          <Text style={[styles.headerTitle, { color: c.foreground }]}>AI Coach</Text>
-          <Text style={[styles.headerSubtitle, { color: c.mutedForeground }]}>
-            {profile.tier === "free" ? "Upgrade for unlimited chat" : "Ask me anything"}
-          </Text>
-        </View>
+        <Text style={[styles.headerTitle, { color: c.foreground }]}>Coach</Text>
+        <Text style={[styles.headerSubtitle, { color: c.mutedForeground }]}>
+          Personalized advice based on your data.
+        </Text>
       </View>
 
       {showQuickActions ? (
-        <View style={styles.quickActionsContainer}>
-          <Text style={[styles.quickTitle, { color: c.foreground }]}>Ask your coach</Text>
-          <Text style={[styles.quickSubtitle, { color: c.mutedForeground }]}>
-            I use your real health data to give personalized advice.
+        <ScrollView style={styles.quickActionsContainer} contentContainerStyle={styles.quickInner} showsVerticalScrollIndicator={false}>
+          <Text style={[styles.quickPrompt, { color: c.mutedForeground }]}>
+            Ask me anything about your health, training, or nutrition.
           </Text>
           <View style={styles.quickGrid}>
             {quickActions.map((action) => (
@@ -147,10 +144,11 @@ export default function CoachScreen() {
                 ]}
               >
                 <Text style={[styles.quickLabel, { color: c.foreground }]}>{action.label}</Text>
+                <Feather name="arrow-right" size={14} color={c.mutedForeground} />
               </Pressable>
             ))}
           </View>
-        </View>
+        </ScrollView>
       ) : (
         <FlatList
           ref={flatListRef}
@@ -163,11 +161,12 @@ export default function CoachScreen() {
           ListHeaderComponent={
             isTyping ? (
               <View style={[styles.msgRow]}>
-                <View style={[styles.avatar, { backgroundColor: c.primary + "15" }]}>
-                  <Feather name="cpu" size={16} color={c.primary} />
-                </View>
                 <View style={[styles.typingBubble, { backgroundColor: c.card, borderColor: c.border }]}>
-                  <Text style={[styles.typingText, { color: c.mutedForeground }]}>Thinking...</Text>
+                  <View style={styles.typingDots}>
+                    <View style={[styles.dot, { backgroundColor: c.mutedForeground }]} />
+                    <View style={[styles.dot, { backgroundColor: c.mutedForeground, opacity: 0.6 }]} />
+                    <View style={[styles.dot, { backgroundColor: c.mutedForeground, opacity: 0.3 }]} />
+                  </View>
                 </View>
               </View>
             ) : null
@@ -199,7 +198,7 @@ export default function CoachScreen() {
             onPress={() => sendMessage(input)}
             style={[styles.sendButton, { backgroundColor: input.trim() ? c.primary : c.muted }]}
           >
-            <Feather name="send" size={18} color={input.trim() ? c.primaryForeground : c.mutedForeground} />
+            <Feather name="arrow-up" size={18} color={input.trim() ? c.primaryForeground : c.mutedForeground} />
           </Pressable>
         </View>
       </View>
@@ -207,52 +206,49 @@ export default function CoachScreen() {
   );
 }
 
+function formatTime(ts: number): string {
+  const d = new Date(ts);
+  const h = d.getHours();
+  const m = d.getMinutes().toString().padStart(2, "0");
+  const ampm = h >= 12 ? "PM" : "AM";
+  return `${h % 12 || 12}:${m} ${ampm}`;
+}
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
     paddingHorizontal: 20,
     paddingBottom: 12,
-  },
-  headerIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
+    gap: 2,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 24,
     fontFamily: "Inter_700Bold",
   },
   headerSubtitle: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: "Inter_400Regular",
   },
   quickActionsContainer: {
     flex: 1,
+  },
+  quickInner: {
     paddingHorizontal: 20,
-    paddingTop: 24,
-    gap: 8,
+    paddingTop: 12,
+    gap: 12,
   },
-  quickTitle: {
-    fontSize: 20,
-    fontFamily: "Inter_700Bold",
-  },
-  quickSubtitle: {
+  quickPrompt: {
     fontSize: 14,
     fontFamily: "Inter_400Regular",
     lineHeight: 20,
-    marginBottom: 12,
   },
   quickGrid: {
-    gap: 10,
+    gap: 8,
   },
   quickCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     padding: 16,
     borderRadius: colors.radius,
     borderWidth: 1,
@@ -260,49 +256,53 @@ const styles = StyleSheet.create({
   quickLabel: {
     fontSize: 15,
     fontFamily: "Inter_500Medium",
+    flex: 1,
   },
   messageList: {
     paddingHorizontal: 16,
     paddingTop: 8,
-    gap: 12,
+    gap: 6,
   },
   msgRow: {
     flexDirection: "row",
     alignItems: "flex-end",
-    gap: 8,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   msgRowUser: {
     flexDirection: "row-reverse",
   },
-  avatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   msgBubble: {
-    maxWidth: "78%",
+    maxWidth: "82%",
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 16,
+    borderRadius: 18,
   },
   msgText: {
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: "Inter_400Regular",
-    lineHeight: 20,
+    lineHeight: 22,
+  },
+  msgTime: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    marginTop: 4,
+    alignSelf: "flex-end",
   },
   typingBubble: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 18,
     borderWidth: 1,
+    borderBottomLeftRadius: 4,
   },
-  typingText: {
-    fontSize: 14,
-    fontFamily: "Inter_400Regular",
-    fontStyle: "italic",
+  typingDots: {
+    flexDirection: "row",
+    gap: 4,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   inputContainer: {
     borderTopWidth: 1,
@@ -324,9 +324,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   sendButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
   },

@@ -35,9 +35,9 @@ export default function PlanScreen() {
       contentContainerStyle={[styles.content, { paddingTop: topPad + 16 }]}
       showsVerticalScrollIndicator={false}
     >
-      <Text style={[styles.title, { color: c.foreground }]}>Weekly Plan</Text>
+      <Text style={[styles.title, { color: c.foreground }]}>This Week</Text>
       <Text style={[styles.subtitle, { color: c.mutedForeground }]}>
-        Personalized for your goals and recovery
+        Your training schedule, adjusted for recovery.
       </Text>
 
       <View style={styles.daysList}>
@@ -56,12 +56,11 @@ export default function PlanScreen() {
               ]}
             >
               <View style={styles.dayHeader}>
-                <View style={styles.dayInfo}>
+                <View style={styles.dayLeft}>
                   <Text style={[styles.dayName, { color: c.foreground }]}>
                     {day.dayOfWeek}
                     {isToday ? " (Today)" : ""}
                   </Text>
-                  <Text style={[styles.dayDate, { color: c.mutedForeground }]}>{day.date}</Text>
                 </View>
                 <View
                   style={[
@@ -84,27 +83,18 @@ export default function PlanScreen() {
 
               {day.workout ? (
                 <View style={styles.workoutInfo}>
-                  <View style={styles.workoutDetail}>
-                    <Feather name="target" size={14} color={c.primary} />
-                    <Text style={[styles.workoutType, { color: c.foreground }]}>
-                      {day.workout.type}
-                    </Text>
-                  </View>
-                  <View style={styles.workoutDetail}>
-                    <Feather name="clock" size={14} color={c.mutedForeground} />
-                    <Text style={[styles.workoutMeta, { color: c.mutedForeground }]}>
-                      {day.workout.duration} min
-                    </Text>
-                  </View>
+                  <Text style={[styles.workoutType, { color: c.foreground }]}>
+                    {day.workout.type} - {day.workout.duration} min
+                  </Text>
                   <Text style={[styles.workoutDesc, { color: c.mutedForeground }]}>
                     {day.workout.description}
                   </Text>
                 </View>
               ) : (
                 <View style={styles.restInfo}>
-                  <Feather name="battery-charging" size={16} color={c.info} />
+                  <Feather name="battery-charging" size={14} color={c.info} />
                   <Text style={[styles.restText, { color: c.mutedForeground }]}>
-                    Focus on recovery, stretching, and hydration
+                    Focus on recovery, stretching, and hydration.
                   </Text>
                 </View>
               )}
@@ -114,34 +104,25 @@ export default function PlanScreen() {
       </View>
 
       <View style={[styles.sectionCard, { backgroundColor: c.card, borderColor: c.border }]}>
-        <View style={styles.sectionHeader}>
-          <Feather name="navigation" size={16} color={c.accent} />
-          <Text style={[styles.sectionTitle, { color: c.foreground }]}>Step Goal</Text>
-        </View>
-        <Text style={[styles.sectionValue, { color: c.foreground }]}>
-          {weeklyPlan.stepGoal.toLocaleString()} steps / day
-        </Text>
-      </View>
-
-      <View style={[styles.sectionCard, { backgroundColor: c.card, borderColor: c.border }]}>
-        <View style={styles.sectionHeader}>
-          <Feather name="coffee" size={16} color={c.accent} />
-          <Text style={[styles.sectionTitle, { color: c.foreground }]}>Nutrition Priorities</Text>
-        </View>
+        <Text style={[styles.sectionTitle, { color: c.foreground }]}>Nutrition This Week</Text>
         {weeklyPlan.nutritionPriorities.map((p) => (
-          <View key={p} style={styles.priorityRow}>
-            <Feather name="check" size={14} color={c.success} />
-            <Text style={[styles.priorityText, { color: c.mutedForeground }]}>{p}</Text>
+          <View key={p} style={styles.bulletRow}>
+            <View style={[styles.bullet, { backgroundColor: c.primary }]} />
+            <Text style={[styles.bulletText, { color: c.mutedForeground }]}>{p}</Text>
           </View>
         ))}
       </View>
 
+      <View style={[styles.sectionCard, { backgroundColor: c.card, borderColor: c.border }]}>
+        <Text style={[styles.sectionTitle, { color: c.foreground }]}>Step Goal</Text>
+        <Text style={[styles.sectionValue, { color: c.foreground }]}>
+          {weeklyPlan.stepGoal.toLocaleString()} steps per day.
+        </Text>
+      </View>
+
       {weeklyPlan.fastingSchedule ? (
         <View style={[styles.sectionCard, { backgroundColor: c.card, borderColor: c.border }]}>
-          <View style={styles.sectionHeader}>
-            <Feather name="clock" size={16} color={c.info} />
-            <Text style={[styles.sectionTitle, { color: c.foreground }]}>Fasting Schedule</Text>
-          </View>
+          <Text style={[styles.sectionTitle, { color: c.foreground }]}>Fasting</Text>
           <Text style={[styles.sectionValue, { color: c.mutedForeground }]}>
             {weeklyPlan.fastingSchedule}
           </Text>
@@ -149,9 +130,9 @@ export default function PlanScreen() {
       ) : null}
 
       {weeklyPlan.adjustmentNote ? (
-        <View style={[styles.adjustmentCard, { backgroundColor: c.warning + "10", borderColor: c.warning + "30" }]}>
+        <View style={[styles.noteCard, { backgroundColor: c.warning + "10", borderColor: c.warning + "30" }]}>
           <Feather name="alert-circle" size={16} color={c.warning} />
-          <Text style={[styles.adjustmentText, { color: c.foreground }]}>
+          <Text style={[styles.noteText, { color: c.foreground }]}>
             {weeklyPlan.adjustmentNote}
           </Text>
         </View>
@@ -163,14 +144,8 @@ export default function PlanScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  loading: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  container: { flex: 1 },
+  loading: { flex: 1, alignItems: "center", justifyContent: "center" },
   content: {
     paddingHorizontal: 20,
     gap: 14,
@@ -185,28 +160,24 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   daysList: {
-    gap: 10,
+    gap: 8,
   },
   dayCard: {
-    padding: 16,
+    padding: 14,
     borderRadius: colors.radius,
-    gap: 10,
+    gap: 8,
   },
   dayHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  dayInfo: {
+  dayLeft: {
     gap: 2,
   },
   dayName: {
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: "Inter_600SemiBold",
-  },
-  dayDate: {
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
   },
   focusBadge: {
     paddingHorizontal: 10,
@@ -218,20 +189,11 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
   },
   workoutInfo: {
-    gap: 6,
-  },
-  workoutDetail: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
+    gap: 4,
   },
   workoutType: {
     fontSize: 14,
     fontFamily: "Inter_500Medium",
-  },
-  workoutMeta: {
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
   },
   workoutDesc: {
     fontSize: 13,
@@ -254,30 +216,32 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 10,
   },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
   sectionTitle: {
     fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Inter_700Bold",
   },
   sectionValue: {
     fontSize: 15,
     fontFamily: "Inter_500Medium",
   },
-  priorityRow: {
+  bulletRow: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+    alignItems: "flex-start",
+    gap: 10,
   },
-  priorityText: {
+  bullet: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginTop: 6,
+  },
+  bulletText: {
     fontSize: 14,
     fontFamily: "Inter_400Regular",
     flex: 1,
+    lineHeight: 20,
   },
-  adjustmentCard: {
+  noteCard: {
     flexDirection: "row",
     alignItems: "flex-start",
     padding: 14,
@@ -285,7 +249,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 10,
   },
-  adjustmentText: {
+  noteText: {
     fontSize: 13,
     fontFamily: "Inter_400Regular",
     lineHeight: 19,

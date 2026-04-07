@@ -6,6 +6,8 @@ import type {
   TrendData,
   WorkoutEntry,
   IntegrationStatus,
+  MetricDetail,
+  MetricKey,
 } from "@/types";
 
 export const defaultProfile: UserProfile = {
@@ -96,55 +98,103 @@ export function generateDailyPlan(metrics: HealthMetrics): DailyPlan {
 
   const readinessLabel = readinessScore >= 80 ? "Excellent" : readinessScore >= 65 ? "Good" : readinessScore >= 45 ? "Moderate" : "Low";
 
-  let workoutType = "Zone 2 Cardio";
+  let headline = "";
+  let summary = "";
+  let todaysPlan = { workout: "", movement: "", nutrition: "", recovery: "" };
+  let whyThisPlan: string[] = [];
+  let optional = "";
+  let workoutType = "";
   let workoutIntensity: "low" | "moderate" | "high" = "moderate";
   let workoutDuration = 40;
-  let workoutDesc = "Moderate-intensity steady-state cardio to build your aerobic base.";
+  let workoutDesc = "";
 
   if (readinessScore >= 75) {
+    headline = "Push today. Your body is ready for a challenge.";
+    summary = "Your recovery is strong and sleep was solid. This is a good day to train hard.";
+    todaysPlan = {
+      workout: "Strength training, 50 minutes. Focus on compound lifts.",
+      movement: "Hit 8,000 steps outside of your workout.",
+      nutrition: "2,200 calories. Prioritize protein and complex carbs before training.",
+      recovery: "Stretch for 10 minutes after your session. Hydrate with 96oz of water.",
+    };
+    whyThisPlan = [
+      "Your HRV is above your 7-day average.",
+      "Resting heart rate is steady at baseline.",
+      "You slept well and recovery score is high.",
+    ];
+    optional = "If you feel fatigued by mid-session, drop to moderate intensity. No need to force it.";
     workoutType = "Strength Training";
     workoutIntensity = "high";
     workoutDuration = 50;
-    workoutDesc = "Your body is recovered and ready. Time for a challenging strength session focusing on compound movements.";
-  } else if (readinessScore < 45) {
+    workoutDesc = "Full body strength with compound movements. Your body is recovered and ready.";
+  } else if (readinessScore >= 45) {
+    headline = "Go moderate today. Stay consistent without overdoing it.";
+    summary = "Your recovery is decent but not fully topped off. A steady effort keeps you on track.";
+    todaysPlan = {
+      workout: "Zone 2 cardio, 40 minutes. Easy pace run, bike, or walk.",
+      movement: "Aim for 7,500 steps throughout the day.",
+      nutrition: "2,000 calories. Balanced meals with protein at every meal.",
+      recovery: "Wind down by 10pm. Avoid screens 30 minutes before bed.",
+    };
+    whyThisPlan = [
+      "Recovery metrics are moderate, not fully recharged.",
+      "Sleep was adequate but not exceptional.",
+      "A moderate session builds fitness without adding too much stress.",
+    ];
+    optional = "If energy feels low, a 30-minute walk is a perfectly good alternative.";
+    workoutType = "Zone 2 Cardio";
+    workoutIntensity = "moderate";
+    workoutDuration = 40;
+    workoutDesc = "Steady-state cardio at an easy, conversational pace. Build your aerobic base.";
+  } else {
+    headline = "Rest today. Recovery will make you stronger tomorrow.";
+    summary = "Your body is showing signs of accumulated stress. Taking it easy today is the right call.";
+    todaysPlan = {
+      workout: "Active recovery only. Light stretching or gentle yoga, 20 minutes.",
+      movement: "A short walk is fine. No step target today.",
+      nutrition: "1,900 calories. Focus on nutrient-dense foods and hydration.",
+      recovery: "Prioritize sleep tonight. Aim for 8+ hours. Try to be in bed by 9:30pm.",
+    };
+    whyThisPlan = [
+      "Your HRV is below your baseline, indicating your body needs rest.",
+      "Resting heart rate is elevated, a sign of incomplete recovery.",
+      "Sleep quality was lower than usual.",
+    ];
+    optional = "If you feel restless, a 20-minute walk at an easy pace is the most you should do.";
     workoutType = "Active Recovery";
     workoutIntensity = "low";
-    workoutDuration = 25;
-    workoutDesc = "Your body needs rest. Light mobility work, stretching, or a gentle walk will help you recover faster.";
+    workoutDuration = 20;
+    workoutDesc = "Light mobility work and stretching. Let your body recover.";
   }
 
   const sleepHours = metrics.sleepDuration;
-  let sleepSummary = `You got ${sleepHours.toFixed(1)} hours of sleep`;
+  let sleepSummary = "";
   if (sleepHours < 7) {
-    sleepSummary += " - less than your body needs. Try to wind down earlier tonight.";
+    sleepSummary = `You got ${sleepHours.toFixed(1)} hours. That is less than your body needs. Aim for an earlier bedtime tonight.`;
   } else if (sleepHours >= 8) {
-    sleepSummary += " - great job prioritizing rest!";
+    sleepSummary = `You got ${sleepHours.toFixed(1)} hours. Solid rest. Keep this consistent.`;
   } else {
-    sleepSummary += " - solid. Keep this consistent.";
+    sleepSummary = `You got ${sleepHours.toFixed(1)} hours. Adequate, but pushing closer to 8 would help recovery.`;
   }
 
   let recoverySummary = "";
   if (metrics.recoveryScore >= 75) {
-    recoverySummary = "Your recovery is strong today. Your body has bounced back well from recent activity.";
+    recoverySummary = "Your recovery is strong. Your body has bounced back well from recent activity.";
   } else if (metrics.recoveryScore >= 50) {
-    recoverySummary = "Recovery is moderate. You can train, but listen to your body and don't push too hard.";
+    recoverySummary = "Recovery is moderate. You can train, but listen to your body.";
   } else {
-    recoverySummary = "Your body is still recovering. Taking it easy today will help you come back stronger tomorrow.";
-  }
-
-  let whyThisPlan = "";
-  if (readinessScore >= 75) {
-    whyThisPlan = "Your HRV is above your baseline, resting heart rate is steady, and you slept well. This is a great day to challenge yourself.";
-  } else if (readinessScore >= 45) {
-    whyThisPlan = "Your recovery metrics are decent but not fully topped off. A moderate effort will keep you moving forward without overdoing it.";
-  } else {
-    whyThisPlan = "Your body is showing signs of accumulated stress - lower HRV and elevated resting heart rate. Recovery today means stronger performance tomorrow.";
+    recoverySummary = "Your body is still recovering. Rest today will help you come back stronger.";
   }
 
   return {
     date: metrics.date,
     readinessScore,
     readinessLabel,
+    headline,
+    summary,
+    todaysPlan,
+    whyThisPlan,
+    optional,
     recoverySummary,
     sleepSummary,
     workoutRecommendation: {
@@ -163,13 +213,7 @@ export function generateDailyPlan(metrics: HealthMetrics): DailyPlan {
         ? "Fuel up for your workout. Prioritize protein and complex carbs."
         : "Focus on nutrient-dense foods and stay hydrated for recovery.",
     },
-    fastingGuidance: "16:8 window today. Start eating at 12pm, last meal by 8pm.",
-    whyThisPlan,
-    todaysPlanSummary: readinessScore >= 75
-      ? "Push day - your body is ready for a challenge"
-      : readinessScore >= 45
-      ? "Steady day - maintain your momentum"
-      : "Recovery day - rest to come back stronger",
+    fastingGuidance: "16:8 window. Start eating at 12pm, last meal by 8pm.",
   };
 }
 
@@ -197,10 +241,10 @@ export function generateWeeklyPlan(): WeeklyPlan {
             intensity: (i === 0 || i === 3 ? "high" : i === 6 ? "high" : "moderate") as "low" | "moderate" | "high",
             description:
               i === 0 || i === 3
-                ? "Full body strength with compound lifts"
+                ? "Full body strength with compound lifts."
                 : i === 1 || i === 4
-                ? "Easy pace run or bike to build aerobic base"
-                : "Short, intense intervals to boost metabolism",
+                ? "Easy pace run or bike. Keep it conversational."
+                : "Short, intense intervals. Push hard, recover fully between sets.",
           },
       focusArea: isRest
         ? "Rest & Recovery"
@@ -216,13 +260,13 @@ export function generateWeeklyPlan(): WeeklyPlan {
     weekStartDate: monday.toISOString().split("T")[0],
     days: planDays,
     nutritionPriorities: [
-      "Hit 160g protein daily",
-      "Eat complex carbs before workouts",
-      "Hydrate with at least 96oz water",
-      "Include vegetables at every meal",
+      "Hit 160g protein daily.",
+      "Eat complex carbs before workouts.",
+      "Drink at least 96oz of water.",
+      "Include vegetables at every meal.",
     ],
     stepGoal: 8000,
-    fastingSchedule: "16:8 - Eat between 12pm and 8pm",
+    fastingSchedule: "16:8. Eat between 12pm and 8pm.",
     adjustmentNote: "If you feel unusually tired mid-week, swap Thursday's strength session for active recovery.",
   };
 }
@@ -236,21 +280,21 @@ export function generateTrendData(): TrendData[] {
       data: metrics.map((m) => ({ date: m.date, value: m.weight })),
       unit: "lbs",
       trend: "down",
-      summary: "Down 2.1 lbs over the last 30 days. You're on track for your goal.",
+      summary: "Down 2.1 lbs over the last 30 days. You are on track for your goal.",
     },
     {
       label: "HRV",
       data: metrics.map((m) => ({ date: m.date, value: m.hrv })),
       unit: "ms",
       trend: "up",
-      summary: "Your HRV has been trending up, which means your body is adapting well to training.",
+      summary: "Your HRV has been trending up. Your body is adapting well to training.",
     },
     {
       label: "Resting HR",
       data: metrics.map((m) => ({ date: m.date, value: m.restingHeartRate })),
       unit: "bpm",
       trend: "down",
-      summary: "Resting heart rate is gradually decreasing - a sign of improving cardiovascular fitness.",
+      summary: "Resting heart rate is gradually decreasing. A sign of improving cardiovascular fitness.",
     },
     {
       label: "Sleep",
@@ -264,7 +308,7 @@ export function generateTrendData(): TrendData[] {
       data: metrics.map((m) => ({ date: m.date, value: m.steps })),
       unit: "steps",
       trend: "up",
-      summary: "Daily steps trending up. You're averaging 8,200 steps, above your 8,000 goal.",
+      summary: "Daily steps trending up. You are averaging 8,200 steps, above your 8,000 goal.",
     },
     {
       label: "Recovery",
@@ -276,6 +320,135 @@ export function generateTrendData(): TrendData[] {
   ];
 }
 
+export function getMetricDetail(
+  key: MetricKey,
+  todayMetrics: HealthMetrics,
+  allMetrics: HealthMetrics[]
+): MetricDetail {
+  const trendData = allMetrics.map((m) => {
+    let value = 0;
+    switch (key) {
+      case "sleep": value = m.sleepDuration; break;
+      case "hrv": value = m.hrv; break;
+      case "steps": value = m.steps; break;
+      case "restingHR": value = m.restingHeartRate; break;
+      case "recovery": value = m.recoveryScore; break;
+      case "weight": value = m.weight; break;
+    }
+    return { date: m.date, value };
+  });
+
+  const recent = trendData.slice(-7);
+  const avg = recent.reduce((s, d) => s + d.value, 0) / recent.length;
+  const current = trendData[trendData.length - 1].value;
+  const trendDir: "up" | "down" | "stable" =
+    current > avg * 1.03 ? "up" : current < avg * 0.97 ? "down" : "stable";
+
+  const details: Record<MetricKey, Omit<MetricDetail, "key" | "trend">> = {
+    sleep: {
+      title: "Sleep",
+      headline: todayMetrics.sleepDuration >= 7.5
+        ? "You slept well last night."
+        : todayMetrics.sleepDuration >= 6.5
+        ? "Sleep was adequate but could be better."
+        : "You did not get enough sleep last night.",
+      explanation: `You got ${todayMetrics.sleepDuration.toFixed(1)} hours with ${todayMetrics.sleepQuality}% quality. Your 7-day average is ${avg.toFixed(1)} hours.`,
+      whatItMeans: "Sleep is when your body repairs muscle, consolidates memory, and regulates hormones. Consistently getting less than 7 hours undermines recovery and training gains.",
+      recommendation: todayMetrics.sleepDuration < 7
+        ? "Set a bedtime alarm for 9:30pm tonight. Avoid screens for 30 minutes before bed. Keep your room cool and dark."
+        : "Keep doing what you are doing. Consistency matters more than occasional long nights.",
+      currentValue: `${todayMetrics.sleepDuration.toFixed(1)}`,
+      unit: "hrs",
+    },
+    hrv: {
+      title: "Heart Rate Variability",
+      headline: todayMetrics.hrv >= 45
+        ? "Your recovery looks good based on HRV."
+        : todayMetrics.hrv >= 35
+        ? "Your HRV is slightly below your average."
+        : "Your HRV is low. Your body needs more recovery.",
+      explanation: `Your HRV is ${todayMetrics.hrv} ms today. Your 7-day average is ${Math.round(avg)} ms.`,
+      whatItMeans: "HRV measures the variation between heartbeats. Higher HRV generally means your body is well-recovered and ready for stress. Lower HRV means your nervous system is under more load.",
+      recommendation: todayMetrics.hrv < 38
+        ? "Take it easy today. Avoid high-intensity training. Focus on hydration, light movement, and sleep."
+        : "Your HRV supports training today. Listen to how you feel during the session.",
+      currentValue: `${todayMetrics.hrv}`,
+      unit: "ms",
+    },
+    steps: {
+      title: "Daily Steps",
+      headline: todayMetrics.steps >= 8000
+        ? "You have hit your step goal."
+        : todayMetrics.steps >= 5000
+        ? "You are partway to your step goal."
+        : "Your movement has been low today.",
+      explanation: `You have ${todayMetrics.steps.toLocaleString()} steps so far. Your goal is 8,000. Your 7-day average is ${Math.round(avg).toLocaleString()}.`,
+      whatItMeans: "Daily steps are a simple measure of overall movement. Consistent movement outside of workouts supports cardiovascular health, metabolism, and recovery.",
+      recommendation: todayMetrics.steps < 6000
+        ? "Take a 20-minute walk after your next meal. Small movement breaks add up."
+        : "You are on track. Keep moving throughout the day.",
+      currentValue: todayMetrics.steps.toLocaleString(),
+      unit: "steps",
+    },
+    restingHR: {
+      title: "Resting Heart Rate",
+      headline: todayMetrics.restingHeartRate <= 60
+        ? "Your resting heart rate is excellent."
+        : todayMetrics.restingHeartRate <= 68
+        ? "Resting heart rate is normal."
+        : "Your resting heart rate is elevated today.",
+      explanation: `Your resting HR is ${todayMetrics.restingHeartRate} bpm. Your 7-day average is ${Math.round(avg)} bpm.`,
+      whatItMeans: "Resting heart rate reflects your cardiovascular fitness and recovery. A lower resting HR generally indicates better fitness. Elevated resting HR can signal stress, poor sleep, or incomplete recovery.",
+      recommendation: todayMetrics.restingHeartRate > 66
+        ? "An elevated resting HR often means your body needs more recovery. Prioritize sleep and hydration today."
+        : "Your resting HR is in a healthy range. Keep up with consistent training and recovery.",
+      currentValue: `${todayMetrics.restingHeartRate}`,
+      unit: "bpm",
+    },
+    recovery: {
+      title: "Recovery Score",
+      headline: todayMetrics.recoveryScore >= 75
+        ? "Your recovery is strong. You are ready to train."
+        : todayMetrics.recoveryScore >= 50
+        ? "Recovery is moderate. Train carefully today."
+        : "Recovery is low. Rest is the priority today.",
+      explanation: `Your recovery score is ${todayMetrics.recoveryScore}%. This is based on your HRV, resting heart rate, and sleep quality.`,
+      whatItMeans: "Recovery score combines multiple signals to estimate how prepared your body is for stress. Higher scores mean you can handle harder training. Lower scores mean your body is still adapting.",
+      recommendation: todayMetrics.recoveryScore < 50
+        ? "Skip intense training today. Focus on active recovery, hydration, and getting to bed early."
+        : "You have enough recovery to train. Match your intensity to how you feel.",
+      currentValue: `${todayMetrics.recoveryScore}`,
+      unit: "%",
+    },
+    weight: {
+      title: "Weight",
+      headline: trendDir === "down"
+        ? "Your weight is trending down. You are making progress."
+        : trendDir === "up"
+        ? "Your weight has been trending up recently."
+        : "Your weight is stable.",
+      explanation: `You are at ${todayMetrics.weight} lbs today. Your 7-day average is ${avg.toFixed(1)} lbs.`,
+      whatItMeans: "Daily weight fluctuates due to water, food timing, and other factors. The trend over weeks matters more than any single day. Focus on the direction, not the number.",
+      recommendation: "Weigh yourself at the same time each day for consistency. Look at the weekly trend, not daily swings.",
+      currentValue: `${todayMetrics.weight}`,
+      unit: "lbs",
+    },
+  };
+
+  const detail = details[key];
+  return {
+    key,
+    ...detail,
+    trend: {
+      label: detail.title,
+      data: trendData,
+      unit: detail.unit,
+      trend: trendDir,
+      summary: detail.explanation,
+    },
+  };
+}
+
 export const integrations: IntegrationStatus[] = [
   { id: "apple_health", name: "Apple Health", icon: "heart", connected: false },
   { id: "garmin", name: "Garmin", icon: "watch", connected: false },
@@ -284,17 +457,17 @@ export const integrations: IntegrationStatus[] = [
 
 export const coachResponses: Record<string, string> = {
   workout:
-    "Based on your recovery score of 72% and decent sleep last night, today is a good day for a moderate-intensity workout. I'd suggest a 40-minute Zone 2 run or bike ride. Your HRV is close to your baseline, which tells me your body can handle some work but isn't fully topped off. Save the heavy lifting for when your recovery is above 80%.",
+    "Based on your recovery score and last night's sleep, today is a good day for moderate training.\n\nI recommend a 40-minute Zone 2 run or bike ride at an easy, conversational pace.\n\nYour HRV is close to your baseline. Your body can handle work but is not fully topped off. Save the heavy lifting for a day when recovery is above 80%.",
   hrv:
-    "Your HRV has been lower than your 7-day average for the past two days. This usually means your body is dealing with some stress - could be from training, poor sleep, work stress, or even diet. It's not alarming, but I'd suggest prioritizing sleep tonight and keeping today's workout lighter. If it stays low for 3+ days, we should look at reducing training volume.",
+    "Your HRV has been lower than your 7-day average for two days.\n\nThis usually means your body is dealing with some stress. It could be from training, poor sleep, work, or diet.\n\nThis is not alarming. Prioritize sleep tonight and keep today's workout lighter. If it stays low for three or more days, reduce your training volume.",
   eat:
-    "Today I'd aim for about 2,100 calories with 160g protein, 200g carbs, and 60g fat. Since you have a moderate workout planned, fuel up with complex carbs beforehand - oatmeal, sweet potato, or whole grain bread. After your workout, get 30-40g protein within an hour. For dinner, lean protein with plenty of vegetables. Don't forget to drink at least 96oz of water throughout the day.",
+    "Today, aim for about 2,100 calories.\n\n160g protein. 200g carbs. 60g fat.\n\nSince you have a moderate workout planned, eat complex carbs beforehand. Oatmeal, sweet potato, or whole grain bread work well.\n\nGet 30-40g protein within an hour after your workout. For dinner, lean protein with plenty of vegetables.\n\nDrink at least 96oz of water throughout the day.",
   fast:
-    "Your 16:8 fasting window looks good for today. Start eating at noon and have your last meal by 8pm. Since your recovery is moderate, I wouldn't extend the fast longer than 16 hours. On recovery days when your body is well-rested, you could push to 18 hours, but today stick with 16:8. Make sure your first meal has a good protein source.",
+    "Your 16:8 fasting window looks good for today.\n\nStart eating at noon. Last meal by 8pm.\n\nSince your recovery is moderate, do not extend the fast beyond 16 hours today. On well-recovered days, you could push to 18 hours.\n\nMake sure your first meal has a solid protein source.",
   weight:
-    "Looking at your data over the past 4 weeks, you've lost about 2 pounds. That's actually a healthy, sustainable rate - about 0.5 lbs per week. Sometimes progress feels slow, but rapid weight loss often leads to muscle loss and rebounds. Your strength metrics are holding steady, which means you're losing fat, not muscle. Stay the course - you're doing this right.",
+    "Over the past 4 weeks, you have lost about 2 pounds.\n\nThat is a healthy rate. About 0.5 lbs per week.\n\nSometimes progress feels slow. But rapid weight loss often leads to muscle loss and rebounds.\n\nYour strength metrics are holding steady. That means you are losing fat, not muscle.\n\nStay the course. You are doing this right.",
   overtraining:
-    "Looking at your recent data, you're not overtraining yet, but you're getting close to the edge. Your HRV has dipped below baseline for 2 consecutive days and your resting heart rate has crept up by 3 bpm. I'd suggest taking tomorrow as a full rest day, and when you come back, start with a lower-intensity session. Also check that you're sleeping 7+ hours and eating enough to support your training load.",
+    "You are not overtraining yet, but you are getting close to the edge.\n\nYour HRV has dipped below baseline for 2 consecutive days. Your resting heart rate has crept up by 3 bpm.\n\nTake tomorrow as a full rest day. When you come back, start with a lower-intensity session.\n\nAlso check that you are sleeping 7 or more hours and eating enough to support your training load.",
   week:
-    "Here's what I'd suggest for this week: Monday - strength (upper body), Tuesday - Zone 2 run 35 min, Wednesday - rest, Thursday - strength (lower body), Friday - Zone 2 bike 40 min, Saturday - rest, Sunday - HIIT 25 min. This gives you a good mix of strength and cardio with enough recovery. Since your HRV has been a bit lower lately, I'm keeping the volume moderate.",
+    "Here is what I recommend for this week:\n\nMonday: Strength, upper body, 45 min\nTuesday: Zone 2 run, 35 min\nWednesday: Rest\nThursday: Strength, lower body, 45 min\nFriday: Zone 2 bike, 40 min\nSaturday: Rest\nSunday: HIIT, 25 min\n\nThis gives you a good mix of strength and cardio with enough recovery. Since your HRV has been a bit lower lately, I am keeping the volume moderate.",
 };

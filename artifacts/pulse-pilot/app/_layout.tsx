@@ -26,6 +26,7 @@ function RootLayoutNav() {
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="onboarding/index" options={{ gestureEnabled: false }} />
       <Stack.Screen name="subscription" options={{ presentation: "modal" }} />
+      <Stack.Screen name="metric-detail" />
     </Stack>
   );
 }
