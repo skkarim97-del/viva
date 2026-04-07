@@ -5,18 +5,15 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Platform,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
 
 export default function PlanScreen() {
   const c = useColors();
-  const insets = useSafeAreaInsets();
   const { weeklyPlan } = useApp();
-  const topPad = Platform.OS === "web" ? 60 : insets.top;
 
   if (!weeklyPlan) {
     return (
@@ -38,9 +35,10 @@ export default function PlanScreen() {
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: c.background }]}
-      contentContainerStyle={[styles.content, { paddingTop: topPad + 20 }]}
+      contentContainerStyle={[styles.content, { paddingTop: 0 }]}
       showsVerticalScrollIndicator={false}
     >
+      <ScreenHeader />
       <Text style={[styles.title, { color: c.foreground }]}>This Week</Text>
 
       <View style={[styles.summaryCard, { backgroundColor: c.card }]}>
@@ -84,7 +82,7 @@ export default function PlanScreen() {
 
             {day.workout ? (
               <Text style={[styles.dayDetail, { color: c.mutedForeground }]}>
-                {day.workout.type} \u00B7 {day.workout.duration} min
+                {day.workout.type} · {day.workout.duration} min
               </Text>
             ) : (
               <View style={styles.restRow}>

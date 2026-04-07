@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useApp } from "@/context/AppContext";
+import { VivaSymbol } from "@/components/VivaSymbol";
 import { useColors } from "@/hooks/useColors";
 import type { HealthGoal } from "@/types";
 
@@ -236,10 +237,10 @@ export default function OnboardingScreen() {
         >
           {step === "welcome" && (
             <View style={styles.welcomeSection}>
-              <View style={[styles.heroIcon, { backgroundColor: c.primary + "12" }]}>
-                <Feather name="activity" size={44} color={c.primary} />
+              <View style={[styles.heroIcon, { backgroundColor: c.foreground + "08" }]}>
+                <VivaSymbol size={48} color={c.foreground} />
               </View>
-              <Text style={[styles.welcomeTitle, { color: c.foreground }]}>Viva</Text>
+              <Text style={[styles.welcomeTitle, { color: c.foreground }]}>VIVA</Text>
               <Text style={[styles.welcomeTagline, { color: c.foreground }]}>Your Health &{"\n"}Wellness Coach</Text>
               <Text style={[styles.welcomeSub, { color: c.mutedForeground }]}>
                 Personalized daily guidance for your body, mind, and habits.
@@ -698,11 +699,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   welcomeTitle: {
-    fontSize: 18,
-    fontFamily: "Inter_600SemiBold",
-    letterSpacing: 1,
-    textTransform: "uppercase",
-    opacity: 0.5,
+    fontSize: 28,
+    fontFamily: "Inter_500Medium",
+    letterSpacing: 6,
   },
   welcomeTagline: {
     fontSize: 30,

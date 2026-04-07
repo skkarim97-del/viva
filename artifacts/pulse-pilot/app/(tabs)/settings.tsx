@@ -7,18 +7,15 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  Platform,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
 
 export default function SettingsScreen() {
   const c = useColors();
-  const insets = useSafeAreaInsets();
   const { profile, integrations, toggleIntegration } = useApp();
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   const tierLabel =
     profile.tier === "premium_plus"
@@ -34,9 +31,10 @@ export default function SettingsScreen() {
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: c.background }]}
-      contentContainerStyle={[styles.content, { paddingTop: topPad + 16 }]}
+      contentContainerStyle={[styles.content, { paddingTop: 0 }]}
       showsVerticalScrollIndicator={false}
     >
+      <ScreenHeader />
       <Text style={[styles.title, { color: c.foreground }]}>Settings</Text>
 
       <View style={[styles.profileCard, { backgroundColor: c.card }]}>

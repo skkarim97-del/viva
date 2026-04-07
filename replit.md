@@ -63,7 +63,7 @@ Mobile-first AI health and wellness coaching app built with Expo/React Native. C
 - **Frontend**: Expo/React Native with AsyncStorage for persistence
 - **Data**: Computed insights engine (`data/insights.ts`) calculates sleep debt, training load, recovery trends, weight projections, TDEE, consistency scores, HRV baselines, and risk flags
 - **State**: Context-based state management (AppContext) with computed DailyInsights
-- **Components**: ReadinessRing (minimal SVG arc), plan rows with icon squares, metric tiles with drill-down
+- **Components**: VivaSymbol (SVG brand mark), VivaWordmark (symbol + text), ScreenHeader (consistent tab header), ReadinessRing (minimal SVG arc), plan rows with icon squares, metric tiles with drill-down
 
 ### Key Files
 - `artifacts/pulse-pilot/app/(tabs)/index.tsx` — Today dashboard (feeling input + inline coach chat)
@@ -85,10 +85,15 @@ Mobile-first AI health and wellness coaching app built with Expo/React Native. C
 - Stack: Onboarding flow, Metric detail drill-down
 
 ### Brand: Viva
+- **Wordmark**: "VIVA" all caps, Inter_500Medium, letter-spacing 3, dark neutral color (foreground). Subtle, not oversized.
+- **Brand Symbol**: Stylized V with pulse line (VivaSymbol component, SVG). Modern, minimal, recognizable at small sizes.
+- **App Icon**: Black background, white V-pulse mark. Premium, simple, stands out on home screen.
+- **Screen Header**: VivaWordmark (symbol + text) consistently positioned at top of all 4 tab screens (Today, Plan, Trends, Settings) via ScreenHeader component.
+- **Color Philosophy**: Green (#34C759) is accent only — used for positive states, readiness, "push" days, progress indicators. Never as primary branding. Most UI stays neutral and calm.
 - **Tagline**: "Your Health & Wellness Coach"
 - **Tone**: Calm confidence, simplicity, clarity, human. No hype, slang, jargon, or emojis.
 - **Positioning**: Not just a fitness app — a daily health and wellness coach for body, mind, energy, stress, and habits.
-- **Feel**: Premium, calm, modern, human, intelligent, trustworthy.
+- **Feel**: Understated, confident, premium, modern, calm. Product experience leads; branding supports.
 - Every sentence either explains meaning or tells the user what to do.
 - Copy examples: "Train today. Keep it steady." / "Focus on recovery today." / "Your body needs a lighter day."
 

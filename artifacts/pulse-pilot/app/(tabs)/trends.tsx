@@ -10,9 +10,9 @@ import {
   Platform,
   Pressable,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Polyline } from "react-native-svg";
 
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
 import type { MetricKey } from "@/types";
@@ -28,9 +28,7 @@ const metricKeyMap: Record<string, MetricKey> = {
 
 export default function TrendsScreen() {
   const c = useColors();
-  const insets = useSafeAreaInsets();
   const { trends, insights } = useApp();
-  const topPad = Platform.OS === "web" ? 60 : insets.top;
 
   const openDetail = (label: string) => {
     const key = metricKeyMap[label];
@@ -44,9 +42,10 @@ export default function TrendsScreen() {
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: c.background }]}
-      contentContainerStyle={[styles.content, { paddingTop: topPad + 20 }]}
+      contentContainerStyle={[styles.content, { paddingTop: 0 }]}
       showsVerticalScrollIndicator={false}
     >
+      <ScreenHeader />
       <Text style={[styles.title, { color: c.foreground }]}>Trends</Text>
 
       {insights && (

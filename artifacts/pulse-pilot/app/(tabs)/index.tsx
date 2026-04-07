@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ReadinessRing } from "@/components/ReadinessRing";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
 import type { MetricKey, FeelingType, EnergyLevel, StressLevel, ChatMessage, DailyState } from "@/types";
@@ -247,10 +248,11 @@ export default function DashboardScreen() {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={0}>
       <ScrollView
         style={[styles.container, { backgroundColor: c.background }]}
-        contentContainerStyle={[styles.content, { paddingTop: topPad + 16, paddingBottom: bottomPad + 100 }]}
+        contentContainerStyle={[styles.content, { paddingTop: 0, paddingBottom: bottomPad + 100 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        <ScreenHeader />
         <View style={styles.statusSection}>
           <ReadinessRing score={dailyPlan.readinessScore} label={dailyPlan.readinessLabel} size={96} />
           <View style={[styles.stateBadge, { backgroundColor: stateColor + "14" }]}>
