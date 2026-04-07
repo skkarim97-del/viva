@@ -1,4 +1,4 @@
-import type { HealthMetrics, WorkoutEntry, UserProfile } from "@/types";
+import type { HealthMetrics, WorkoutEntry, UserProfile, SleepIntelligence } from "@/types";
 
 export interface DailyInsights {
   sleepDebt: { hours: number; label: string; detail: string };
@@ -12,6 +12,7 @@ export interface DailyInsights {
   topPriority: string;
   bodyComposition: { estimatedTDEE: number; detail: string };
   weekSummary: string;
+  sleepIntelligence: SleepIntelligence;
 }
 
 export function computeInsights(
@@ -35,6 +36,7 @@ export function computeInsights(
   const bodyComposition = computeTDEE(todayMetrics, profile);
   const topPriority = determineTopPriority(riskFlags, sleepDebt, recoveryTrend, trainingLoad, weightProjection);
   const weekSummary = generateWeekSummary(last7, workouts, weightProjection, sleepDebt);
+  const sleepIntelligence = computeSleepIntelligence(last14, last7);
 
   return {
     sleepDebt,
@@ -48,6 +50,7 @@ export function computeInsights(
     topPriority,
     bodyComposition,
     weekSummary,
+    sleepIntelligence,
   };
 }
 
@@ -325,4 +328,66 @@ function generateWeekSummary(
   });
 
   return `This week: ${avgSleep.toFixed(1)}h avg sleep, ${avgSteps.toLocaleString()} avg steps, ${avgRecovery}% avg recovery, ${recentWorkouts.length} workouts. Weight change: ${weight.rate >= 0 ? "+" : ""}${weight.rate} lbs/week.`;
+}
+
+function computeSleepIntelligence(last14: HealthMetrics[], last7: HealthMetrics[]): SleepIntelligence {
+  const avgDuration = last14.reduce((s, m) => s + m.sleepDuration, 0) / last14.length;
+
+  const sleepTimes = last14.map((m) => {
+    const hours = m.sleepDuration;
+    return 23 - (hours - 7) * 0.5;
+  });
+  const avgBedtime = sleepTimes.reduce((s, t) => s + t, 0) / sleepTimes.length;
+  const bedtimeVariance = sleepTimes.reduce((s, t) => s + Math.pow(t - avgBedtime, 2), 0) / sleepTimes.length;
+  const bedtimeStdDev = Math.sqrt(bedtimeVariance);
+
+  let bedtimeConsistency: "consistent" | "somewhat_consistent" | "inconsistent" = "consistent";
+  if (bedtimeStdDev > 1.0) bedtimeConsistency = "inconsistent";
+  else if (bedtimeStdDev > 0.5) bedtimeConsistency = "somewhat_consistent";
+
+  const recentAvg = last7.reduce((s, m) => s + m.sleepDuration, 0) / last7.length;
+  const olderAvg = last14.slice(0, 7).reduce((s, m) => s + m.sleepDuration, 0) / Math.min(7, last14.slice(0, 7).length);
+  let sleepTrend: "improving" | "declining" | "stable" = "stable";
+  if (recentAvg > olderAvg + 0.2) sleepTrend = "improving";
+  else if (recentAvg < olderAvg - 0.2) sleepTrend = "declining";
+
+  const recentQualityAvg = last7.reduce((s, m) => s + m.sleepQuality, 0) / last7.length;
+  const olderQualityAvg = last14.slice(0, 7).reduce((s, m) => s + m.sleepQuality, 0) / Math.min(7, last14.slice(0, 7).length);
+  const qualityTrending = recentQualityAvg < olderQualityAvg - 5 ? "declining" : recentQualityAvg > olderQualityAvg + 5 ? "improving" : "stable";
+
+  let insight = "";
+  if (bedtimeConsistency === "inconsistent") {
+    insight = "Your sleep schedule is inconsistent. Irregular bedtimes make it harder for your body to optimize recovery.";
+  } else if (sleepTrend === "improving") {
+    insight = "Sleep duration is improving over the past week. Your recovery should benefit within a few days.";
+  } else if (sleepTrend === "declining") {
+    insight = "Sleep duration has been declining. This will start affecting recovery and energy if it continues.";
+  } else if (qualityTrending === "declining") {
+    insight = "Sleep quality is declining even though duration is stable. Consider adjusting your wind-down routine.";
+  } else if (avgDuration < 7) {
+    insight = "You are averaging under 7 hours. Most adults need 7-9 hours for optimal recovery and cognitive function.";
+  } else {
+    insight = "Sleep is consistent and adequate. This is one of the strongest contributors to your overall wellness.";
+  }
+
+  let recommendation = "";
+  if (bedtimeConsistency === "inconsistent") {
+    recommendation = "Stabilize your bedtime. Pick a consistent time and stick to it within 30 minutes, even on weekends.";
+  } else if (avgDuration < 7) {
+    recommendation = "Increase time in bed by 20-30 minutes. Set a bedtime alarm to build the habit.";
+  } else if (qualityTrending === "declining") {
+    recommendation = "Adjust your wind-down habits. Reduce screens, dim lights, and avoid caffeine after 2pm.";
+  } else if (sleepTrend === "declining") {
+    recommendation = "Your sleep has been shortening. Prioritize getting to bed on time for the next few nights.";
+  } else {
+    recommendation = "Keep your current routine. Consistent sleep is the foundation of everything else.";
+  }
+
+  return {
+    avgDuration: Math.round(avgDuration * 10) / 10,
+    bedtimeConsistency,
+    sleepTrend,
+    insight,
+    recommendation,
+  };
 }

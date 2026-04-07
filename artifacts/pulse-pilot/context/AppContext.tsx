@@ -20,9 +20,11 @@ import type {
   WorkoutEntry,
   ChatMessage,
   IntegrationStatus,
-  HealthGoal,
   SubscriptionTier,
   FeelingType,
+  EnergyLevel,
+  StressLevel,
+  WellnessInputs,
 } from "@/types";
 
 interface AppContextType {
@@ -44,13 +46,17 @@ interface AppContextType {
   insights: DailyInsights | null;
   feeling: FeelingType;
   setFeeling: (feeling: FeelingType) => void;
+  energy: EnergyLevel;
+  setEnergy: (energy: EnergyLevel) => void;
+  stress: StressLevel;
+  setStress: (stress: StressLevel) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const PROFILE_KEY = "@pulsepilot_profile";
 const CHAT_KEY = "@pulsepilot_chat";
-const FEELING_KEY = "@pulsepilot_feeling";
+const WELLNESS_KEY = "@pulsepilot_wellness";
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<UserProfile>(defaultProfile);
@@ -65,6 +71,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [insights, setInsights] = useState<DailyInsights | null>(null);
   const [feeling, setFeelingState] = useState<FeelingType>(null);
+  const [energy, setEnergyState] = useState<EnergyLevel>(null);
+  const [stress, setStressState] = useState<StressLevel>(null);
   const [metricsRef, setMetricsRef] = useState<HealthMetrics | null>(null);
 
   useEffect(() => {
@@ -83,14 +91,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setChatMessages(JSON.parse(savedChat));
       }
 
-      const savedFeeling = await AsyncStorage.getItem(FEELING_KEY);
       const todayDate = new Date().toISOString().split("T")[0];
       let currentFeeling: FeelingType = null;
-      if (savedFeeling) {
-        const parsed = JSON.parse(savedFeeling);
+      let currentEnergy: EnergyLevel = null;
+      let currentStress: StressLevel = null;
+      const savedWellness = await AsyncStorage.getItem(WELLNESS_KEY);
+      if (savedWellness) {
+        const parsed = JSON.parse(savedWellness);
         if (parsed.date === todayDate) {
-          currentFeeling = parsed.feeling;
+          currentFeeling = parsed.feeling ?? null;
+          currentEnergy = parsed.energy ?? null;
+          currentStress = parsed.stress ?? null;
           setFeelingState(currentFeeling);
+          setEnergyState(currentEnergy);
+          setStressState(currentStress);
         }
       }
 
@@ -100,7 +114,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const today = allMetrics[allMetrics.length - 1];
       setTodayMetrics(today);
       setMetricsRef(today);
-      setDailyPlan(generateDailyPlan(today, currentFeeling));
+      setDailyPlan(generateDailyPlan(today, { feeling: currentFeeling, energy: currentEnergy, stress: currentStress }));
       setWeeklyPlan(generateWeeklyPlan());
       setTrends(generateTrendData());
       const allWorkouts = generateMockWorkouts();
@@ -114,15 +128,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const setFeeling = useCallback((newFeeling: FeelingType) => {
-    setFeelingState(newFeeling);
+  const saveWellness = useCallback((f: FeelingType, e: EnergyLevel, s: StressLevel) => {
     const todayDate = new Date().toISOString().split("T")[0];
-    AsyncStorage.setItem(FEELING_KEY, JSON.stringify({ date: todayDate, feeling: newFeeling }));
+    AsyncStorage.setItem(WELLNESS_KEY, JSON.stringify({ date: todayDate, feeling: f, energy: e, stress: s }));
+  }, []);
 
+  const regeneratePlan = useCallback((f: FeelingType, e: EnergyLevel, s: StressLevel) => {
     if (metricsRef) {
-      setDailyPlan(generateDailyPlan(metricsRef, newFeeling));
+      setDailyPlan(generateDailyPlan(metricsRef, { feeling: f, energy: e, stress: s }));
     }
   }, [metricsRef]);
+
+  const setFeeling = useCallback((newFeeling: FeelingType) => {
+    setFeelingState(newFeeling);
+    saveWellness(newFeeling, energy, stress);
+    regeneratePlan(newFeeling, energy, stress);
+  }, [energy, stress, saveWellness, regeneratePlan]);
+
+  const setEnergy = useCallback((newEnergy: EnergyLevel) => {
+    setEnergyState(newEnergy);
+    saveWellness(feeling, newEnergy, stress);
+    regeneratePlan(feeling, newEnergy, stress);
+  }, [feeling, stress, saveWellness, regeneratePlan]);
+
+  const setStress = useCallback((newStress: StressLevel) => {
+    setStressState(newStress);
+    saveWellness(feeling, energy, newStress);
+    regeneratePlan(feeling, energy, newStress);
+  }, [feeling, energy, saveWellness, regeneratePlan]);
 
   const updateProfile = useCallback((updates: Partial<UserProfile>) => {
     setProfile((prev) => {
@@ -178,6 +211,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         insights,
         feeling,
         setFeeling,
+        energy,
+        setEnergy,
+        stress,
+        setStress,
       }}
     >
       {children}

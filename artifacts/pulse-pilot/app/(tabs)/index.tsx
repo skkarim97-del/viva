@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ReadinessRing } from "@/components/ReadinessRing";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
-import type { MetricKey, FeelingType, ChatMessage } from "@/types";
+import type { MetricKey, FeelingType, EnergyLevel, StressLevel, ChatMessage } from "@/types";
 
 const FEELINGS: { key: NonNullable<FeelingType>; label: string }[] = [
   { key: "great", label: "Great" },
@@ -25,6 +25,18 @@ const FEELINGS: { key: NonNullable<FeelingType>; label: string }[] = [
   { key: "tired", label: "Tired" },
   { key: "exhausted", label: "Exhausted" },
   { key: "stressed", label: "Stressed" },
+];
+
+const ENERGY_LEVELS: { key: NonNullable<EnergyLevel>; label: string }[] = [
+  { key: "high", label: "High" },
+  { key: "medium", label: "Medium" },
+  { key: "low", label: "Low" },
+];
+
+const STRESS_LEVELS: { key: NonNullable<StressLevel>; label: string }[] = [
+  { key: "low", label: "Low" },
+  { key: "moderate", label: "Moderate" },
+  { key: "high", label: "High" },
 ];
 
 const API_BASE = Platform.OS === "web"
@@ -36,7 +48,8 @@ export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const {
     todayMetrics, dailyPlan, insights, feeling, setFeeling,
-    chatMessages, addChatMessage, profile, trends,
+    energy, setEnergy, stress, setStress,
+    chatMessages, addChatMessage, profile,
   } = useApp();
   const topPad = Platform.OS === "web" ? 60 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -46,6 +59,7 @@ export default function DashboardScreen() {
   const [askMessages, setAskMessages] = useState<ChatMessage[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [streamingText, setStreamingText] = useState("");
+  const [showEnergyStress, setShowEnergyStress] = useState(false);
 
   if (!todayMetrics || !dailyPlan) {
     return (
@@ -55,10 +69,14 @@ export default function DashboardScreen() {
     );
   }
 
-  const openMetric = (key: MetricKey) => {
+  const haptic = () => {
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
+  };
+
+  const openMetric = (key: MetricKey) => {
+    haptic();
     router.push({ pathname: "/metric-detail", params: { key } });
   };
 
@@ -66,7 +84,19 @@ export default function DashboardScreen() {
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
-    setFeeling(feeling === f ? null : f);
+    const newVal = feeling === f ? null : f;
+    setFeeling(newVal);
+    if (newVal && !showEnergyStress) setShowEnergyStress(true);
+  };
+
+  const selectEnergy = (e: NonNullable<EnergyLevel>) => {
+    haptic();
+    setEnergy(energy === e ? null : e);
+  };
+
+  const selectStress = (s: NonNullable<StressLevel>) => {
+    haptic();
+    setStress(stress === s ? null : s);
   };
 
   const sendAskMessage = async (text: string) => {
@@ -114,6 +144,9 @@ export default function DashboardScreen() {
             },
             readinessScore: dailyPlan?.readinessScore,
             userFeeling: feeling,
+            userEnergy: energy,
+            userStress: stress,
+            sleepInsight: insights?.sleepIntelligence?.insight,
           },
           conversationHistory,
         }),
@@ -189,6 +222,14 @@ export default function DashboardScreen() {
     { key: "restingHR", label: "Heart Rate", value: `${todayMetrics.restingHeartRate}`, unit: "bpm" },
   ];
 
+  const focusColor = dailyPlan.dailyFocus.includes("push") || dailyPlan.dailyFocus.includes("performance")
+    ? c.success
+    : dailyPlan.dailyFocus.includes("recovery")
+    ? c.info
+    : dailyPlan.dailyFocus.includes("stress")
+    ? c.warning
+    : c.primary;
+
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={0}>
       <ScrollView
@@ -226,11 +267,71 @@ export default function DashboardScreen() {
               );
             })}
           </View>
+
+          {showEnergyStress && (
+            <View style={styles.subInputs}>
+              <View style={styles.subInputRow}>
+                <Text style={[styles.subInputLabel, { color: c.mutedForeground }]}>Energy</Text>
+                <View style={styles.subChipRow}>
+                  {ENERGY_LEVELS.map(({ key, label }) => {
+                    const isSelected = energy === key;
+                    return (
+                      <Pressable
+                        key={key}
+                        onPress={() => selectEnergy(key)}
+                        style={({ pressed }) => [
+                          styles.subChip,
+                          {
+                            backgroundColor: isSelected ? c.primary : c.card,
+                            opacity: pressed ? 0.8 : 1,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.subChipLabel, { color: isSelected ? c.primaryForeground : c.foreground }]}>
+                          {label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+              <View style={styles.subInputRow}>
+                <Text style={[styles.subInputLabel, { color: c.mutedForeground }]}>Stress</Text>
+                <View style={styles.subChipRow}>
+                  {STRESS_LEVELS.map(({ key, label }) => {
+                    const isSelected = stress === key;
+                    return (
+                      <Pressable
+                        key={key}
+                        onPress={() => selectStress(key)}
+                        style={({ pressed }) => [
+                          styles.subChip,
+                          {
+                            backgroundColor: isSelected ? c.primary : c.card,
+                            opacity: pressed ? 0.8 : 1,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.subChipLabel, { color: isSelected ? c.primaryForeground : c.foreground }]}>
+                          {label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            </View>
+          )}
         </View>
 
         <View style={styles.coachingSection}>
           <Text style={[styles.headline, { color: c.foreground }]}>{dailyPlan.headline}</Text>
           <Text style={[styles.summary, { color: c.mutedForeground }]}>{dailyPlan.summary}</Text>
+        </View>
+
+        <View style={[styles.focusCard, { backgroundColor: focusColor + "10" }]}>
+          <View style={[styles.focusDot, { backgroundColor: focusColor }]} />
+          <Text style={[styles.focusText, { color: c.foreground }]}>{dailyPlan.dailyFocus}</Text>
         </View>
 
         <View style={[styles.planCard, { backgroundColor: c.card }]}>
@@ -239,7 +340,7 @@ export default function DashboardScreen() {
           <PlanRow icon="target" iconColor={c.primary} label="Workout" value={dailyPlan.todaysPlan.workout} foreground={c.foreground} muted={c.mutedForeground} />
           <PlanRow icon="navigation" iconColor={c.accent} label="Movement" value={dailyPlan.todaysPlan.movement} foreground={c.foreground} muted={c.mutedForeground} />
           <PlanRow icon="coffee" iconColor={c.warning} label="Nutrition" value={dailyPlan.todaysPlan.nutrition} foreground={c.foreground} muted={c.mutedForeground} />
-          <PlanRow icon="moon" iconColor={c.info} label="Recovery" value={dailyPlan.todaysPlan.recovery} foreground={c.foreground} muted={c.mutedForeground} />
+          <PlanRow icon="moon" iconColor={c.info} label="Recovery & Mind" value={dailyPlan.todaysPlan.recoveryMind} foreground={c.foreground} muted={c.mutedForeground} />
         </View>
 
         <View style={styles.whySection}>
@@ -251,6 +352,17 @@ export default function DashboardScreen() {
             </View>
           ))}
         </View>
+
+        {insights?.sleepIntelligence && (
+          <View style={[styles.sleepCard, { backgroundColor: c.card }]}>
+            <View style={styles.sleepHeader}>
+              <Feather name="moon" size={14} color={c.info} />
+              <Text style={[styles.sleepTitle, { color: c.foreground }]}>Sleep Intelligence</Text>
+            </View>
+            <Text style={[styles.sleepInsight, { color: c.foreground }]}>{insights.sleepIntelligence.insight}</Text>
+            <Text style={[styles.sleepRec, { color: c.mutedForeground }]}>{insights.sleepIntelligence.recommendation}</Text>
+          </View>
+        )}
 
         <View style={styles.metricsRow}>
           {metricItems.map((item) => (
@@ -283,7 +395,7 @@ export default function DashboardScreen() {
           </View>
           <View style={styles.askContent}>
             <Text style={[styles.askTitle, { color: c.foreground }]}>Ask your coach</Text>
-            <Text style={[styles.askSub, { color: c.mutedForeground }]}>Follow up on your plan, recovery, or nutrition</Text>
+            <Text style={[styles.askSub, { color: c.mutedForeground }]}>Follow up on your plan, sleep, stress, or nutrition</Text>
           </View>
           <Feather name={showAsk ? "chevron-up" : "chevron-down"} size={16} color={c.mutedForeground + "60"} />
         </Pressable>
@@ -348,7 +460,7 @@ export default function DashboardScreen() {
 
             {askMessages.length === 0 && (
               <View style={styles.askSuggestions}>
-                {["Should I work out today?", "Why this plan?", "What should I eat?"].map((q) => (
+                {["How is my sleep?", "Should I work out today?", "How can I reduce stress?"].map((q) => (
                   <Pressable
                     key={q}
                     onPress={() => sendAskMessage(q)}
@@ -425,10 +537,40 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
   },
 
+  subInputs: {
+    gap: 10,
+    marginTop: 4,
+  },
+  subInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+  },
+  subInputLabel: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    width: 50,
+    textAlign: "right",
+  },
+  subChipRow: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  subChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  subChipLabel: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+  },
+
   coachingSection: {
     alignItems: "center",
     gap: 10,
-    marginBottom: 28,
+    marginBottom: 16,
   },
   headline: {
     fontSize: 20,
@@ -445,6 +587,27 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     paddingHorizontal: 12,
     opacity: 0.8,
+  },
+
+  focusCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 14,
+    marginBottom: 24,
+    alignSelf: "center",
+  },
+  focusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  focusText: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: -0.1,
   },
 
   planCard: {
@@ -494,7 +657,7 @@ const styles = StyleSheet.create({
   whySection: {
     paddingHorizontal: 4,
     gap: 10,
-    marginBottom: 28,
+    marginBottom: 24,
   },
   whyTitle: {
     fontSize: 12,
@@ -520,6 +683,33 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     flex: 1,
     opacity: 0.75,
+  },
+
+  sleepCard: {
+    borderRadius: 16,
+    padding: 16,
+    gap: 8,
+    marginBottom: 20,
+  },
+  sleepHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  sleepTitle: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+  },
+  sleepInsight: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 20,
+  },
+  sleepRec: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 19,
+    opacity: 0.7,
   },
 
   metricsRow: {

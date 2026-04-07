@@ -8,7 +8,7 @@ import type {
   IntegrationStatus,
   MetricDetail,
   MetricKey,
-  FeelingType,
+  WellnessInputs,
 } from "@/types";
 
 export const defaultProfile: UserProfile = {
@@ -50,46 +50,50 @@ export function generateMockMetrics(days: number = 30): HealthMetrics[] {
     metrics.push({
       date: generateDateString(i),
       steps: Math.round(baseSteps + (Math.random() - 0.5) * 1000),
-      caloriesBurned: Math.round(2200 + Math.random() * 400),
-      activeCalories: Math.round(350 + Math.random() * 200),
+      caloriesBurned: Math.round(2100 + (Math.random() - 0.5) * 400),
+      activeCalories: Math.round(350 + (Math.random() - 0.5) * 200),
       restingHeartRate: Math.round(baseRhr + (Math.random() - 0.5) * 4),
       hrv: Math.round(baseHrv + (Math.random() - 0.5) * 6),
       weight: Math.round((baseWeight + (Math.random() - 0.5) * 1) * 10) / 10,
-      sleepDuration: Math.round((baseSleep + (Math.random() - 0.5) * 1) * 10) / 10,
-      sleepQuality: Math.round(65 + Math.random() * 30),
-      recoveryScore: Math.round(55 + Math.random() * 40),
-      strain: Math.round((8 + Math.random() * 8) * 10) / 10,
-      vo2Max: 38 + Math.round(Math.random() * 5),
+      sleepDuration: Math.round((baseSleep + (Math.random() - 0.5) * 1.2) * 10) / 10,
+      sleepQuality: Math.round(70 + Math.sin(i / 6) * 15 + (Math.random() - 0.5) * 10),
+      recoveryScore: Math.round(65 + Math.sin(i / 5) * 15 + (Math.random() - 0.5) * 10),
+      strain: Math.round(8 + Math.sin(i / 4) * 4 + (Math.random() - 0.5) * 3),
+      vo2Max: 42,
     });
   }
   return metrics;
 }
 
 export function generateMockWorkouts(): WorkoutEntry[] {
-  const types = ["Strength Training", "Zone 2 Run", "HIIT", "Yoga", "Walk", "Cycling"];
-  const intensities: ("low" | "moderate" | "high" | "very_high")[] = ["low", "moderate", "high", "very_high"];
   const workouts: WorkoutEntry[] = [];
-
-  for (let i = 0; i < 12; i++) {
-    workouts.push({
-      id: `wo_${i}`,
-      date: generateDateString(i * 2 + Math.round(Math.random())),
-      type: types[i % types.length],
-      duration: 30 + Math.round(Math.random() * 30),
-      intensity: intensities[Math.min(i % 4, 3)],
-      caloriesBurned: 200 + Math.round(Math.random() * 300),
-      heartRateAvg: 120 + Math.round(Math.random() * 40),
-    });
+  const types = ["Strength Training", "Zone 2 Run", "HIIT", "Yoga", "Cycling", "Walking"];
+  for (let i = 13; i >= 0; i--) {
+    if (i % 2 === 0) {
+      const type = types[i % types.length];
+      workouts.push({
+        id: `w_${i}`,
+        date: generateDateString(i),
+        type,
+        duration: 30 + Math.round(Math.random() * 30),
+        intensity: type === "HIIT" ? "very_high" : type === "Strength Training" ? "high" : type === "Yoga" || type === "Walking" ? "low" : "moderate",
+        caloriesBurned: 200 + Math.round(Math.random() * 300),
+      });
+    }
   }
   return workouts;
 }
 
-export function getTodayMetrics(): HealthMetrics {
+export function generateTodayMetrics(): HealthMetrics {
   const all = generateMockMetrics(1);
   return all[0];
 }
 
-export function generateDailyPlan(metrics: HealthMetrics, feeling?: FeelingType): DailyPlan {
+export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInputs): DailyPlan {
+  const feeling = inputs?.feeling ?? null;
+  const energy = inputs?.energy ?? null;
+  const stress = inputs?.stress ?? null;
+
   let readinessScore = Math.round(
     metrics.recoveryScore * 0.3 +
     metrics.sleepQuality * 0.3 +
@@ -102,14 +106,22 @@ export function generateDailyPlan(metrics: HealthMetrics, feeling?: FeelingType)
   else if (feeling === "stressed") readinessScore = Math.min(readinessScore, 50);
   else if (feeling === "great") readinessScore = Math.max(readinessScore, 75);
 
+  if (energy === "low") readinessScore = Math.min(readinessScore, 45);
+  else if (energy === "high") readinessScore = Math.max(readinessScore, 70);
+
+  if (stress === "high") readinessScore = Math.min(readinessScore, 50);
+
   const readinessLabel = readinessScore >= 80 ? "Excellent" : readinessScore >= 65 ? "Good" : readinessScore >= 45 ? "Moderate" : "Low";
 
   const feelingOverride = feeling === "exhausted" || feeling === "tired" || feeling === "stressed";
+  const stressOverride = stress === "high";
+  const lowEnergy = energy === "low";
   const dataIsGood = metrics.recoveryScore >= 65 && metrics.sleepQuality >= 70;
 
   let headline = "";
   let summary = "";
-  let todaysPlan = { workout: "", movement: "", nutrition: "", recovery: "" };
+  let dailyFocus = "";
+  let todaysPlan = { workout: "", movement: "", nutrition: "", recoveryMind: "" };
   let whyThisPlan: string[] = [];
   let optional = "";
   let workoutType = "";
@@ -117,15 +129,36 @@ export function generateDailyPlan(metrics: HealthMetrics, feeling?: FeelingType)
   let workoutDuration = 40;
   let workoutDesc = "";
 
-  if (feelingOverride && dataIsGood) {
+  if (stressOverride && dataIsGood) {
+    headline = "Dial it back. Manage your stress first.";
+    summary = "Your body could handle training, but stress changes the equation. Today is about calming your system.";
+    dailyFocus = "Focus on reducing stress";
+    todaysPlan = {
+      workout: "Zone 2 walk or yoga, 30 min. Nothing intense.",
+      movement: "Move gently. Fresh air helps.",
+      nutrition: "2,000 cal. Avoid skipping meals under stress. Limit caffeine after noon.",
+      recoveryMind: "10 min breathing exercise. Wind down early. Reduce screens tonight.",
+    };
+    whyThisPlan = [
+      "Stress raises cortisol. Adding hard training raises it more.",
+      "Low-intensity movement actually helps reduce stress.",
+      "Protecting your nervous system is the priority today.",
+    ];
+    workoutType = "Stress Relief";
+    workoutIntensity = "low";
+    workoutDuration = 30;
+    workoutDesc = "Gentle movement focused on stress relief.";
+    optional = "If you start feeling better, increase intensity slightly. No obligation.";
+  } else if (feelingOverride && dataIsGood) {
     if (feeling === "exhausted") {
       headline = "Take it easy. You know your body best.";
       summary = "Your data looks solid, but you feel exhausted. Subjective fatigue matters. Rest today.";
+      dailyFocus = "Focus on recovery";
       todaysPlan = {
         workout: "Active recovery only. Gentle stretching, 15 min.",
         movement: "Light walk if you feel like it. No pressure.",
         nutrition: "1,900 cal. Comfort foods that nourish. Stay hydrated.",
-        recovery: "Prioritize sleep. In bed early tonight.",
+        recoveryMind: "Prioritize sleep. 10 min meditation or deep breathing. In bed early.",
       };
       whyThisPlan = [
         "Your data says go, but your body says stop. We listen to both.",
@@ -139,11 +172,12 @@ export function generateDailyPlan(metrics: HealthMetrics, feeling?: FeelingType)
     } else if (feeling === "tired") {
       headline = "Go light today. Save your energy.";
       summary = "Your metrics look decent, but you feel tired. A lighter session is the smarter call.";
+      dailyFocus = "Focus on consistency";
       todaysPlan = {
         workout: "Easy walk or light yoga, 30 min.",
         movement: "6,000 steps. No need to push.",
         nutrition: "2,000 cal. Balanced, easy meals.",
-        recovery: "Wind down early. Extra sleep helps more than an extra set.",
+        recoveryMind: "Wind down early. 5 min deep breathing before bed. Extra sleep helps more than an extra set.",
       };
       whyThisPlan = [
         "Fatigue you can feel often shows up in data tomorrow.",
@@ -157,11 +191,12 @@ export function generateDailyPlan(metrics: HealthMetrics, feeling?: FeelingType)
     } else {
       headline = "Dial it back. Manage your stress first.";
       summary = "Your body could handle training, but stress changes the equation. Go easy.";
+      dailyFocus = "Focus on reducing stress";
       todaysPlan = {
         workout: "Zone 2 walk or yoga, 30 min. Nothing intense.",
         movement: "Move gently. Fresh air helps.",
         nutrition: "2,000 cal. Avoid skipping meals under stress.",
-        recovery: "10 min breathing exercise. Limit caffeine after noon.",
+        recoveryMind: "10 min breathing exercise. Reduce stimulation tonight. Limit caffeine after noon.",
       };
       whyThisPlan = [
         "Stress raises cortisol. Adding hard training raises it more.",
@@ -173,19 +208,41 @@ export function generateDailyPlan(metrics: HealthMetrics, feeling?: FeelingType)
       workoutDuration = 30;
       workoutDesc = "Gentle movement focused on stress relief.";
     }
-    optional = "If you start feeling better, you can increase intensity slightly. But no obligation.";
+    optional = "If you start feeling better, increase intensity slightly. No obligation.";
+  } else if (lowEnergy && dataIsGood) {
+    headline = "Low energy. Keep it light.";
+    summary = "Your data supports training, but your energy is low. A gentle session keeps you on track without draining you.";
+    dailyFocus = "Focus on consistency";
+    todaysPlan = {
+      workout: "Easy walk or light yoga, 30 min.",
+      movement: "6,000 steps. Move when it feels natural.",
+      nutrition: "2,000 cal. Balanced meals. Eat consistently throughout the day.",
+      recoveryMind: "Light stretching, 10 min. Consider a short nap if possible. Early bedtime.",
+    };
+    whyThisPlan = [
+      "Low energy often means your body is still processing yesterday's load.",
+      "A gentle session now protects tomorrow's performance.",
+      "Rest is not the enemy of progress. It is part of it.",
+    ];
+    workoutType = "Light Activity";
+    workoutIntensity = "low";
+    workoutDuration = 30;
+    workoutDesc = "Easy movement to stay active without adding strain.";
+    optional = "If energy picks up, you can increase to moderate. Listen to your body.";
   } else if (readinessScore >= 75) {
-    headline = feeling === "great" ? "Let's go. You feel it and your data confirms it." : "Push today. Your body is ready.";
-    summary = feeling === "great"
+    const feelingGreat = feeling === "great" || energy === "high";
+    headline = feelingGreat ? "Let's go. You feel it and your data confirms it." : "Push today. Your body is ready.";
+    summary = feelingGreat
       ? "You feel great and your recovery backs it up. Make this session count."
       : "Recovery is strong, sleep was solid. A good day to train hard.";
+    dailyFocus = "Good day to push performance";
     todaysPlan = {
       workout: "Strength, 50 min. Compound lifts, full body.",
       movement: "8,000 steps outside your workout.",
       nutrition: "2,200 cal. Protein and carbs before training.",
-      recovery: "Stretch 10 min post-session. 96oz water.",
+      recoveryMind: "Stretch 10 min post-session. 96oz water. Wind down routine before bed.",
     };
-    whyThisPlan = feeling === "great"
+    whyThisPlan = feelingGreat
       ? [
           "You feel great and your body data agrees.",
           "Recovery signals are strong across the board.",
@@ -204,11 +261,12 @@ export function generateDailyPlan(metrics: HealthMetrics, feeling?: FeelingType)
   } else if (readinessScore >= 45) {
     headline = "Train today. Keep it steady.";
     summary = "Recovery is solid, but not fully reset. A controlled session keeps you on track.";
+    dailyFocus = "Focus on consistency";
     todaysPlan = {
       workout: "Zone 2 cardio, 40 min. Easy pace.",
       movement: "7,500 steps throughout the day.",
       nutrition: "2,000 cal. Balanced meals, protein at every meal.",
-      recovery: "Wind down by 10pm. No screens 30 min before bed.",
+      recoveryMind: "Wind down by 10pm. No screens 30 min before bed. 5 min breathing exercise.",
     };
     whyThisPlan = [
       "Your body is not fully recharged yet.",
@@ -223,11 +281,12 @@ export function generateDailyPlan(metrics: HealthMetrics, feeling?: FeelingType)
   } else {
     headline = "Recovery first today.";
     summary = "Your body is showing signs of fatigue. Rest now, train stronger tomorrow.";
+    dailyFocus = "Focus on recovery";
     todaysPlan = {
       workout: "Active recovery only. Light stretching, 20 min.",
       movement: "A short walk is fine. No step target today.",
       nutrition: "1,900 cal. Nutrient-dense foods, stay hydrated.",
-      recovery: "Prioritize 8+ hours sleep. In bed by 9:30pm.",
+      recoveryMind: "Prioritize 8+ hours sleep. In bed by 9:30pm. 10 min meditation or light reading.",
     };
     whyThisPlan = [
       "Your body needs time to repair and adapt.",
@@ -266,6 +325,7 @@ export function generateDailyPlan(metrics: HealthMetrics, feeling?: FeelingType)
     readinessLabel,
     headline,
     summary,
+    dailyFocus,
     todaysPlan,
     whyThisPlan,
     optional,

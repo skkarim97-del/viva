@@ -66,11 +66,12 @@ export interface DailyPlan {
   readinessLabel: "Low" | "Moderate" | "Good" | "Excellent";
   headline: string;
   summary: string;
+  dailyFocus: string;
   todaysPlan: {
     workout: string;
     movement: string;
     nutrition: string;
-    recovery: string;
+    recoveryMind: string;
   };
   whyThisPlan: string[];
   optional?: string;
@@ -139,6 +140,8 @@ export interface IntegrationStatus {
 }
 
 export type FeelingType = "great" | "good" | "tired" | "exhausted" | "stressed" | null;
+export type EnergyLevel = "high" | "medium" | "low" | null;
+export type StressLevel = "low" | "moderate" | "high" | null;
 
 export type MetricKey = "sleep" | "hrv" | "steps" | "restingHR" | "recovery" | "weight";
 
@@ -152,4 +155,18 @@ export interface MetricDetail {
   currentValue: string;
   unit: string;
   trend: TrendData;
+}
+
+export interface SleepIntelligence {
+  avgDuration: number;
+  bedtimeConsistency: "consistent" | "somewhat_consistent" | "inconsistent";
+  sleepTrend: "improving" | "declining" | "stable";
+  insight: string;
+  recommendation: string;
+}
+
+export interface WellnessInputs {
+  feeling: FeelingType;
+  energy: EnergyLevel;
+  stress: StressLevel;
 }

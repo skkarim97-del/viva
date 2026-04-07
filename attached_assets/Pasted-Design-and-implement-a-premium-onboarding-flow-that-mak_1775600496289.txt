@@ -1,0 +1,313 @@
+Design and implement a premium onboarding flow that makes PulsePilot feel highly personalized, intelligent, and simple.
+
+## Core Goal
+
+Onboarding should:
+
+* feel fast and intuitive
+* require minimal typing
+* use mostly taps and selections
+* establish a strong sense of personalization immediately
+* configure the AI coaching system with enough context to generate meaningful recommendations on day one
+
+The user should feel:
+“This app understands my goals and situation already.”
+
+---
+
+## Step-by-step onboarding flow
+
+### 1. Welcome screen
+
+* Clean, minimal design
+* Short value proposition:
+  “Your daily health and performance coach”
+* Subtext:
+  “Personalized guidance for fitness, recovery, sleep, and mental well-being”
+* Primary CTA: “Get Started”
+
+---
+
+### 2. Goal selection (multi-select)
+
+Ask:
+“What do you want to improve?”
+
+Options:
+
+* Lose weight
+* Build muscle
+* Improve fitness
+* Increase energy
+* Sleep better
+* Reduce stress
+* Stay consistent
+* General health
+
+Allow multiple selections.
+
+---
+
+### 3. Basic profile (quick inputs)
+
+Keep UI extremely simple.
+
+Inputs:
+
+* Age (optional)
+* Sex (optional)
+* Height
+* Current weight
+* Goal weight (if weight loss or gain selected)
+
+Use:
+
+* sliders
+* steppers
+* tap-based input
+
+---
+
+### 4. Activity level
+
+Ask:
+“How active are you right now?”
+
+Options:
+
+* Mostly inactive
+* Lightly active (walking, occasional workouts)
+* Moderately active (3–4 workouts/week)
+* Very active (5+ workouts/week)
+
+---
+
+### 5. Training preference
+
+Ask:
+“How much time can you train?”
+
+Options:
+
+* Under 30 min/day
+* 30–60 min/day
+* 60–90 min/day
+* 90+ min/day
+
+---
+
+### 6. Mental & energy baseline
+
+Ask:
+“How have you been feeling recently?”
+
+Options:
+
+* Consistently energized
+* Generally good
+* Often tired
+* Frequently stressed
+* Burnt out
+
+Keep this simple and non-clinical.
+
+---
+
+### 7. Sleep habits
+
+Ask:
+“What does your sleep look like?”
+
+Options:
+
+* 7–8 hours consistently
+* 6–7 hours
+* Under 6 hours
+* Inconsistent schedule
+
+Then optionally:
+“What time do you usually go to bed?”
+“What time do you wake up?”
+
+(Keep optional or quick-select)
+
+---
+
+### 8. Device integration
+
+Prompt user to connect:
+
+* Apple Health (HealthKit)
+* Garmin
+* WHOOP
+
+Explain clearly:
+“This helps personalize your daily recommendations automatically.”
+
+Also include:
+“Skip for now” option
+
+---
+
+### 9. Personalization summary (important)
+
+Before entering the app, show:
+
+“You’re set up”
+
+Then show a short summary:
+
+* Goal: Lose weight and improve energy
+* Plan: Moderate training, consistent activity
+* Focus: Build sustainable habits
+
+CTA:
+“Start your plan”
+
+---
+
+## Backend logic (critical)
+
+Use onboarding inputs to calculate:
+
+### 1. Caloric needs
+
+* Estimate maintenance calories (TDEE)
+* Apply a reasonable deficit or surplus based on goal
+* Keep recommendations moderate and sustainable
+
+Example:
+
+* Weight loss: 300–500 calorie deficit
+* Muscle gain: slight surplus with protein emphasis
+
+### 2. Protein targets
+
+* Based on body weight and goal
+
+### 3. Activity targets
+
+* Steps
+* Workout frequency
+* Training intensity
+
+### 4. Sleep targets
+
+* Based on current sleep vs ideal
+* Identify sleep debt and consistency issues
+
+### 5. Recovery baseline
+
+* Initialize expected recovery patterns until wearable data improves accuracy
+
+---
+
+## Product behavior
+
+The system should:
+
+* combine onboarding inputs + wearable data
+* continuously update recommendations
+* adapt plans over time
+
+If wearable data exists:
+
+* prioritize real data
+
+If not:
+
+* rely on onboarding assumptions
+
+---
+
+## UI design requirements (critical)
+
+The onboarding must feel:
+
+* premium
+* smooth
+* minimal
+* fast
+* visually refined
+
+Design direction:
+
+* full-screen steps
+* large typography
+* clean spacing
+* subtle animations between steps
+* soft transitions
+* minimal text per screen
+
+Each screen should:
+
+* ask one question only
+* use large tap targets
+* avoid clutter
+* feel effortless
+
+---
+
+## Visual inspiration
+
+Use inspiration from:
+
+* Apple onboarding flows
+* Headspace
+* Calm
+* Oura
+* WHOOP
+* top-performing App Store apps
+
+But ensure the final design:
+
+* feels unique
+* not generic
+* more minimal and premium
+
+---
+
+## Micro-interactions
+
+Add:
+
+* smooth transitions between steps
+* subtle haptic feedback on selections
+* progress indicator (top bar or dots)
+* animated confirmation on completion
+
+---
+
+## Tone and copy
+
+* simple
+* calm
+* confident
+* no jargon
+* no pressure
+* no hype
+
+Example tone:
+“Let’s understand your baseline”
+“Set your starting point”
+“We’ll adapt this over time”
+
+---
+
+## Final goal
+
+After onboarding, the user should open the app and see:
+
+* a personalized daily plan
+* tailored to their goals, baseline, and habits
+* even before full wearable data is available
+
+The onboarding should feel like:
+
+* a quick setup
+* not a questionnaire
+
+And the result should feel:
+
+* highly personalized
+* immediately useful
