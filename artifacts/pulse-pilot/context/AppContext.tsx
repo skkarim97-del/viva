@@ -24,6 +24,9 @@ import type {
   FeelingType,
   EnergyLevel,
   StressLevel,
+  HydrationLevel,
+  LifeLoad,
+  TrainingIntent,
   WellnessInputs,
 } from "@/types";
 
@@ -50,6 +53,12 @@ interface AppContextType {
   setEnergy: (energy: EnergyLevel) => void;
   stress: StressLevel;
   setStress: (stress: StressLevel) => void;
+  hydration: HydrationLevel;
+  setHydration: (hydration: HydrationLevel) => void;
+  lifeLoad: LifeLoad;
+  setLifeLoad: (lifeLoad: LifeLoad) => void;
+  trainingIntent: TrainingIntent;
+  setTrainingIntent: (trainingIntent: TrainingIntent) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -73,6 +82,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [feeling, setFeelingState] = useState<FeelingType>(null);
   const [energy, setEnergyState] = useState<EnergyLevel>(null);
   const [stress, setStressState] = useState<StressLevel>(null);
+  const [hydration, setHydrationState] = useState<HydrationLevel>(null);
+  const [lifeLoad, setLifeLoadState] = useState<LifeLoad>(null);
+  const [trainingIntent, setTrainingIntentState] = useState<TrainingIntent>(null);
   const [metricsRef, setMetricsRef] = useState<HealthMetrics | null>(null);
 
   useEffect(() => {
@@ -95,6 +107,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       let currentFeeling: FeelingType = null;
       let currentEnergy: EnergyLevel = null;
       let currentStress: StressLevel = null;
+      let currentHydration: HydrationLevel = null;
+      let currentLifeLoad: LifeLoad = null;
+      let currentTrainingIntent: TrainingIntent = null;
       const savedWellness = await AsyncStorage.getItem(WELLNESS_KEY);
       if (savedWellness) {
         const parsed = JSON.parse(savedWellness);
@@ -102,9 +117,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           currentFeeling = parsed.feeling ?? null;
           currentEnergy = parsed.energy ?? null;
           currentStress = parsed.stress ?? null;
+          currentHydration = parsed.hydration ?? null;
+          currentLifeLoad = parsed.lifeLoad ?? null;
+          currentTrainingIntent = parsed.trainingIntent ?? null;
           setFeelingState(currentFeeling);
           setEnergyState(currentEnergy);
           setStressState(currentStress);
+          setHydrationState(currentHydration);
+          setLifeLoadState(currentLifeLoad);
+          setTrainingIntentState(currentTrainingIntent);
         }
       }
 
@@ -114,7 +135,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const today = allMetrics[allMetrics.length - 1];
       setTodayMetrics(today);
       setMetricsRef(today);
-      setDailyPlan(generateDailyPlan(today, { feeling: currentFeeling, energy: currentEnergy, stress: currentStress }));
+      setDailyPlan(generateDailyPlan(today, { feeling: currentFeeling, energy: currentEnergy, stress: currentStress, hydration: currentHydration, lifeLoad: currentLifeLoad, trainingIntent: currentTrainingIntent }));
       setWeeklyPlan(generateWeeklyPlan());
       setTrends(generateTrendData());
       const allWorkouts = generateMockWorkouts();
@@ -128,34 +149,52 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const saveWellness = useCallback((f: FeelingType, e: EnergyLevel, s: StressLevel) => {
+  const saveWellness = useCallback((f: FeelingType, e: EnergyLevel, s: StressLevel, h: HydrationLevel, ll: LifeLoad, ti: TrainingIntent) => {
     const todayDate = new Date().toISOString().split("T")[0];
-    AsyncStorage.setItem(WELLNESS_KEY, JSON.stringify({ date: todayDate, feeling: f, energy: e, stress: s }));
+    AsyncStorage.setItem(WELLNESS_KEY, JSON.stringify({ date: todayDate, feeling: f, energy: e, stress: s, hydration: h, lifeLoad: ll, trainingIntent: ti }));
   }, []);
 
-  const regeneratePlan = useCallback((f: FeelingType, e: EnergyLevel, s: StressLevel) => {
+  const regeneratePlan = useCallback((f: FeelingType, e: EnergyLevel, s: StressLevel, h: HydrationLevel, ll: LifeLoad, ti: TrainingIntent) => {
     if (metricsRef) {
-      setDailyPlan(generateDailyPlan(metricsRef, { feeling: f, energy: e, stress: s }));
+      setDailyPlan(generateDailyPlan(metricsRef, { feeling: f, energy: e, stress: s, hydration: h, lifeLoad: ll, trainingIntent: ti }));
     }
   }, [metricsRef]);
 
   const setFeeling = useCallback((newFeeling: FeelingType) => {
     setFeelingState(newFeeling);
-    saveWellness(newFeeling, energy, stress);
-    regeneratePlan(newFeeling, energy, stress);
-  }, [energy, stress, saveWellness, regeneratePlan]);
+    saveWellness(newFeeling, energy, stress, hydration, lifeLoad, trainingIntent);
+    regeneratePlan(newFeeling, energy, stress, hydration, lifeLoad, trainingIntent);
+  }, [energy, stress, hydration, lifeLoad, trainingIntent, saveWellness, regeneratePlan]);
 
   const setEnergy = useCallback((newEnergy: EnergyLevel) => {
     setEnergyState(newEnergy);
-    saveWellness(feeling, newEnergy, stress);
-    regeneratePlan(feeling, newEnergy, stress);
-  }, [feeling, stress, saveWellness, regeneratePlan]);
+    saveWellness(feeling, newEnergy, stress, hydration, lifeLoad, trainingIntent);
+    regeneratePlan(feeling, newEnergy, stress, hydration, lifeLoad, trainingIntent);
+  }, [feeling, stress, hydration, lifeLoad, trainingIntent, saveWellness, regeneratePlan]);
 
   const setStress = useCallback((newStress: StressLevel) => {
     setStressState(newStress);
-    saveWellness(feeling, energy, newStress);
-    regeneratePlan(feeling, energy, newStress);
-  }, [feeling, energy, saveWellness, regeneratePlan]);
+    saveWellness(feeling, energy, newStress, hydration, lifeLoad, trainingIntent);
+    regeneratePlan(feeling, energy, newStress, hydration, lifeLoad, trainingIntent);
+  }, [feeling, energy, hydration, lifeLoad, trainingIntent, saveWellness, regeneratePlan]);
+
+  const setHydration = useCallback((newHydration: HydrationLevel) => {
+    setHydrationState(newHydration);
+    saveWellness(feeling, energy, stress, newHydration, lifeLoad, trainingIntent);
+    regeneratePlan(feeling, energy, stress, newHydration, lifeLoad, trainingIntent);
+  }, [feeling, energy, stress, lifeLoad, trainingIntent, saveWellness, regeneratePlan]);
+
+  const setLifeLoad = useCallback((newLifeLoad: LifeLoad) => {
+    setLifeLoadState(newLifeLoad);
+    saveWellness(feeling, energy, stress, hydration, newLifeLoad, trainingIntent);
+    regeneratePlan(feeling, energy, stress, hydration, newLifeLoad, trainingIntent);
+  }, [feeling, energy, stress, hydration, trainingIntent, saveWellness, regeneratePlan]);
+
+  const setTrainingIntent = useCallback((newTrainingIntent: TrainingIntent) => {
+    setTrainingIntentState(newTrainingIntent);
+    saveWellness(feeling, energy, stress, hydration, lifeLoad, newTrainingIntent);
+    regeneratePlan(feeling, energy, stress, hydration, lifeLoad, newTrainingIntent);
+  }, [feeling, energy, stress, hydration, lifeLoad, saveWellness, regeneratePlan]);
 
   const updateProfile = useCallback((updates: Partial<UserProfile>) => {
     setProfile((prev) => {
@@ -215,6 +254,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setEnergy,
         stress,
         setStress,
+        hydration,
+        setHydration,
+        lifeLoad,
+        setLifeLoad,
+        trainingIntent,
+        setTrainingIntent,
       }}
     >
       {children}

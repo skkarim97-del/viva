@@ -159,6 +159,9 @@ export interface IntegrationStatus {
 export type FeelingType = "great" | "good" | "tired" | "exhausted" | "stressed" | null;
 export type EnergyLevel = "high" | "medium" | "low" | null;
 export type StressLevel = "low" | "moderate" | "high" | null;
+export type HydrationLevel = "good" | "low" | null;
+export type LifeLoad = "light" | "normal" | "busy" | "overwhelmed" | null;
+export type TrainingIntent = "none" | "light" | "training" | null;
 
 export type MetricKey = "sleep" | "hrv" | "steps" | "restingHR" | "recovery" | "weight";
 
@@ -186,4 +189,7 @@ export interface WellnessInputs {
   feeling: FeelingType;
   energy: EnergyLevel;
   stress: StressLevel;
+  hydration: HydrationLevel;
+  lifeLoad: LifeLoad;
+  trainingIntent: TrainingIntent;
 }

@@ -93,6 +93,9 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
   const feeling = inputs?.feeling ?? null;
   const energy = inputs?.energy ?? null;
   const stress = inputs?.stress ?? null;
+  const hydration = inputs?.hydration ?? null;
+  const lifeLoad = inputs?.lifeLoad ?? null;
+  const trainingIntent = inputs?.trainingIntent ?? null;
 
   let readinessScore = Math.round(
     metrics.recoveryScore * 0.3 +
@@ -110,6 +113,13 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
   else if (energy === "high") readinessScore = Math.max(readinessScore, 70);
 
   if (stress === "high") readinessScore = Math.min(readinessScore, 50);
+
+  if (lifeLoad === "overwhelmed") readinessScore = Math.min(readinessScore, 35);
+  else if (lifeLoad === "busy") readinessScore = Math.min(readinessScore, 55);
+
+  if (trainingIntent === "none") readinessScore = Math.min(readinessScore, 40);
+
+  if (hydration === "low") readinessScore = Math.max(readinessScore - 5, 0);
 
   const readinessLabel = readinessScore >= 80 ? "Excellent" : readinessScore >= 65 ? "Good" : readinessScore >= 45 ? "Moderate" : "Low";
 
@@ -130,7 +140,53 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
   let workoutDuration = 40;
   let workoutDesc = "";
 
-  if (stressOverride && dataIsGood) {
+  const overwhelmedOverride = lifeLoad === "overwhelmed";
+  const busyOverride = lifeLoad === "busy";
+  const noTraining = trainingIntent === "none";
+
+  if (overwhelmedOverride) {
+    dailyState = "recover";
+    headline = "Life is heavy right now.";
+    summary = "When you're overwhelmed, your body needs simplicity. Keep today easy and kind.";
+    dailyFocus = "Simplify and recover";
+    yourDay = {
+      move: "Gentle walk, 15-20 min. Fresh air if possible.",
+      fuel: hydration === "low" ? "Eat simple meals. Drink water consistently — you're running low." : "Eat simple, nourishing meals. Don't skip meals.",
+      recover: "Protect your sleep tonight. In bed early.",
+      mind: "10 min breathing or a calm walk. Reduce commitments where you can.",
+    };
+    whyThisPlan = [
+      "Life stress and training stress compound.",
+      "Simplifying today protects the rest of your week.",
+      "Recovery isn't just physical — your mind needs rest too.",
+    ];
+    workoutType = "Rest";
+    workoutIntensity = "low";
+    workoutDuration = 20;
+    workoutDesc = "Gentle movement only. No structured workout.";
+    optional = "A short walk is enough. Don't add pressure.";
+  } else if (noTraining && !stressOverride && !feelingOverride) {
+    dailyState = "maintain";
+    headline = "Movement and recovery today.";
+    summary = "No training planned. Focus on staying active and giving your body what it needs.";
+    dailyFocus = "Active rest day";
+    yourDay = {
+      move: "Walk or light stretching, 20-30 min.",
+      fuel: hydration === "low" ? "Balanced meals. Focus on water — you're behind on hydration." : "Balanced meals. Protein and vegetables.",
+      recover: "Good day to catch up on sleep. Wind down early.",
+      mind: "Take a mental break. Read, walk, or just relax.",
+    };
+    whyThisPlan = [
+      "Rest days are when your body adapts and grows stronger.",
+      "Light movement supports recovery without adding strain.",
+      "Honoring your intent keeps your plan sustainable.",
+    ];
+    workoutType = "Rest Day";
+    workoutIntensity = "low";
+    workoutDuration = 20;
+    workoutDesc = "Light movement and mobility.";
+    optional = "If you feel the urge to train, keep it very light.";
+  } else if (stressOverride && dataIsGood) {
     dailyState = "recover";
     headline = "Manage your stress first.";
     summary = "Your body could train, but stress changes the equation. Today is about calming your system.";
@@ -334,7 +390,32 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     : dailyState === "maintain" ? "Slightly Off Track"
     : "Off Track";
 
+  if (busyOverride && !overwhelmedOverride && dailyState !== "recover") {
+    workoutDuration = Math.min(workoutDuration, 30);
+    yourDay.move = yourDay.move.replace(/\d{2,3}\s*min/i, `${workoutDuration} min`);
+    yourDay.fuel = yourDay.fuel + (hydration === "low" ? " Prioritize water." : "");
+    yourDay.mind = "Keep it simple. Short walk or 5 min breathing.";
+  }
+
+  if (hydration === "low" && !overwhelmedOverride && !noTraining) {
+    if (!yourDay.fuel.toLowerCase().includes("water") && !yourDay.fuel.toLowerCase().includes("hydrat")) {
+      yourDay.fuel += " Drink more water today.";
+    }
+    if (workoutIntensity === "high") {
+      yourDay.fuel += " Add electrolytes before training.";
+    }
+  }
+
+  if (trainingIntent === "light" && workoutIntensity === "high") {
+    workoutIntensity = "moderate";
+    workoutDuration = Math.min(workoutDuration, 35);
+    yourDay.move = yourDay.move.replace(/\d{2,3}\s*min/i, `${workoutDuration} min`) + " Keep it moderate.";
+  }
+
   const statusDrivers: string[] = [];
+  if (lifeLoad === "overwhelmed") statusDrivers.push("Life load is heavy");
+  else if (lifeLoad === "busy") statusDrivers.push("Busy day ahead");
+
   if (sleepHours >= 7.5) statusDrivers.push("You slept well");
   else if (sleepHours >= 6.5) statusDrivers.push("Sleep was adequate");
   else statusDrivers.push("Sleep was poor");
@@ -348,7 +429,9 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
   else if (feeling === "tired") statusDrivers.push("You're feeling tired");
   else if (feeling === "stressed" || stress === "high") statusDrivers.push("Stress is elevated");
   else if (energy === "low") statusDrivers.push("Energy is low");
-  else if (metrics.steps >= 8000) statusDrivers.push("Your activity is consistent");
+  else if (hydration === "low") statusDrivers.push("Hydration is low");
+  else if (trainingIntent === "none") statusDrivers.push("No training planned");
+  else if (metrics.steps >= 8000) statusDrivers.push("Activity is consistent");
   else statusDrivers.push("Activity has been light");
 
   const guidance =

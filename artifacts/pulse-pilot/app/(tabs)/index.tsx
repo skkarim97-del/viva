@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
-import type { MetricKey, FeelingType, EnergyLevel, StressLevel, ChatMessage, DailyStatusLabel } from "@/types";
+import type { MetricKey, FeelingType, EnergyLevel, StressLevel, HydrationLevel, LifeLoad, TrainingIntent, ChatMessage, DailyStatusLabel } from "@/types";
 
 const FEELINGS: { key: NonNullable<FeelingType>; label: string }[] = [
   { key: "great", label: "Great" },
@@ -39,6 +39,24 @@ const STRESS_LEVELS: { key: NonNullable<StressLevel>; label: string }[] = [
   { key: "high", label: "High" },
 ];
 
+const HYDRATION_LEVELS: { key: NonNullable<HydrationLevel>; label: string }[] = [
+  { key: "good", label: "Good" },
+  { key: "low", label: "Low" },
+];
+
+const LIFE_LOADS: { key: NonNullable<LifeLoad>; label: string }[] = [
+  { key: "light", label: "Light" },
+  { key: "normal", label: "Normal" },
+  { key: "busy", label: "Busy" },
+  { key: "overwhelmed", label: "Overwhelmed" },
+];
+
+const TRAINING_INTENTS: { key: NonNullable<TrainingIntent>; label: string }[] = [
+  { key: "none", label: "None" },
+  { key: "light", label: "Light" },
+  { key: "training", label: "Training" },
+];
+
 const STATUS_COLOR_MAP: Record<DailyStatusLabel, (c: ReturnType<typeof useColors>) => string> = {
   "Strong Day": (c) => c.success,
   "On Track": (c) => c.primary,
@@ -56,6 +74,8 @@ export default function DashboardScreen() {
   const {
     todayMetrics, dailyPlan, insights, feeling, setFeeling,
     energy, setEnergy, stress, setStress,
+    hydration, setHydration, lifeLoad, setLifeLoad,
+    trainingIntent, setTrainingIntent,
     chatMessages, addChatMessage, profile,
   } = useApp();
   const topPad = Platform.OS === "web" ? 60 : insets.top;
@@ -66,7 +86,6 @@ export default function DashboardScreen() {
   const [askMessages, setAskMessages] = useState<ChatMessage[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [streamingText, setStreamingText] = useState("");
-  const [showEnergyStress, setShowEnergyStress] = useState(false);
 
   if (!todayMetrics || !dailyPlan) {
     return (
@@ -93,7 +112,6 @@ export default function DashboardScreen() {
     }
     const newVal = feeling === f ? null : f;
     setFeeling(newVal);
-    if (newVal && !showEnergyStress) setShowEnergyStress(true);
   };
 
   const selectEnergy = (e: NonNullable<EnergyLevel>) => {
@@ -104,6 +122,21 @@ export default function DashboardScreen() {
   const selectStress = (s: NonNullable<StressLevel>) => {
     haptic();
     setStress(stress === s ? null : s);
+  };
+
+  const selectHydration = (h: NonNullable<HydrationLevel>) => {
+    haptic();
+    setHydration(hydration === h ? null : h);
+  };
+
+  const selectLifeLoad = (ll: NonNullable<LifeLoad>) => {
+    haptic();
+    setLifeLoad(lifeLoad === ll ? null : ll);
+  };
+
+  const selectTrainingIntent = (ti: NonNullable<TrainingIntent>) => {
+    haptic();
+    setTrainingIntent(trainingIntent === ti ? null : ti);
   };
 
   const sendAskMessage = async (text: string) => {
@@ -154,6 +187,9 @@ export default function DashboardScreen() {
             userFeeling: feeling,
             userEnergy: energy,
             userStress: stress,
+            userHydration: hydration,
+            userLifeLoad: lifeLoad,
+            userTrainingIntent: trainingIntent,
             sleepInsight: insights?.sleepIntelligence?.insight,
           },
           conversationHistory,
@@ -281,7 +317,7 @@ export default function DashboardScreen() {
                     {
                       backgroundColor: isSelected ? c.primary : c.card,
                       opacity: pressed ? 0.8 : 1,
-                      transform: [{ scale: pressed ? 0.95 : 1 }],
+                      transform: [{ scale: pressed ? 0.97 : 1 }],
                     },
                   ]}
                 >
@@ -293,60 +329,137 @@ export default function DashboardScreen() {
             })}
           </View>
 
-          {showEnergyStress && (
-            <View style={styles.subInputs}>
-              <View style={styles.subInputRow}>
-                <Text style={[styles.subInputLabel, { color: c.mutedForeground }]}>Energy</Text>
-                <View style={styles.subChipRow}>
-                  {ENERGY_LEVELS.map(({ key, label }) => {
-                    const isSelected = energy === key;
-                    return (
-                      <Pressable
-                        key={key}
-                        onPress={() => selectEnergy(key)}
-                        style={({ pressed }) => [
-                          styles.subChip,
-                          {
-                            backgroundColor: isSelected ? c.primary : c.card,
-                            opacity: pressed ? 0.8 : 1,
-                          },
-                        ]}
-                      >
-                        <Text style={[styles.subChipLabel, { color: isSelected ? c.primaryForeground : c.foreground }]}>
-                          {label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-              <View style={styles.subInputRow}>
-                <Text style={[styles.subInputLabel, { color: c.mutedForeground }]}>Stress</Text>
-                <View style={styles.subChipRow}>
-                  {STRESS_LEVELS.map(({ key, label }) => {
-                    const isSelected = stress === key;
-                    return (
-                      <Pressable
-                        key={key}
-                        onPress={() => selectStress(key)}
-                        style={({ pressed }) => [
-                          styles.subChip,
-                          {
-                            backgroundColor: isSelected ? c.primary : c.card,
-                            opacity: pressed ? 0.8 : 1,
-                          },
-                        ]}
-                      >
-                        <Text style={[styles.subChipLabel, { color: isSelected ? c.primaryForeground : c.foreground }]}>
-                          {label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
+          <View style={styles.subInputs}>
+            <View style={styles.subInputRow}>
+              <Text style={[styles.subInputLabel, { color: c.mutedForeground }]}>Energy</Text>
+              <View style={styles.subChipRow}>
+                {ENERGY_LEVELS.map(({ key, label }) => {
+                  const isSelected = energy === key;
+                  return (
+                    <Pressable
+                      key={key}
+                      onPress={() => selectEnergy(key)}
+                      style={({ pressed }) => [
+                        styles.subChip,
+                        {
+                          backgroundColor: isSelected ? c.primary : c.card,
+                          opacity: pressed ? 0.8 : 1,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.subChipLabel, { color: isSelected ? c.primaryForeground : c.foreground }]}>
+                        {label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
             </View>
-          )}
+            <View style={styles.subInputRow}>
+              <Text style={[styles.subInputLabel, { color: c.mutedForeground }]}>Stress</Text>
+              <View style={styles.subChipRow}>
+                {STRESS_LEVELS.map(({ key, label }) => {
+                  const isSelected = stress === key;
+                  return (
+                    <Pressable
+                      key={key}
+                      onPress={() => selectStress(key)}
+                      style={({ pressed }) => [
+                        styles.subChip,
+                        {
+                          backgroundColor: isSelected ? c.primary : c.card,
+                          opacity: pressed ? 0.8 : 1,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.subChipLabel, { color: isSelected ? c.primaryForeground : c.foreground }]}>
+                        {label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.contextSection}>
+          <Text style={[styles.contextTitle, { color: c.mutedForeground }]}>Today's Context</Text>
+          <View style={styles.contextRow}>
+            <Text style={[styles.contextLabel, { color: c.mutedForeground }]}>Hydration</Text>
+            <View style={styles.contextChipRow}>
+              {HYDRATION_LEVELS.map(({ key, label }) => {
+                const isSelected = hydration === key;
+                return (
+                  <Pressable
+                    key={key}
+                    onPress={() => selectHydration(key)}
+                    style={({ pressed }) => [
+                      styles.contextChip,
+                      {
+                        backgroundColor: isSelected ? c.primary : c.card,
+                        opacity: pressed ? 0.8 : 1,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.contextChipLabel, { color: isSelected ? c.primaryForeground : c.foreground }]}>
+                      {label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+          <View style={styles.contextRow}>
+            <Text style={[styles.contextLabel, { color: c.mutedForeground }]}>Life Load</Text>
+            <View style={styles.contextChipRow}>
+              {LIFE_LOADS.map(({ key, label }) => {
+                const isSelected = lifeLoad === key;
+                return (
+                  <Pressable
+                    key={key}
+                    onPress={() => selectLifeLoad(key)}
+                    style={({ pressed }) => [
+                      styles.contextChip,
+                      {
+                        backgroundColor: isSelected ? c.primary : c.card,
+                        opacity: pressed ? 0.8 : 1,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.contextChipLabel, { color: isSelected ? c.primaryForeground : c.foreground }]}>
+                      {label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+          <View style={styles.contextRow}>
+            <Text style={[styles.contextLabel, { color: c.mutedForeground }]}>Training</Text>
+            <View style={styles.contextChipRow}>
+              {TRAINING_INTENTS.map(({ key, label }) => {
+                const isSelected = trainingIntent === key;
+                return (
+                  <Pressable
+                    key={key}
+                    onPress={() => selectTrainingIntent(key)}
+                    style={({ pressed }) => [
+                      styles.contextChip,
+                      {
+                        backgroundColor: isSelected ? c.primary : c.card,
+                        opacity: pressed ? 0.8 : 1,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.contextChipLabel, { color: isSelected ? c.primaryForeground : c.foreground }]}>
+                      {label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
         </View>
 
         <View style={styles.coachingSection}>
@@ -636,6 +749,42 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   subChipLabel: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+  },
+
+  contextSection: {
+    marginBottom: 24,
+    gap: 10,
+  },
+  contextTitle: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    textAlign: "center",
+    marginBottom: 2,
+  },
+  contextRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  contextLabel: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    width: 70,
+    textAlign: "right",
+  },
+  contextChipRow: {
+    flexDirection: "row",
+    gap: 6,
+    flex: 1,
+  },
+  contextChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  contextChipLabel: {
     fontSize: 12,
     fontFamily: "Inter_500Medium",
   },
