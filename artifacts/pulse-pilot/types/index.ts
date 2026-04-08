@@ -225,10 +225,10 @@ export const CATEGORY_OPTIONS: Record<ActionCategory, CategoryOption[]> = {
     { id: "hydrate_stressed", title: "Steady hydration + lower caffeine", subtitle: "Calm your system", category: "hydrate", stateTag: "stressed", supportText: ["Swap afternoon coffee for herbal tea", "Hydration supports stress response"] },
   ],
   recover: [
-    { id: "recover_great", title: "Bed by 10:30 pm", subtitle: "Protect your gains", category: "recover", stateTag: "great", supportText: ["Wind down at 10:00", "Muscles repair during sleep"] },
-    { id: "recover_good", title: "Aim for 8 hours", subtitle: "Solid recovery window", category: "recover", stateTag: "good", supportText: ["Screen-free 30 min before bed", "Keep the room cool and dark"] },
-    { id: "recover_tired", title: "Bed by 9:30 pm", subtitle: "Prioritize extra rest", category: "recover", stateTag: "tired", supportText: ["Start winding down at 9:00", "Skip late-night screens"] },
-    { id: "recover_stressed", title: "Warm bath + bed by 10 pm", subtitle: "Calm before sleep", category: "recover", stateTag: "stressed", supportText: ["Hot water lowers cortisol", "Try a body scan in bed"] },
+    { id: "recover_great", title: "Aim for under 7 hours", subtitle: "Light recovery day", category: "recover", stateTag: "great", supportText: ["You're well recovered", "Keep a consistent wake time"] },
+    { id: "recover_good", title: "Aim for 8 hours", subtitle: "Standard recovery target", category: "recover", stateTag: "good", supportText: ["Screen-free 30 min before bed", "Keep the room cool and dark"] },
+    { id: "recover_tired", title: "Aim for 9 hours", subtitle: "Deep recovery focus", category: "recover", stateTag: "tired", supportText: ["Start winding down early", "Skip late-night screens"] },
+    { id: "recover_stressed", title: "Aim for 10+ hours", subtitle: "Full reset mode", category: "recover", stateTag: "stressed", supportText: ["Your body needs extra rest", "Prioritize sleep above all else"] },
   ],
 };
 
