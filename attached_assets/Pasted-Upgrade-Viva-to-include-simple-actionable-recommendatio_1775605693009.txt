@@ -1,0 +1,149 @@
+Upgrade Viva to include simple, actionable recommendations with built-in accountability tracking.
+
+## Core goal
+
+Transform the app from:
+
+* passive recommendations
+
+into:
+
+* actionable daily plan
+* lightweight habit tracking system
+
+The experience must remain:
+
+* simple
+* clean
+* not overwhelming
+
+---
+
+## Update “Your Day”
+
+Each recommendation must be:
+
+* specific
+* measurable
+* actionable
+* short (one line)
+
+Examples:
+
+* Move: 30–45 min walk or workout
+* Hydrate: drink 2–3L water
+* Mind: 10 min meditation or quiet time
+* Recover: in bed by 10:30pm
+* Fuel: eat balanced meals, prioritize protein
+
+---
+
+## Add completion tracking
+
+Each item should have:
+
+* a checkbox or tap-to-complete interaction
+
+Behavior:
+
+* user taps → item becomes completed
+* apply subtle green highlight
+* smooth animation
+
+---
+
+## Limit number of actions
+
+* show only 4–5 actions per day
+* do not overload the user
+
+---
+
+## Track completion over time
+
+Store:
+
+* daily completion rate
+* weekly consistency
+
+Display:
+
+* simple consistency score
+
+Example:
+“Consistency: 80% this week”
+
+Keep this subtle and not gamified.
+
+---
+
+## Update tone of recommendations
+
+Shift from fitness-focused language to holistic health.
+
+Avoid:
+
+* “train”
+* “workout-focused language only”
+
+Use:
+
+* movement
+* recovery
+* hydration
+* mental well-being
+* balance
+
+---
+
+## Update headline examples
+
+Replace:
+“Train today. Keep it steady.”
+
+With:
+
+* “Stay active. Keep it balanced.”
+* “Focus on consistency today.”
+* “Take care of your body and mind today.”
+
+---
+
+## Add Daily Focus
+
+Add a short section:
+
+“Daily Focus”
+
+Example:
+“Stay consistent across movement, hydration, and recovery”
+
+---
+
+## UX requirements
+
+* interactions must be instant
+* tapping tasks must feel satisfying
+* no friction
+* no forms
+
+---
+
+## Visual design
+
+* completed tasks → subtle green
+* incomplete → neutral
+* no aggressive colors
+* maintain clean aesthetic
+
+---
+
+## Final goal
+
+The user should feel:
+
+“I know exactly what to do today and I can track if I did it.”
+
+Not:
+
+“I’m reading advice I may or may not follow.”

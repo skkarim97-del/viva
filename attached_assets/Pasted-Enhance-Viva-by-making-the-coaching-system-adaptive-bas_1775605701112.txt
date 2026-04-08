@@ -1,0 +1,145 @@
+Enhance Viva by making the coaching system adaptive based on user behavior and completion.
+
+## Core principle
+
+The app must continuously learn from:
+
+* what the user was recommended
+* what the user actually completed
+* how consistent the user is over time
+
+All future recommendations must adjust based on this behavior.
+
+---
+
+## Track completion data
+
+For each daily action, store:
+
+* whether it was completed (yes/no)
+* completion rate over time
+* category (Move, Fuel, Recover, Mind, Hydration)
+
+---
+
+## Behavior-based adaptation
+
+Use completion data to adjust recommendations:
+
+### If user consistently completes an action
+
+* maintain or slightly increase difficulty
+* reinforce behavior
+
+Example:
+“Keep this up, you’ve been consistent”
+
+---
+
+### If user often skips an action
+
+* reduce difficulty
+* simplify the task
+* adjust timing or framing
+
+Example:
+Instead of:
+“10 min meditation”
+
+Change to:
+“Try 5 min of quiet time earlier in the day”
+
+---
+
+### If user partially completes actions
+
+* keep recommendations similar
+* provide small adjustments
+
+---
+
+## Personalization loop
+
+Combine:
+
+* objective data (sleep, steps, HRV, etc.)
+* subjective input (energy, stress, feeling)
+* context (hydration, training intent)
+* behavior history (completion data)
+
+All of these inputs must influence:
+
+* Daily State
+* Daily Focus
+* Your Day plan
+* Why explanation
+
+---
+
+## Coaching adjustments
+
+The system should adapt in these ways:
+
+### Difficulty
+
+* increase or decrease intensity based on consistency
+
+### Volume
+
+* reduce number of tasks if user is inconsistent
+* increase slightly if user is consistent
+
+### Specificity
+
+* give more precise guidance for engaged users
+* simplify guidance for less engaged users
+
+---
+
+## Feedback language
+
+Incorporate behavior into messaging:
+
+Examples:
+
+* “You’ve been consistent with hydration”
+* “You’ve skipped recovery recently, let’s simplify it”
+* “You’re building strong habits this week”
+
+Keep tone:
+
+* supportive
+* non-judgmental
+* encouraging
+
+---
+
+## UX requirement
+
+Do not expose complexity.
+
+Users should not see:
+
+* algorithms
+* scores behind the scenes
+* complicated tracking systems
+
+They should only feel:
+
+* smarter recommendations
+* more personalized guidance
+
+---
+
+## Final goal
+
+The app should feel:
+
+* adaptive
+* intelligent
+* personal
+* responsive over time
+
+The user should feel:
+
+“This app learns how I actually live and adjusts to me.”

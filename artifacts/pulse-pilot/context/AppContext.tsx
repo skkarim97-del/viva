@@ -27,7 +27,7 @@ import type {
   HydrationLevel,
   LifeLoad,
   TrainingIntent,
-  WellnessInputs,
+  CompletionRecord,
 } from "@/types";
 
 interface AppContextType {
@@ -59,6 +59,9 @@ interface AppContextType {
   setLifeLoad: (lifeLoad: LifeLoad) => void;
   trainingIntent: TrainingIntent;
   setTrainingIntent: (trainingIntent: TrainingIntent) => void;
+  toggleAction: (actionId: string) => void;
+  completionHistory: CompletionRecord[];
+  weeklyConsistency: number;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -66,6 +69,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 const PROFILE_KEY = "@viva_profile";
 const CHAT_KEY = "@viva_chat";
 const WELLNESS_KEY = "@viva_wellness";
+const COMPLETION_KEY = "@viva_completions";
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<UserProfile>(defaultProfile);
@@ -86,6 +90,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [lifeLoad, setLifeLoadState] = useState<LifeLoad>(null);
   const [trainingIntent, setTrainingIntentState] = useState<TrainingIntent>(null);
   const [metricsRef, setMetricsRef] = useState<HealthMetrics | null>(null);
+  const [completionHistory, setCompletionHistory] = useState<CompletionRecord[]>([]);
 
   useEffect(() => {
     loadData();
@@ -129,13 +134,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
+      let loadedHistory: CompletionRecord[] = [];
+      const savedCompletions = await AsyncStorage.getItem(COMPLETION_KEY);
+      if (savedCompletions) {
+        loadedHistory = JSON.parse(savedCompletions);
+        setCompletionHistory(loadedHistory);
+      }
+
       const allMetrics = generateMockMetrics(30);
       setMetrics(allMetrics);
 
       const today = allMetrics[allMetrics.length - 1];
       setTodayMetrics(today);
       setMetricsRef(today);
-      setDailyPlan(generateDailyPlan(today, { feeling: currentFeeling, energy: currentEnergy, stress: currentStress, hydration: currentHydration, lifeLoad: currentLifeLoad, trainingIntent: currentTrainingIntent }));
+      const plan = generateDailyPlan(today, { feeling: currentFeeling, energy: currentEnergy, stress: currentStress, hydration: currentHydration, lifeLoad: currentLifeLoad, trainingIntent: currentTrainingIntent }, loadedHistory);
+      const todayCompletion = loadedHistory.find(r => r.date === todayDate);
+      if (todayCompletion) {
+        for (const a of plan.actions) {
+          const saved = todayCompletion.actions.find(sa => sa.id === a.id);
+          if (saved) a.completed = saved.completed;
+        }
+      }
+      setDailyPlan(plan);
       setWeeklyPlan(generateWeeklyPlan());
       setTrends(generateTrendData());
       const allWorkouts = generateMockWorkouts();
@@ -156,9 +176,42 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const regeneratePlan = useCallback((f: FeelingType, e: EnergyLevel, s: StressLevel, h: HydrationLevel, ll: LifeLoad, ti: TrainingIntent) => {
     if (metricsRef) {
-      setDailyPlan(generateDailyPlan(metricsRef, { feeling: f, energy: e, stress: s, hydration: h, lifeLoad: ll, trainingIntent: ti }));
+      const newPlan = generateDailyPlan(metricsRef, { feeling: f, energy: e, stress: s, hydration: h, lifeLoad: ll, trainingIntent: ti }, completionHistory);
+      const todayDate = new Date().toISOString().split("T")[0];
+      const todayCompletion = completionHistory.find(r => r.date === todayDate);
+      if (todayCompletion) {
+        for (const a of newPlan.actions) {
+          const saved = todayCompletion.actions.find(sa => sa.id === a.id);
+          if (saved) a.completed = saved.completed;
+        }
+      }
+      setDailyPlan(newPlan);
     }
-  }, [metricsRef]);
+  }, [metricsRef, completionHistory]);
+
+  const toggleAction = useCallback((actionId: string) => {
+    setDailyPlan(prev => {
+      if (!prev) return prev;
+      const updatedActions = prev.actions.map(a =>
+        a.id === actionId ? { ...a, completed: !a.completed } : a
+      );
+      const todayDate = new Date().toISOString().split("T")[0];
+      const completedCount = updatedActions.filter(a => a.completed).length;
+      const completionRate = Math.round((completedCount / updatedActions.length) * 100);
+      const todayRecord: CompletionRecord = {
+        date: todayDate,
+        actions: updatedActions.map(a => ({ id: a.id, category: a.category, completed: a.completed })),
+        completionRate,
+      };
+      setCompletionHistory(prevHistory => {
+        const filtered = prevHistory.filter(r => r.date !== todayDate);
+        const updated = [...filtered, todayRecord];
+        AsyncStorage.setItem(COMPLETION_KEY, JSON.stringify(updated));
+        return updated;
+      });
+      return { ...prev, actions: updatedActions };
+    });
+  }, []);
 
   const setFeeling = useCallback((newFeeling: FeelingType) => {
     setFeelingState(newFeeling);
@@ -229,6 +282,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [updateProfile]
   );
 
+  const weeklyConsistency = (() => {
+    const recent = completionHistory.slice(-7);
+    if (recent.length === 0) return -1;
+    return Math.round(recent.reduce((sum, r) => sum + r.completionRate, 0) / recent.length);
+  })();
+
   return (
     <AppContext.Provider
       value={{
@@ -260,6 +319,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setLifeLoad,
         trainingIntent,
         setTrainingIntent,
+        toggleAction,
+        completionHistory,
+        weeklyConsistency,
       }}
     >
       {children}

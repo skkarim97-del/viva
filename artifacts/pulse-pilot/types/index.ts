@@ -73,6 +73,21 @@ export type DailyState = "recover" | "maintain" | "build" | "push";
 
 export type DailyStatusLabel = "Strong Day" | "On Track" | "Slightly Off Track" | "Off Track";
 
+export type ActionCategory = "move" | "fuel" | "recover" | "mind" | "hydrate";
+
+export interface DailyAction {
+  id: string;
+  category: ActionCategory;
+  text: string;
+  completed: boolean;
+}
+
+export interface CompletionRecord {
+  date: string;
+  actions: { id: string; category: ActionCategory; completed: boolean }[];
+  completionRate: number;
+}
+
 export interface DailyPlan {
   date: string;
   readinessScore: number;
@@ -84,6 +99,7 @@ export interface DailyPlan {
   headline: string;
   summary: string;
   dailyFocus: string;
+  actions: DailyAction[];
   yourDay: {
     move: string;
     fuel: string;

@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
-import type { MetricKey, FeelingType, EnergyLevel, StressLevel, HydrationLevel, LifeLoad, TrainingIntent, ChatMessage, DailyStatusLabel } from "@/types";
+import type { MetricKey, FeelingType, EnergyLevel, StressLevel, HydrationLevel, LifeLoad, TrainingIntent, ChatMessage, DailyStatusLabel, ActionCategory } from "@/types";
 
 const FEELINGS: { key: NonNullable<FeelingType>; label: string }[] = [
   { key: "great", label: "Great" },
@@ -77,6 +77,7 @@ export default function DashboardScreen() {
     hydration, setHydration, lifeLoad, setLifeLoad,
     trainingIntent, setTrainingIntent,
     chatMessages, addChatMessage, profile,
+    toggleAction, weeklyConsistency,
   } = useApp();
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -268,12 +269,16 @@ export default function DashboardScreen() {
 
   const statusColor = STATUS_COLOR_MAP[dailyPlan.statusLabel](c);
 
-  const DAY_ITEMS: { key: keyof typeof dailyPlan.yourDay; label: string; icon: keyof typeof Feather.glyphMap; color: string }[] = [
-    { key: "move", label: "Move", icon: "activity", color: c.primary },
-    { key: "fuel", label: "Fuel", icon: "coffee", color: c.warning },
-    { key: "recover", label: "Recover", icon: "battery-charging", color: c.info },
-    { key: "mind", label: "Mind", icon: "sun", color: c.accent },
-  ];
+  const ACTION_META: Record<ActionCategory, { label: string; icon: keyof typeof Feather.glyphMap; color: string }> = {
+    move: { label: "Move", icon: "activity", color: c.primary },
+    fuel: { label: "Fuel", icon: "coffee", color: c.warning },
+    recover: { label: "Recover", icon: "battery-charging", color: c.info },
+    mind: { label: "Mind", icon: "sun", color: c.accent },
+    hydrate: { label: "Hydrate", icon: "droplet", color: "#5AC8FA" },
+  };
+
+  const completedCount = dailyPlan.actions.filter(a => a.completed).length;
+  const totalActions = dailyPlan.actions.length;
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={0}>
@@ -378,20 +383,73 @@ export default function DashboardScreen() {
           )}
         </View>
 
+        {dailyPlan.dailyFocus ? (
+          <View style={[styles.focusCard, { backgroundColor: c.card }]}>
+            <Text style={[styles.focusLabel, { color: c.mutedForeground }]}>Daily Focus</Text>
+            <Text style={[styles.focusText, { color: c.foreground }]}>{dailyPlan.dailyFocus}</Text>
+          </View>
+        ) : null}
+
         <View style={[styles.dayCard, { backgroundColor: c.card }]}>
-          <Text style={[styles.dayTitle, { color: c.foreground }]}>Your Day</Text>
-          {DAY_ITEMS.map((item) => (
-            <DayRow
-              key={item.key}
-              icon={item.icon}
-              iconColor={item.color}
-              label={item.label}
-              value={dailyPlan.yourDay[item.key]}
-              foreground={c.foreground}
-              muted={c.mutedForeground}
-            />
-          ))}
+          <View style={styles.dayHeader}>
+            <Text style={[styles.dayTitle, { color: c.foreground }]}>Your Day</Text>
+            <Text style={[styles.dayProgress, { color: c.mutedForeground }]}>
+              {completedCount}/{totalActions}
+            </Text>
+          </View>
+          {dailyPlan.actions.map((action) => {
+            const meta = ACTION_META[action.category];
+            return (
+              <Pressable
+                key={action.id}
+                onPress={() => { haptic(); toggleAction(action.id); }}
+                style={({ pressed }) => [
+                  styles.actionRow,
+                  {
+                    backgroundColor: action.completed ? c.success + "0A" : "transparent",
+                    opacity: pressed ? 0.8 : 1,
+                    transform: [{ scale: pressed ? 0.98 : 1 }],
+                  },
+                ]}
+              >
+                <View style={[
+                  styles.actionCheck,
+                  {
+                    backgroundColor: action.completed ? c.success : "transparent",
+                    borderColor: action.completed ? c.success : c.border,
+                  },
+                ]}>
+                  {action.completed && <Feather name="check" size={11} color="#fff" />}
+                </View>
+                <View style={[styles.dayIconWrap, { backgroundColor: meta.color + "12" }]}>
+                  <Feather name={meta.icon} size={15} color={meta.color} />
+                </View>
+                <View style={styles.actionContent}>
+                  <Text style={[styles.actionLabel, { color: c.mutedForeground }]}>{meta.label}</Text>
+                  <Text style={[
+                    styles.actionText,
+                    {
+                      color: action.completed ? c.mutedForeground : c.foreground,
+                      textDecorationLine: action.completed ? "line-through" : "none",
+                      opacity: action.completed ? 0.6 : 1,
+                    },
+                  ]}>
+                    {action.text}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
         </View>
+
+        {weeklyConsistency >= 0 && (
+          <View style={[styles.consistencyCard, { backgroundColor: c.card }]}>
+            <Feather name="trending-up" size={14} color={c.success} />
+            <Text style={[styles.consistencyText, { color: c.mutedForeground }]}>
+              Consistency: {weeklyConsistency}% this week
+            </Text>
+          </View>
+        )}
 
         <View style={styles.metricsRow}>
           {metricItems.map((item) => (
@@ -547,26 +605,6 @@ function RefineRow<T extends string>({ label, items, selected, onSelect, cardBg,
   );
 }
 
-function DayRow({ icon, iconColor, label, value, foreground, muted }: {
-  icon: keyof typeof Feather.glyphMap;
-  iconColor: string;
-  label: string;
-  value: string;
-  foreground: string;
-  muted: string;
-}) {
-  return (
-    <View style={styles.dayRow}>
-      <View style={[styles.dayIconWrap, { backgroundColor: iconColor + "12" }]}>
-        <Feather name={icon} size={15} color={iconColor} />
-      </View>
-      <View style={styles.dayRowContent}>
-        <Text style={[styles.dayRowLabel, { color: muted }]}>{label}</Text>
-        <Text style={[styles.dayRowValue, { color: foreground }]}>{value}</Text>
-      </View>
-    </View>
-  );
-}
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
@@ -693,22 +731,62 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_500Medium",
   },
 
+  focusCard: {
+    borderRadius: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    marginBottom: 24,
+    gap: 4,
+  },
+  focusLabel: {
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  focusText: {
+    fontSize: 15,
+    fontFamily: "Inter_500Medium",
+    lineHeight: 22,
+  },
+
   dayCard: {
     borderRadius: 20,
-    padding: 24,
-    gap: 20,
+    padding: 20,
+    gap: 6,
     marginBottom: 24,
+  },
+  dayHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
   },
   dayTitle: {
     fontSize: 15,
     fontFamily: "Inter_600SemiBold",
     letterSpacing: -0.1,
-    marginBottom: -4,
   },
-  dayRow: {
+  dayProgress: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+  },
+  actionRow: {
     flexDirection: "row",
-    gap: 12,
-    alignItems: "flex-start",
+    gap: 10,
+    alignItems: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    borderRadius: 12,
+    marginHorizontal: -4,
+  },
+  actionCheck: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
   },
   dayIconWrap: {
     width: 32,
@@ -717,21 +795,34 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  dayRowContent: {
+  actionContent: {
     flex: 1,
-    gap: 2,
-    paddingTop: 2,
+    gap: 1,
   },
-  dayRowLabel: {
+  actionLabel: {
     fontSize: 11,
     fontFamily: "Inter_600SemiBold",
     textTransform: "uppercase",
     letterSpacing: 0.6,
   },
-  dayRowValue: {
+  actionText: {
     fontSize: 14,
     fontFamily: "Inter_400Regular",
     lineHeight: 20,
+  },
+
+  consistencyCard: {
+    borderRadius: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    marginBottom: 24,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  consistencyText: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
   },
 
   metricsRow: {
