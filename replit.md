@@ -28,7 +28,7 @@ The system is a pnpm workspace monorepo using Node.js 24 and TypeScript 5.9. The
 
 - **Onboarding**: A 9-step premium flow covering goals, profile, activity, energy, sleep, and device integration.
 - **Dashboard (Today tab)**: Card-based layout with a status card (streak, progress), feeling card, coach insight, refine card, Your Day card, habit tracker, and metric tiles. Emphasizes progressive disclosure.
-- **Adaptive Coaching**: Uses completion history, wearable data, and subjective inputs to generate personalized plans. Lower completion rates lead to simplified recommendations.
+- **Adaptive Coaching**: Full rules engine in `generateDailyPlan()` and coach system prompt. IF [data condition] THEN [action] WHY [reason] across sleep/HRV/strain/stress/nutrition. Recovery > performance. Trends > single day. Sleep < 6h + HRV down = full recovery day. HRV declining 5 days = 2-day recovery protocol. Consecutive high strain = enforced rest. No workouts in 3 days = scheduled session. 5+ consistent days = deload. Completion history and weak categories also feed back into plan simplification.
 - **Daily Status & State**: Displays a status pill (e.g., "Strong Day") and drivers. Daily state (Recover, Maintain, Build, Push) drives the plan.
 - **Coach Insight**: A multi-signal coaching paragraph generated from HRV, sleep trends, recovery, activity, and user inputs, updated reactively.
 - **Your Day (State-Based Single Selection)**: 5 checkable actions per day (Move/Fuel/Hydrate/Recover/Mind), with 4 options per category mapped to state tags. Recommendations are provided, and users can override.

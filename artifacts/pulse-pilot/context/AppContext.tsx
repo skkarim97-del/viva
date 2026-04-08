@@ -275,7 +275,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const today = allMetrics[allMetrics.length - 1];
       setTodayMetrics(today);
       setMetricsRef(today);
-      const plan = generateDailyPlan(today, { feeling: currentFeeling, energy: currentEnergy, stress: currentStress, hydration: currentHydration, trainingIntent: currentTrainingIntent }, loadedHistory);
+      const plan = generateDailyPlan(today, { feeling: currentFeeling, energy: currentEnergy, stress: currentStress, hydration: currentHydration, trainingIntent: currentTrainingIntent }, loadedHistory, allMetrics);
       const todayCompletion = loadedHistory.find(r => r.date === todayDate);
       if (todayCompletion) {
         for (const a of plan.actions) {
@@ -320,7 +320,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const regeneratePlan = useCallback((f: FeelingType, e: EnergyLevel, s: StressLevel, h: HydrationLevel, ti: TrainingIntent) => {
     if (metricsRef) {
-      const newPlan = generateDailyPlan(metricsRef, { feeling: f, energy: e, stress: s, hydration: h, trainingIntent: ti }, completionHistory);
+      const newPlan = generateDailyPlan(metricsRef, { feeling: f, energy: e, stress: s, hydration: h, trainingIntent: ti }, completionHistory, metrics);
       const todayDate = new Date().toISOString().split("T")[0];
       const todayCompletion = completionHistory.find(r => r.date === todayDate);
       if (todayCompletion) {
@@ -334,7 +334,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       setDailyPlan(newPlan);
     }
-  }, [metricsRef, completionHistory]);
+  }, [metricsRef, completionHistory, metrics]);
 
   const generateCompletionFeedback = (action: DailyAction, completed: boolean, completedCount: number, total: number): string | null => {
     if (!completed) return null;

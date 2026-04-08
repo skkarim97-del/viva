@@ -131,12 +131,42 @@ function pickOptionTitle(category: ActionCategory, tag: StateTag): string {
   return match ? match.title : options[1].title;
 }
 
-export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInputs, history?: CompletionRecord[]): DailyPlan {
+export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInputs, history?: CompletionRecord[], recentMetrics?: HealthMetrics[]): DailyPlan {
   const feeling = inputs?.feeling ?? null;
   const energy = inputs?.energy ?? null;
   const stress = inputs?.stress ?? null;
   const hydration = inputs?.hydration ?? null;
   const trainingIntent = inputs?.trainingIntent ?? null;
+
+  const last7 = recentMetrics?.slice(-7) ?? [];
+  const last3 = last7.slice(-3);
+  const last5 = recentMetrics?.slice(-5) ?? [];
+
+  const avg7Hrv = last7.length >= 7 ? last7.reduce((s, m) => s + m.hrv, 0) / last7.length : 0;
+  const avg7Sleep = last7.length >= 3 ? last7.reduce((s, m) => s + m.sleepDuration, 0) / last7.length : 0;
+  const avg7Rhr = last7.length >= 3 ? last7.reduce((s, m) => s + m.restingHeartRate, 0) / last7.length : 0;
+
+  const hrvDeviation = avg7Hrv > 0 ? ((metrics.hrv - avg7Hrv) / avg7Hrv) * 100 : 0;
+  const rhrElevated = avg7Rhr > 0 && metrics.restingHeartRate > avg7Rhr + 5;
+
+  const sleepDeclining3 = last3.length >= 3 && last3.every((m, i) => i === 0 || m.sleepDuration < last3[i - 1].sleepDuration);
+  const hrvDeclining5 = last5.length >= 5 && last5[last5.length - 1].hrv < last5[0].hrv - 5 && last5.every((m, i) => i === 0 || m.hrv <= last5[i - 1].hrv + 2);
+
+  const sleepConsistencyOff = last3.length >= 3 && (() => {
+    const durations = last3.map(m => m.sleepDuration);
+    const maxDiff = Math.max(...durations) - Math.min(...durations);
+    return maxDiff > 1.5;
+  })();
+
+  const yesterdayStrain = last7.length >= 2 ? last7[last7.length - 2]?.strain ?? 0 : 0;
+  const avgStrain = last7.length >= 3 ? last7.reduce((s, m) => s + m.strain, 0) / last7.length : 5;
+  const highStrainYesterday = yesterdayStrain > avgStrain * 1.2;
+  const consecutiveHighStrain = last3.length >= 2 && last3.slice(-2).every(m => m.strain > avgStrain * 1.2);
+  const consecutivePoorRecovery = last3.length >= 3 && last3.every(m => m.recoveryScore < 50);
+
+  const recentWorkoutDays = last7.filter(m => m.strain > 4).length;
+  const noWorkout3Days = last3.length >= 3 && last3.every(m => m.strain <= 3.5);
+  const consistent5Days = recentWorkoutDays >= 5;
 
   let readinessScore = Math.round(
     metrics.recoveryScore * 0.3 +
@@ -159,6 +189,15 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
 
   if (hydration === "low") readinessScore = Math.max(readinessScore - 5, 0);
   else if (hydration === "dehydrated") readinessScore = Math.max(readinessScore - 10, 0);
+
+  if (hrvDeviation < -15) readinessScore = Math.min(readinessScore, 40);
+  else if (hrvDeviation < -10) readinessScore = Math.min(readinessScore, 50);
+
+  if (consecutivePoorRecovery) readinessScore = Math.min(readinessScore, 35);
+  if (consecutiveHighStrain) readinessScore = Math.min(readinessScore, 45);
+  if (hrvDeclining5) readinessScore = Math.min(readinessScore, 45);
+  if (rhrElevated && Math.abs(hrvDeviation) < 5) readinessScore = Math.min(readinessScore, 50);
+  if (sleepDeclining3) readinessScore = Math.min(readinessScore, 55);
 
   const readinessLabel = readinessScore >= 80 ? "Excellent" : readinessScore >= 65 ? "Good" : readinessScore >= 45 ? "Moderate" : "Low";
 
@@ -201,7 +240,26 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     readinessScore = Math.min(readinessScore, 50);
   }
 
-  if (stress === "very_high") {
+  const sleepCritical = metrics.sleepDuration < 6 && hrvDeviation < -10;
+  const sleepLow = metrics.sleepDuration < 6.5;
+  const sleepGoodHrvGood = metrics.sleepDuration > 7.5 && hrvDeviation >= 0;
+
+  if (sleepCritical) {
+    dailyState = "recover";
+    headline = "Recovery day. Your body needs it.";
+    summary = "Under 6 hours of sleep and your HRV is down. Walking and stretching only today.";
+    dailyFocus = "Full recovery";
+    whyThisPlan = [
+      "Sleep under 6 hours with dropping HRV is a clear sign of nervous system fatigue.",
+      "Training today would dig a deeper hole. Recovery is the productive choice.",
+      "Hydrate well, eat nourishing food, and aim for an early night.",
+    ];
+    workoutType = "Recovery Walk";
+    workoutIntensity = "low";
+    workoutDuration = 20;
+    workoutDesc = "Walking and light stretching only.";
+    optional = "If you feel restless, 10 minutes of gentle yoga can help settle your system.";
+  } else if (stress === "very_high") {
     dailyState = "recover";
     headline = "Take it slow today.";
     summary = "High stress needs simplicity. Protect your energy and nourish yourself.";
@@ -216,6 +274,66 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     workoutDuration = 20;
     workoutDesc = "Gentle movement only.";
     optional = "A short walk in nature can help reset your nervous system.";
+  } else if (stressOverride && (sleepDeclining3 || metrics.sleepDuration < 6.5)) {
+    dailyState = "recover";
+    headline = "Your body is sending clear signals.";
+    summary = "Stress plus poor sleep is compounding. Remove intense training and prioritize rest tonight.";
+    dailyFocus = "De-stress and sleep";
+    whyThisPlan = [
+      "Compounding stress and poor sleep accelerate burnout.",
+      "Removing training today is the fastest path to feeling better tomorrow.",
+      "Early sleep tonight will have a bigger impact than any workout.",
+    ];
+    workoutType = "Rest";
+    workoutIntensity = "low";
+    workoutDuration = 15;
+    workoutDesc = "10-15 min breathing or gentle walk.";
+    optional = "Try to be in bed 30 minutes earlier tonight.";
+  } else if (hrvDeviation < -15) {
+    dailyState = "recover";
+    headline = "Recovery protocol today.";
+    summary = "Your HRV is well below your baseline. Prioritize walking, hydration, and an early night.";
+    dailyFocus = "Restore your nervous system";
+    whyThisPlan = [
+      "HRV down more than 15% is a strong indicator of systemic stress.",
+      "Gentle movement and hydration support faster recovery.",
+      "Sleep is your best recovery tool right now.",
+    ];
+    workoutType = "Recovery Walk";
+    workoutIntensity = "low";
+    workoutDuration = 25;
+    workoutDesc = "Easy walk and hydration focus.";
+    optional = "Skip screens 30 minutes before bed tonight.";
+  } else if (consecutiveHighStrain) {
+    dailyState = "recover";
+    headline = "Earned rest day.";
+    summary = "Two or more hard days in a row. Your body needs to absorb that work before you push again.";
+    dailyFocus = "Active recovery";
+    whyThisPlan = [
+      "Cumulative fatigue from consecutive hard days increases injury risk.",
+      "Recovery days are where adaptation actually happens.",
+      "Quality rest now means a stronger performance next session.",
+    ];
+    workoutType = "Active Recovery";
+    workoutIntensity = "low";
+    workoutDuration = 25;
+    workoutDesc = "Light mobility work and easy walking.";
+    optional = "Foam rolling and stretching are great choices today.";
+  } else if (hrvDeclining5) {
+    dailyState = "recover";
+    headline = "Your body needs a reset.";
+    summary = "HRV has been declining for 5 days. Two low-intensity days plus sleep focus will get you back on track.";
+    dailyFocus = "Recovery protocol";
+    whyThisPlan = [
+      "A 5-day HRV decline signals early burnout. Catching it now prevents worse.",
+      "Two light days with good sleep typically reverses the trend.",
+      "This is the smart play. not the easy one, the productive one.",
+    ];
+    workoutType = "Light Movement";
+    workoutIntensity = "low";
+    workoutDuration = 25;
+    workoutDesc = "Walking, yoga, or gentle stretching.";
+    optional = "Focus on sleep quality for the next two nights.";
   } else if (noTraining && !stressOverride && !feelingOverride) {
     dailyState = "maintain";
     headline = "Focus on balance today.";
@@ -292,6 +410,92 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     workoutDuration = 30;
     workoutDesc = "Easy movement to stay active without adding strain.";
     optional = "If energy picks up after eating and hydrating, you can increase to moderate.";
+  } else if (sleepDeclining3 && !sleepGoodHrvGood) {
+    dailyState = "maintain";
+    headline = "Sleep needs attention.";
+    summary = "Your sleep has been declining for 3 days. Prioritize rest tonight over training today.";
+    dailyFocus = "Protect your sleep";
+    whyThisPlan = [
+      "Three-day trends matter more than any single night.",
+      "Declining sleep accumulates fatigue faster than one bad night.",
+      "An early, consistent bedtime tonight is worth more than a workout.",
+    ];
+    workoutType = "Light Activity";
+    workoutIntensity = "low";
+    workoutDuration = 25;
+    workoutDesc = "Easy walk only. Save energy for sleep tonight.";
+    optional = "Set a fixed wind-down time 30 minutes before bed. No screens.";
+  } else if (rhrElevated && Math.abs(hrvDeviation) < 5 && readinessScore >= 45) {
+    dailyState = "build";
+    headline = "Keep it moderate today.";
+    summary = "Your resting heart rate is elevated even though HRV looks stable. Possible early fatigue or illness signal.";
+    dailyFocus = "Moderate effort only";
+    whyThisPlan = [
+      "Elevated resting heart rate with stable HRV often signals early stress or illness.",
+      "Avoiding max effort today helps you catch it before it becomes a setback.",
+      "If you feel fine tomorrow, you can push harder then.",
+    ];
+    workoutType = "Moderate Cardio";
+    workoutIntensity = "moderate";
+    workoutDuration = 35;
+    workoutDesc = "Moderate effort. No max effort or heavy lifting.";
+    optional = "Monitor how you feel. If energy drops, switch to a walk.";
+  } else if (noWorkout3Days && readinessScore >= 45) {
+    dailyState = "build";
+    headline = "Time to move.";
+    summary = sleepLow
+      ? "Three days without activity, but sleep was short. A lighter workout will get you moving without overdoing it."
+      : "Three days without meaningful activity. A 30-45 minute workout today will restore your rhythm.";
+    dailyFocus = "Rebuild consistency";
+    whyThisPlan = [
+      "Three days off is enough rest. Longer gaps break momentum.",
+      "Even moderate effort today maintains fitness and mental clarity.",
+      "Consistency matters more than intensity right now.",
+    ];
+    workoutType = sleepLow ? "Light Activity" : "Strength or Cardio";
+    workoutIntensity = sleepLow ? "low" : "moderate";
+    workoutDuration = sleepLow ? 25 : 40;
+    workoutDesc = sleepLow ? "Light movement. Reduced intensity due to low sleep." : "30-45 min workout. Strength or cardio based on preference.";
+    optional = "If you're easing back in, start with a 20-minute walk and build up.";
+  } else if (consistent5Days) {
+    dailyState = "maintain";
+    headline = "Solid week. Ease off today.";
+    summary = "Five or more active days this week. A lighter day helps your body absorb the work.";
+    dailyFocus = "Deload and absorb";
+    whyThisPlan = [
+      "Consistent training needs periodic lighter days to avoid plateaus.",
+      "Your muscles and nervous system adapt during recovery, not during training.",
+      "One lighter day now protects the quality of your next hard session.",
+    ];
+    workoutType = "Light Movement";
+    workoutIntensity = "low";
+    workoutDuration = 30;
+    workoutDesc = "Easy movement, mobility, or yoga.";
+    optional = "If you feel great, keep it to moderate at most.";
+  } else if (sleepGoodHrvGood && readinessScore >= 75) {
+    const feelingGreat = feeling === "great" || energy === "excellent" || energy === "high";
+    dailyState = "push";
+    headline = feelingGreat ? "You're ready. Make the most of today." : "Green light for intensity.";
+    summary = feelingGreat
+      ? "You feel great and your body agrees. A good day to challenge yourself."
+      : "Sleep was solid and your HRV is above baseline. Your body is ready to perform.";
+    dailyFocus = "Challenge yourself today";
+    whyThisPlan = feelingGreat
+      ? [
+          "When body and mind are aligned, that's when real progress happens.",
+          "Recovery and sleep are supporting you. take advantage of it.",
+          "Challenge your body, nourish it well, and rest tonight.",
+        ]
+      : [
+          "Good sleep plus above-baseline HRV is a green light for high intensity.",
+          "Recovery and sleep signals support a bigger effort today.",
+          "Push now, recover well tonight, and you'll build real momentum.",
+        ];
+    optional = "If you feel fatigued mid-session, drop to moderate. Listen to your body.";
+    workoutType = "Strength Training";
+    workoutIntensity = "high";
+    workoutDuration = 50;
+    workoutDesc = "Full body strength with compound movements.";
   } else if (readinessScore >= 75) {
     const feelingGreat = feeling === "great" || energy === "excellent" || energy === "high";
     dailyState = "push";
@@ -318,19 +522,27 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     workoutDesc = "Full body strength with compound movements.";
   } else if (readinessScore >= 45) {
     dailyState = "build";
-    headline = "Build momentum today.";
-    summary = "Recovery is solid, but not fully reset. Stay consistent and take care of the basics.";
-    dailyFocus = "Steady progress today";
-    whyThisPlan = [
-      "Your body is partially recharged. a moderate effort keeps you progressing.",
-      "Good nutrition and hydration will support your recovery overnight.",
-      "Consistency in the basics is what separates good weeks from great ones.",
-    ];
+    headline = sleepLow ? "Take it easier today." : "Build momentum today.";
+    summary = sleepLow
+      ? "Sleep was under 6.5 hours. Reduce intensity by about 30% and focus on the basics."
+      : "Recovery is solid, but not fully reset. Stay consistent and take care of the basics.";
+    dailyFocus = sleepLow ? "Lighter effort, strong basics" : "Steady progress today";
+    whyThisPlan = sleepLow
+      ? [
+          "Insufficient sleep reduces reaction time and increases injury risk.",
+          "Reducing intensity today preserves your progress without adding risk.",
+          "Good nutrition and hydration partially offset the sleep deficit.",
+        ]
+      : [
+          "Your body is partially recharged. a moderate effort keeps you progressing.",
+          "Good nutrition and hydration will support your recovery overnight.",
+          "Consistency in the basics is what separates good weeks from great ones.",
+        ];
     optional = "If energy feels low, a 20-minute walk is a great alternative.";
-    workoutType = "Cardio";
-    workoutIntensity = "moderate";
-    workoutDuration = 40;
-    workoutDesc = "Steady-state cardio at a conversational pace.";
+    workoutType = sleepLow ? "Light Activity" : "Cardio";
+    workoutIntensity = sleepLow ? "low" : "moderate";
+    workoutDuration = sleepLow ? 30 : 40;
+    workoutDesc = sleepLow ? "Reduced intensity. No HIIT today." : "Steady-state cardio at a conversational pace.";
   } else {
     dailyState = "recover";
     headline = "Recovery first today.";
@@ -355,6 +567,18 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
 
   if (trainingIntent === "moderate" && workoutIntensity === "high") {
     workoutDuration = Math.min(workoutDuration, 45);
+  }
+
+  if (highStrainYesterday && workoutIntensity === "high") {
+    workoutIntensity = "moderate";
+    workoutDuration = Math.min(workoutDuration, 35);
+    if (!whyThisPlan.some(w => w.includes("strain"))) {
+      whyThisPlan.push("Yesterday was a high-strain day. Dialing back prevents overtraining.");
+    }
+  }
+
+  if (sleepConsistencyOff && !whyThisPlan.some(w => w.includes("circadian") || w.includes("bedtime"))) {
+    whyThisPlan.push("Your sleep timing has been inconsistent. A fixed wind-down routine tonight will help.");
   }
 
   const recommendedTag = stateTagFromReadiness(readinessScore, feeling, stress, energy);
@@ -443,16 +667,24 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     nutritionTarget: {
       calories: readinessScore >= 65 ? 2200 : 1900,
       protein: 160,
-      carbs: readinessScore >= 65 ? 220 : 180,
+      carbs: workoutIntensity === "high" ? 240 : readinessScore >= 65 ? 220 : 180,
       fat: 65,
-      hydration: 96,
-      note: stressOverride
+      hydration: isDehydrated ? 112 : 96,
+      note: isDehydrated
+        ? "You're behind on hydration. Drink 16-24 oz of water now and keep sipping through the day."
+        : stressOverride
         ? "Focus on calming, whole foods. Magnesium-rich greens, omega-3s from fish, and complex carbs support your stress response."
+        : workoutIntensity === "high"
+        ? "Fuel your effort with extra carbs post-workout. Include protein within an hour of training."
         : readinessScore >= 65
         ? "Fuel your effort with protein and complex carbs. Include colorful vegetables and stay well hydrated."
         : "Focus on nutrient-dense, anti-inflammatory foods. Good nutrition accelerates recovery and restores energy.",
     },
-    fastingGuidance: "16:8 window. Eat between 12pm and 8pm.",
+    fastingGuidance: lowEnergy && inputs?.trainingIntent !== "none"
+      ? "Consider breaking your fast with a balanced meal (protein + carbs) if energy is low."
+      : metrics.recoveryScore >= 75
+      ? "16:8 window. Eat between 12pm and 8pm. On well-recovered days you could push to 18 hours."
+      : "16:8 window. Eat between 12pm and 8pm. Do not extend beyond 16 hours today.",
   };
 }
 

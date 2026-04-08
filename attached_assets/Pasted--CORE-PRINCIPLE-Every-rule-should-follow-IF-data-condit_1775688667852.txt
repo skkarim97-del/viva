@@ -1,0 +1,131 @@
+🔥 CORE PRINCIPLE
+
+Every rule should follow:
+
+IF [data condition]
+THEN [clear action]
+WHY [short reasoning]
+PRIORITY [high / medium / low]
+🧠 RECOVERY / SLEEP RULES
+IF sleep < 6.5 hours
+THEN reduce training intensity by 30% and avoid HIIT
+WHY insufficient recovery increases injury risk and lowers performance
+PRIORITY high
+IF sleep < 6 hours AND HRV down > 10% from baseline
+THEN full recovery day (walking + stretching only)
+WHY clear sign of nervous system fatigue
+PRIORITY high
+IF sleep consistency off (bedtime variance > 1.5 hours past 3 days)
+THEN enforce fixed wind-down time tonight (no screens 30 min before bed)
+WHY circadian disruption reduces recovery quality
+PRIORITY medium
+IF sleep > 7.5 hours AND HRV above baseline
+THEN green light for high intensity training
+WHY body is recovered and ready to perform
+PRIORITY high
+❤️ HRV / READINESS RULES
+IF HRV down > 15% from 7-day average
+THEN avoid heavy training and prioritize recovery protocol (walk + hydration + early sleep)
+WHY strong indicator of systemic stress
+PRIORITY high
+IF HRV trending up 3+ days
+THEN increase training load or intensity
+WHY positive adaptation signal
+PRIORITY medium
+IF HRV stable BUT resting heart rate elevated > 5 bpm
+THEN keep training moderate, avoid max effort
+WHY possible early fatigue or illness signal
+PRIORITY high
+🏃 ACTIVITY / STRAIN RULES
+IF high strain yesterday (top 20% of user baseline)
+THEN today = low intensity or active recovery
+WHY prevents overtraining and improves long-term performance
+PRIORITY high
+IF 2+ consecutive days of high strain
+THEN enforce recovery day
+WHY cumulative fatigue risk
+PRIORITY high
+IF steps < 5,000 by 3pm
+THEN schedule 20–30 min walk before dinner
+WHY maintain baseline activity and metabolic health
+PRIORITY medium
+IF no workouts logged in 3 days
+THEN schedule 30–45 min workout today (strength or cardio)
+WHY maintain consistency and momentum
+PRIORITY high
+🧠 STRESS / MIND RULES
+IF user reports high stress
+THEN prescribe 10–15 min downregulation (breathing, walk, or quiet time)
+WHY lowers cortisol and improves focus
+PRIORITY high
+IF high stress AND poor sleep
+THEN remove intense training + prioritize recovery + early sleep
+WHY compounding stress signals
+PRIORITY high
+IF low stress AND high energy
+THEN encourage deep work or challenging task block
+WHY optimal cognitive performance window
+PRIORITY medium
+🥗 NUTRITION / FASTING RULES
+IF fasting AND low energy reported
+THEN recommend breaking fast with balanced meal (protein + carbs)
+WHY energy deficit impacting performance
+PRIORITY high
+IF high strain day planned
+THEN increase carb intake post-workout
+WHY supports recovery and glycogen replenishment
+PRIORITY medium
+IF hydration low (user input or proxy)
+THEN push 16–24 oz water immediately
+WHY hydration directly impacts performance and HRV
+PRIORITY high
+🔄 TREND-BASED RULES (THIS IS WHERE YOU WIN)
+IF sleep declining 3+ days in a row
+THEN prioritize sleep tonight over training
+WHY trend matters more than single day
+PRIORITY high
+IF HRV declining trend over 5 days
+THEN initiate recovery protocol (2 low-intensity days + sleep focus)
+WHY early burnout prevention
+PRIORITY high
+IF workouts consistent 5+ days
+THEN suggest deload or lighter day
+WHY avoid plateau and fatigue
+PRIORITY medium
+🎯 DAILY DECISION ENGINE (MOST IMPORTANT)
+
+At the end, synthesize into ONE clear plan:
+
+IF multiple high-priority recovery signals
+THEN
+- Training: recovery only
+- Activity: 8–10k steps
+- Mind: 10 min breathing
+- Sleep: lights out before 10:30
+IF strong recovery signals
+THEN
+- Training: high intensity or strength
+- Activity: normal movement
+- Mind: optional
+- Sleep: maintain routine
+🧪 PRIORITIZATION LOGIC
+
+When multiple rules trigger:
+
+High priority overrides everything
+Recovery > performance
+Trends > single day data
+🔥 KEY PRODUCT INSIGHT
+
+Most apps stop at:
+
+“Your HRV is down”
+
+You go further:
+
+“Your HRV is down → Do this → Here’s why”
+
+That’s the difference between:
+
+data app
+coach
