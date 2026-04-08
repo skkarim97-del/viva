@@ -177,17 +177,17 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
   if (stress === "very_high") {
     dailyState = "recover";
     headline = "Take it slow today.";
-    summary = "High stress needs simplicity. Keep today easy.";
+    summary = "High stress needs simplicity. Protect your energy and nourish yourself.";
     dailyFocus = "Simplify and recover";
     yourDay = {
-      move: "20 min walk",
-      fuel: "Light meals",
-      hydrate: hydrateText,
-      recover: "Bed by 10:00 pm · 8 hours",
-      mind: "10 min breathing",
+      move: "20 min walk · fresh air",
+      fuel: "Warm, nourishing meals · anti-inflammatory foods",
+      hydrate: isDehydrated ? "10+ cups water · herbal tea tonight" : "8+ cups water · herbal tea tonight",
+      recover: "Wind down by 9:30 · bed by 10:00 pm",
+      mind: "10 min guided meditation or body scan",
     };
     whyThisPlan = [
-      "Stress and training stress compound.",
+      "Stress affects your entire body — sleep, digestion, energy, and mood.",
       "Simplifying today protects the rest of your week.",
       "Recovery isn't just physical — your mind needs rest too.",
     ];
@@ -195,23 +195,23 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     workoutIntensity = "low";
     workoutDuration = 20;
     workoutDesc = "Gentle movement only.";
-    optional = "A short walk is enough.";
+    optional = "A short walk in nature can help reset your nervous system.";
   } else if (noTraining && !stressOverride && !feelingOverride) {
     dailyState = "maintain";
     headline = "Focus on balance today.";
-    summary = "No training planned. Stay active and nourish your body.";
-    dailyFocus = "Active rest day";
+    summary = "No training planned. A great day to nourish, hydrate, and recharge.";
+    dailyFocus = "Nourish and recharge";
     yourDay = {
-      move: "20 min walk",
-      fuel: "Balanced meals",
+      move: "20 min walk · nature if possible",
+      fuel: "Balanced meals · extra veggies and whole grains",
       hydrate: hydrateText,
-      recover: "Bed by 10:00 pm · 8 hours",
-      mind: "5 min breathing",
+      recover: "Bed by 10:00 pm · screen-free wind-down",
+      mind: "Gratitude journaling or 5 min breathing",
     };
     whyThisPlan = [
-      "Rest days are when your body adapts and grows stronger.",
-      "Light movement supports recovery without adding strain.",
-      "Honoring your intent keeps your plan sustainable.",
+      "Rest days are when your body and mind repair and adapt.",
+      "Light movement and good nutrition accelerate recovery.",
+      "Investing in rest today makes tomorrow more productive.",
     ];
     workoutType = "Rest Day";
     workoutIntensity = "low";
@@ -221,41 +221,41 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
   } else if (stressOverride && dataIsGood) {
     dailyState = "recover";
     headline = "Ease the tension today.";
-    summary = "Your body could train, but stress changes things. Go easy.";
-    dailyFocus = "Keep stress low today";
+    summary = "Your body is ready, but stress changes things. Focus on calming your system.";
+    dailyFocus = "Stress management first";
     yourDay = {
-      move: "Stretch / mobility",
-      fuel: "Balanced meals",
-      hydrate: hydrateText,
-      recover: "Bed by 10:00 pm · 8 hours",
-      mind: "10 min breathing",
+      move: "30 min yoga or stretch",
+      fuel: "Whole foods · magnesium-rich foods (leafy greens, nuts)",
+      hydrate: isDehydrated ? "10+ cups water · reduce caffeine today" : "8+ cups water · reduce caffeine today",
+      recover: "Warm bath or shower · bed by 10:00 pm",
+      mind: "10 min breathing · box breathing or 4-7-8",
     };
     whyThisPlan = [
-      "Stress raises cortisol. Hard training raises it more.",
-      "Gentle movement helps reduce stress naturally.",
-      "Protecting your nervous system is the priority today.",
+      "Stress raises cortisol, which affects sleep, appetite, and recovery.",
+      "Gentle movement and breathing help calm your nervous system.",
+      "The right nutrition can support your body's stress response.",
     ];
     workoutType = "Stress Relief";
     workoutIntensity = "low";
     workoutDuration = 30;
-    workoutDesc = "Gentle movement focused on stress relief.";
-    optional = "If you start feeling better, increase intensity slightly.";
+    workoutDesc = "Gentle yoga or stretching focused on stress relief.";
+    optional = "If you start feeling better, a moderate walk can help too.";
   } else if (feelingOverride && dataIsGood) {
     if (feeling === "tired") {
       dailyState = "maintain";
-      headline = "Keep it light today.";
-      summary = "Your metrics look decent, but you feel tired. Go lighter.";
-      dailyFocus = "Stay consistent today";
+      headline = "Keep it gentle today.";
+      summary = "You're running low. Focus on recharging with good food, water, and rest.";
+      dailyFocus = "Recharge your energy";
       yourDay = {
-        move: "20 min walk",
-        fuel: "Balanced meals · protein each meal",
-        hydrate: hydrateText,
-        recover: "Bed by 10:00 pm · 8 hours",
-        mind: "5 min breathing",
+        move: "20 min walk · easy pace",
+        fuel: "Balanced meals · complex carbs for sustained energy",
+        hydrate: isDehydrated ? "10+ cups water · start with a big glass now" : "8+ cups water · start with a big glass now",
+        recover: "Bed by 10:00 pm · aim for 8 hours",
+        mind: "5 min breathing or a screen-free break",
       };
       whyThisPlan = [
         "Fatigue you can feel often shows up in data tomorrow.",
-        "A light day now prevents a forced rest day later.",
+        "Good nutrition and hydration are the fastest way to restore energy.",
         "Consistency beats intensity when you're running low.",
       ];
       workoutType = "Light Activity";
@@ -265,75 +265,75 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     } else {
       dailyState = "recover";
       headline = "Prioritize calm today.";
-      summary = "Your body could handle training, but stress changes things.";
-      dailyFocus = "Keep stress low today";
+      summary = "Your body could handle training, but stress changes the equation. Take care of yourself.";
+      dailyFocus = "Calm and restore";
       yourDay = {
-        move: "Stretch / mobility",
-        fuel: "Balanced meals",
-        hydrate: hydrateText,
-        recover: "Bed by 10:00 pm · 8 hours",
-        mind: "10 min meditation",
+        move: "Stretch / mobility · or a nature walk",
+        fuel: "Comfort food done right · warm, whole-food meals",
+        hydrate: isDehydrated ? "10+ cups water · herbal tea in the evening" : "8+ cups water · herbal tea in the evening",
+        recover: "Wind down by 9:30 · bed by 10:00 pm",
+        mind: "10 min meditation · body scan or guided",
       };
       whyThisPlan = [
-        "Stress raises cortisol. Hard training raises it more.",
-        "Gentle movement helps reduce stress naturally.",
-        "Protecting your nervous system is the priority today.",
+        "Stress affects digestion, sleep quality, and energy levels.",
+        "Gentle movement and breathing help your nervous system settle.",
+        "Caring for your mind is caring for your body.",
       ];
       workoutType = "Stress Relief";
       workoutIntensity = "low";
       workoutDuration = 30;
       workoutDesc = "Gentle movement focused on stress relief.";
     }
-    optional = "If you start feeling better, increase intensity slightly.";
+    optional = "If you start feeling better, a moderate walk can shift your mood.";
   } else if (lowEnergy && dataIsGood) {
     dailyState = "maintain";
     headline = "Keep it gentle today.";
-    summary = "Your data supports training, but your energy is low.";
-    dailyFocus = "Stay consistent today";
+    summary = "Your data supports activity, but energy is low. Nourish and hydrate first.";
+    dailyFocus = "Restore your energy";
     yourDay = {
-      move: "20 min walk",
-      fuel: "Balanced meals · protein each meal",
-      hydrate: hydrateText,
-      recover: "Bed by 10:00 pm · 8 hours",
-      mind: "5 min breathing",
+      move: "20 min walk · fresh air helps energy",
+      fuel: "Balanced meals · iron-rich foods and complex carbs",
+      hydrate: isDehydrated ? "10+ cups water · dehydration drains energy" : "8+ cups water · dehydration drains energy",
+      recover: "Bed by 10:00 pm · protect your sleep window",
+      mind: "5 min breathing · reset mid-afternoon",
     };
     whyThisPlan = [
-      "Low energy often means your body is still processing yesterday.",
-      "A gentle session now protects tomorrow's performance.",
-      "Rest is not the enemy of progress. It's part of it.",
+      "Low energy often signals dehydration, poor nutrition, or accumulated stress.",
+      "Addressing the basics — water, food, rest — is the fastest fix.",
+      "A gentle day now prevents a forced rest day later.",
     ];
     workoutType = "Light Activity";
     workoutIntensity = "low";
     workoutDuration = 30;
     workoutDesc = "Easy movement to stay active without adding strain.";
-    optional = "If energy picks up, you can increase to moderate.";
+    optional = "If energy picks up after eating and hydrating, you can increase to moderate.";
   } else if (readinessScore >= 75) {
     const feelingGreat = feeling === "great" || energy === "excellent" || energy === "high";
     dailyState = "push";
-    headline = feelingGreat ? "You're ready. Go for it." : "A strong day ahead.";
+    headline = feelingGreat ? "You're ready. Make the most of today." : "A strong day ahead.";
     summary = feelingGreat
-      ? "You feel great and your recovery backs it up."
-      : "Recovery is strong, sleep was solid. A good day to push.";
-    dailyFocus = "Maximize today";
+      ? "You feel great and your body agrees. A good day to challenge yourself."
+      : "Recovery is strong, sleep was solid. You have the capacity to push.";
+    dailyFocus = "Challenge yourself today";
     yourDay = {
-      move: trainingIntent === "intense" ? "60 min cardio" : "Strength training",
-      fuel: "High protein",
+      move: trainingIntent === "intense" ? "60 min training · push your limits" : "Strength or cardio · challenge yourself",
+      fuel: "High protein · whole foods · fuel your effort",
       hydrate: isDehydrated ? "10+ cups water + electrolytes" : "8+ cups water + electrolytes",
-      recover: "Bed by 10:00 pm · 8 hours",
-      mind: "5 min breathing",
+      recover: "Wind down by 9:30 · bed by 10:00 pm",
+      mind: "5 min breathing · set an intention for the day",
     };
     whyThisPlan = feelingGreat
       ? [
-          "You feel great and your body data agrees.",
-          "Recovery signals are strong across the board.",
-          "Days like this are when real progress happens.",
+          "When body and mind are aligned, that's when real progress happens.",
+          "Recovery and sleep are supporting you — take advantage of it.",
+          "Challenge your body, nourish it well, and rest tonight.",
         ]
       : [
           "Your body is fully recharged from last night.",
-          "Heart rate and recovery signals are strong.",
-          "A hard session will produce real gains today.",
+          "Recovery and sleep signals support a bigger effort today.",
+          "Push now, recover well tonight, and you'll build real momentum.",
         ];
-    optional = "If you feel fatigued mid-session, drop to moderate.";
+    optional = "If you feel fatigued mid-session, drop to moderate. Listen to your body.";
     workoutType = "Strength Training";
     workoutIntensity = "high";
     workoutDuration = 50;
@@ -341,19 +341,19 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
   } else if (readinessScore >= 45) {
     dailyState = "build";
     headline = "Build momentum today.";
-    summary = "Recovery is solid, but not fully reset. A controlled session keeps you on track.";
-    dailyFocus = "Focus on consistency today";
+    summary = "Recovery is solid, but not fully reset. Stay consistent and take care of the basics.";
+    dailyFocus = "Steady progress today";
     yourDay = {
-      move: "40 min cardio",
-      fuel: "Balanced meals · protein each meal",
+      move: "40 min moderate cardio · steady pace",
+      fuel: "Balanced meals · protein and veggies each meal",
       hydrate: hydrateText,
-      recover: "Bed by 10:00 pm · 8 hours",
-      mind: "5 min breathing",
+      recover: "Bed by 10:00 pm · aim for 8 hours",
+      mind: "5 min breathing or journaling",
     };
     whyThisPlan = [
-      "Your body is not fully recharged yet.",
-      "A steady workout will help without adding too much stress.",
-      "Sleep was good enough to support training today.",
+      "Your body is partially recharged — a moderate effort keeps you progressing.",
+      "Good nutrition and hydration will support your recovery overnight.",
+      "Consistency in the basics is what separates good weeks from great ones.",
     ];
     optional = "If energy feels low, a 20-minute walk is a great alternative.";
     workoutType = "Cardio";
@@ -363,18 +363,18 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
   } else {
     dailyState = "recover";
     headline = "Recovery first today.";
-    summary = "Your body is showing signs of fatigue. Rest now, come back stronger.";
-    dailyFocus = "Focus on recovery";
+    summary = "Your body is asking for rest. Focus on sleep, nutrition, hydration, and calm.";
+    dailyFocus = "Rest and restore";
     yourDay = {
-      move: "Stretch / mobility",
-      fuel: "Recovery nutrition",
-      hydrate: isDehydrated ? "10+ cups water + electrolytes" : "8+ cups water",
-      recover: "Bed by 10:00 pm · aim for 8 hours",
-      mind: "10 min meditation",
+      move: "Stretch / mobility · or a gentle walk",
+      fuel: "Recovery nutrition · anti-inflammatory foods, extra protein",
+      hydrate: isDehydrated ? "10+ cups water + electrolytes" : "8+ cups water · sip throughout the day",
+      recover: "Bed by 10:00 pm · aim for 8+ hours",
+      mind: "10 min meditation · body scan or breathing",
     };
     whyThisPlan = [
-      "Your body needs time to repair and adapt.",
-      "Resting heart rate is elevated, a sign of incomplete recovery.",
+      "Your body needs time to repair — that includes rest, nutrition, and calm.",
+      "Sleep, hydration, and stress management are your best tools right now.",
       "Pushing through fatigue creates more fatigue, not progress.",
     ];
     optional = "A 20-minute easy walk is the most you should do today.";
@@ -435,22 +435,22 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
 
   if (sleepHours >= 7.5) statusDrivers.push("Slept well");
   else if (sleepHours >= 6.5) statusDrivers.push("Sleep was adequate");
-  else statusDrivers.push("Sleep was poor");
+  else statusDrivers.push("Sleep was short");
 
   if (feeling === "great" || energy === "excellent" || energy === "high") statusDrivers.push("Feeling strong");
-  else if (feeling === "tired") statusDrivers.push("Feeling tired");
   else if (feeling === "stressed" || stressOverride) statusDrivers.push("Stress is elevated");
+  else if (feeling === "tired") statusDrivers.push("Feeling tired");
   else if (energy === "low") statusDrivers.push("Energy is low");
   else if (isDehydrated) statusDrivers.push("Hydration is low");
-  else if (trainingIntent === "none") statusDrivers.push("No training planned");
-  else if (metrics.steps >= 8000) statusDrivers.push("Activity is on track");
-  else statusDrivers.push("Activity has been light");
+  else if (trainingIntent === "none") statusDrivers.push("Rest day");
+  else if (metrics.steps >= 8000) statusDrivers.push("Movement is strong");
+  else statusDrivers.push("Movement has been light");
 
   const guidance =
-    dailyState === "push" ? "Good day to push"
+    dailyState === "push" ? "Make the most of today"
     : dailyState === "build" ? "Stay consistent today"
-    : dailyState === "maintain" ? "Take it easy today"
-    : "Focus on recovery today";
+    : dailyState === "maintain" ? "Focus on the basics today"
+    : "Rest and restore today";
 
   return {
     date: metrics.date,
@@ -481,9 +481,11 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
       carbs: readinessScore >= 65 ? 220 : 180,
       fat: 65,
       hydration: 96,
-      note: readinessScore >= 65
-        ? "Fuel up for your workout. Prioritize protein and complex carbs."
-        : "Focus on nutrient-dense foods and stay hydrated.",
+      note: stressOverride
+        ? "Focus on calming, whole foods. Magnesium-rich greens, omega-3s from fish, and complex carbs support your stress response."
+        : readinessScore >= 65
+        ? "Fuel your effort with protein and complex carbs. Include colorful vegetables and stay well hydrated."
+        : "Focus on nutrient-dense, anti-inflammatory foods. Good nutrition accelerates recovery and restores energy.",
     },
     fastingGuidance: "16:8 window. Eat between 12pm and 8pm.",
   };
@@ -495,6 +497,26 @@ export function generateWeeklyPlan(): WeeklyPlan {
   const dayOfWeek = today.getDay();
   const monday = new Date(today);
   monday.setDate(today.getDate() - ((dayOfWeek + 6) % 7));
+
+  const focusAreas = [
+    "Strength + Stress Management",
+    "Cardio + Hydration Focus",
+    "Rest & Recovery · Nourish",
+    "Strength + Sleep Optimization",
+    "Active Movement + Nutrition",
+    "Rest & Recovery · Mental Wellness",
+    "Light Movement + Meal Prep",
+  ];
+
+  const workoutDescriptions = [
+    "Full Body Strength · Fuel well beforehand",
+    "Easy Pace Walk or Jog · Stay hydrated",
+    "",
+    "Strength or Yoga · Wind down early tonight",
+    "Moderate Cardio · Focus on nutrition today",
+    "",
+    "Light Movement · Meal prep for the week",
+  ];
 
   const planDays = days.map((day, i) => {
     const date = new Date(monday);
@@ -508,23 +530,12 @@ export function generateWeeklyPlan(): WeeklyPlan {
       workout: isRest
         ? undefined
         : {
-            type: i === 0 || i === 3 ? "Strength Training" : i === 1 || i === 4 ? "Zone 2 Cardio" : "HIIT",
+            type: i === 0 || i === 3 ? "Strength Training" : i === 1 || i === 4 ? "Active Movement" : "Light Activity",
             duration: i === 6 ? 30 : 45,
-            intensity: (i === 0 || i === 3 ? "high" : i === 6 ? "high" : "moderate") as "low" | "moderate" | "high",
-            description:
-              i === 0 || i === 3
-                ? "Full Body Strength · Compound Lifts"
-                : i === 1 || i === 4
-                ? "Easy Pace · Keep It Conversational"
-                : "Short, Intense Intervals · Full Recovery Between Sets",
+            intensity: (i === 0 || i === 3 ? "high" : i === 6 ? "moderate" : "moderate") as "low" | "moderate" | "high",
+            description: workoutDescriptions[i],
           },
-      focusArea: isRest
-        ? "Rest & Recovery"
-        : i === 0 || i === 3
-        ? "Strength"
-        : i === 1 || i === 4
-        ? "Cardio"
-        : "Conditioning",
+      focusArea: focusAreas[i],
     };
   });
 
@@ -532,14 +543,15 @@ export function generateWeeklyPlan(): WeeklyPlan {
     weekStartDate: monday.toISOString().split("T")[0],
     days: planDays,
     nutritionPriorities: [
-      "Hit 160g protein daily.",
-      "Eat complex carbs before workouts.",
-      "96oz water minimum.",
-      "Vegetables at every meal.",
+      "Protein at every meal · lean meats, eggs, legumes.",
+      "Colorful vegetables and whole grains daily.",
+      "Anti-inflammatory foods · berries, leafy greens, fatty fish.",
+      "96oz water minimum · reduce caffeine after 2 pm.",
+      "Mindful eating · slow down, minimize screens at meals.",
     ],
     stepGoal: 8000,
     fastingSchedule: "16:8. Eat between 12pm and 8pm.",
-    adjustmentNote: "If you feel unusually tired mid-week, swap Thursday's strength session for active recovery.",
+    adjustmentNote: "If stress is high or sleep drops mid-week, swap a training day for yoga, stretching, and extra recovery time.",
   };
 }
 
