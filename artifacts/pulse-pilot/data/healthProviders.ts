@@ -206,9 +206,9 @@ const garminProvider: HealthDataProvider = {
   },
 };
 
-const whoopProvider: HealthDataProvider = {
-  id: "whoop",
-  name: "WHOOP",
+const samsungHealthProvider: HealthDataProvider = {
+  id: "samsung_health",
+  name: "Samsung Health",
 
   async isAvailable() {
     return true;
@@ -224,7 +224,7 @@ const whoopProvider: HealthDataProvider = {
         ? "/api"
         : `https://${process.env.EXPO_PUBLIC_DOMAIN}/api`;
 
-      const res = await fetch(`${API_BASE}/health/whoop?days=${days}`, {
+      const res = await fetch(`${API_BASE}/health/samsung?days=${days}`, {
         headers: { "Content-Type": "application/json" },
       });
       if (!res.ok) return [];
@@ -267,7 +267,7 @@ function fillDefaults(partial: Partial<HealthMetrics>[], days: number): HealthMe
 export const healthProviders: Record<string, HealthDataProvider> = {
   apple_health: appleHealthProvider,
   garmin: garminProvider,
-  whoop: whoopProvider,
+  samsung_health: samsungHealthProvider,
 };
 
 export async function fetchHealthData(

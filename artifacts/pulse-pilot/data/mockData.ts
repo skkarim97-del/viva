@@ -759,7 +759,7 @@ export function getMetricDetail(
 export const integrations: IntegrationStatus[] = [
   { id: "apple_health", name: "Apple Health", icon: "heart", connected: false },
   { id: "garmin", name: "Garmin", icon: "watch", connected: false },
-  { id: "whoop", name: "WHOOP", icon: "activity", connected: false },
+  { id: "samsung_health", name: "Samsung Health", icon: "smartphone", connected: false },
 ];
 
 export const coachResponses: Record<string, string> = {

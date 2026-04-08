@@ -35,35 +35,36 @@ router.get("/garmin", async (req: Request, res: Response) => {
   }
 });
 
-router.get("/whoop", async (req: Request, res: Response) => {
+router.get("/samsung", async (req: Request, res: Response) => {
   const days = Math.min(90, Math.max(1, parseInt(req.query.days as string) || 28));
 
-  const whoopToken = process.env.WHOOP_ACCESS_TOKEN;
-  if (!whoopToken) {
+  const samsungToken = process.env.SAMSUNG_HEALTH_ACCESS_TOKEN;
+  if (!samsungToken) {
     return res.status(503).json({
-      error: "WHOOP not connected",
-      message: "Connect your WHOOP account in Settings to sync health data.",
+      error: "Samsung Health not connected",
+      message: "Connect your Samsung Health account in Settings to sync health data.",
       setupRequired: true,
     });
   }
 
   try {
-    const endDate = new Date().toISOString();
+    const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    const [cycles, recoveries, sleeps] = await Promise.all([
-      whoopFetch(`/developer/v1/cycle?start=${startDate.toISOString()}&end=${endDate}`, whoopToken),
-      whoopFetch(`/developer/v1/recovery?start=${startDate.toISOString()}&end=${endDate}`, whoopToken),
-      whoopFetch(`/developer/v1/activity/sleep?start=${startDate.toISOString()}&end=${endDate}`, whoopToken),
+    const [dailies, sleepData, heartRate, exercise] = await Promise.all([
+      samsungFetch("/v1/daily-summary", samsungToken, startDate, endDate),
+      samsungFetch("/v1/sleep", samsungToken, startDate, endDate),
+      samsungFetch("/v1/heart-rate", samsungToken, startDate, endDate),
+      samsungFetch("/v1/exercise", samsungToken, startDate, endDate),
     ]);
 
-    const metrics = buildMetricsFromWhoop(cycles, recoveries, sleeps, days);
-    res.json({ metrics, source: "whoop", days });
+    const metrics = buildMetricsFromSamsung(dailies, sleepData, heartRate, exercise, days);
+    res.json({ metrics, source: "samsung_health", days });
   } catch (err: any) {
     res.status(502).json({
-      error: "Failed to fetch WHOOP data",
-      message: err.message || "Could not reach WHOOP servers.",
+      error: "Failed to fetch Samsung Health data",
+      message: err.message || "Could not reach Samsung Health servers.",
     });
   }
 });
@@ -72,7 +73,7 @@ router.get("/status", (_req: Request, res: Response) => {
   res.json({
     providers: {
       garmin: { connected: !!process.env.GARMIN_ACCESS_TOKEN },
-      whoop: { connected: !!process.env.WHOOP_ACCESS_TOKEN },
+      samsung_health: { connected: !!process.env.SAMSUNG_HEALTH_ACCESS_TOKEN },
       apple_health: { connected: false, note: "Apple Health connects directly on-device via HealthKit" },
     },
   });
@@ -89,14 +90,18 @@ async function garminFetch(path: string, token: string): Promise<any> {
   return res.json();
 }
 
-async function whoopFetch(path: string, token: string): Promise<any> {
-  const res = await fetch(`https://api.prod.whoop.com${path}`, {
+async function samsungFetch(path: string, token: string, startDate: Date, endDate: Date): Promise<any> {
+  const params = new URLSearchParams({
+    start: startDate.toISOString(),
+    end: endDate.toISOString(),
+  });
+  const res = await fetch(`https://api.shealth.samsung.com${path}?${params}`, {
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: "application/json",
     },
   });
-  if (!res.ok) throw new Error(`WHOOP API error: ${res.status}`);
+  if (!res.ok) throw new Error(`Samsung Health API error: ${res.status}`);
   return res.json();
 }
 
@@ -141,47 +146,57 @@ function buildMetricsFromGarmin(dailies: any[], _sleep: any[], heartRates: any[]
   return metrics;
 }
 
-function buildMetricsFromWhoop(cycles: any, recoveries: any, sleeps: any, days: number) {
+function buildMetricsFromSamsung(dailies: any, sleepData: any, heartRate: any, exercise: any, days: number) {
   const metrics: any[] = [];
   const now = new Date();
-  const cycleRecords = cycles?.records || cycles || [];
-  const recoveryRecords = recoveries?.records || recoveries || [];
-  const sleepRecords = sleeps?.records || sleeps || [];
+  const dailyRecords = dailies?.data || dailies || [];
+  const sleepRecords = sleepData?.data || sleepData || [];
+  const hrRecords = heartRate?.data || heartRate || [];
+  const exerciseRecords = exercise?.data || exercise || [];
 
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(now);
     d.setDate(d.getDate() - i);
     const date = dateStr(d);
 
-    const cycle = cycleRecords.find((c: any) => {
-      const cDate = c.start ? dateStr(new Date(c.start)) : "";
-      return cDate === date;
-    });
-
-    const recovery = recoveryRecords.find((r: any) => {
-      const rDate = r.created_at ? dateStr(new Date(r.created_at)) : r.cycle_id === cycle?.id ? date : "";
+    const daily = dailyRecords.find((r: any) => {
+      const rDate = r.date || (r.created_at ? dateStr(new Date(r.created_at)) : "");
       return rDate === date;
     });
 
     const sleep = sleepRecords.find((s: any) => {
-      const sDate = s.start ? dateStr(new Date(s.start)) : "";
+      const sDate = s.date || (s.start_time ? dateStr(new Date(s.start_time)) : "");
       return sDate === date;
     });
 
-    const sleepDurationMs = sleep ? new Date(sleep.end).getTime() - new Date(sleep.start).getTime() : 0;
+    const hr = hrRecords.find((h: any) => {
+      const hDate = h.date || (h.start_time ? dateStr(new Date(h.start_time)) : "");
+      return hDate === date;
+    });
+
+    const dayExercises = exerciseRecords.filter((e: any) => {
+      const eDate = e.date || (e.start_time ? dateStr(new Date(e.start_time)) : "");
+      return eDate === date;
+    });
+
+    const sleepDurationMs = sleep?.duration_ms || (sleep?.end_time && sleep?.start_time
+      ? new Date(sleep.end_time).getTime() - new Date(sleep.start_time).getTime()
+      : 0);
+
+    const totalExerciseCal = dayExercises.reduce((sum: number, e: any) => sum + (e.calories || 0), 0);
 
     metrics.push({
       date,
-      steps: 0,
-      caloriesBurned: cycle?.score?.kilojoule ? Math.round(cycle.score.kilojoule / 4.184) : 0,
-      activeCalories: cycle?.score?.kilojoule ? Math.round(cycle.score.kilojoule / 4.184 * 0.4) : 0,
-      restingHeartRate: recovery?.score?.resting_heart_rate ?? 65,
-      hrv: recovery?.score?.hrv_rmssd_milli ? Math.round(recovery.score.hrv_rmssd_milli) : 40,
-      weight: 0,
+      steps: daily?.steps ?? daily?.step_count ?? 0,
+      caloriesBurned: (daily?.calories ?? daily?.total_calories ?? 0) + totalExerciseCal,
+      activeCalories: daily?.active_calories ?? totalExerciseCal,
+      restingHeartRate: hr?.resting_heart_rate ?? hr?.min ?? 65,
+      hrv: hr?.hrv ?? hr?.sdnn ?? 40,
+      weight: daily?.weight ?? 0,
       sleepDuration: sleepDurationMs > 0 ? Math.round(sleepDurationMs / 3600000 * 10) / 10 : 0,
-      sleepQuality: sleep?.score?.sleep_performance_percentage ?? 70,
-      recoveryScore: recovery?.score?.recovery_score ?? 60,
-      strain: cycle?.score?.strain ? Math.round(cycle.score.strain * 10) / 10 : 10,
+      sleepQuality: sleep?.efficiency ?? sleep?.score ?? 70,
+      recoveryScore: daily?.stress_score ? Math.max(20, 100 - daily.stress_score) : 60,
+      strain: daily?.stress_score ?? 10,
     });
   }
 

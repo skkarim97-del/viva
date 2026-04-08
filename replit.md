@@ -69,11 +69,11 @@ Mobile-first AI health and wellness coaching app built with Expo/React Native. C
 - **Subscription**: 3-tier paywall (Free, Premium $9.99/mo, Premium Plus $19.99/mo)
 
 ### Architecture
-- **Backend**: Express API server with `/api/coach/chat` (SSE streaming coaching), `/api/coach/weekly-plan` (JSON weekly plan generation), `/api/health/garmin`, `/api/health/whoop`, `/api/health/status` for health data sync
+- **Backend**: Express API server with `/api/coach/chat` (SSE streaming coaching), `/api/coach/weekly-plan` (JSON weekly plan generation), `/api/health/garmin`, `/api/health/samsung`, `/api/health/status` for health data sync
 - **AI**: OpenAI integration via `@workspace/integrations-openai-ai-server` — no API key needed, billed to Replit credits
 - **Frontend**: Expo/React Native with AsyncStorage for persistence
 - **Data**: Computed insights engine (`data/insights.ts`) calculates sleep debt, training load, recovery trends, weight projections, TDEE, consistency scores, HRV baselines, and risk flags
-- **Health Data Providers**: `data/healthProviders.ts` — Apple HealthKit (iOS native), Garmin (via backend API), WHOOP (via backend API). Provider layer tries connected sources in order, falls back to mock data. 28-day window for Trends.
+- **Health Data Providers**: `data/healthProviders.ts` — Apple HealthKit (iOS native), Garmin (via backend API), Samsung Health (via backend API). Provider layer tries connected sources in order, falls back to mock data. 28-day window for Trends.
 - **State**: Context-based state management (AppContext) with computed DailyInsights. Integration toggle persists to `@viva_integrations` AsyncStorage key and triggers health data re-sync.
 - **Trend Computation**: `generateTrendDataFromMetrics()` dynamically computes trend direction and plain-English summaries from actual metrics (Weight, HRV, Resting HR, Sleep, Steps, Recovery).
 - **Components**: VivaSymbol (SVG brand mark), VivaWordmark (symbol + text), ScreenHeader (consistent tab header), plan rows with icon squares, metric tiles with drill-down
@@ -87,11 +87,11 @@ Mobile-first AI health and wellness coaching app built with Expo/React Native. C
 - `artifacts/pulse-pilot/app/metric-detail.tsx` — Metric drill-down with deep analysis
 - `artifacts/pulse-pilot/data/insights.ts` — Computed insights engine
 - `artifacts/pulse-pilot/data/mockData.ts` — Mock health data, adaptive daily plan, trend computation from metrics
-- `artifacts/pulse-pilot/data/healthProviders.ts` — Apple Health / Garmin / WHOOP provider layer
+- `artifacts/pulse-pilot/data/healthProviders.ts` — Apple Health / Garmin / Samsung Health provider layer
 - `artifacts/pulse-pilot/constants/colors.ts` — Design system colors
 - `artifacts/pulse-pilot/context/AppContext.tsx` — Global state with feeling state, integration persistence, health data sync
 - `artifacts/api-server/src/routes/coach/index.ts` — OpenAI coaching endpoint (SSE)
-- `artifacts/api-server/src/routes/healthData.ts` — Garmin + WHOOP backend proxy routes
+- `artifacts/api-server/src/routes/healthData.ts` — Garmin + Samsung Health backend proxy routes
 
 ### Navigation
 - Tab bar: Today, Plan, Trends, Settings (4 tabs, borderless, blur on iOS)
