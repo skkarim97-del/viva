@@ -78,11 +78,12 @@ export default function PlanScreen() {
         showsVerticalScrollIndicator={false}
       >
         <ScreenHeader />
-        <Text style={[styles.title, { color: c.foreground }]}>This Week</Text>
+        <Text style={[styles.title, { color: c.foreground }]}>Your Week</Text>
 
         <View style={[styles.summaryCard, { backgroundColor: c.card }]}>
+          <Text style={[styles.summaryHeader, { color: c.foreground }]}>Week Overview</Text>
           {weeklyPlan.weekSummary.split("\n\n").map((line, i) => (
-            <Text key={i} style={[styles.summaryText, { color: c.foreground }, i > 0 && { marginTop: 8 }]}>{line}</Text>
+            <Text key={i} style={[styles.summaryText, { color: c.foreground }, i > 0 && { marginTop: 10 }]}>{line}</Text>
           ))}
         </View>
 
@@ -247,14 +248,20 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   summaryCard: {
-    padding: 16,
-    borderRadius: 16,
+    padding: 20,
+    borderRadius: 20,
     marginBottom: 4,
+    gap: 10,
+  },
+  summaryHeader: {
+    fontSize: 16,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: -0.2,
   },
   summaryText: {
     fontSize: 14,
     fontFamily: "Inter_400Regular",
-    lineHeight: 21,
+    lineHeight: 22,
     opacity: 0.75,
   },
   dayCard: {

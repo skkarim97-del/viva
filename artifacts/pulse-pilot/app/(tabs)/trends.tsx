@@ -216,9 +216,9 @@ export default function TrendsScreen() {
 
       {insights && (
         <View style={[styles.summaryCard, { backgroundColor: c.card }]}>
-          <Text style={[styles.summaryHeader, { color: c.foreground }]}>Your Week</Text>
+          <Text style={[styles.summaryHeader, { color: c.foreground }]}>Your Recent Trends</Text>
           {insights.weekSummary.split("\n\n").map((line, i) => (
-            <Text key={i} style={[styles.summaryText, { color: c.foreground }, i > 0 && { marginTop: 12 }]}>{line}</Text>
+            <Text key={i} style={[styles.summaryText, { color: c.foreground }]}>{line}</Text>
           ))}
         </View>
       )}
@@ -339,7 +339,7 @@ const styles = StyleSheet.create({
   summaryCard: {
     padding: 20,
     borderRadius: 20,
-    gap: 10,
+    gap: 12,
   },
   summaryHeader: {
     fontSize: 18,

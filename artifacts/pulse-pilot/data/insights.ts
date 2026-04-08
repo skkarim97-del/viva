@@ -400,7 +400,7 @@ function generateWeekSummary(
     parts.push("Keep building on this foundation heading into next week. Small, consistent improvements in sleep, nutrition, and stress management add up.");
   }
 
-  return parts.slice(0, 3).join("\n\n");
+  return parts.slice(0, 4).join("\n\n");
 }
 
 function computeSleepIntelligence(last14: HealthMetrics[], last7: HealthMetrics[]): SleepIntelligence {

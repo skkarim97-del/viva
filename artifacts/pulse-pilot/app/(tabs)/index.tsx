@@ -402,7 +402,7 @@ export default function DashboardScreen() {
         )}
 
         <View style={[styles.feelingCard, { backgroundColor: c.card }]}>
-          <Text style={[styles.feelingPrompt, { color: c.mutedForeground }]}>How are you feeling?</Text>
+          <Text style={[styles.feelingPrompt, { color: c.mutedForeground }]}>How are you feeling today?</Text>
           <View style={styles.feelingRow}>
             {FEELINGS.map(({ key, label }) => {
               const isSelected = feeling === key;
@@ -431,7 +431,21 @@ export default function DashboardScreen() {
         <View style={[styles.askCard, { backgroundColor: c.card }]}>
           <Text style={[styles.coachHeader, { color: c.foreground }]}>Your VIVA Coach</Text>
           {coachInsight ? (
-            <Text style={[styles.coachInsightText, { color: c.foreground }]}>{coachInsight}</Text>
+            <View style={styles.coachInsightWrap}>
+              {coachInsight.split(/(?<=\.)\s+/).reduce((acc: string[][], sentence, i) => {
+                const lastGroup = acc[acc.length - 1];
+                if (lastGroup && lastGroup.join(" ").length + sentence.length < 140) {
+                  lastGroup.push(sentence);
+                } else {
+                  acc.push([sentence]);
+                }
+                return acc;
+              }, [] as string[][]).map((group, i) => (
+                <Text key={i} style={[styles.coachInsightText, { color: c.foreground }]}>
+                  {group.join(" ")}
+                </Text>
+              ))}
+            </View>
           ) : null}
 
           {askMessages.length > 0 && !showChat && (
@@ -525,9 +539,19 @@ export default function DashboardScreen() {
                         ? { backgroundColor: c.primary }
                         : { backgroundColor: c.card },
                     ]}>
-                      <Text style={[styles.askMsgText, { color: msg.role === "user" ? c.primaryForeground : c.foreground }]}>
-                        {msg.content}
-                      </Text>
+                      {msg.role === "assistant" && msg.content.includes("\n") ? (
+                        <View style={{ gap: 8 }}>
+                          {msg.content.split(/\n\n+/).map((para, pi) => (
+                            <Text key={pi} style={[styles.askMsgText, { color: c.foreground }]}>
+                              {para}
+                            </Text>
+                          ))}
+                        </View>
+                      ) : (
+                        <Text style={[styles.askMsgText, { color: msg.role === "user" ? c.primaryForeground : c.foreground }]}>
+                          {msg.content}
+                        </Text>
+                      )}
                     </View>
                   </View>
                 );
@@ -1129,10 +1153,13 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
     letterSpacing: -0.3,
   },
+  coachInsightWrap: {
+    gap: 10,
+  },
   coachInsightText: {
     fontSize: 14,
     fontFamily: "Inter_400Regular",
-    lineHeight: 21,
+    lineHeight: 22,
     letterSpacing: -0.1,
   },
   chatViewAll: {

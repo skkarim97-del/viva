@@ -45,7 +45,7 @@ Mobile-first AI health and wellness coaching app built with Expo/React Native. C
 
 ### Features
 - **Onboarding**: 9-step premium flow (Welcome, Goals, Profile, Activity Level, Training Time, Energy Baseline, Sleep Habits, Device Integration, Personalization Summary)
-- **Dashboard (Today tab)**: Card-based layout — Status card → Feeling card → Refine card (expandable) → Your Day card → Metric tiles → Ask your coach. 24px spacing between all cards. Minimal, calm, output-focused.
+- **Dashboard (Today tab)**: Card-based layout — Positioning tagline → Status card (with streak badge + progress bar) → Completion feedback toast → Feeling card → Coach card (with paragraph-spaced insights) → Refine card (expandable) → Your Day card → Habit Tracker card → Metric tiles. 24px spacing between all cards. Minimal, calm, output-focused.
 - **Progressive disclosure**: Only feeling input visible by default. Energy, Stress, Hydration, and Training hidden behind "Refine your day" card toggle. Reduces visual clutter.
 - **State-based color system**: Refine chips use semantic colors when selected. Energy: excellent/high=green, medium=gray, low=red. Stress: low=green, moderate=amber, high/very_high=red. Hydration: well_hydrated/good=blue, low=amber, dehydrated=red. Training: none=gray, light=light-blue, moderate/intense=blue. Selected state = tinted background (18% opacity) + colored border (40% opacity) + colored text. Unselected = neutral.
 - **Selection animations**: Subtle scale (1.02x selected, 0.96x pressed) on both feeling and refine chips. No harsh transitions.
