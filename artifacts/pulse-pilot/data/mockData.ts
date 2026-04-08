@@ -176,7 +176,7 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
 
   if (stress === "very_high") {
     dailyState = "recover";
-    headline = "Take it slow. Be kind to yourself.";
+    headline = "Take it slow today.";
     summary = "High stress needs simplicity. Keep today easy.";
     dailyFocus = "Simplify and recover";
     yourDay = {
@@ -220,7 +220,7 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     optional = "If you feel the urge to train, keep it very light.";
   } else if (stressOverride && dataIsGood) {
     dailyState = "recover";
-    headline = "Ease the tension. Prioritize calm.";
+    headline = "Ease the tension today.";
     summary = "Your body could train, but stress changes things. Go easy.";
     dailyFocus = "Keep stress low today";
     yourDay = {
@@ -243,7 +243,7 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
   } else if (feelingOverride && dataIsGood) {
     if (feeling === "tired") {
       dailyState = "maintain";
-      headline = "Stay consistent. Keep it light.";
+      headline = "Keep it light today.";
       summary = "Your metrics look decent, but you feel tired. Go lighter.";
       dailyFocus = "Stay consistent today";
       yourDay = {
@@ -264,7 +264,7 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
       workoutDesc = "Easy walk or gentle yoga.";
     } else {
       dailyState = "recover";
-      headline = "Ease the tension. Prioritize calm.";
+      headline = "Prioritize calm today.";
       summary = "Your body could handle training, but stress changes things.";
       dailyFocus = "Keep stress low today";
       yourDay = {
@@ -287,7 +287,7 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     optional = "If you start feeling better, increase intensity slightly.";
   } else if (lowEnergy && dataIsGood) {
     dailyState = "maintain";
-    headline = "Low energy. Keep it gentle.";
+    headline = "Keep it gentle today.";
     summary = "Your data supports training, but your energy is low.";
     dailyFocus = "Stay consistent today";
     yourDay = {
@@ -310,7 +310,7 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
   } else if (readinessScore >= 75) {
     const feelingGreat = feeling === "great" || energy === "excellent" || energy === "high";
     dailyState = "push";
-    headline = feelingGreat ? "You're ready. Make it count." : "Strong day. Push yourself.";
+    headline = feelingGreat ? "You're ready. Go for it." : "A strong day ahead.";
     summary = feelingGreat
       ? "You feel great and your recovery backs it up."
       : "Recovery is strong, sleep was solid. A good day to push.";
@@ -340,7 +340,7 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     workoutDesc = "Full body strength with compound movements.";
   } else if (readinessScore >= 45) {
     dailyState = "build";
-    headline = "Stay active. Keep it balanced.";
+    headline = "Build momentum today.";
     summary = "Recovery is solid, but not fully reset. A controlled session keeps you on track.";
     dailyFocus = "Focus on consistency today";
     yourDay = {
@@ -362,7 +362,7 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     workoutDesc = "Steady-state cardio at a conversational pace.";
   } else {
     dailyState = "recover";
-    headline = "Recovery comes first today.";
+    headline = "Recovery first today.";
     summary = "Your body is showing signs of fatigue. Rest now, come back stronger.";
     dailyFocus = "Focus on recovery";
     yourDay = {
@@ -429,21 +429,21 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
 
   const statusDrivers: string[] = [];
 
-  if (sleepHours >= 7.5) statusDrivers.push("You slept well");
+  if (metrics.recoveryScore >= 70) statusDrivers.push("Recovery is solid");
+  else if (metrics.recoveryScore >= 50) statusDrivers.push("Recovery is moderate");
+  else statusDrivers.push("Recovery is low");
+
+  if (sleepHours >= 7.5) statusDrivers.push("Slept well");
   else if (sleepHours >= 6.5) statusDrivers.push("Sleep was adequate");
   else statusDrivers.push("Sleep was poor");
 
-  if (metrics.recoveryScore >= 70) statusDrivers.push("Recovery is solid");
-  else if (metrics.recoveryScore >= 50) statusDrivers.push("Recovery is moderate");
-  else statusDrivers.push("Recovery is lower than usual");
-
-  if (feeling === "great" || energy === "excellent" || energy === "high") statusDrivers.push("You're feeling strong");
-  else if (feeling === "tired") statusDrivers.push("You're feeling tired");
+  if (feeling === "great" || energy === "excellent" || energy === "high") statusDrivers.push("Feeling strong");
+  else if (feeling === "tired") statusDrivers.push("Feeling tired");
   else if (feeling === "stressed" || stressOverride) statusDrivers.push("Stress is elevated");
   else if (energy === "low") statusDrivers.push("Energy is low");
   else if (isDehydrated) statusDrivers.push("Hydration is low");
   else if (trainingIntent === "none") statusDrivers.push("No training planned");
-  else if (metrics.steps >= 8000) statusDrivers.push("Activity is consistent");
+  else if (metrics.steps >= 8000) statusDrivers.push("Activity is on track");
   else statusDrivers.push("Activity has been light");
 
   const guidance =

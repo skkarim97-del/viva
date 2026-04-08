@@ -289,9 +289,9 @@ export default function DashboardScreen() {
             <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
             <Text style={[styles.statusLabel, { color: statusColor }]}>{dailyPlan.statusLabel}</Text>
           </View>
-          <Text style={[styles.headline, { color: c.foreground }]}>{dailyPlan.headline}</Text>
-          <Text style={[styles.driversInline, { color: c.mutedForeground }]}>
-            {dailyPlan.statusDrivers.join("  ·  ")}
+          <Text style={[styles.headline, { color: c.foreground }]} numberOfLines={1} adjustsFontSizeToFit>{dailyPlan.headline}</Text>
+          <Text style={[styles.driversInline, { color: c.mutedForeground }]} numberOfLines={2}>
+            {dailyPlan.statusDrivers.join(" · ")}
           </Text>
         </View>
 
@@ -690,19 +690,19 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   headline: {
-    fontSize: 26,
+    fontSize: 22,
     fontFamily: "Inter_700Bold",
-    letterSpacing: -0.6,
+    letterSpacing: -0.5,
     textAlign: "center",
-    lineHeight: 32,
+    lineHeight: 28,
     marginTop: 4,
-    paddingHorizontal: 8,
   },
   driversInline: {
     fontSize: 13,
     fontFamily: "Inter_400Regular",
     textAlign: "center",
-    marginTop: 2,
+    lineHeight: 19,
+    marginTop: 4,
     opacity: 0.7,
   },
 
