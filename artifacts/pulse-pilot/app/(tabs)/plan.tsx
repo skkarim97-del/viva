@@ -97,14 +97,14 @@ export default function PlanScreen() {
               style={[
                 styles.dayCard,
                 { backgroundColor: c.card },
-                isToday && { borderWidth: 1.5, borderColor: c.primary + "30" },
+                isToday && { borderWidth: 1.5, borderColor: c.primary + "45", backgroundColor: c.primary + "06" },
               ]}
             >
               <View style={styles.dayHeader}>
                 <View style={styles.dayNameRow}>
                   <Text style={[styles.dayName, { color: c.foreground }]}>{day.dayOfWeek}</Text>
                   {isToday && (
-                    <View style={[styles.todayBadge, { backgroundColor: c.primary + "15" }]}>
+                    <View style={[styles.todayBadge, { backgroundColor: c.primary + "20" }]}>
                       <Text style={[styles.todayText, { color: c.primary }]}>Today</Text>
                     </View>
                   )}

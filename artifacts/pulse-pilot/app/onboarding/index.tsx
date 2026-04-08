@@ -83,7 +83,8 @@ export default function OnboardingScreen() {
   const [selectedGoals, setSelectedGoals] = useState<HealthGoal[]>([]);
   const [age, setAge] = useState("32");
   const [sex, setSex] = useState<"male" | "female" | "other">("male");
-  const [height, setHeight] = useState("70");
+  const [heightFeet, setHeightFeet] = useState("5");
+  const [heightInches, setHeightInches] = useState("10");
   const [weight, setWeight] = useState("185");
   const [goalWeight, setGoalWeight] = useState("170");
   const [activityLevel, setActivityLevel] = useState<"inactive" | "light" | "moderate" | "very_active" | null>(null);
@@ -137,7 +138,7 @@ export default function OnboardingScreen() {
     updateProfile({
       age: parseInt(age) || 32,
       sex,
-      height: parseInt(height) || 70,
+      height: ((parseInt(heightFeet) || 5) * 12) + (parseInt(heightInches) || 10),
       weight: parseInt(weight) || 185,
       goalWeight: showGoalWeight ? (parseInt(goalWeight) || 170) : parseInt(weight) || 185,
       goals: selectedGoals.length > 0 ? selectedGoals : ["general_wellness"],
@@ -307,7 +308,14 @@ export default function OnboardingScreen() {
                 </View>
 
                 <ProfileInput label="Age" value={age} onChange={setAge} unit="" colors={c} optional />
-                <ProfileInput label="Height" value={height} onChange={setHeight} unit="in" colors={c} />
+                <View style={styles.heightRow}>
+                  <View style={{ flex: 1 }}>
+                    <ProfileInput label="Height" value={heightFeet} onChange={setHeightFeet} unit="ft" colors={c} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <ProfileInput label="" value={heightInches} onChange={setHeightInches} unit="in" colors={c} />
+                  </View>
+                </View>
                 <ProfileInput label="Current weight" value={weight} onChange={setWeight} unit="lbs" colors={c} />
                 {showGoalWeight && (
                   <ProfileInput label="Goal weight" value={goalWeight} onChange={setGoalWeight} unit="lbs" colors={c} />
@@ -773,6 +781,10 @@ const styles = StyleSheet.create({
   },
 
   profileGroup: {
+    gap: 8,
+  },
+  heightRow: {
+    flexDirection: "row",
     gap: 8,
   },
   sexRow: {
