@@ -3,6 +3,7 @@ import type {
   HealthMetrics,
   DailyPlan,
   WeeklyPlan,
+  WeeklyPlanDay,
   TrendData,
   WorkoutEntry,
   IntegrationStatus,
@@ -492,7 +493,7 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
 }
 
 export function generateWeeklyPlan(): WeeklyPlan {
-  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  const dayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
   const today = new Date();
   const dayOfWeek = today.getDay();
   const monday = new Date(today);
@@ -501,56 +502,46 @@ export function generateWeeklyPlan(): WeeklyPlan {
   const focusAreas = [
     "Strength + Stress Management",
     "Cardio + Hydration Focus",
-    "Rest & Recovery · Nourish",
+    "Recovery + Nourish",
     "Strength + Sleep Optimization",
     "Active Movement + Nutrition",
-    "Rest & Recovery · Mental Wellness",
+    "Recovery + Mental Wellness",
     "Light Movement + Meal Prep",
   ];
 
-  const workoutDescriptions = [
-    "Full Body Strength · Fuel well beforehand",
-    "Easy Pace Walk or Jog · Stay hydrated",
-    "",
-    "Strength or Yoga · Wind down early tonight",
-    "Moderate Cardio · Focus on nutrition today",
-    "",
-    "Light Movement · Meal prep for the week",
+  const dayConfigs: { move: string; fuel: string; hydrate: string; recover: string; mind: string }[] = [
+    { move: "45 min strength", fuel: "High protein", hydrate: "3L water", recover: "Bed by 10:00 pm", mind: "5 min breathing" },
+    { move: "40 min cardio", fuel: "Balanced meals", hydrate: "Water + electrolytes", recover: "Aim for 7 hours", mind: "10 min meditation" },
+    { move: "Active recovery", fuel: "Lighter meals", hydrate: "2L water", recover: "Aim for 8 hours", mind: "Quiet time" },
+    { move: "45 min strength", fuel: "High protein", hydrate: "3L water", recover: "Wind down 30 min early", mind: "5 min breathing" },
+    { move: "40 min cardio", fuel: "Balanced meals", hydrate: "Water + electrolytes", recover: "Bed by 10:00 pm", mind: "10 min breathing" },
+    { move: "Rest day", fuel: "Recovery nutrition", hydrate: "2L water", recover: "Aim for 8 hours", mind: "10 min meditation" },
+    { move: "30 min yoga", fuel: "Balanced meals", hydrate: "2L water", recover: "Bed by 10:30 pm", mind: "Quiet time" },
   ];
 
-  const planDays = days.map((day, i) => {
+  const categories: ActionCategory[] = ["move", "fuel", "hydrate", "recover", "mind"];
+
+  const planDays: WeeklyPlanDay[] = dayNames.map((name, i) => {
     const date = new Date(monday);
     date.setDate(monday.getDate() + i);
-    const isRest = i === 2 || i === 5;
-
+    const cfg = dayConfigs[i];
     return {
-      dayOfWeek: day,
+      dayOfWeek: name,
       date: date.toISOString().split("T")[0],
-      isRestDay: isRest,
-      workout: isRest
-        ? undefined
-        : {
-            type: i === 0 || i === 3 ? "Strength Training" : i === 1 || i === 4 ? "Active Movement" : "Light Activity",
-            duration: i === 6 ? 30 : 45,
-            intensity: (i === 0 || i === 3 ? "high" : i === 6 ? "moderate" : "moderate") as "low" | "moderate" | "high",
-            description: workoutDescriptions[i],
-          },
       focusArea: focusAreas[i],
+      actions: categories.map((cat) => ({
+        category: cat,
+        recommended: cfg[cat],
+        chosen: cfg[cat],
+        completed: false,
+      })),
     };
   });
 
   return {
     weekStartDate: monday.toISOString().split("T")[0],
+    weekSummary: "This week focuses on steady progress with two lighter days to support recovery. Your plan balances movement, nutrition, hydration, and rest based on your recent patterns.",
     days: planDays,
-    nutritionPriorities: [
-      "Protein at every meal · lean meats, eggs, legumes.",
-      "Colorful vegetables and whole grains daily.",
-      "Anti-inflammatory foods · berries, leafy greens, fatty fish.",
-      "96oz water minimum · reduce caffeine after 2 pm.",
-      "Mindful eating · slow down, minimize screens at meals.",
-    ],
-    stepGoal: 8000,
-    fastingSchedule: "16:8. Eat between 12pm and 8pm.",
     adjustmentNote: "If stress is high or sleep drops mid-week, swap a training day for yoga, stretching, and extra recovery time.",
   };
 }

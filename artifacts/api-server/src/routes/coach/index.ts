@@ -224,4 +224,136 @@ router.post("/chat", async (req: Request, res: Response) => {
   }
 });
 
+const WEEKLY_PLAN_PROMPT = `You are Viva, a holistic health and wellness coach generating a personalized weekly plan.
+
+Based on the user's health data, goals, recent behavior, and trends, generate a 7-day plan covering 5 wellness categories each day:
+
+1. Move — workout or movement recommendation (keep it simple: "45 min strength", "30 min yoga", "20 min walk", "Rest day", etc.)
+2. Fuel — nutrition focus for the day ("High protein", "Balanced meals", "Lighter meals", "Recovery nutrition", etc.)
+3. Hydrate — hydration target ("2L water", "3L water", "Water + electrolytes", etc.)
+4. Recover — sleep/recovery target ("Bed by 10:00 pm", "Aim for 8 hours", "Wind down 30 min early", etc.)
+5. Mind — mental wellness activity ("5 min breathing", "10 min meditation", "Quiet time", etc.)
+
+Rules:
+- Keep each recommendation SHORT — 2-5 words max
+- Make the plan realistic and personalized based on the provided data
+- Include 1-2 lighter/recovery days per week
+- If sleep has been poor, prioritize recovery and lighter training
+- If stress is high, add more mindfulness and reduce intensity
+- If the user has been consistent, gradually increase challenge
+- Balance the week — don't put all hard days together
+- Each day should have a focusArea that pairs physical + wellness themes (e.g., "Strength + Stress Management")
+
+Also generate a weekSummary (2-3 sentences) explaining the week's focus and how it was shaped by the user's data.
+
+Respond ONLY with valid JSON in this exact format:
+{
+  "weekSummary": "...",
+  "days": [
+    {
+      "dayOfWeek": "Monday",
+      "focusArea": "...",
+      "move": "...",
+      "fuel": "...",
+      "hydrate": "...",
+      "recover": "...",
+      "mind": "..."
+    }
+  ],
+  "adjustmentNote": "..."
+}`;
+
+router.post("/weekly-plan", async (req: Request, res: Response) => {
+  try {
+    const { healthContext } = req.body;
+
+    let contextBlock = "";
+    if (healthContext) {
+      const parts: string[] = [];
+
+      if (healthContext.recentMetrics && Array.isArray(healthContext.recentMetrics)) {
+        const recent = healthContext.recentMetrics.slice(-7);
+        const avgSleep = recent.reduce((s: number, m: any) => s + m.sleepDuration, 0) / recent.length;
+        const avgSteps = recent.reduce((s: number, m: any) => s + m.steps, 0) / recent.length;
+        const avgRecovery = recent.reduce((s: number, m: any) => s + m.recoveryScore, 0) / recent.length;
+        const avgHrv = recent.reduce((s: number, m: any) => s + m.hrv, 0) / recent.length;
+        parts.push(
+          `LAST 7 DAYS AVERAGES:`,
+          `- Sleep: ${avgSleep.toFixed(1)} hours`,
+          `- Steps: ${Math.round(avgSteps).toLocaleString()}`,
+          `- Recovery: ${Math.round(avgRecovery)}%`,
+          `- HRV: ${Math.round(avgHrv)} ms`,
+        );
+      }
+
+      if (healthContext.profile) {
+        const p = healthContext.profile;
+        parts.push(
+          `\nUSER PROFILE:`,
+          `- Age: ${p.age}, Sex: ${p.sex}`,
+          `- Goals: ${p.goals?.join(", ") || "general wellness"}`,
+          `- Days available to train: ${p.daysAvailableToTrain || 4}`,
+          `- Available time per session: ${p.availableWorkoutTime || 45} min`,
+        );
+      }
+
+      if (healthContext.completionHistory && Array.isArray(healthContext.completionHistory)) {
+        const recent = healthContext.completionHistory.slice(-7);
+        if (recent.length > 0) {
+          const avgCompletion = recent.reduce((s: number, r: any) => s + r.completionRate, 0) / recent.length;
+          parts.push(`\nLAST WEEK COMPLETION: ${Math.round(avgCompletion)}%`);
+        }
+      }
+
+      if (healthContext.wellnessInputs) {
+        const w = healthContext.wellnessInputs;
+        const inputs: string[] = [];
+        if (w.energy) inputs.push(`Energy: ${w.energy}`);
+        if (w.stress) inputs.push(`Stress: ${w.stress}`);
+        if (w.hydration) inputs.push(`Hydration: ${w.hydration}`);
+        if (inputs.length > 0) {
+          parts.push(`\nCURRENT WELLNESS: ${inputs.join(", ")}`);
+        }
+      }
+
+      contextBlock = parts.filter(Boolean).join("\n");
+    }
+
+    const messages: { role: "system" | "user"; content: string }[] = [
+      { role: "system", content: WEEKLY_PLAN_PROMPT },
+    ];
+
+    if (contextBlock) {
+      messages.push({
+        role: "user",
+        content: `Here is my health data. Generate a personalized weekly plan based on this:\n\n${contextBlock}`,
+      });
+    } else {
+      messages.push({
+        role: "user",
+        content: "Generate a balanced weekly wellness plan for someone looking to maintain general health and fitness.",
+      });
+    }
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      max_completion_tokens: 2048,
+      messages,
+      response_format: { type: "json_object" },
+    });
+
+    const content = completion.choices[0]?.message?.content;
+    if (!content) {
+      res.status(500).json({ error: "No response from AI" });
+      return;
+    }
+
+    const plan = JSON.parse(content);
+    res.json(plan);
+  } catch (error: any) {
+    console.error("Weekly plan generation error:", error);
+    res.status(500).json({ error: "Failed to generate weekly plan" });
+  }
+});
+
 export default router;

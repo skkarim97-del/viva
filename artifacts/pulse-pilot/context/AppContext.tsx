@@ -13,11 +13,14 @@ import {
 } from "@/data/mockData";
 import { computeInsights, type DailyInsights } from "@/data/insights";
 import { fetchHealthData } from "@/data/healthProviders";
+import { Platform } from "react-native";
 import type {
   UserProfile,
   HealthMetrics,
   DailyPlan,
   WeeklyPlan,
+  WeeklyPlanDay,
+  WeeklyDayAction,
   TrendData,
   WorkoutEntry,
   ChatMessage,
@@ -29,7 +32,13 @@ import type {
   HydrationLevel,
   TrainingIntent,
   CompletionRecord,
+  ActionCategory,
 } from "@/types";
+
+const EXPO_PUBLIC_DOMAIN = process.env.EXPO_PUBLIC_DOMAIN || "";
+const API_BASE = Platform.OS === "web"
+  ? "/api"
+  : `https://${EXPO_PUBLIC_DOMAIN}/api`;
 
 interface AppContextType {
   profile: UserProfile;
@@ -60,6 +69,8 @@ interface AppContextType {
   setTrainingIntent: (trainingIntent: TrainingIntent) => void;
   toggleAction: (actionId: string) => void;
   editAction: (actionId: string, newText: string) => void;
+  editWeeklyAction: (date: string, category: ActionCategory, newText: string) => void;
+  toggleWeeklyAction: (date: string, category: ActionCategory) => void;
   completionHistory: CompletionRecord[];
   weeklyConsistency: number;
 }
@@ -71,6 +82,7 @@ const CHAT_KEY = "@viva_chat";
 const WELLNESS_KEY = "@viva_wellness";
 const COMPLETION_KEY = "@viva_completions";
 const INTEGRATIONS_KEY = "@viva_integrations";
+const WEEKLY_PLAN_KEY = "@viva_weekly_plan";
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<UserProfile>(defaultProfile);
@@ -95,6 +107,80 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     loadData();
   }, []);
+
+  const fetchAIWeeklyPlan = async (allMetrics: HealthMetrics[], userProfile: UserProfile, history: CompletionRecord[]) => {
+    try {
+      const res = await fetch(`${API_BASE}/coach/weekly-plan`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          healthContext: {
+            recentMetrics: allMetrics.slice(-14),
+            profile: {
+              age: userProfile.age,
+              sex: userProfile.sex,
+              goals: userProfile.goals,
+              daysAvailableToTrain: userProfile.daysAvailableToTrain,
+              availableWorkoutTime: userProfile.availableWorkoutTime,
+            },
+            completionHistory: history.slice(-7),
+          },
+        }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.days || !Array.isArray(data.days)) return;
+
+      const today = new Date();
+      const dayOfWeek = today.getDay();
+      const monday = new Date(today);
+      monday.setDate(today.getDate() - ((dayOfWeek + 6) % 7));
+      const weekStartDate = monday.toISOString().split("T")[0];
+      const categories: ActionCategory[] = ["move", "fuel", "hydrate", "recover", "mind"];
+
+      const aiDays: WeeklyPlanDay[] = data.days.map((d: any, i: number) => {
+        const date = new Date(monday);
+        date.setDate(monday.getDate() + i);
+        return {
+          dayOfWeek: d.dayOfWeek || ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][i],
+          date: date.toISOString().split("T")[0],
+          focusArea: d.focusArea || "",
+          actions: categories.map((cat): WeeklyDayAction => ({
+            category: cat,
+            recommended: d[cat] || "",
+            chosen: d[cat] || "",
+            completed: false,
+          })),
+        };
+      });
+
+      const aiPlan: WeeklyPlan = {
+        weekStartDate,
+        weekSummary: data.weekSummary || "",
+        days: aiDays,
+        adjustmentNote: data.adjustmentNote,
+      };
+
+      setWeeklyPlan((prev) => {
+        if (prev && prev.weekStartDate === weekStartDate) {
+          const merged: WeeklyPlan = {
+            ...aiPlan,
+            days: aiPlan.days.map((aiDay) => {
+              const existingDay = prev.days.find(d => d.date === aiDay.date);
+              if (!existingDay) return aiDay;
+              const hasEdits = existingDay.actions.some(a => a.chosen !== a.recommended || a.completed);
+              if (hasEdits) return existingDay;
+              return aiDay;
+            }),
+          };
+          AsyncStorage.setItem(WEEKLY_PLAN_KEY, JSON.stringify(merged));
+          return merged;
+        }
+        AsyncStorage.setItem(WEEKLY_PLAN_KEY, JSON.stringify(aiPlan));
+        return aiPlan;
+      });
+    } catch {}
+  };
 
   const loadData = async () => {
     try {
@@ -195,7 +281,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
       }
       setDailyPlan(plan);
-      setWeeklyPlan(generateWeeklyPlan());
+      const savedWeeklyPlan = await AsyncStorage.getItem(WEEKLY_PLAN_KEY);
+      const generatedWeekly = generateWeeklyPlan();
+      if (savedWeeklyPlan) {
+        const parsed = JSON.parse(savedWeeklyPlan);
+        if (parsed.weekStartDate === generatedWeekly.weekStartDate) {
+          setWeeklyPlan(parsed);
+        } else {
+          setWeeklyPlan(generatedWeekly);
+        }
+      } else {
+        setWeeklyPlan(generatedWeekly);
+      }
+
+      fetchAIWeeklyPlan(allMetrics, savedProfile ? JSON.parse(savedProfile) : defaultProfile, loadedHistory);
       setTrends(generateTrendDataFromMetrics(allMetrics));
       const allWorkouts = generateMockWorkouts();
       setWorkouts(allWorkouts);
@@ -251,6 +350,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         AsyncStorage.setItem(COMPLETION_KEY, JSON.stringify(updated));
         return updated;
       });
+
+      const toggledAction = updatedActions.find(a => a.id === actionId);
+      if (toggledAction) {
+        setWeeklyPlan(wp => {
+          if (!wp) return wp;
+          const updatedWp = {
+            ...wp,
+            days: wp.days.map(d => {
+              if (d.date !== todayDate) return d;
+              return {
+                ...d,
+                actions: d.actions.map(a =>
+                  a.category === toggledAction.category ? { ...a, completed: toggledAction.completed } : a
+                ),
+              };
+            }),
+          };
+          AsyncStorage.setItem(WEEKLY_PLAN_KEY, JSON.stringify(updatedWp));
+          return updatedWp;
+        });
+      }
+
       return { ...prev, actions: updatedActions };
     });
   }, []);
@@ -275,7 +396,111 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         AsyncStorage.setItem(COMPLETION_KEY, JSON.stringify(updated));
         return updated;
       });
+
+      const editedAction = updatedActions.find(a => a.id === actionId);
+      if (editedAction) {
+        setWeeklyPlan(wp => {
+          if (!wp) return wp;
+          const updatedWp = {
+            ...wp,
+            days: wp.days.map(d => {
+              if (d.date !== todayDate) return d;
+              return {
+                ...d,
+                actions: d.actions.map(a =>
+                  a.category === editedAction.category ? { ...a, chosen: newText } : a
+                ),
+              };
+            }),
+          };
+          AsyncStorage.setItem(WEEKLY_PLAN_KEY, JSON.stringify(updatedWp));
+          return updatedWp;
+        });
+      }
+
       return { ...prev, actions: updatedActions };
+    });
+  }, []);
+
+  const editWeeklyAction = useCallback((date: string, category: ActionCategory, newText: string) => {
+    setWeeklyPlan(prev => {
+      if (!prev) return prev;
+      const updated = {
+        ...prev,
+        days: prev.days.map(d => {
+          if (d.date !== date) return d;
+          return {
+            ...d,
+            actions: d.actions.map(a =>
+              a.category === category ? { ...a, chosen: newText } : a
+            ),
+          };
+        }),
+      };
+      AsyncStorage.setItem(WEEKLY_PLAN_KEY, JSON.stringify(updated));
+
+      const todayDate = new Date().toISOString().split("T")[0];
+      if (date === todayDate) {
+        setDailyPlan(prevPlan => {
+          if (!prevPlan) return prevPlan;
+          return {
+            ...prevPlan,
+            actions: prevPlan.actions.map(a =>
+              a.category === category ? { ...a, text: newText } : a
+            ),
+          };
+        });
+      }
+      return updated;
+    });
+  }, []);
+
+  const toggleWeeklyAction = useCallback((date: string, category: ActionCategory) => {
+    setWeeklyPlan(prev => {
+      if (!prev) return prev;
+      const dayData = prev.days.find(d => d.date === date);
+      const actionData = dayData?.actions.find(a => a.category === category);
+      const newCompleted = actionData ? !actionData.completed : true;
+
+      const updated = {
+        ...prev,
+        days: prev.days.map(d => {
+          if (d.date !== date) return d;
+          return {
+            ...d,
+            actions: d.actions.map(a =>
+              a.category === category ? { ...a, completed: newCompleted } : a
+            ),
+          };
+        }),
+      };
+      AsyncStorage.setItem(WEEKLY_PLAN_KEY, JSON.stringify(updated));
+
+      const todayDate = new Date().toISOString().split("T")[0];
+      if (date === todayDate) {
+        setDailyPlan(prevPlan => {
+          if (!prevPlan) return prevPlan;
+          const updatedActions = prevPlan.actions.map(a =>
+            a.category === category ? { ...a, completed: newCompleted } : a
+          );
+          const completedCount = updatedActions.filter(a => a.completed).length;
+          const completionRate = Math.round((completedCount / updatedActions.length) * 100);
+          const todayRecord: CompletionRecord = {
+            date: todayDate,
+            actions: updatedActions.map(a => ({ id: a.id, category: a.category, completed: a.completed, recommended: a.recommended, chosen: a.text !== a.recommended ? a.text : undefined })),
+            completionRate,
+          };
+          setCompletionHistory(prevHistory => {
+            const filtered = prevHistory.filter(r => r.date !== todayDate);
+            const hist = [...filtered, todayRecord];
+            AsyncStorage.setItem(COMPLETION_KEY, JSON.stringify(hist));
+            return hist;
+          });
+          return { ...prevPlan, actions: updatedActions };
+        });
+      }
+
+      return updated;
     });
   }, []);
 
@@ -411,6 +636,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setTrainingIntent,
         toggleAction,
         editAction,
+        editWeeklyAction,
+        toggleWeeklyAction,
         completionHistory,
         weeklyConsistency,
       }}

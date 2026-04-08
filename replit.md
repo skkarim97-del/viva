@@ -61,15 +61,15 @@ Mobile-first AI health and wellness coaching app built with Expo/React Native. C
 - **Refine Categories**: 4 categories × 4 options each. Energy (Excellent/High/Medium/Low), Stress (Low/Moderate/High/Very High), Hydration (Hydrated/Good/Low/Dehydrated), Training (None/Light/Moderate/Intense). Stacked layout (label above, chips below, flex: 1 equal width).
 - **Metrics Row**: Sleep (hrs), Steps (k), Heart Rate (bpm), HRV (ms). No Recovery metric.
 - **No weather**: The product does not use weather data. All inputs are user-relevant and controllable.
-- **AI Coach (contextual)**: Integrated into Today screen as expandable "Ask your coach" card. Inline chat with streaming SSE responses, suggested questions, and full health context including energy/stress/sleep intelligence.
-- **Weekly Plan**: Summary card at top, day cards with Today badge, adaptive tags (build day/recovery day/steady effort), adjustment notes
+- **AI Coach (contextual)**: Integrated into Today screen as expandable "Ask your coach" card. Full-screen chat modal with scrollable messages + fixed bottom input bar. Streaming SSE responses. Client-side + server-side health-topic validation blocks off-topic queries. Suggested question chips.
+- **Weekly Plan**: AI-powered weekly coaching layer. 5 categories per day (Move/Fuel/Hydrate/Recover/Mind). Editable via bottom sheet with preset options (WEEKLY_OPTIONS). Checkable actions with completion tracking. Bidirectional sync with Today screen — edits/completions flow both ways. AI weekly plan generated via `/api/coach/weekly-plan` endpoint using health data, goals, and completion history. Falls back to local `generateWeeklyPlan()`. Persisted in `@viva_weekly_plan` AsyncStorage key with week rollover detection.
 - **Trends**: 30-day trend charts with plain-English takeaway per card, press-to-drill-down
 - **Metric Drill-Down**: Large value + headline → explanation → 30-day chart → "What this means" → deep analysis (from insights engine) → "What to do" section
 - **Settings**: Borderless Apple-native styling, rounded profile card, hairline dividers
 - **Subscription**: 3-tier paywall (Free, Premium $9.99/mo, Premium Plus $19.99/mo)
 
 ### Architecture
-- **Backend**: Express API server with `/api/coach/chat` endpoint for AI coaching (SSE streaming), `/api/health/garmin`, `/api/health/whoop`, `/api/health/status` for health data sync
+- **Backend**: Express API server with `/api/coach/chat` (SSE streaming coaching), `/api/coach/weekly-plan` (JSON weekly plan generation), `/api/health/garmin`, `/api/health/whoop`, `/api/health/status` for health data sync
 - **AI**: OpenAI integration via `@workspace/integrations-openai-ai-server` — no API key needed, billed to Replit credits
 - **Frontend**: Expo/React Native with AsyncStorage for persistence
 - **Data**: Computed insights engine (`data/insights.ts`) calculates sleep debt, training load, recovery trends, weight projections, TDEE, consistency scores, HRV baselines, and risk flags

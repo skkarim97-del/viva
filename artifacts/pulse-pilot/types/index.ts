@@ -136,20 +136,64 @@ export interface NutritionTarget {
 
 export interface WeeklyPlan {
   weekStartDate: string;
+  weekSummary: string;
   days: WeeklyPlanDay[];
-  nutritionPriorities: string[];
-  stepGoal: number;
-  fastingSchedule?: string;
   adjustmentNote?: string;
 }
 
 export interface WeeklyPlanDay {
   dayOfWeek: string;
   date: string;
-  isRestDay: boolean;
-  workout?: WorkoutRecommendation;
   focusArea: string;
+  actions: WeeklyDayAction[];
 }
+
+export interface WeeklyDayAction {
+  category: ActionCategory;
+  recommended: string;
+  chosen: string;
+  completed: boolean;
+}
+
+export const WEEKLY_OPTIONS: Record<ActionCategory, string[]> = {
+  move: [
+    "20 min walk",
+    "30 min yoga",
+    "40 min cardio",
+    "45 min strength",
+    "Mobility & stretching",
+    "Active recovery",
+    "Rest day",
+  ],
+  fuel: [
+    "Balanced meals",
+    "High protein",
+    "Moderate carb",
+    "Lighter meals",
+    "Recovery nutrition",
+  ],
+  hydrate: [
+    "2L water",
+    "3L water",
+    "Water + electrolytes",
+    "Hydration focus",
+  ],
+  recover: [
+    "Bed by 10:00 pm",
+    "Bed by 10:30 pm",
+    "Aim for 7 hours",
+    "Aim for 8 hours",
+    "Wind down 30 min early",
+  ],
+  mind: [
+    "5 min breathing",
+    "10 min breathing",
+    "5 min meditation",
+    "10 min meditation",
+    "Quiet time",
+    "Skip",
+  ],
+};
 
 export interface ChatMessage {
   id: string;

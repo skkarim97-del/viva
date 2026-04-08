@@ -1,0 +1,329 @@
+Upgrade the Plan tab so it becomes a true weekly coaching layer powered by the ChatGPT API and the user’s health data.
+
+## Core goal
+
+The weekly plan should not be a static workout list.
+
+It should be a personalized weekly schedule that uses:
+
+* wearable data from Apple Health, Garmin, or WHOOP
+* manual user inputs
+* recent behavior and completion history
+* user goals
+* sleep, recovery, activity, stress, hydration, and energy signals
+
+The weekly plan should generate a simple, high-level schedule for:
+
+* movement / workouts
+* nutrition
+* hydration
+* recovery
+* mindfulness / meditation
+
+This should feel like the weekly version of “Your Day.”
+
+---
+
+## 1. Weekly plan structure
+
+Each day in the Plan tab should include a simple, editable plan across these 5 categories:
+
+1. Move
+2. Fuel
+3. Hydrate
+4. Recover
+5. Mind
+
+Do not make it too detailed or too technical.
+
+Keep it simple and mainstream.
+
+Examples:
+
+* Move → 45 min strength
+* Fuel → high protein
+* Hydrate → 2L water + electrolytes
+* Recover → bed by 10:00 pm
+* Mind → 10 min meditation
+
+---
+
+## 2. Use ChatGPT API to generate the weekly plan
+
+Use the ChatGPT API as the central intelligence layer for the weekly plan.
+
+The model should look at:
+
+* current goals
+* sleep trends
+* recovery trends
+* heart rate / HRV trends if available
+* recent activity
+* recent stress and energy inputs
+* hydration patterns
+* what the user completed last week
+* what the user tends to edit or prefer
+
+Based on that, generate a weekly plan that feels realistic and personalized.
+
+The output should not be generic.
+It should adapt to the user’s actual health patterns and behavior.
+
+---
+
+## 3. Weekly output should cover all major wellness areas
+
+The weekly plan must go beyond just workouts.
+
+For each week, generate a balanced plan that includes:
+
+### Movement
+
+* strength
+* cardio
+* walking
+* mobility
+* recovery days
+
+### Nutrition
+
+* high protein
+* balanced meals
+* lighter meals
+* recovery nutrition
+* calorie awareness if relevant
+
+### Hydration
+
+* normal hydration
+* increased hydration
+* electrolytes on higher activity days
+
+### Recovery
+
+* bedtime targets
+* sleep duration goals
+* wind-down routines
+* lighter recovery days
+
+### Mind
+
+* breathing
+* meditation
+* quiet time
+* short reset sessions
+* stress reduction emphasis
+
+---
+
+## 4. Make the weekly plan editable
+
+The weekly plan must not be locked.
+
+Users should be able to edit each day just like they can edit “Your Day.”
+
+For every day card, allow the user to tap and customize each category.
+
+Example:
+Monday
+
+* Move → change from Strength to Cardio or Recovery
+* Fuel → change from High Protein to Balanced Meals
+* Hydrate → change from 2L to 3L water
+* Recover → adjust bedtime target
+* Mind → change 5 min breathing to 10 min meditation
+
+Use a bottom sheet or modal for editing.
+Do not use dense forms.
+
+---
+
+## 5. Sync weekly plan with Today screen
+
+The weekly plan and Today screen must stay connected.
+
+If the user edits a day in the weekly plan:
+
+* that day’s “Your Day” plan should reflect the updated version
+
+If the user edits “Your Day”:
+
+* that day’s weekly plan card should update too
+
+There should be a clear connection between:
+
+* weekly recommendation
+* chosen version
+* completed version
+
+---
+
+## 6. Track recommended vs chosen vs completed
+
+For each day and each category, track:
+
+* Recommended
+* Chosen
+* Completed
+
+Example:
+
+* Recommended → 45 min strength
+* Chosen → 30 min cardio
+* Completed → 30 min cardio
+
+This should feed back into personalization over time.
+
+---
+
+## 7. Weekly summary at the top
+
+At the top of the Plan screen, generate a short weekly summary paragraph using the ChatGPT API.
+
+This should explain:
+
+* the main focus of the week
+* how the plan was shaped by the user’s recent data
+* the tone of the week
+
+Examples:
+
+* “This week focuses on steady progress with extra recovery support after lower sleep and higher activity last week.”
+* “Your recent recovery has been strong, so this week includes more structured movement while keeping sleep and hydration consistent.”
+
+Keep it short, professional, and easy to understand.
+
+---
+
+## 8. Keep the plan simple and high-level
+
+Do not make the weekly plan look like a detailed training program.
+
+Avoid:
+
+* technical jargon
+* overly detailed exercise prescriptions
+* long explanations
+* cluttered day cards
+
+Instead, make it feel like:
+
+* a simple weekly health plan
+* very easy to scan
+* clearly personalized
+* practical for a normal adult
+
+---
+
+## 9. Editing options by category
+
+Create clean, simple editing options for each of the 5 categories.
+
+### Move
+
+Examples:
+
+* 20 min walk
+* 40 min cardio
+* 45 min strength
+* mobility
+* stretch
+* rest & recovery
+
+### Fuel
+
+Examples:
+
+* balanced meals
+* high protein
+* moderate carb
+* lighter meals
+* recovery nutrition
+
+### Hydrate
+
+Examples:
+
+* 2L water
+* 3L water
+* water + electrolytes
+* hydration focus
+
+### Recover
+
+Examples:
+
+* bed by 10:00 pm
+* bed by 10:30 pm
+* aim for 7 hours
+* aim for 8 hours
+* wind down 30 min early
+
+### Mind
+
+Examples:
+
+* 5 min breathing
+* 10 min breathing
+* 5 min meditation
+* 10 min meditation
+* quiet time
+* skip
+
+Keep all options mainstream and easy to understand.
+
+---
+
+## 10. Personalization logic
+
+The weekly plan should adapt based on:
+
+* connected wearable data
+* manual data
+* refined daily inputs
+* recent task completion
+* user edits and preferences
+* goal type
+* sleep and stress patterns
+
+Examples:
+
+* if sleep has been poor, increase recovery and simplify training
+* if the user has been consistent and well-recovered, increase activity slightly
+* if stress has been high, add more mindfulness and reduce plan intensity
+* if hydration has been low, build in more hydration prompts and electrolytes
+
+---
+
+## 11. UX requirements
+
+The Plan tab should feel:
+
+* clean
+* premium
+* simple
+* editable
+* synced with Today
+* powered by intelligence, not templates
+
+Important:
+
+* each day card should be tappable
+* editing should be fast
+* no typing required unless optional
+* clear separation between categories
+* strong spacing and hierarchy
+
+---
+
+## 12. Final goal
+
+The weekly plan should feel like:
+
+* a personalized weekly version of “Your Day”
+* generated by real user data
+* editable like a real planning tool
+* holistic across movement, food, hydration, recovery, and mindfulness
+
+The user should feel:
+“This is a smart weekly plan built for how I actually live, and I can easily adjust it when needed.”
