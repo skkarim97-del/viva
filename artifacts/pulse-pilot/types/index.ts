@@ -213,10 +213,10 @@ export const CATEGORY_OPTIONS: Record<ActionCategory, CategoryOption[]> = {
     { id: "mind_stressed", title: "5 min box breathing", subtitle: "Calm your nervous system", category: "mind", stateTag: "stressed", durationMinutes: 5, supportText: ["4 counts in, hold, out, hold", "Repeat 5 cycles"] },
   ],
   fuel: [
-    { id: "fuel_great", title: "High protein focus", subtitle: "Fuel your performance", category: "fuel", stateTag: "great", supportText: ["Protein at every meal", "Include whole grains for energy"] },
-    { id: "fuel_good", title: "Balanced meals", subtitle: "Solid everyday nutrition", category: "fuel", stateTag: "good", supportText: ["Protein, carbs, and fats each meal", "Include colorful vegetables"] },
-    { id: "fuel_tired", title: "Light and easy digestion", subtitle: "Gentle on your system", category: "fuel", stateTag: "tired", supportText: ["Warm, simple meals", "Steady blood sugar support"] },
-    { id: "fuel_stressed", title: "Whole-food reset", subtitle: "Nourish and simplify", category: "fuel", stateTag: "stressed", supportText: ["Magnesium-rich greens and nuts", "Minimize processed food"] },
+    { id: "fuel_great", title: "Heavy fuel (performance focus)", subtitle: "Higher calories, protein, and carbs", category: "fuel", stateTag: "great", supportText: ["Protein at every meal", "Include whole grains for energy"] },
+    { id: "fuel_good", title: "Moderate fuel (balanced)", subtitle: "Steady energy and recovery", category: "fuel", stateTag: "good", supportText: ["Protein, carbs, and fats each meal", "Include colorful vegetables"] },
+    { id: "fuel_tired", title: "Light fuel (easy digestion)", subtitle: "Lower volume, gentle meals", category: "fuel", stateTag: "tired", supportText: ["Warm, simple meals", "Steady blood sugar support"] },
+    { id: "fuel_stressed", title: "Minimal fuel (reset)", subtitle: "Light eating or fasting approach", category: "fuel", stateTag: "stressed", supportText: ["Give your system a break", "Hydrate well between light meals"] },
   ],
   hydrate: [
     { id: "hydrate_great", title: "Post-workout hydration focus", subtitle: "Replace what you lose", category: "hydrate", stateTag: "great", supportText: ["Water + electrolytes around training", "Track intake if possible"] },
