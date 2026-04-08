@@ -1,0 +1,146 @@
+Upgrade the Insights section to deliver deeper, more valuable, and more differentiated insights based on the user’s overall health and behavior.
+
+## Core goal
+
+Insights should NOT just summarize data.
+
+They should:
+
+* interpret patterns
+* connect multiple signals
+* explain what it means
+* suggest a clear implication or action
+
+The user should feel:
+“This actually understands what’s going on with me.”
+
+---
+
+## 1. Insight structure (required)
+
+Each insight should follow:
+
+1. Signal (what’s happening)
+2. Meaning (what it indicates)
+3. Implication (what to do or expect)
+
+Keep it to 1–2 short lines max.
+
+---
+
+## 2. Data inputs to combine
+
+Insights must combine multiple signals, not single metrics.
+
+Use:
+
+* HRV vs baseline
+* sleep duration + sleep trend
+* recent activity (last 3–5 days)
+* energy input
+* stress input
+* hydration input
+* consistency (task completion)
+
+Do NOT generate insights from a single metric in isolation.
+
+---
+
+## 3. Example upgraded insights
+
+Replace simple outputs like:
+“HRV is up this week”
+
+With:
+
+* “Your recovery is improving, but your sleep has been inconsistent — push today, but prioritize a strong wind-down tonight.”
+* “You’ve been active but under-recovered the last few days — a lighter session today will help you sustain progress.”
+* “Energy is high and stress is low — this is a good window for a more demanding workout or focused work.”
+* “Hydration and sleep are both trending down — this is likely driving lower energy today.”
+
+---
+
+## 4. Tone
+
+Insights should feel:
+
+* intelligent
+* human
+* practical
+* slightly coaching-oriented
+
+Avoid:
+
+* robotic phrasing
+* raw stats without meaning
+* generic advice
+
+---
+
+## 5. Personalization
+
+Insights must reflect:
+
+* recent behavior patterns
+* user inputs (feeling, stress, energy)
+* what the user actually did vs was recommended
+
+Examples:
+
+* “You’ve skipped recovery routines this week — simplify it today instead of forcing it.”
+* “You’ve been consistent with movement — maintain it rather than increasing intensity.”
+
+---
+
+## 6. Action bias
+
+Each insight should imply a decision:
+
+* push vs hold vs recover
+* increase vs maintain vs reduce
+* focus on sleep, hydration, or movement
+
+Even if not explicitly labeled, the recommendation should be clear.
+
+---
+
+## 7. Output format
+
+Keep insights:
+
+* short (1–2 lines)
+* scannable
+* not paragraph-heavy
+
+Example format:
+
+“Your recovery is improving, but sleep has been inconsistent — keep intensity moderate and prioritize an earlier night.”
+
+---
+
+## 8. Avoid Garmin-style outputs
+
+Do NOT:
+
+* restate metrics
+* focus on isolated trends
+* give generic health tips
+
+DO:
+
+* connect signals
+* explain cause + effect
+* guide behavior
+
+---
+
+## 9. Final goal
+
+Insights should feel like:
+
+* a smart coach noticing patterns
+* not a dashboard summarizing data
+
+The user should think:
+
+“This actually understands my body and my habits, and tells me what to do next.”

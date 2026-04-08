@@ -460,13 +460,6 @@ export default function DashboardScreen() {
           )}
         </View>
 
-        {dailyPlan.dailyFocus ? (
-          <View style={[styles.focusCard, { backgroundColor: c.card }]}>
-            <Text style={[styles.focusLabel, { color: c.mutedForeground }]}>Daily Focus</Text>
-            <Text style={[styles.focusText, { color: c.foreground }]}>{dailyPlan.dailyFocus}</Text>
-          </View>
-        ) : null}
-
         <View style={[styles.dayCard, { backgroundColor: c.card }]}>
           <View style={styles.dayHeader}>
             <Text style={[styles.dayTitle, { color: c.foreground }]}>Your Day</Text>
@@ -776,25 +769,6 @@ const styles = StyleSheet.create({
   refineChipLabel: {
     fontSize: 12,
     fontFamily: "Inter_500Medium",
-  },
-
-  focusCard: {
-    borderRadius: 24,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    marginBottom: 16,
-    gap: 4,
-  },
-  focusLabel: {
-    fontSize: 11,
-    fontFamily: "Inter_600SemiBold",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-  },
-  focusText: {
-    fontSize: 15,
-    fontFamily: "Inter_500Medium",
-    lineHeight: 22,
   },
 
   dayCard: {
