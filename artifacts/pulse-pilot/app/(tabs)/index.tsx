@@ -322,6 +322,97 @@ export default function DashboardScreen() {
           </View>
         </View>
 
+        <Pressable
+          onPress={() => setShowAsk(!showAsk)}
+          style={({ pressed }) => [
+            styles.askCard,
+            { backgroundColor: c.card, opacity: pressed ? 0.8 : 1 },
+          ]}
+        >
+          <View style={[styles.askIconWrap, { backgroundColor: c.primary + "10" }]}>
+            <Feather name="message-circle" size={18} color={c.primary} />
+          </View>
+          <View style={styles.askContent}>
+            <Text style={[styles.askTitle, { color: c.foreground }]}>Ask your coach</Text>
+            <Text style={[styles.askSub, { color: c.mutedForeground }]}>Follow up on your day, sleep, stress, or nutrition</Text>
+          </View>
+          <Feather name={showAsk ? "chevron-up" : "chevron-down"} size={16} color={c.mutedForeground + "60"} />
+        </Pressable>
+
+        {showAsk && (
+          <View style={[styles.askPanel, { backgroundColor: c.card }]}>
+            {askMessages.length > 0 && (
+              <View style={styles.askMessagesWrap}>
+                {askMessages.slice(-4).map((msg) => (
+                  <View key={msg.id} style={[styles.askMsgRow, msg.role === "user" && styles.askMsgRowUser]}>
+                    <View style={[
+                      styles.askBubble,
+                      msg.role === "user"
+                        ? { backgroundColor: c.primary }
+                        : { backgroundColor: c.background },
+                    ]}>
+                      <Text style={[styles.askMsgText, { color: msg.role === "user" ? c.primaryForeground : c.foreground }]}>
+                        {msg.content}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+                {streamingText ? (
+                  <View style={styles.askMsgRow}>
+                    <View style={[styles.askBubble, { backgroundColor: c.background }]}>
+                      <Text style={[styles.askMsgText, { color: c.foreground }]}>{streamingText}{"\u258D"}</Text>
+                    </View>
+                  </View>
+                ) : isTyping ? (
+                  <View style={styles.askMsgRow}>
+                    <View style={[styles.askBubble, { backgroundColor: c.background }]}>
+                      <View style={styles.typingDots}>
+                        <View style={[styles.dot, { backgroundColor: c.mutedForeground }]} />
+                        <View style={[styles.dot, { backgroundColor: c.mutedForeground, opacity: 0.5 }]} />
+                        <View style={[styles.dot, { backgroundColor: c.mutedForeground, opacity: 0.25 }]} />
+                      </View>
+                    </View>
+                  </View>
+                ) : null}
+              </View>
+            )}
+
+            <View style={[styles.askInputRow, { backgroundColor: c.background }]}>
+              <TextInput
+                style={[styles.askInputField, { color: c.foreground }]}
+                value={askInput}
+                onChangeText={setAskInput}
+                placeholder="Ask about your day..."
+                placeholderTextColor={c.mutedForeground + "80"}
+                onSubmitEditing={() => sendAskMessage(askInput)}
+                returnKeyType="send"
+                editable={!isTyping}
+              />
+              <Pressable
+                onPress={() => sendAskMessage(askInput)}
+                disabled={isTyping || !askInput.trim()}
+                style={[styles.askSendBtn, { backgroundColor: askInput.trim() && !isTyping ? c.primary : c.muted }]}
+              >
+                <Feather name="arrow-up" size={14} color={askInput.trim() && !isTyping ? c.primaryForeground : c.mutedForeground} />
+              </Pressable>
+            </View>
+
+            {askMessages.length === 0 && (
+              <View style={styles.askSuggestions}>
+                {["How is my sleep?", "Should I work out today?", "How can I reduce stress?"].map((q) => (
+                  <Pressable
+                    key={q}
+                    onPress={() => sendAskMessage(q)}
+                    style={({ pressed }) => [styles.askSuggestion, { borderColor: c.border, opacity: pressed ? 0.7 : 1 }]}
+                  >
+                    <Text style={[styles.askSuggestionText, { color: c.foreground }]}>{q}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
         <View style={[styles.refineCard, { backgroundColor: c.card }]}>
           <Pressable
             onPress={() => { haptic(); setShowRefine(!showRefine); }}
@@ -460,97 +551,6 @@ export default function DashboardScreen() {
             </Pressable>
           ))}
         </View>
-
-        <Pressable
-          onPress={() => setShowAsk(!showAsk)}
-          style={({ pressed }) => [
-            styles.askCard,
-            { backgroundColor: c.card, opacity: pressed ? 0.8 : 1 },
-          ]}
-        >
-          <View style={[styles.askIconWrap, { backgroundColor: c.primary + "10" }]}>
-            <Feather name="message-circle" size={18} color={c.primary} />
-          </View>
-          <View style={styles.askContent}>
-            <Text style={[styles.askTitle, { color: c.foreground }]}>Ask your coach</Text>
-            <Text style={[styles.askSub, { color: c.mutedForeground }]}>Follow up on your day, sleep, stress, or nutrition</Text>
-          </View>
-          <Feather name={showAsk ? "chevron-up" : "chevron-down"} size={16} color={c.mutedForeground + "60"} />
-        </Pressable>
-
-        {showAsk && (
-          <View style={[styles.askPanel, { backgroundColor: c.card }]}>
-            {askMessages.length > 0 && (
-              <View style={styles.askMessagesWrap}>
-                {askMessages.slice(-4).map((msg) => (
-                  <View key={msg.id} style={[styles.askMsgRow, msg.role === "user" && styles.askMsgRowUser]}>
-                    <View style={[
-                      styles.askBubble,
-                      msg.role === "user"
-                        ? { backgroundColor: c.primary }
-                        : { backgroundColor: c.background },
-                    ]}>
-                      <Text style={[styles.askMsgText, { color: msg.role === "user" ? c.primaryForeground : c.foreground }]}>
-                        {msg.content}
-                      </Text>
-                    </View>
-                  </View>
-                ))}
-                {streamingText ? (
-                  <View style={styles.askMsgRow}>
-                    <View style={[styles.askBubble, { backgroundColor: c.background }]}>
-                      <Text style={[styles.askMsgText, { color: c.foreground }]}>{streamingText}{"\u258D"}</Text>
-                    </View>
-                  </View>
-                ) : isTyping ? (
-                  <View style={styles.askMsgRow}>
-                    <View style={[styles.askBubble, { backgroundColor: c.background }]}>
-                      <View style={styles.typingDots}>
-                        <View style={[styles.dot, { backgroundColor: c.mutedForeground }]} />
-                        <View style={[styles.dot, { backgroundColor: c.mutedForeground, opacity: 0.5 }]} />
-                        <View style={[styles.dot, { backgroundColor: c.mutedForeground, opacity: 0.25 }]} />
-                      </View>
-                    </View>
-                  </View>
-                ) : null}
-              </View>
-            )}
-
-            <View style={[styles.askInputRow, { backgroundColor: c.background }]}>
-              <TextInput
-                style={[styles.askInputField, { color: c.foreground }]}
-                value={askInput}
-                onChangeText={setAskInput}
-                placeholder="Ask about your day..."
-                placeholderTextColor={c.mutedForeground + "80"}
-                onSubmitEditing={() => sendAskMessage(askInput)}
-                returnKeyType="send"
-                editable={!isTyping}
-              />
-              <Pressable
-                onPress={() => sendAskMessage(askInput)}
-                disabled={isTyping || !askInput.trim()}
-                style={[styles.askSendBtn, { backgroundColor: askInput.trim() && !isTyping ? c.primary : c.muted }]}
-              >
-                <Feather name="arrow-up" size={14} color={askInput.trim() && !isTyping ? c.primaryForeground : c.mutedForeground} />
-              </Pressable>
-            </View>
-
-            {askMessages.length === 0 && (
-              <View style={styles.askSuggestions}>
-                {["How is my sleep?", "Should I work out today?", "How can I reduce stress?"].map((q) => (
-                  <Pressable
-                    key={q}
-                    onPress={() => sendAskMessage(q)}
-                    style={({ pressed }) => [styles.askSuggestion, { borderColor: c.border, opacity: pressed ? 0.7 : 1 }]}
-                  >
-                    <Text style={[styles.askSuggestionText, { color: c.foreground }]}>{q}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            )}
-          </View>
-        )}
       </ScrollView>
 
       <Modal
