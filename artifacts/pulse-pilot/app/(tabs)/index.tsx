@@ -331,6 +331,7 @@ export default function DashboardScreen() {
         </View>
 
         <View style={[styles.askCard, { backgroundColor: c.card }]}>
+          <Text style={[styles.coachHeader, { color: c.foreground }]}>Your VIVA Coach</Text>
           {coachInsight ? (
             <Text style={[styles.coachInsightText, { color: c.foreground }]}>{coachInsight}</Text>
           ) : null}
@@ -881,6 +882,11 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     gap: 16,
     marginBottom: 8,
+  },
+  coachHeader: {
+    fontSize: 18,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: -0.3,
   },
   coachInsightText: {
     fontSize: 14,
