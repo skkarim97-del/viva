@@ -483,9 +483,9 @@ export default function OnboardingScreen() {
 
           {step === "integrations" && (
             <View style={styles.section}>
-              <Text style={[styles.stepTitle, { color: c.foreground }]}>Connect your devices</Text>
+              <Text style={[styles.stepTitle, { color: c.foreground }]}>Connect your{"\n"}wearable data</Text>
               <Text style={[styles.stepSub, { color: c.mutedForeground }]}>
-                This helps personalize your daily recommendations automatically.
+                Viva learns your patterns from real data. Sleep, heart rate, activity, and recovery all help us give you smarter daily insights.
               </Text>
               <View style={styles.optionList}>
                 {integrations.map((integration) => (

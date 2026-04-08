@@ -1,0 +1,82 @@
+Set up wearable and health data connections for Viva using a MOBILE-FIRST architecture, not web-only.
+
+Goal:
+Allow users to connect their Apple Health, Garmin, and Samsung Health data so Viva can generate personalized insights from real historical data.
+
+Architecture:
+- iOS: use Apple HealthKit
+- Android: use Health Connect as the default health data layer
+- Samsung Health: access through Health Connect on Android where available
+- Garmin: integrate separately through Garmin’s developer/API program
+
+Important:
+A plain web app is NOT enough for full Apple Health or Android health integrations.
+We need a mobile app layer using React Native, Flutter, or native mobile code.
+
+Implementation plan:
+
+1. Apple Health integration
+- Build iOS HealthKit support
+- Request permission to read:
+  - sleep
+  - heart rate
+  - resting heart rate
+  - HRV if available
+  - workouts
+  - step count
+- Add HealthKit capability and required usage descriptions
+- Only ask for data types that Viva actually uses
+- Cache pulled data securely for insight generation
+
+2. Android health integration
+- Use Health Connect as the main Android health data source
+- Request permission to read:
+  - sleep
+  - heart rate
+  - resting heart rate if available
+  - workouts
+  - steps
+- Build a simple permission flow that explains why data improves personalization
+- Handle cases where Health Connect is not installed or not available
+
+3. Samsung Health support
+- First try to access Samsung-originated data through Health Connect
+- If needed later, evaluate direct Samsung Health Data SDK partnership for deeper access
+- Do not make Samsung a separate first-class integration in v1 if Health Connect already covers the needed data
+
+4. Garmin integration
+- Add Garmin as a separate integration track
+- Research and implement Garmin Connect / Health API access
+- Build OAuth / account-linking flow if required
+- Normalize Garmin data into the same internal Viva schema as Apple Health and Health Connect
+
+5. Data model
+Normalize all incoming health data into one internal structure:
+- sleep duration
+- sleep quality
+- HRV
+- resting heart rate
+- steps
+- workouts
+- activity strain or training load if available
+- timestamps
+- source platform
+
+6. UX requirements
+- Add a “Connect your data” onboarding step
+- Show:
+  - Apple Health on iPhone
+  - Health Connect on Android
+  - Garmin as an optional additional connection
+- Explain the value clearly:
+  “Connect your wearable data so Viva can learn your patterns and give smarter daily insights.”
+- Make permissions feel trustworthy, minimal, and easy
+
+7. Fail gracefully
+- If the user declines permissions, still let them use the app with manual input
+- If historical wearable data is limited, show lighter insights and say we are still learning their baseline
+- Never block the app behind data connection
+
+8. Product priority
+- Ship Apple Health + Health Connect first
+- Add Garmin after core mobile health integrations are stable

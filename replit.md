@@ -1,117 +1,59 @@
-# Workspace
+# Replit Workspace
 
 ## Overview
 
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+This project is a monorepo utilizing pnpm workspaces and TypeScript to develop a mobile-first AI health and wellness coaching application named Viva. The Viva app, built with Expo/React Native, provides personalized coaching across physical health, mental well-being, energy, stress, sleep, and daily habits. It aims to be a premium, calm, and intelligent daily guide for users, focusing on clarity, confidence, simplicity, and actionable insights. The application integrates AI (OpenAI) for coaching, leverages health data from various providers, and offers a personalized, adaptive experience.
 
-## Stack
+## User Preferences
 
-- **Monorepo tool**: pnpm workspaces
-- **Node.js version**: 24
-- **Package manager**: pnpm
-- **TypeScript version**: 5.9
-- **API framework**: Express 5
-- **Database**: PostgreSQL + Drizzle ORM
+The user prefers an understated, confident, premium, and modern feel for the application. The tone should be calm confidence, simplicity, clarity, and human, avoiding hype, slang, jargon, or emojis. Every sentence should either explain meaning or tell the user what to do.
+
+## System Architecture
+
+The system is a pnpm workspace monorepo using Node.js 24 and TypeScript 5.9. The backend is an Express 5 API server with PostgreSQL and Drizzle ORM for data management, and Zod for validation. API codegen is handled by Orval from an OpenAPI spec, and the build process uses esbuild.
+
+### UI/UX Decisions (Viva App)
+
+- **Design Philosophy**: Optimize for clarity, confidence, simplicity, and action. The app should feel like a smart daily brief, a premium wellness product, and an Apple-native health coach, not a cluttered dashboard or medical portal.
+- **Design System**:
+    - **Colors**: Primary blue (#1A5CFF light / #5B8AFF dark), Sky blue accent (#5AC8FA), Apple-like neutrals. Green (#34C759) is used only for positive states, readiness, and progress.
+    - **Card Style**: Background contrast only (no borders), #F7F7FA cards on white, radius 16-20.
+    - **Typography**: Inter font family, negative letter-spacing on large text, 11-12px uppercase labels. Page titles are 28px Inter_700Bold, section headers 18px Inter_600SemiBold, body text 14px Inter_400Regular.
+    - **Spacing**: Generous whitespace, 24px horizontal padding, 28px section gaps.
+    - **Interactions**: Press scale (0.97-0.98) and opacity (0.8) on interactive elements. Subtle scale (1.02x selected, 0.96x pressed) for selection animations.
+    - **Dividers**: HairlineWidth only, using background color rather than border color.
+- **Brand**: "VIVA" wordmark (all caps, Inter_500Medium, letter-spacing 3) with a stylized V pulse line symbol. App icon is a white V-pulse mark on a black background.
+
+### Technical Implementations & Features
+
+- **Onboarding**: A 9-step premium flow covering goals, profile, activity, energy, sleep, and device integration.
+- **Dashboard (Today tab)**: Card-based layout with a status card (streak, progress), feeling card, coach insight, refine card, Your Day card, habit tracker, and metric tiles. Emphasizes progressive disclosure.
+- **Adaptive Coaching**: Uses completion history, wearable data, and subjective inputs to generate personalized plans. Lower completion rates lead to simplified recommendations.
+- **Daily Status & State**: Displays a status pill (e.g., "Strong Day") and drivers. Daily state (Recover, Maintain, Build, Push) drives the plan.
+- **Coach Insight**: A multi-signal coaching paragraph generated from HRV, sleep trends, recovery, activity, and user inputs, updated reactively.
+- **Your Day (State-Based Single Selection)**: 5 checkable actions per day (Move/Fuel/Hydrate/Recover/Mind), with 4 options per category mapped to state tags. Recommendations are provided, and users can override.
+- **Completion Tracking**: Tracks daily completion rate and weekly consistency, displayed in the Habit Tracker card and progress bar. Persisted in AsyncStorage.
+- **Trends Tab**: Summaries, key insights, correlations, and pattern detection. Key Metrics section shows 4-week averages with mini SVG sparkline charts for Recovery/Body, Activity, and Habits categories.
+- **AI Coach**: Integrated as an expandable card on the Today screen, offering a full-screen chat modal with streaming SSE responses. Contextual health data is sent to the coach for enriched interactions.
+- **Weekly Plan**: AI-powered weekly coaching layer with 5 categories per day, editable via a bottom sheet. Synchronizes with the Today screen and persists in AsyncStorage.
+- **Metric Drill-Down**: Provides detailed analysis, 30-day charts, and actionable advice for individual metrics.
+- **Health Data Providers**: `data/healthProviders.ts` handles integration with Apple HealthKit, Health Connect (Android), Garmin, and Samsung Health, with a 28-day data window.
+- **State Management**: Context-based state management (`AppContext`) with computed DailyInsights.
+- **Navigation**: Tab bar for Today, Plan, Trends, Settings. Modals for subscription. Stack for onboarding and metric drill-down.
+
+## External Dependencies
+
+- **API Framework**: Express 5
+- **Database**: PostgreSQL
+- **ORM**: Drizzle ORM
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
-- **API codegen**: Orval (from OpenAPI spec)
-- **Build**: esbuild (CJS bundle)
-- **Mobile**: Expo (React Native) - Viva app
-- **AI**: OpenAI via Replit AI Integrations (gpt-4o-mini for coaching chat)
-
-## Key Commands
-
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- `pnpm --filter @workspace/api-server run dev` — run API server locally
-
-## Viva App
-
-Mobile-first AI health and wellness coaching app built with Expo/React Native. Covers physical health, mental well-being, energy, stress, sleep, and daily habits. Premium, calm, intelligent — feels like a trusted daily guide, not a data dashboard.
-
-### Design Philosophy
-- **Optimize for**: clarity, confidence, simplicity, action
-- **Should feel like**: a smart daily brief, a premium wellness product, an Apple-native health coach
-- **Should NOT feel like**: a dashboard, a medical portal, a cluttered fitness tracker
-
-### Design System
-- **Colors**: Primary blue (#1A5CFF light / #5B8AFF dark), Sky blue accent (#5AC8FA), Apple-like neutrals
-- **Card style**: Background contrast only (no borders), #F7F7FA cards on white, radius 16-20
-- **Typography**: Inter font family, negative letter-spacing on large text, 11-12px uppercase labels
-- **Spacing**: Generous whitespace, 24px horizontal padding, 28px section gaps
-- **Interactions**: Press scale (0.97-0.98) and opacity (0.8) on interactive elements
-- **Dividers**: hairlineWidth only, using background color rather than border color
-
-### Features
-- **Onboarding**: 9-step premium flow (Welcome, Goals, Profile, Activity Level, Training Time, Energy Baseline, Sleep Habits, Device Integration, Personalization Summary)
-- **Dashboard (Today tab)**: Card-based layout — Positioning tagline → Status card (with streak badge + progress bar) → Completion feedback toast → Feeling card → Coach card (with paragraph-spaced insights) → Refine card (expandable) → Your Day card → Habit Tracker card → Metric tiles. 24px spacing between all cards. Minimal, calm, output-focused.
-- **Progressive disclosure**: Only feeling input visible by default. Energy, Stress, Hydration, and Training hidden behind "Refine your day" card toggle. Reduces visual clutter.
-- **State-based color system**: Refine chips use semantic colors when selected. Energy: excellent/high=green, medium=gray, low=red. Stress: low=green, moderate=amber, high/very_high=red. Hydration: well_hydrated/good=blue, low=amber, dehydrated=red. Training: none=gray, light=light-blue, moderate/intense=blue. Selected state = tinted background (18% opacity) + colored border (40% opacity) + colored text. Unselected = neutral.
-- **Selection animations**: Subtle scale (1.02x selected, 0.96x pressed) on both feeling and refine chips. No harsh transitions.
-- **Daily Status**: Status pill with label ("Strong Day", "On Track", "Slightly Off Track", "Off Track"). Drivers shown as inline dot-separated text (not stacked bullets).
-- **Daily State**: One of Recover, Maintain, Build, or Push. Maps to status labels. Drives the entire plan.
-- **Coach Insight**: Multi-signal coaching paragraph displayed at the top of the "Ask your coach" card. Combines HRV vs baseline, sleep trends, recovery patterns, activity levels, and user inputs (feeling, energy, stress, hydration) into 2-3 clear, actionable sentences. Updates reactively when feelings/refine inputs change. Generated by `generateCoachInsight()` in insights.ts.
-- **Your Day (State-Based Single Selection)**: Always 5 checkable actions per day (Move/Fuel/Hydrate/Recover/Mind). Each category has exactly 4 options mapped to state tags (great/good/tired/stressed) defined in `CATEGORY_OPTIONS`. Bottom sheet shows: category icon + title, "Choose one for today" instruction, 4 radio-select options with title/subtitle, "Best match today" recommended badge (based on `recommendedStateTag`), support tips for selected option. Single-selection per category. Progress counter "0/5". Actions persisted via `@viva_completions` in AsyncStorage as CompletionRecord array with recommended/chosen tracking.
-- **Editable Actions**: Each action tracks `recommended` (original AI suggestion) and `chosen` (user override). editAction in AppContext persists chosen text to AsyncStorage. On reload/regenerate, chosen edits are restored from completion history.
-- **Completion Tracking**: Daily completion rate + weekly consistency score. Habit Tracker card shows three stats: weekly consistency %, day streak count, and today's completion (e.g. 2/5). Completion feedback toast appears briefly when checking off actions (category-specific messages like "Movement done for the day"). Progress bar in status card shows today's completion percentage. Data stored per-day with per-action category + recommended/chosen breakdown. Habit stats feed into Trends tab (Key Metrics section) and weekly summary generation.
-- **Trends Tab Layout**: Recent Trends summary (top) > Key Insights (3-5 habit+biometric insights) > Correlations (unchanged) > Patterns Detected (unchanged) > Key Metrics at bottom with 3 categories x 3 metrics each: Recovery/Body (Sleep avg, HRV avg, Resting HR avg), Activity (Steps avg, Workouts/week, Active Cal avg), Habits (Weekly %, Streak days, Today completed). All averages are **4-week (28-day)** with mini SVG sparkline charts showing weekly trend per tile (react-native-svg Polyline). Habit sparklines use day-normalized boundaries (start-of-day) with contiguous 7-day buckets.
-- **Typography System**: Standardized across all tabs. Page titles: 28px Inter_700Bold -0.5. Section headers (summaryHeader, coachHeader, etc): 18px Inter_600SemiBold -0.3. Body/summary text: 14px Inter_400Regular lineHeight 22. Consistent across Today, Plan, Trends, and Coach.
-- **Adaptive Coaching**: Completion history feeds back into plan generation. Low weekly rate (< 40%) caps readiness. Weak categories (< 40% completion over 7 days) get simplified recommendations (shorter durations, simpler text). Combines with wearable data + subjective inputs for full personalization loop.
-- **Holistic Tone**: Headlines use balanced language ("Stay active. Keep it balanced.", "Focus on balance today.", "Rest and recharge today.") instead of fitness-focused ("Train today"). Action text is short and specific (e.g., "40 min zone 2 cardio · easy pace").
-- **Wellness Inputs**: Feeling (Great/Good/Tired/Stressed) always visible in its own card. Energy/Stress/Hydration/Training hidden behind "Refine your day".
-- **Refine Categories**: 4 categories × 4 options each. Energy (Excellent/High/Medium/Low), Stress (Low/Moderate/High/Very High), Hydration (Hydrated/Good/Low/Dehydrated), Training (None/Light/Moderate/Intense). Stacked layout (label above, chips below, flex: 1 equal width).
-- **Metrics Row**: Sleep (hrs), Steps (k), Heart Rate (bpm), HRV (ms). No Recovery metric.
-- **No weather**: The product does not use weather data. All inputs are user-relevant and controllable.
-- **AI Coach (contextual)**: Integrated into Today screen as expandable "Ask your coach" card. Full-screen chat modal with scrollable messages + fixed bottom input bar. Streaming SSE responses. Client-side + server-side health-topic validation blocks off-topic queries. Suggested question chips. Enriched health context sent to coach includes: HRV baseline (7-day avg), sleep debt (3-day deficit), recovery trend (improving/stable/declining), streak days, weekly completion rate, today's completion rate, calories burned, and all biometric/subjective data. Coach uses 60/40 weighting (biometric data prioritized over self-reported).
-- **Weekly Plan**: AI-powered weekly coaching layer. 5 categories per day (Move/Fuel/Hydrate/Recover/Mind). Editable via bottom sheet with state-based 4-option selector (same as Today tab, from CATEGORY_OPTIONS). Shows category icon, title, "Choose one for the day", recommended badge, and support tips. Checkable actions with completion tracking. Bidirectional sync with Today screen. AI weekly plan generated via `/api/coach/weekly-plan` endpoint using health data, goals, and completion history. Falls back to local `generateWeeklyPlan()` which uses state rotation (great/good/tired cycle). Persisted in `@viva_weekly_plan` AsyncStorage key with week rollover detection.
-- **Trends**: 30-day trend charts with plain-English takeaway per card, press-to-drill-down. Correlation cards show statistical relationships between metrics (Sleep vs HRV, Sleep vs Recovery, Activity vs Recovery, Resting HR vs Recovery) with strength badges and data-specific insights. Pattern detection identifies week-over-week trends in sleep, HRV variability, recovery consistency, and activity streaks.
-- **Metric Drill-Down**: Large value + headline → explanation → 30-day chart → "What this means" → deep analysis (from insights engine) → "What to do" section
-- **Settings**: Borderless Apple-native styling, rounded profile card, hairline dividers
-- **Subscription**: 3-tier paywall (Free, Premium $9.99/mo, Premium Plus $19.99/mo)
-
-### Architecture
-- **Backend**: Express API server with `/api/coach/chat` (SSE streaming coaching), `/api/coach/weekly-plan` (JSON weekly plan generation), `/api/health/garmin`, `/api/health/samsung`, `/api/health/status` for health data sync
-- **AI**: OpenAI integration via `@workspace/integrations-openai-ai-server` — no API key needed, billed to Replit credits
-- **Frontend**: Expo/React Native with AsyncStorage for persistence
-- **Data**: Computed insights engine (`data/insights.ts`) calculates sleep debt, training load, recovery trends, weight projections, TDEE, consistency scores, HRV baselines, and risk flags
-- **Health Data Providers**: `data/healthProviders.ts` — Apple HealthKit (iOS native), Garmin (via backend API), Samsung Health (via backend API). Provider layer tries connected sources in order, falls back to mock data. 28-day window for Trends.
-- **State**: Context-based state management (AppContext) with computed DailyInsights. Integration toggle persists to `@viva_integrations` AsyncStorage key and triggers health data re-sync.
-- **Trend Computation**: `generateTrendDataFromMetrics()` dynamically computes trend direction and plain-English summaries from actual metrics (Weight, HRV, Resting HR, Sleep, Steps, Recovery).
-- **Components**: VivaSymbol (SVG brand mark), VivaWordmark (symbol + text), ScreenHeader (consistent tab header), plan rows with icon squares, metric tiles with drill-down
-
-### Key Files
-- `artifacts/pulse-pilot/app/(tabs)/index.tsx` — Today dashboard (feeling input + inline coach chat)
-- `artifacts/pulse-pilot/app/(tabs)/coach.tsx` — Legacy coach screen (hidden from tabs, kept for reference)
-- `artifacts/pulse-pilot/app/(tabs)/plan.tsx` — Weekly plan with adaptive tags
-- `artifacts/pulse-pilot/app/(tabs)/trends.tsx` — Trends with takeaways
-- `artifacts/pulse-pilot/app/(tabs)/settings.tsx` — Premium settings with last-sync timestamps
-- `artifacts/pulse-pilot/app/metric-detail.tsx` — Metric drill-down with deep analysis
-- `artifacts/pulse-pilot/data/insights.ts` — Computed insights engine
-- `artifacts/pulse-pilot/data/mockData.ts` — Mock health data, adaptive daily plan, trend computation from metrics
-- `artifacts/pulse-pilot/data/healthProviders.ts` — Apple Health / Garmin / Samsung Health provider layer
-- `artifacts/pulse-pilot/constants/colors.ts` — Design system colors
-- `artifacts/pulse-pilot/context/AppContext.tsx` — Global state with feeling state, integration persistence, health data sync
-- `artifacts/api-server/src/routes/coach/index.ts` — OpenAI coaching endpoint (SSE)
-- `artifacts/api-server/src/routes/healthData.ts` — Garmin + Samsung Health backend proxy routes
-
-### Navigation
-- Tab bar: Today, Plan, Trends, Settings (4 tabs, borderless, blur on iOS)
-- Coach: Integrated into Today screen as expandable inline panel (not a tab)
-- Modal: Subscription screen
-- Stack: Onboarding flow, Metric detail drill-down
-
-### Brand: Viva
-- **Wordmark**: "VIVA" all caps, Inter_500Medium, letter-spacing 3, dark neutral color (foreground). Subtle, not oversized.
-- **Brand Symbol**: Stylized V with pulse line (VivaSymbol component, SVG). Modern, minimal, recognizable at small sizes.
-- **App Icon**: Black background, white V-pulse mark. Premium, simple, stands out on home screen.
-- **Screen Header**: VivaWordmark (symbol + text) consistently positioned at top of all 4 tab screens (Today, Plan, Trends, Settings) via ScreenHeader component.
-- **Color Philosophy**: Green (#34C759) is accent only — used for positive states, readiness, "push" days, progress indicators. Never as primary branding. Most UI stays neutral and calm.
-- **Tagline**: "Your Health & Wellness Coach"
-- **Tone**: Calm confidence, simplicity, clarity, human. No hype, slang, jargon, or emojis.
-- **Positioning**: Not just a fitness app — a daily health and wellness coach for body, mind, energy, stress, and habits.
-- **Feel**: Understated, confident, premium, modern, calm. Product experience leads; branding supports.
-- Every sentence either explains meaning or tells the user what to do.
-- Copy examples: "Train today. Keep it steady." / "Focus on recovery today." / "Your body needs a lighter day."
-
-See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
+- **API Codegen**: Orval (from OpenAPI spec)
+- **Mobile Development**: Expo (React Native)
+- **AI Integration**: OpenAI (via Replit AI Integrations using `gpt-4o-mini` for coaching chat)
+- **Health Data**:
+    - Apple HealthKit (iOS native)
+    - Health Connect (Android native via `react-native-health-connect`)
+    - Garmin (via backend API)
+    - Samsung Health (delegates to Health Connect on Android)
+- **Persistence**: AsyncStorage (for Expo/React Native)
+- **Charting**: `react-native-svg` (for sparkline charts)
