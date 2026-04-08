@@ -1,0 +1,351 @@
+Refine Habit Tracker + Trends integration + standardize app summaries and typography
+
+Keep everything else the same from the prior instructions, with these refinements included:
+
+1. Habit Tracker data must feed into the Trends tab
+
+The Habit Tracker should not live on its own. Its tracked metrics must feed directly into the Trends tab over time.
+
+Specifically, the Trends tab should reflect the same core Habit Tracker stats, including:
+
+Weekly completion %
+Current day streak
+Today completed count such as 0/5 today
+Top habit consistency
+
+So if the Habit Tracker shows:
+
+0% weekly
+0 day streak
+0/5 today
+
+those are not just front-end display numbers. They must be backed by stored historical habit completion data and be usable in trends, summaries, and insights.
+
+2. Keep habits binary only
+
+All habits should remain binary only:
+
+completed = true/false
+no quantity-based habits
+no units
+no partial progress logic
+
+Use the same simplified habit model:
+
+type HabitLog = {
+  userId: string;
+  habitId: string;
+  date: string; // YYYY-MM-DD
+  completed: boolean;
+  source: "user_manual";
+  completedAt?: string;
+};
+3. Habit Tracker stats should be real and synced everywhere
+
+Make sure these Habit Tracker metrics are computed from actual stored data:
+
+Weekly %
+completed habit check-ins this week / total scheduled this week
+Day streak
+current consecutive day streak based on completion logic
+Today
+number of completed habits today / number of scheduled habits today
+Top habit consistency
+the most consistently completed active habit over the selected recent window
+
+If a user checks off a habit, edits a habit, archives a habit, or changes anything in the Habit Tracker, the Trends tab should update accordingly.
+
+No fake placeholders.
+No stale UI.
+No disconnected numbers.
+
+4. Trends tab should stay visually simplified
+
+On the Trends tab, keep the page focused and avoid overload.
+
+New rule:
+
+Top = short summary
+Middle = 3 to 5 key insights max
+Bottom = compact key metrics only
+
+Do not spread too many detailed stats throughout the page.
+
+5. Trends tab layout
+Section 1: Recent Trends
+
+Keep this clean and spaced out.
+
+Use a short summary that combines:
+
+recovery
+activity
+habits
+
+Example:
+
+“Your recovery is holding steady, but habit consistency dipped this week.”
+“Movement has been strong, and your habit adherence is improving.”
+
+Keep this to 2 to 4 sentences max.
+
+Section 2: Key Insights
+
+Show only 3 to 5 insights max.
+
+These should be sharp, high-signal insights such as:
+
+“You completed 4 of 5 habits today”
+“Your habit consistency is down versus last week”
+“You’ve missed habits 3 days in a row”
+“Recovery tends to be stronger during weeks with better habit adherence”
+
+Do not overload this section.
+
+Section 3: Key Metrics
+
+Put the detailed stats at the bottom only.
+
+Only show three metrics under each category so the page stays focused and premium.
+
+Recovery / Body
+
+Show exactly these 3 metrics:
+
+Sleep 7-day average
+HRV if available
+Resting heart rate
+Activity
+
+Show exactly these 3 metrics:
+
+Steps 7-day average
+Workouts per week
+Active minutes or equivalent activity volume metric
+Habits
+
+Show exactly these 3 metrics:
+
+Weekly completion %
+Current day streak
+Today completed count
+
+Do not show extra detailed habit metrics in the main bottom grid beyond those three.
+
+Top habit consistency should still be used in logic, summaries, and insights, but it does not need to appear as a fourth metric card in the bottom section unless used as one of the rotating insights.
+
+This bottom section should be the only place where multiple detailed metrics live. Keep it compact and visually lighter.
+
+6. Standardize fonts across all tabs
+
+Standardize the typography system across the entire app.
+
+Right now, the Week Overview section appears visually different from the Trends Summary and Viva Coach sections. Fix that so the app feels like one cohesive product.
+
+Apply one consistent type system across:
+
+Today tab
+Plan tab
+Trends tab
+Viva Coach
+Week Overview
+Weekly Summary
+Habit Tracker
+onboarding summaries
+any AI-generated summary blocks
+
+Standardize:
+
+font family
+header size
+subheader size
+body text size
+line height
+font weight
+spacing between headings and paragraphs
+
+Use the same visual hierarchy for:
+
+section titles
+summary text
+insight text
+helper text
+
+The goal is that Week Overview, Trends Summary, and Viva Coach all feel like they belong to the same design system, not like different components built separately.
+
+7. Make all text summaries more data-referenced but still easy to understand
+
+Across the app, all summary text should feel more grounded in user data.
+
+Do not make summaries vague, generic, or overly fluffy.
+
+Instead, summaries should:
+
+reference actual patterns in the user’s data
+sound intelligent and credible
+stay easy to understand
+avoid sounding too technical or robotic
+avoid medical language unless necessary
+
+Examples of the right style:
+
+“Your sleep averaged 7.4 hours this week, and your resting heart rate stayed stable, which supports a solid recovery trend.”
+“You were more active than usual this week, but lower habit completion may be limiting recovery.”
+“Your HRV held steady while workouts increased, which suggests your training load is staying manageable.”
+“You completed 4 of 5 habits today, and your weekly consistency is trending up.”
+
+Bad style to avoid:
+
+generic motivational filler
+overly abstract observations
+summaries that make claims without referring to actual data
+summaries that read like a search engine or generic AI output
+
+The tone should be:
+
+concise
+warm
+professional
+coach-like
+data-aware
+easy for a normal user to understand quickly
+8. Break up all long summary blocks into readable chunks
+
+Do not render AI summaries as one long dense paragraph.
+
+This is especially important for:
+
+Weekly Summary
+Week Overview
+Trends Summary
+Viva Coach responses
+any longer insight or recap modules
+
+Break longer summaries into clean chunks such as:
+
+short paragraphs
+grouped bullets if appropriate
+separate cards or stacked sections
+1 to 2 idea blocks per paragraph
+
+For the Weekly Summary specifically:
+
+split it into readable sections instead of one text wall
+make it easy to scan
+create natural breaks between recovery, activity, habits, and recommendations
+
+For example, the Weekly Summary could be chunked into:
+
+Recovery
+Activity
+Habits
+What to focus on next
+
+Do not make it visually busy, but do make it easier to read than a single large text block.
+
+9. Habit Tracker data should influence trends without cluttering the page
+
+Use habit data in:
+
+trends summary
+key insights
+coach logic
+weekly planning
+weekly summary
+
+But do not turn the Trends tab into a giant dashboard.
+
+The habit data should make the app smarter, not busier.
+
+10. Avoid redundancy across the Trends tab and summary modules
+
+Make sure:
+
+the summary does not repeat exact metrics
+the insights do not repeat the summary
+the key metrics section does not restate insight text
+the Weekly Summary does not just restate the Trends Summary word for word
+
+Each layer should have a distinct job:
+
+Summary = narrative
+Insights = most important takeaways
+Key Metrics = raw support numbers
+Weekly Summary = broader recap + what matters next
+11. Spacing and presentation
+
+Keep the same cleaner spacing approach across the app:
+
+more white space between sections
+readable line height
+no cramped text
+consistent card padding
+consistent spacing between chunked summary blocks
+
+The app should feel premium, clean, and easy to scan.
+
+Priority areas:
+
+Trends summary
+Week Overview
+Weekly Summary
+Viva Coach responses
+12. Summary generation rules across the app
+
+For all AI-generated text summaries in the app, use these rules:
+
+reference actual user inputs, wearable data, and habit history when available
+explain patterns in plain English
+keep summaries concise
+avoid repeating the same insight in multiple places
+use specifics where possible
+stay encouraging, but grounded
+do not overstate certainty
+if data is limited, acknowledge that lightly and still be useful
+
+Examples:
+
+“Your data suggests recovery is stable, though slightly lower sleep consistency may be worth watching.”
+“Based on your recent steps, workouts, and habits, you’re maintaining good momentum this week.”
+“Your routine looks solid overall, but missed habits may be starting to show up in recovery.”
+13. QA requirements
+
+Test the following:
+
+User completes habits for several days and Trends reflects it
+User misses habits and weekly % drops correctly
+Day streak updates correctly
+Today completed count updates correctly
+Trends summary uses habit data
+Key insights use habit patterns
+Detailed metrics only appear at the bottom
+Only 3 metrics appear under each category
+Fonts and type hierarchy are consistent across tabs
+Week Overview, Trends Summary, and Viva Coach look visually aligned
+Weekly Summary is chunked into readable sections instead of one text wall
+Summaries reference real user data where available
+Summaries stay easy to understand and not overly technical
+No repeated or excessive data across the page
+Habit edits and archived habits sync correctly
+14. Product goal
+
+The goal is:
+
+Habit Tracker stats are real and persistent
+Habit data feeds into Trends
+The Trends tab stays focused and premium
+Detailed metrics live at the bottom only
+Only 3 metrics appear under each category
+Typography feels standardized across the whole app
+Summaries feel data-referenced, credible, and easy to understand
+Weekly summaries are chunked and readable
+The page emphasizes signal over noise
+
+So users should understand:
+
+how they’re doing
+how their habits are trending
+what matters most
+what to focus on next
+
+without the app feeling overloaded or inconsistent.

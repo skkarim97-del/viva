@@ -28,7 +28,8 @@ export function computeInsights(
   allMetrics: HealthMetrics[],
   todayMetrics: HealthMetrics,
   workouts: WorkoutEntry[],
-  profile: UserProfile
+  profile: UserProfile,
+  completionHistory?: CompletionRecord[]
 ): DailyInsights {
   const last7 = allMetrics.slice(-7);
   const last14 = allMetrics.slice(-14);
@@ -44,7 +45,8 @@ export function computeInsights(
   const riskFlags = computeRiskFlags(todayMetrics, last7, sleepDebt, hrvBaseline, trainingLoad);
   const bodyComposition = computeTDEE(todayMetrics, profile);
   const topPriority = determineTopPriority(riskFlags, sleepDebt, recoveryTrend, trainingLoad, weightProjection);
-  const weekSummary = generateWeekSummary(last7, workouts, weightProjection, sleepDebt, recoveryTrend, consistencyScore, trainingLoad);
+  const habitStats = computeHabitStats(completionHistory || []);
+  const weekSummary = generateWeekSummary(last7, workouts, weightProjection, sleepDebt, recoveryTrend, consistencyScore, trainingLoad, habitStats);
   const sleepIntelligence = computeSleepIntelligence(last14, last7);
 
   return {
@@ -321,6 +323,70 @@ function determineTopPriority(
   return "You are on track. Keep doing what you are doing. Consistency is your biggest advantage right now.";
 }
 
+export interface HabitStats {
+  weeklyPercent: number;
+  streakDays: number;
+  todayCompleted: number;
+  todayTotal: number;
+  topHabit: string | null;
+  topHabitPercent: number;
+}
+
+export function computeHabitStats(history: CompletionRecord[]): HabitStats {
+  const todayDate = new Date().toISOString().split("T")[0];
+  const todayRecord = history.find(r => r.date === todayDate);
+  const todayCompleted = todayRecord ? todayRecord.actions.filter(a => a.completed).length : 0;
+  const todayTotal = todayRecord ? todayRecord.actions.length : 5;
+
+  const last7 = history.filter(r => {
+    const d = new Date(r.date);
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 7);
+    return d >= cutoff;
+  });
+  const weeklyPercent = last7.length > 0
+    ? Math.round(last7.reduce((sum, r) => sum + r.completionRate, 0) / last7.length)
+    : 0;
+
+  let streakDays = 0;
+  if (history.length > 0) {
+    const sorted = [...history].sort((a, b) => b.date.localeCompare(a.date));
+    for (let i = 0; i < sorted.length; i++) {
+      const checkDate = new Date();
+      checkDate.setDate(checkDate.getDate() - i);
+      const expected = checkDate.toISOString().split("T")[0];
+      const record = sorted.find(r => r.date === expected);
+      if (record && record.completionRate >= 40) {
+        streakDays++;
+      } else if (expected === todayDate) {
+        continue;
+      } else {
+        break;
+      }
+    }
+  }
+
+  const categoryCount: Record<string, { done: number; total: number }> = {};
+  for (const record of last7) {
+    for (const a of record.actions) {
+      if (!categoryCount[a.category]) categoryCount[a.category] = { done: 0, total: 0 };
+      categoryCount[a.category].total++;
+      if (a.completed) categoryCount[a.category].done++;
+    }
+  }
+  let topHabit: string | null = null;
+  let topHabitPercent = 0;
+  for (const [cat, counts] of Object.entries(categoryCount)) {
+    const pct = counts.total > 0 ? Math.round((counts.done / counts.total) * 100) : 0;
+    if (pct > topHabitPercent) {
+      topHabitPercent = pct;
+      topHabit = cat;
+    }
+  }
+
+  return { weeklyPercent, streakDays, todayCompleted, todayTotal, topHabit, topHabitPercent };
+}
+
 function generateWeekSummary(
   last7: HealthMetrics[],
   workouts: WorkoutEntry[],
@@ -328,7 +394,8 @@ function generateWeekSummary(
   sleep: { hours: number; label: string },
   recovery: { direction: "improving" | "declining" | "stable"; streak: number },
   consistency: { score: number; label: string },
-  training: { trend: "rising" | "falling" | "stable" }
+  training: { trend: "rising" | "falling" | "stable" },
+  habits: HabitStats
 ) {
   const avgSleep = last7.reduce((s, m) => s + m.sleepDuration, 0) / last7.length;
   const avgSteps = Math.round(last7.reduce((s, m) => s + m.steps, 0) / last7.length);
@@ -384,10 +451,16 @@ function generateWeekSummary(
     parts.push("You've been putting in the effort, but your body is asking for more recovery time between sessions.");
   }
 
-  if (consistency.score >= 80) {
-    parts.push("Consistency has been excellent across your habits. that steady, holistic effort is what drives lasting wellness.");
-  } else if (consistency.score < 50) {
-    parts.push("Consistency dipped this week. Getting back to a rhythm with the basics. movement, nutrition, hydration, sleep. is the priority.");
+  if (habits.weeklyPercent >= 80) {
+    parts.push(`Habit adherence has been strong at ${habits.weeklyPercent}% this week. That consistency is what drives lasting wellness.`);
+  } else if (habits.weeklyPercent > 0 && habits.weeklyPercent < 50) {
+    parts.push(`Habit completion was ${habits.weeklyPercent}% this week. Getting back to a rhythm with the basics. movement, nutrition, hydration, sleep. is the priority.`);
+  } else if (habits.weeklyPercent >= 50 && habits.weeklyPercent < 80) {
+    parts.push(`You completed ${habits.weeklyPercent}% of your habits this week. Solid effort, but there is room to be more consistent.`);
+  }
+
+  if (habits.streakDays >= 3 && habits.weeklyPercent >= 60) {
+    parts.push(`You are on a ${habits.streakDays}-day streak. Momentum like that compounds over time.`);
   }
 
   if (weight.onTrack && Math.abs(weight.rate) > 0.1) {

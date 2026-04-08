@@ -254,9 +254,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   summaryHeader: {
-    fontSize: 16,
+    fontSize: 18,
     fontFamily: "Inter_600SemiBold",
-    letterSpacing: -0.2,
+    letterSpacing: -0.3,
   },
   summaryText: {
     fontSize: 14,

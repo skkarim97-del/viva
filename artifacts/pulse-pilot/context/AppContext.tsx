@@ -306,7 +306,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setWorkouts(allWorkouts);
 
       const savedProfileData = savedProfile ? JSON.parse(savedProfile) : defaultProfile;
-      setInsights(computeInsights(allMetrics, today, allWorkouts, savedProfileData));
+      setInsights(computeInsights(allMetrics, today, allWorkouts, savedProfileData, loadedHistory));
     } catch {
     } finally {
       setIsLoading(false);

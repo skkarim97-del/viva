@@ -10,10 +10,10 @@ import {
   Platform,
   Pressable,
 } from "react-native";
-import Svg, { Polyline } from "react-native-svg";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { useApp } from "@/context/AppContext";
+import { computeHabitStats } from "@/data/insights";
 import { useColors } from "@/hooks/useColors";
 import type { MetricKey, HealthMetrics } from "@/types";
 
@@ -183,12 +183,69 @@ function detectPatterns(metrics: HealthMetrics[]): string[] {
   return patterns;
 }
 
+function buildKeyInsights(metrics: HealthMetrics[], habitStats: { weeklyPercent: number; streakDays: number; todayCompleted: number; todayTotal: number; topHabit: string | null; topHabitPercent: number }): string[] {
+  const insights: string[] = [];
+  if (metrics.length < 3) return insights;
+  const recent = metrics.slice(-7);
+
+  const avgSleep = recent.reduce((s, m) => s + m.sleepDuration, 0) / recent.length;
+  const avgRecovery = Math.round(recent.reduce((s, m) => s + m.recoveryScore, 0) / recent.length);
+  const avgSteps = Math.round(recent.reduce((s, m) => s + m.steps, 0) / recent.length);
+  const avgRHR = Math.round(recent.reduce((s, m) => s + m.restingHeartRate, 0) / recent.length);
+
+  if (habitStats.todayCompleted > 0) {
+    insights.push(`You completed ${habitStats.todayCompleted} of ${habitStats.todayTotal} habits today.`);
+  }
+
+  if (habitStats.weeklyPercent > 0 && habitStats.weeklyPercent < 50) {
+    insights.push(`Habit consistency is at ${habitStats.weeklyPercent}% this week. Small wins add up.`);
+  } else if (habitStats.weeklyPercent >= 80) {
+    insights.push(`Habit consistency is excellent at ${habitStats.weeklyPercent}% this week.`);
+  }
+
+  if (habitStats.streakDays >= 3) {
+    insights.push(`You are on a ${habitStats.streakDays}-day habit streak. Keep it going.`);
+  } else if (habitStats.streakDays === 0 && habitStats.weeklyPercent > 0) {
+    insights.push(`Your habit streak was broken. Today is a fresh start.`);
+  }
+
+  if (avgSleep < 6.5) {
+    insights.push(`Sleep averaged ${avgSleep.toFixed(1)} hrs this week. That is below the recommended 7+ hours.`);
+  } else if (avgSleep >= 7.5) {
+    insights.push(`Sleep averaged ${avgSleep.toFixed(1)} hrs. Strong foundation for recovery.`);
+  }
+
+  if (avgRecovery < 55) {
+    insights.push(`Recovery has been low at ${avgRecovery}%. Consider dialing back intensity.`);
+  } else if (avgRecovery >= 75) {
+    insights.push(`Recovery is solid at ${avgRecovery}%. Your body is handling the load well.`);
+  }
+
+  if (avgSteps >= 10000) {
+    insights.push(`Averaging ${avgSteps.toLocaleString()} steps. Activity level is strong.`);
+  } else if (avgSteps < 5000) {
+    insights.push(`Steps averaged ${avgSteps.toLocaleString()} this week. More daily movement would help.`);
+  }
+
+  return insights.slice(0, 5);
+}
+
+const CATEGORY_LABELS: Record<string, string> = {
+  move: "Move",
+  fuel: "Fuel",
+  hydrate: "Hydrate",
+  recover: "Recover",
+  mind: "Mind",
+};
+
 export default function TrendsScreen() {
   const c = useColors();
-  const { trends, insights, metrics } = useApp();
+  const { trends, insights, metrics, completionHistory, weeklyConsistency, streakDays, todayCompletionRate, dailyPlan } = useApp();
 
   const correlations = useMemo(() => buildCorrelations(metrics), [metrics]);
   const patterns = useMemo(() => detectPatterns(metrics), [metrics]);
+  const habitStats = useMemo(() => computeHabitStats(completionHistory), [completionHistory]);
+  const keyInsights = useMemo(() => buildKeyInsights(metrics, habitStats), [metrics, habitStats]);
 
   const openDetail = (label: string) => {
     const key = metricKeyMap[label];
@@ -205,6 +262,18 @@ export default function TrendsScreen() {
     return "Weak link";
   };
 
+  const last7 = metrics.slice(-7);
+  const avgSleep = last7.length > 0 ? +(last7.reduce((s, m) => s + m.sleepDuration, 0) / last7.length).toFixed(1) : 0;
+  const avgHrv = last7.length > 0 ? Math.round(last7.reduce((s, m) => s + m.hrv, 0) / last7.length) : 0;
+  const avgRHR = last7.length > 0 ? Math.round(last7.reduce((s, m) => s + m.restingHeartRate, 0) / last7.length) : 0;
+  const avgSteps = last7.length > 0 ? Math.round(last7.reduce((s, m) => s + m.steps, 0) / last7.length) : 0;
+  const avgActiveCalories = last7.length > 0 ? Math.round(last7.reduce((s, m) => s + (m.activeCalories || 0), 0) / last7.length) : 0;
+
+  const recentWorkoutCount = last7.filter(m => (m.activeCalories || 0) > 200 || m.steps > 8000).length;
+
+  const completedCount = dailyPlan ? dailyPlan.actions.filter(a => a.completed).length : 0;
+  const totalActions = dailyPlan ? dailyPlan.actions.length : 5;
+
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: c.background }]}
@@ -219,6 +288,18 @@ export default function TrendsScreen() {
           <Text style={[styles.summaryHeader, { color: c.foreground }]}>Your Recent Trends</Text>
           {insights.weekSummary.split("\n\n").map((line, i) => (
             <Text key={i} style={[styles.summaryText, { color: c.foreground }]}>{line}</Text>
+          ))}
+        </View>
+      )}
+
+      {keyInsights.length > 0 && (
+        <View style={styles.sectionWrap}>
+          <Text style={[styles.sectionTitle, { color: c.foreground }]}>Key Insights</Text>
+          {keyInsights.map((insight, i) => (
+            <View key={i} style={[styles.insightCard, { backgroundColor: c.card }]}>
+              <Feather name="zap" size={13} color={c.primary} />
+              <Text style={[styles.insightText, { color: c.foreground }]}>{insight}</Text>
+            </View>
           ))}
         </View>
       )}
@@ -269,55 +350,78 @@ export default function TrendsScreen() {
         </View>
       )}
 
-      <Text style={[styles.sectionTitle, { color: c.foreground, marginTop: 8 }]}>Metrics</Text>
-      {trends.map((trend) => {
-        const latest = trend.data[trend.data.length - 1];
-        const width = 260;
-        const height = 44;
-        const values = trend.data.map((d) => d.value);
-        const min = Math.min(...values);
-        const max = Math.max(...values);
-        const range = max - min || 1;
-        const points = values
-          .map((v, j) => {
-            const x = (j / (values.length - 1)) * width;
-            const y = height - ((v - min) / range) * (height - 4) - 2;
-            return `${x},${y}`;
-          })
-          .join(" ");
+      <View style={styles.sectionWrap}>
+        <Text style={[styles.sectionTitle, { color: c.foreground }]}>Key Metrics</Text>
 
-        return (
+        <Text style={[styles.categoryLabel, { color: c.mutedForeground }]}>Recovery / Body</Text>
+        <View style={styles.metricsRow}>
           <Pressable
-            key={trend.label}
-            onPress={() => openDetail(trend.label)}
-            style={({ pressed }) => [
-              styles.card,
-              { backgroundColor: c.card, opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
-            ]}
+            onPress={() => openDetail("Sleep")}
+            style={({ pressed }) => [styles.metricTile, { backgroundColor: c.card, opacity: pressed ? 0.8 : 1 }]}
           >
-            <View style={styles.cardTop}>
-              <View style={styles.cardMeta}>
-                <Text style={[styles.label, { color: c.mutedForeground }]}>{trend.label}</Text>
-                <View style={styles.valueRow}>
-                  <Text style={[styles.value, { color: c.foreground }]}>
-                    {trend.unit === "steps"
-                      ? latest.value.toLocaleString()
-                      : trend.unit === "hrs"
-                      ? latest.value.toFixed(1)
-                      : latest.value.toString()}
-                  </Text>
-                  <Text style={[styles.unit, { color: c.mutedForeground }]}>{trend.unit}</Text>
-                </View>
-              </View>
-              <Feather name="chevron-right" size={16} color={c.mutedForeground + "50"} />
-            </View>
-            <Svg width={width} height={height} style={styles.chart}>
-              <Polyline points={points} fill="none" stroke={c.primary} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
-            <Text style={[styles.takeaway, { color: c.mutedForeground }]}>{trend.summary}</Text>
+            <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>Sleep</Text>
+            <Text style={[styles.metricValue, { color: c.foreground }]}>{avgSleep}</Text>
+            <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>hrs avg</Text>
           </Pressable>
-        );
-      })}
+          <Pressable
+            onPress={() => openDetail("HRV")}
+            style={({ pressed }) => [styles.metricTile, { backgroundColor: c.card, opacity: pressed ? 0.8 : 1 }]}
+          >
+            <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>HRV</Text>
+            <Text style={[styles.metricValue, { color: c.foreground }]}>{avgHrv}</Text>
+            <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>ms avg</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => openDetail("Resting HR")}
+            style={({ pressed }) => [styles.metricTile, { backgroundColor: c.card, opacity: pressed ? 0.8 : 1 }]}
+          >
+            <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>Resting HR</Text>
+            <Text style={[styles.metricValue, { color: c.foreground }]}>{avgRHR}</Text>
+            <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>bpm avg</Text>
+          </Pressable>
+        </View>
+
+        <Text style={[styles.categoryLabel, { color: c.mutedForeground }]}>Activity</Text>
+        <View style={styles.metricsRow}>
+          <Pressable
+            onPress={() => openDetail("Steps")}
+            style={({ pressed }) => [styles.metricTile, { backgroundColor: c.card, opacity: pressed ? 0.8 : 1 }]}
+          >
+            <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>Steps</Text>
+            <Text style={[styles.metricValue, { color: c.foreground }]}>{avgSteps >= 1000 ? `${(avgSteps / 1000).toFixed(1)}k` : avgSteps}</Text>
+            <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>avg</Text>
+          </Pressable>
+          <View style={[styles.metricTile, { backgroundColor: c.card }]}>
+            <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>Workouts</Text>
+            <Text style={[styles.metricValue, { color: c.foreground }]}>{recentWorkoutCount}</Text>
+            <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>this week</Text>
+          </View>
+          <View style={[styles.metricTile, { backgroundColor: c.card }]}>
+            <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>Active Cal</Text>
+            <Text style={[styles.metricValue, { color: c.foreground }]}>{avgActiveCalories}</Text>
+            <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>avg</Text>
+          </View>
+        </View>
+
+        <Text style={[styles.categoryLabel, { color: c.mutedForeground }]}>Habits</Text>
+        <View style={styles.metricsRow}>
+          <View style={[styles.metricTile, { backgroundColor: c.card }]}>
+            <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>Weekly</Text>
+            <Text style={[styles.metricValue, { color: c.foreground }]}>{weeklyConsistency >= 0 ? `${weeklyConsistency}%` : "0%"}</Text>
+            <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>completion</Text>
+          </View>
+          <View style={[styles.metricTile, { backgroundColor: c.card }]}>
+            <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>Streak</Text>
+            <Text style={[styles.metricValue, { color: c.foreground }]}>{streakDays}</Text>
+            <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>days</Text>
+          </View>
+          <View style={[styles.metricTile, { backgroundColor: c.card }]}>
+            <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>Today</Text>
+            <Text style={[styles.metricValue, { color: c.foreground }]}>{completedCount}/{totalActions}</Text>
+            <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>done</Text>
+          </View>
+        </View>
+      </View>
 
       <View style={{ height: 110 }} />
     </ScrollView>
@@ -365,6 +469,19 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     marginBottom: 2,
     opacity: 0.7,
+  },
+  insightCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    padding: 14,
+    borderRadius: 16,
+  },
+  insightText: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 21,
   },
   corrCard: {
     padding: 16,
@@ -427,45 +544,37 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     lineHeight: 20,
   },
-  card: {
-    padding: 16,
+  categoryLabel: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 0.3,
+    textTransform: "uppercase",
+    marginTop: 8,
+    marginBottom: -2,
+  },
+  metricsRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  metricTile: {
+    flex: 1,
+    padding: 14,
     borderRadius: 16,
-    gap: 12,
-  },
-  cardTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-  },
-  cardMeta: {
-    gap: 2,
-  },
-  label: {
-    fontSize: 12,
-    fontFamily: "Inter_500Medium",
-    letterSpacing: 0.2,
-  },
-  valueRow: {
-    flexDirection: "row",
-    alignItems: "baseline",
     gap: 3,
   },
-  value: {
-    fontSize: 22,
+  metricLabel: {
+    fontSize: 11,
+    fontFamily: "Inter_500Medium",
+    letterSpacing: 0.1,
+  },
+  metricValue: {
+    fontSize: 20,
     fontFamily: "Inter_700Bold",
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
   },
-  unit: {
-    fontSize: 13,
+  metricUnit: {
+    fontSize: 11,
     fontFamily: "Inter_400Regular",
-  },
-  chart: {
-    alignSelf: "center",
-  },
-  takeaway: {
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
-    lineHeight: 18,
-    opacity: 0.7,
   },
 });
