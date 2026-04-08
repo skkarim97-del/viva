@@ -51,7 +51,9 @@ export default function TrendsScreen() {
       {insights && (
         <View style={[styles.summaryCard, { backgroundColor: c.card }]}>
           <Text style={[styles.summaryHeader, { color: c.foreground }]}>Your Week</Text>
-          <Text style={[styles.summaryText, { color: c.foreground }]}>{insights.weekSummary}</Text>
+          {insights.weekSummary.split("\n\n").map((line, i) => (
+            <Text key={i} style={[styles.summaryText, { color: c.foreground }, i > 0 && { marginTop: 12 }]}>{line}</Text>
+          ))}
         </View>
       )}
 
