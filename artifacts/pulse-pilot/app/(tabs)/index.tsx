@@ -43,7 +43,7 @@ const STRESS_LEVELS: { key: NonNullable<StressLevel>; label: string; color: stri
 ];
 
 const HYDRATION_LEVELS: { key: NonNullable<HydrationLevel>; label: string; color: string }[] = [
-  { key: "well_hydrated", label: "Well Hydrated", color: "#5AC8FA" },
+  { key: "hydrated", label: "Hydrated", color: "#5AC8FA" },
   { key: "good", label: "Good", color: "#5AC8FA" },
   { key: "low", label: "Low", color: "#FF9500" },
   { key: "dehydrated", label: "Dehydrated", color: "#FF6B6B" },

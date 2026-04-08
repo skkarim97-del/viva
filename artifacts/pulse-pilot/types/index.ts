@@ -177,7 +177,7 @@ export interface IntegrationStatus {
 export type FeelingType = "great" | "good" | "tired" | "stressed" | null;
 export type EnergyLevel = "excellent" | "high" | "medium" | "low" | null;
 export type StressLevel = "low" | "moderate" | "high" | "very_high" | null;
-export type HydrationLevel = "well_hydrated" | "good" | "low" | "dehydrated" | null;
+export type HydrationLevel = "hydrated" | "good" | "low" | "dehydrated" | null;
 export type TrainingIntent = "none" | "light" | "moderate" | "intense" | null;
 
 export type MetricKey = "sleep" | "hrv" | "steps" | "restingHR" | "recovery" | "weight";
