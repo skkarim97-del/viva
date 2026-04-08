@@ -1,0 +1,570 @@
+Refactor the “Your Day” selection system so each category is a single intentional choice, and make the available options adapt based on the user’s daily state.
+
+The current UX is too messy and inconsistent. Right now each category mixes together actions, habits, tips, and rules. It feels like a random list instead of a clean daily plan.
+
+I want to redesign this so that each wellness category represents one clear decision.
+
+The goal is that the user is choosing one primary action per category for the day.
+
+Examples:
+- Mind: choose one thing like 10 min meditation, 15 min hot bath, 10 min journaling
+- Move: choose one thing like 45 min cardio, 45 min strength training, 15 min mobility
+- Fuel: choose one nutrition approach for the day
+- Hydrate: choose one hydration target or hydration plan
+- Same logic for any other daily wellness category
+
+This should feel like a coach helping the user commit to a daily plan, not a content dump.
+
+CORE PRODUCT RULE
+
+For every category in “Your Day”:
+- The user can select only one primary option
+- That selected option becomes the official plan for that category for the day
+- The category should not show a bunch of overlapping suggestions that represent different kinds of things
+- All options within a category should be at the same level of abstraction and should be mutually exclusive enough to make sense as a single choice
+
+Do not mix:
+- actions
+- informational tips
+- behavior reminders
+- broad philosophies
+- restrictions
+
+inside the same choice list
+
+Example of bad structure:
+- “8+ cups water throughout the day”
+- “reduce caffeine after 2 pm”
+- “track water intake today”
+- “herbal tea in the evening”
+
+These are not parallel choices. Some are goals, some are reminders, some are habits.
+
+Instead, the selectable options should all be the same type of thing.
+
+NEW UX MODEL
+
+Each category should have:
+1. One primary selection area
+   This is where the user picks one option only.
+
+2. Optional supporting guidance
+   After a user selects an option, show 1 to 2 small supporting suggestions below if helpful, but these should not be selectable as separate primary options.
+
+Example:
+- User selects: “45 min strength training”
+- Supporting guidance below:
+  - “Optional: 5 min warmup”
+  - “Optional: post-workout stretch”
+
+These are support details, not competing choices.
+
+NEW DAILY STATE LOGIC
+
+I also want each category to adapt based on the user’s daily state:
+- Great
+- Good
+- Tired
+- Stressed
+
+This logic should apply across the daily wellness categories so the plan feels personalized and realistic.
+
+Important:
+- Each category should still end with one final selected action
+- But the options shown and the default recommendation should be influenced by the user’s current state
+- The user can always override the recommendation
+
+This means the app should not show the exact same intensity or tone of options every day.
+
+Examples:
+- Great: more ambitious options
+- Good: solid productive baseline options
+- Tired: reduced intensity, recovery-supportive options
+- Stressed: calming, restorative, nervous-system-friendly options
+
+For example in MOVE:
+- Great: 60 min strength training, 45 min cardio
+- Good: 45 min strength training, 30 min cardio, moderate movement
+- Tired: 20 min walk, 20 min mobility, recovery movement
+- Stressed: gentle walk, yoga, mobility, low-stimulation movement
+
+For example in MIND:
+- Great: journaling, meditation, focused reset
+- Good: guided meditation, breathing, walk outside
+- Tired: hot bath, body scan, short meditation
+- Stressed: box breathing, hot bath, calming walk, nervous system reset
+
+For example in FUEL:
+- Great: high protein focus, balanced performance meals
+- Good: balanced meals, whole-food focus
+- Tired: easy digestion, steady blood sugar support
+- Stressed: simple nourishing meals, hydration support, lower-friction nutrition
+
+For example in HYDRATE:
+- Great: baseline hydration or workout hydration
+- Good: baseline hydration with consistency
+- Tired: hydration plus electrolytes
+- Stressed: hydration plus calming support and reduced overstimulation
+
+The state-based logic should feel intuitive and coach-like, not random.
+
+IMPORTANT IMPLEMENTATION RULE FOR STATE-BASED OPTIONS
+
+Each category should show 4 options total, one aligned to each readiness state:
+- Great
+- Good
+- Tired
+- Stressed
+
+That means inside each category selector, the user should see 4 clear options, with each option intentionally mapped to one of those states.
+
+Example structure for MOVE:
+- Great → 60 min strength training
+- Good → 45 min cardio
+- Tired → 20 min recovery walk
+- Stressed → 15 min yoga or mobility
+
+Example structure for MIND:
+- Great → 10 min journaling
+- Good → 10 min guided meditation
+- Tired → 15 min hot bath
+- Stressed → 5 min box breathing
+
+This creates a simple and elegant system:
+- one option per state
+- four options per category
+- only one final choice selected by the user
+
+The app should visually indicate which option best matches the user’s current state, for example:
+- “Recommended for your current state”
+- “Best match for today”
+
+But the user should still be able to pick any of the 4 options.
+
+CATEGORY DESIGN RULES
+
+MOVE
+This category should only contain movement options.
+
+All options should be framed as one complete movement choice for the day.
+
+Every move option should clearly answer:
+What is the user doing today for movement?
+
+The four options should map cleanly to:
+- Great
+- Good
+- Tired
+- Stressed
+
+Example starting point:
+- Great → 60 min strength training
+- Good → 45 min cardio
+- Tired → 20 min recovery walk
+- Stressed → 15 min yoga or mobility
+
+MIND
+This category should only contain one mental wellness or nervous system choice.
+
+Every mind option should clearly answer:
+What is the user doing today for their mental reset?
+
+The four options should map cleanly to:
+- Great
+- Good
+- Tired
+- Stressed
+
+Example starting point:
+- Great → 10 min journaling
+- Good → 10 min guided meditation
+- Tired → 15 min hot bath
+- Stressed → 5 min box breathing
+
+FUEL
+This category should represent the user’s nutrition focus for the day.
+
+Every fuel option should clearly answer:
+What is the user’s nutrition strategy today?
+
+The four options should map cleanly to:
+- Great
+- Good
+- Tired
+- Stressed
+
+Example starting point:
+- Great → High protein focus
+- Good → Balanced meals
+- Tired → Light and easy digestion
+- Stressed → Whole-food reset
+
+Also make sure nutrition examples align with a broad user base. Do not hardcode non-vegetarian examples like fish or lean meats into the main UI copy unless dynamically personalized.
+
+HYDRATE
+This category should represent one hydration plan or hydration target.
+
+Every hydrate option should clearly answer:
+What is the hydration plan for today?
+
+The four options should map cleanly to:
+- Great
+- Good
+- Tired
+- Stressed
+
+Example starting point:
+- Great → Post-workout hydration focus
+- Good → 8 cups water baseline
+- Tired → 10+ cups + electrolytes
+- Stressed → Steady hydration + lower caffeine
+
+Important: if “lower caffeine” is included, phrase it as part of the overall hydration plan, not as a random standalone tip.
+
+SELECTION BEHAVIOR
+
+Implement the following:
+
+Single select only
+Each category must behave like radio buttons, not checkboxes.
+
+The user can select only one option in each category.
+
+If they select a new option, it replaces the old one.
+
+Selected state
+The selected option should be very visually obvious:
+- highlighted background
+- border glow or accent
+- checkmark icon
+- slightly stronger text contrast
+
+Unselected state
+Unselected options should remain tappable but visually secondary.
+
+Tap behavior
+When the user taps a category card from “Your Day”, the bottom sheet or modal opens.
+
+Inside the sheet:
+- user sees only 4 coherent options for that category
+- each option maps to Great, Good, Tired, or Stressed
+- one option is visually tagged as the recommended match for the user’s current state
+- user taps one option
+- selection saves immediately or with a clear confirm CTA depending on current product pattern
+- sheet closes or gives brief confirmation feedback
+
+Current card summary
+After selection, the main “Your Day” card should show only the selected result.
+
+Example:
+- MOVE → 60 min strength training
+- MIND → 10 min guided meditation
+- HYDRATE → 10+ cups + electrolytes
+- FUEL → High protein focus
+
+Not a sentence fragment that sounds inconsistent with the category.
+
+DATA MODEL CHANGES
+
+Please refactor the daily plan state so that each category stores one primary value only.
+
+Example structure:
+
+type DailyCategorySelection = {
+  id: string;
+  label: string;
+  description?: string;
+  stateTag?: 'great' | 'good' | 'tired' | 'stressed';
+};
+
+type DailyPlan = {
+  date: string;
+  move?: DailyCategorySelection;
+  mind?: DailyCategorySelection;
+  fuel?: DailyCategorySelection;
+  hydrate?: DailyCategorySelection;
+  recovery?: DailyCategorySelection;
+  currentState?: 'great' | 'good' | 'tired' | 'stressed';
+};
+
+Or equivalent shape if the app already has a plan schema.
+
+Important:
+- persist the selected option per day
+- persist the user’s daily state if the app collects it
+- the same chosen value should appear consistently across the app
+- no duplicate conflicting representations
+
+SYNCHRONIZATION REQUIREMENT ACROSS TABS
+
+This is very important.
+
+The selected daily choice in “Your Day” must sync with the corresponding day inside the Plan tab.
+
+That means:
+- if I update MOVE in the Today tab, the same day in the Plan tab updates immediately
+- if I update that same day in the Plan tab, the Today tab updates immediately
+- the wording must match exactly
+- no paraphrasing
+- no separate local state that drifts out of sync
+
+There should be one source of truth for the day’s selected items.
+
+SMART RECOMMENDATION SYSTEM
+
+After cleaning up the selection system, improve how options are recommended.
+
+For each category, the app should recommend the option that best matches the user’s daily state and available health data such as:
+- sleep score
+- HRV
+- resting heart rate
+- recent workouts
+- strain or load
+- steps
+- habit adherence
+- self-reported energy
+- soreness
+- hydration
+- mood or stress inputs
+
+But even if the app recommends something, the user should still be able to override it.
+
+RECOMMENDATION UX
+Inside each category sheet, show a small label above or beside one option:
+- “Recommended for your current state”
+or
+- “Best match today”
+
+Use this only on one option per category.
+
+RECOMMENDATION LOGIC EXAMPLES
+Examples of the kind of logic I want:
+- Great + strong recovery metrics → more ambitious options
+- Good + decent recovery → moderate productive options
+- Tired + poor sleep or soreness → recovery-supportive options
+- Stressed + high strain or stress inputs → calming restorative options
+- Heavy sweat or workout day → stronger hydration recommendation
+- Poor recent nutrition consistency → balanced meals or whole-food reset
+- Post-workout day → recovery nutrition
+
+Do not make this random. Make it feel logical and grounded in user data.
+
+OPTION ARCHITECTURE
+
+Please build category option definitions in a clean structured way so they are easy to manage.
+
+For example:
+
+type CategoryOption = {
+  id: string;
+  title: string;
+  subtitle?: string;
+  category: 'move' | 'mind' | 'fuel' | 'hydrate' | 'recovery';
+  stateTag: 'great' | 'good' | 'tired' | 'stressed';
+  supportText?: string[];
+  tags?: string[];
+  durationMinutes?: number;
+  intensity?: 'low' | 'moderate' | 'high';
+};
+
+Then define curated options for each category in one place.
+
+Each category should have exactly 4 primary options, one for each state:
+- Great
+- Good
+- Tired
+- Stressed
+
+This will make it easier to:
+- render the UI
+- recommend an option
+- store a selection
+- analyze trends later
+
+CONTENT REWRITE REQUIREMENTS
+
+Please rewrite the option copy so it is:
+- clean
+- consistent
+- parallel in structure
+- action-oriented
+- concise
+- coach-like
+- easy to scan on mobile
+
+Do not mix styles like:
+- some options being full sentences
+- some being fragments
+- some being advice
+- some being goals
+- some being examples
+
+Examples of better formatting:
+- 60 min strength training
+- 45 min cardio
+- 15 min yoga or mobility
+- 10 min guided meditation
+- 15 min hot bath
+- High protein focus
+- Balanced meals
+- 8 cups water baseline
+- 10+ cups + electrolytes
+
+Optional subtitle examples:
+- Strong training day
+- Solid baseline movement
+- Gentle recovery movement
+- Nervous system reset
+- Prioritize protein at meals
+- Extra hydration for training day
+
+Keep titles short and scannable.
+
+UI CLEANUP REQUIREMENTS
+
+Bottom sheet consistency
+All bottom sheets for category selection should follow the exact same layout:
+- category icon
+- category title
+- short instruction text like “Choose one for today”
+- optional state badge showing current daily state
+- list of 4 options
+- selected state styling
+- optional recommendation badge
+- optional support text after selection
+
+Spacing
+The current sheets feel crowded and inconsistent. Increase vertical spacing between:
+- sheet header
+- options
+- bottom safe area
+
+Make sure the bottom sheet is mobile friendly and does not feel cramped on iPhone.
+
+Typography
+Standardize fonts, font sizes, font weights, and line heights across:
+- Today tab
+- Plan tab
+- Trends tab
+- Viva Coach
+- bottom sheets
+- weekly summaries
+
+The visual language should feel like one product, not stitched together.
+
+Safe area handling
+Make sure the bottom sheet does not collide with the iPhone browser bottom controls or device safe areas.
+
+COMPLETION LOGIC
+
+In “Your Day”, each category should count as complete only when:
+- a primary option is selected
+- and if completion tracking exists, the user marks that item as done
+
+Do not treat browsing options as completion.
+
+Example:
+- User selected “10 min guided meditation”
+- It appears as the day’s official Mind plan
+- Once completed, the user can check it off
+
+This gives structure:
+1. choose
+2. commit
+3. complete
+
+TRENDS INTEGRATION
+
+Selections should flow into Trends so the app can later say things like:
+- Most common movement choice this week
+- Mind routine consistency
+- Hydration plan adherence
+- Nutrition focus patterns
+- Completion rate by category
+- Which choices correlate with better recovery or mood
+- Which state the user was in when they made each selection
+- How Great, Good, Tired, or Stressed days affect plan choices and completion
+
+So please store these selections in a way that supports future analytics.
+
+ENGINEERING REQUIREMENTS
+
+Please refactor this cleanly, not as a hack.
+
+I want:
+- one source of truth for daily selections
+- reusable category selector component
+- reusable option row component
+- typed option definitions
+- exactly 4 options per category, each mapped to one state
+- state shared across Today and Plan tabs
+- support for future analytics
+- support for AI recommendations
+
+Avoid:
+- duplicated per-screen config
+- hardcoded inconsistent option sets
+- storing full display strings everywhere if IDs can be stored and rendered from definitions
+- brittle UI-specific logic mixed into business logic
+
+SUGGESTED EXAMPLE OPTION SETS
+
+Use these as a starting point and feel free to improve them, but keep the same logic of one option per state.
+
+MOVE
+- Great → 60 min strength training
+- Good → 45 min cardio
+- Tired → 20 min recovery walk
+- Stressed → 15 min yoga or mobility
+
+MIND
+- Great → 10 min journaling
+- Good → 10 min guided meditation
+- Tired → 15 min hot bath
+- Stressed → 5 min box breathing
+
+FUEL
+- Great → High protein focus
+- Good → Balanced meals
+- Tired → Light and easy digestion
+- Stressed → Whole-food reset
+
+HYDRATE
+- Great → Post-workout hydration focus
+- Good → 8 cups water baseline
+- Tired → 10+ cups + electrolytes
+- Stressed → Steady hydration + lower caffeine
+
+If there is a fifth category like Recovery, it should follow the same logic:
+- exactly 4 options
+- one per state
+- one final choice only
+
+FINAL GOAL
+
+After this refactor, the experience should feel like this:
+- the app understands whether I’m Great, Good, Tired, or Stressed
+- each category shows 4 coherent options mapped to those states
+- one option is smartly recommended based on my current state and health data
+- I can override it easily
+- I pick one thing for Move, one for Mind, one for Fuel, one for Hydrate
+- those choices become my actual plan for the day
+- that same plan shows up consistently across Today and Plan
+- the UI feels clean, intentional, and premium
+- the product feels like a real coach, not a random wellness checklist
+
+ACCEPTANCE CRITERIA
+
+Please consider this complete only when all of the below are true:
+
+1. Each category only allows one primary selection
+2. Each category shows exactly 4 options
+3. The 4 options in each category map clearly to Great, Good, Tired, and Stressed
+4. All options inside a category are coherent and parallel
+5. Today tab and Plan tab stay perfectly synced for the same day
+6. Selected options display clearly on the main cards
+7. Recommendation logic can identify and highlight the best state-matched option
+8. Supporting suggestions are separated from primary choices
+9. State is stored cleanly for future trends and analytics
+10. Bottom sheets and typography feel standardized across the app
+11. The experience feels more like choosing a real daily plan and less like browsing a list of wellness ideas

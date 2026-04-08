@@ -15,8 +15,8 @@ import * as Haptics from "expo-haptics";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
+import { CATEGORY_OPTIONS } from "@/types";
 import type { ActionCategory, WeeklyPlanDay } from "@/types";
-import { WEEKLY_OPTIONS } from "@/types";
 
 const CATEGORY_META: Record<ActionCategory, { label: string; icon: keyof typeof Feather.glyphMap; color: string }> = {
   move: { label: "Move", icon: "activity", color: "#FF6B6B" },
@@ -187,45 +187,81 @@ export default function PlanScreen() {
       <Modal visible={!!editingDay && !!editingCategory} animationType="slide" transparent>
         <Pressable style={styles.modalOverlay} onPress={() => { setEditingDay(null); setEditingCategory(null); }}>
           <Pressable
-            style={[styles.modalSheet, { backgroundColor: c.card, paddingBottom: Math.max(insets.bottom, 20) }]}
+            style={[styles.modalSheet, { backgroundColor: c.card, paddingBottom: Math.max(insets.bottom, 24) }]}
             onPress={(e) => e.stopPropagation()}
           >
-            {editingCategory && editingDay && (
-              <>
-                <View style={styles.modalHandle} />
-                <Text style={[styles.modalTitle, { color: c.foreground }]}>
-                  {editingDay.dayOfWeek}: {CATEGORY_META[editingCategory].label}
-                </Text>
-                <Text style={[styles.modalSubtitle, { color: c.mutedForeground }]}>
-                  Recommended: {editingDay.actions.find(a => a.category === editingCategory)?.recommended}
-                </Text>
-                <View style={styles.optionsGrid}>
-                  {WEEKLY_OPTIONS[editingCategory].map((option) => {
-                    const currentAction = editingDay.actions.find(a => a.category === editingCategory);
-                    const isSelected = currentAction?.chosen === option;
-                    return (
-                      <Pressable
-                        key={option}
-                        onPress={() => selectOption(option)}
-                        style={[
-                          styles.optionChip,
-                          { borderColor: c.border },
-                          isSelected && { backgroundColor: c.primary + "12", borderColor: c.primary },
-                        ]}
-                      >
-                        <Text style={[
-                          styles.optionText,
-                          { color: c.foreground },
-                          isSelected && { color: c.primary, fontFamily: "Inter_600SemiBold" },
-                        ]}>
-                          {option}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </>
-            )}
+            {editingCategory && editingDay && (() => {
+              const meta = CATEGORY_META[editingCategory];
+              const options = CATEGORY_OPTIONS[editingCategory];
+              const currentAction = editingDay.actions.find(a => a.category === editingCategory);
+              const selectedOption = options.find(o => o.title === currentAction?.chosen);
+              return (
+                <>
+                  <View style={styles.modalHandle} />
+                  <View style={styles.modalHeaderRow}>
+                    <View style={[styles.modalIconWrap, { backgroundColor: meta.color + "12" }]}>
+                      <Feather name={meta.icon} size={18} color={meta.color} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.modalTitle, { color: c.foreground }]}>
+                        {editingDay.dayOfWeek}: {meta.label}
+                      </Text>
+                      <Text style={[styles.modalSubtitle, { color: c.mutedForeground }]}>Choose one for the day</Text>
+                    </View>
+                  </View>
+                  <View style={styles.optionsGrid}>
+                    {options.map((option) => {
+                      const isSelected = currentAction?.chosen === option.title;
+                      const isRecommended = currentAction?.recommended === option.title;
+                      return (
+                        <Pressable
+                          key={option.id}
+                          onPress={() => selectOption(option.title)}
+                          style={({ pressed }) => [
+                            styles.optionChip,
+                            {
+                              borderColor: isSelected ? meta.color + "40" : c.border + "30",
+                              backgroundColor: isSelected ? meta.color + "10" : c.background,
+                              opacity: pressed ? 0.85 : 1,
+                            },
+                          ]}
+                        >
+                          <View style={styles.optionContent}>
+                            <View style={styles.optionTitleRow}>
+                              <Text style={[
+                                styles.optionText,
+                                { color: isSelected ? meta.color : c.foreground },
+                                isSelected && { fontFamily: "Inter_600SemiBold" },
+                              ]}>
+                                {option.title}
+                              </Text>
+                              {isSelected && <Feather name="check-circle" size={18} color={meta.color} />}
+                            </View>
+                            <Text style={[styles.optionSubtitle, { color: c.mutedForeground }]}>{option.subtitle}</Text>
+                            {isRecommended && !isSelected && (
+                              <View style={[styles.recBadge, { backgroundColor: c.success + "14" }]}>
+                                <Feather name="zap" size={10} color={c.success} />
+                                <Text style={[styles.recBadgeText, { color: c.success }]}>Recommended</Text>
+                              </View>
+                            )}
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                  {selectedOption?.supportText && selectedOption.supportText.length > 0 && (
+                    <View style={styles.supportSection}>
+                      {selectedOption.supportText.map((tip, i) => (
+                        <View key={i} style={styles.supportRow}>
+                          <Feather name="info" size={11} color={c.mutedForeground} />
+                          <Text style={[styles.supportTip, { color: c.mutedForeground }]}>{tip}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </>
+              );
+            })()}
           </Pressable>
         </Pressable>
       </Modal>
@@ -363,7 +399,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 28,
     paddingHorizontal: 24,
     paddingTop: 12,
-    maxHeight: "60%",
+    maxHeight: "70%",
   },
   modalHandle: {
     width: 36,
@@ -373,29 +409,85 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     marginBottom: 16,
   },
+  modalHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 20,
+  },
+  modalIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   modalTitle: {
     fontSize: 18,
     fontFamily: "Inter_600SemiBold",
     letterSpacing: -0.3,
-    marginBottom: 4,
   },
   modalSubtitle: {
     fontSize: 13,
     fontFamily: "Inter_400Regular",
-    marginBottom: 16,
+    marginTop: 2,
   },
   optionsGrid: {
-    gap: 8,
+    gap: 10,
     paddingBottom: 8,
   },
   optionChip: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    borderWidth: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    borderRadius: 16,
+    borderWidth: 1.5,
+  },
+  optionContent: {
+    gap: 4,
+  },
+  optionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   optionText: {
     fontSize: 15,
     fontFamily: "Inter_500Medium",
+    flex: 1,
+  },
+  optionSubtitle: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    opacity: 0.7,
+  },
+  recBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    alignSelf: "flex-start",
+    marginTop: 4,
+  },
+  recBadgeText: {
+    fontSize: 11,
+    fontFamily: "Inter_500Medium",
+  },
+  supportSection: {
+    marginTop: 16,
+    gap: 8,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(128,128,128,0.15)",
+  },
+  supportRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  supportTip: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
   },
 });

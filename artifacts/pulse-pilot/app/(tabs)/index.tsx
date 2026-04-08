@@ -22,8 +22,8 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 import { useApp } from "@/context/AppContext";
 import { generateCoachInsight } from "@/data/insights";
 import { useColors } from "@/hooks/useColors";
-import { ACTION_OPTIONS } from "@/types";
-import type { MetricKey, FeelingType, EnergyLevel, StressLevel, HydrationLevel, TrainingIntent, ChatMessage, DailyStatusLabel, ActionCategory } from "@/types";
+import { CATEGORY_OPTIONS } from "@/types";
+import type { MetricKey, FeelingType, EnergyLevel, StressLevel, HydrationLevel, TrainingIntent, ChatMessage, DailyStatusLabel, ActionCategory, CategoryOption } from "@/types";
 
 const FEELINGS: { key: NonNullable<FeelingType>; label: string }[] = [
   { key: "great", label: "Great" },
@@ -739,53 +739,83 @@ export default function DashboardScreen() {
         onRequestClose={() => setEditingAction(null)}
       >
         <Pressable style={styles.modalOverlay} onPress={() => setEditingAction(null)}>
-          <Pressable style={[styles.modalSheet, { backgroundColor: c.card }]} onPress={(e) => e.stopPropagation()}>
-            {editingAction && (
-              <>
-                <View style={styles.modalHandle}>
-                  <View style={[styles.handleBar, { backgroundColor: c.border }]} />
-                </View>
-                <View style={styles.modalHeader}>
-                  <View style={[styles.modalIconWrap, { backgroundColor: ACTION_META[editingAction].color + "12" }]}>
-                    <Feather name={ACTION_META[editingAction].icon} size={18} color={ACTION_META[editingAction].color} />
+          <Pressable style={[styles.modalSheet, { backgroundColor: c.card, paddingBottom: Math.max(bottomPad, 24) }]} onPress={(e) => e.stopPropagation()}>
+            {editingAction && (() => {
+              const meta = ACTION_META[editingAction];
+              const options = CATEGORY_OPTIONS[editingAction];
+              const currentAction = dailyPlan.actions.find(a => a.category === editingAction);
+              const selectedOption = options.find(o => o.title === currentAction?.text);
+              return (
+                <>
+                  <View style={styles.modalHandle}>
+                    <View style={[styles.handleBar, { backgroundColor: c.border }]} />
                   </View>
-                  <Text style={[styles.modalTitle, { color: c.foreground }]}>{ACTION_META[editingAction].label}</Text>
-                </View>
-                <View style={styles.modalOptions}>
-                  {ACTION_OPTIONS[editingAction].map((option) => {
-                    const currentAction = dailyPlan.actions.find(a => a.category === editingAction);
-                    const isSelected = currentAction?.text === option;
-                    return (
-                      <Pressable
-                        key={option}
-                        onPress={() => {
-                          haptic();
-                          const action = dailyPlan.actions.find(a => a.category === editingAction);
-                          if (action) {
-                            editAction(action.id, option);
-                          }
-                          setEditingAction(null);
-                        }}
-                        style={({ pressed }) => [
-                          styles.modalOption,
-                          {
-                            backgroundColor: isSelected ? c.primary + "10" : c.background,
-                            borderColor: isSelected ? c.primary + "30" : c.border + "40",
-                            opacity: pressed ? 0.7 : 1,
-                          },
-                        ]}
-                      >
-                        <Text style={[
-                          styles.modalOptionText,
-                          { color: isSelected ? c.primary : c.foreground },
-                        ]}>{option}</Text>
-                        {isSelected && <Feather name="check" size={16} color={c.primary} />}
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </>
-            )}
+                  <View style={styles.modalHeader}>
+                    <View style={[styles.modalIconWrap, { backgroundColor: meta.color + "12" }]}>
+                      <Feather name={meta.icon} size={18} color={meta.color} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.modalTitle, { color: c.foreground }]}>{meta.label}</Text>
+                      <Text style={[styles.modalInstruction, { color: c.mutedForeground }]}>Choose one for today</Text>
+                    </View>
+                  </View>
+                  <View style={styles.modalOptions}>
+                    {options.map((option) => {
+                      const isSelected = currentAction?.text === option.title;
+                      const isRecommended = option.stateTag === dailyPlan.recommendedStateTag;
+                      return (
+                        <Pressable
+                          key={option.id}
+                          onPress={() => {
+                            haptic();
+                            if (currentAction) {
+                              editAction(currentAction.id, option.title);
+                            }
+                            setEditingAction(null);
+                          }}
+                          style={({ pressed }) => [
+                            styles.modalOption,
+                            {
+                              backgroundColor: isSelected ? meta.color + "10" : c.background,
+                              borderColor: isSelected ? meta.color + "40" : c.border + "30",
+                              opacity: pressed ? 0.85 : 1,
+                            },
+                          ]}
+                        >
+                          <View style={styles.modalOptionContent}>
+                            <View style={styles.modalOptionTitleRow}>
+                              <Text style={[
+                                styles.modalOptionText,
+                                { color: isSelected ? meta.color : c.foreground },
+                                isSelected && { fontFamily: "Inter_600SemiBold" },
+                              ]}>{option.title}</Text>
+                              {isSelected && <Feather name="check-circle" size={18} color={meta.color} />}
+                            </View>
+                            <Text style={[styles.modalOptionSubtitle, { color: c.mutedForeground }]}>{option.subtitle}</Text>
+                            {isRecommended && !isSelected && (
+                              <View style={[styles.recommendedBadge, { backgroundColor: c.success + "14" }]}>
+                                <Feather name="zap" size={10} color={c.success} />
+                                <Text style={[styles.recommendedText, { color: c.success }]}>Best match today</Text>
+                              </View>
+                            )}
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                  {selectedOption?.supportText && selectedOption.supportText.length > 0 && (
+                    <View style={styles.supportSection}>
+                      {selectedOption.supportText.map((tip, i) => (
+                        <View key={i} style={styles.supportRow}>
+                          <Feather name="info" size={11} color={c.mutedForeground} />
+                          <Text style={[styles.supportText, { color: c.mutedForeground }]}>{tip}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </>
+              );
+            })()}
           </Pressable>
         </Pressable>
       </Modal>
@@ -1304,20 +1334,66 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: "Inter_600SemiBold",
   },
+  modalInstruction: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    marginTop: 2,
+  },
   modalOptions: {
-    gap: 8,
+    gap: 10,
   },
   modalOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
     paddingVertical: 14,
     paddingHorizontal: 18,
     borderRadius: 16,
-    borderWidth: 1,
+    borderWidth: 1.5,
+  },
+  modalOptionContent: {
+    gap: 4,
+  },
+  modalOptionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   modalOptionText: {
     fontSize: 15,
     fontFamily: "Inter_500Medium",
+    flex: 1,
+  },
+  modalOptionSubtitle: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    opacity: 0.7,
+  },
+  recommendedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    alignSelf: "flex-start",
+    marginTop: 4,
+  },
+  recommendedText: {
+    fontSize: 11,
+    fontFamily: "Inter_500Medium",
+  },
+  supportSection: {
+    marginTop: 16,
+    gap: 8,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(128,128,128,0.15)",
+  },
+  supportRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  supportText: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
   },
 });

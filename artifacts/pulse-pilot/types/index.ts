@@ -94,6 +94,7 @@ export interface DailyPlan {
   readinessScore: number;
   readinessLabel: "Low" | "Moderate" | "Good" | "Excellent";
   dailyState: DailyState;
+  recommendedStateTag: StateTag;
   statusLabel: DailyStatusLabel;
   statusDrivers: string[];
   guidance: string;
@@ -155,45 +156,6 @@ export interface WeeklyDayAction {
   completed: boolean;
 }
 
-export const WEEKLY_OPTIONS: Record<ActionCategory, string[]> = {
-  move: [
-    "20 min walk",
-    "30 min yoga",
-    "40 min cardio",
-    "45 min strength",
-    "Mobility & stretching",
-    "Active recovery",
-    "Rest day",
-  ],
-  fuel: [
-    "Balanced meals",
-    "High protein",
-    "Moderate carb",
-    "Lighter meals",
-    "Recovery nutrition",
-  ],
-  hydrate: [
-    "8 cups water",
-    "10+ cups water",
-    "Water + electrolytes",
-    "Hydration focus",
-  ],
-  recover: [
-    "Bed by 10:00 pm",
-    "Bed by 10:30 pm",
-    "Aim for 7 hours",
-    "Aim for 8 hours",
-    "Wind down 30 min early",
-  ],
-  mind: [
-    "5 min breathing",
-    "10 min breathing",
-    "5 min meditation",
-    "10 min meditation",
-    "Quiet time",
-    "Skip",
-  ],
-};
 
 export interface ChatMessage {
   id: string;
@@ -223,6 +185,59 @@ export type EnergyLevel = "excellent" | "high" | "medium" | "low" | null;
 export type StressLevel = "low" | "moderate" | "high" | "very_high" | null;
 export type HydrationLevel = "hydrated" | "good" | "low" | "dehydrated" | null;
 export type TrainingIntent = "none" | "light" | "moderate" | "intense" | null;
+
+export type StateTag = "great" | "good" | "tired" | "stressed";
+
+export interface CategoryOption {
+  id: string;
+  title: string;
+  subtitle: string;
+  category: ActionCategory;
+  stateTag: StateTag;
+  supportText?: string[];
+  durationMinutes?: number;
+  intensity?: "low" | "moderate" | "high";
+}
+
+export const CATEGORY_OPTIONS: Record<ActionCategory, CategoryOption[]> = {
+  move: [
+    { id: "move_great", title: "60 min strength training", subtitle: "Strong training day", category: "move", stateTag: "great", durationMinutes: 60, intensity: "high", supportText: ["5 min dynamic warmup", "Post-workout stretch"] },
+    { id: "move_good", title: "45 min cardio", subtitle: "Solid baseline movement", category: "move", stateTag: "good", durationMinutes: 45, intensity: "moderate", supportText: ["Keep a conversational pace", "Cool down with 5 min walk"] },
+    { id: "move_tired", title: "20 min recovery walk", subtitle: "Gentle recovery movement", category: "move", stateTag: "tired", durationMinutes: 20, intensity: "low", supportText: ["Fresh air helps energy", "No pace pressure"] },
+    { id: "move_stressed", title: "15 min yoga or mobility", subtitle: "Nervous system reset", category: "move", stateTag: "stressed", durationMinutes: 15, intensity: "low", supportText: ["Focus on breathing", "Gentle stretching only"] },
+  ],
+  mind: [
+    { id: "mind_great", title: "10 min journaling", subtitle: "Capture your clarity", category: "mind", stateTag: "great", durationMinutes: 10, supportText: ["Write freely, no rules", "Reflect on what's working"] },
+    { id: "mind_good", title: "10 min guided meditation", subtitle: "Centered and focused", category: "mind", stateTag: "good", durationMinutes: 10, supportText: ["Use a timer or app", "Find a quiet spot"] },
+    { id: "mind_tired", title: "15 min hot bath", subtitle: "Rest and restore", category: "mind", stateTag: "tired", durationMinutes: 15, supportText: ["Add epsom salts if available", "No screens during"] },
+    { id: "mind_stressed", title: "5 min box breathing", subtitle: "Calm your nervous system", category: "mind", stateTag: "stressed", durationMinutes: 5, supportText: ["4 counts in, hold, out, hold", "Repeat 5 cycles"] },
+  ],
+  fuel: [
+    { id: "fuel_great", title: "High protein focus", subtitle: "Fuel your performance", category: "fuel", stateTag: "great", supportText: ["Protein at every meal", "Include whole grains for energy"] },
+    { id: "fuel_good", title: "Balanced meals", subtitle: "Solid everyday nutrition", category: "fuel", stateTag: "good", supportText: ["Protein, carbs, and fats each meal", "Include colorful vegetables"] },
+    { id: "fuel_tired", title: "Light and easy digestion", subtitle: "Gentle on your system", category: "fuel", stateTag: "tired", supportText: ["Warm, simple meals", "Steady blood sugar support"] },
+    { id: "fuel_stressed", title: "Whole-food reset", subtitle: "Nourish and simplify", category: "fuel", stateTag: "stressed", supportText: ["Magnesium-rich greens and nuts", "Minimize processed food"] },
+  ],
+  hydrate: [
+    { id: "hydrate_great", title: "Post-workout hydration focus", subtitle: "Replace what you lose", category: "hydrate", stateTag: "great", supportText: ["Water + electrolytes around training", "Track intake if possible"] },
+    { id: "hydrate_good", title: "8 cups water baseline", subtitle: "Stay consistent today", category: "hydrate", stateTag: "good", supportText: ["Sip throughout the day", "One glass with each meal"] },
+    { id: "hydrate_tired", title: "10+ cups + electrolytes", subtitle: "Extra hydration for recovery", category: "hydrate", stateTag: "tired", supportText: ["Dehydration worsens fatigue", "Add a pinch of salt or electrolyte mix"] },
+    { id: "hydrate_stressed", title: "Steady hydration + lower caffeine", subtitle: "Calm your system", category: "hydrate", stateTag: "stressed", supportText: ["Swap afternoon coffee for herbal tea", "Hydration supports stress response"] },
+  ],
+  recover: [
+    { id: "recover_great", title: "Bed by 10:30 pm", subtitle: "Protect your gains", category: "recover", stateTag: "great", supportText: ["Wind down at 10:00", "Muscles repair during sleep"] },
+    { id: "recover_good", title: "Aim for 8 hours", subtitle: "Solid recovery window", category: "recover", stateTag: "good", supportText: ["Screen-free 30 min before bed", "Keep the room cool and dark"] },
+    { id: "recover_tired", title: "Bed by 9:30 pm", subtitle: "Prioritize extra rest", category: "recover", stateTag: "tired", supportText: ["Start winding down at 9:00", "Skip late-night screens"] },
+    { id: "recover_stressed", title: "Warm bath + bed by 10 pm", subtitle: "Calm before sleep", category: "recover", stateTag: "stressed", supportText: ["Hot water lowers cortisol", "Try a body scan in bed"] },
+  ],
+};
+
+export const WEEKLY_OPTIONS: Record<ActionCategory, string[]> = Object.fromEntries(
+  (["move", "fuel", "hydrate", "recover", "mind"] as ActionCategory[]).map(cat => [
+    cat,
+    CATEGORY_OPTIONS[cat].map(o => o.title),
+  ])
+) as Record<ActionCategory, string[]>;
 
 export type MetricKey = "sleep" | "hrv" | "steps" | "restingHR" | "recovery" | "weight";
 
@@ -254,53 +269,9 @@ export interface WellnessInputs {
   trainingIntent: TrainingIntent;
 }
 
-export const ACTION_OPTIONS: Record<ActionCategory, string[]> = {
-  move: [
-    "20 min walk",
-    "30 min yoga or stretch",
-    "40 min cardio",
-    "Strength training",
-    "Stretch / mobility",
-    "Active recovery · gentle movement",
-    "Nature walk · fresh air",
-    "Rest & recovery",
-  ],
-  fuel: [
-    "Balanced meals · protein + veggies each meal",
-    "High protein · lean meats, eggs, legumes",
-    "Whole-food focus · minimize processed food",
-    "Anti-inflammatory foods · leafy greens, berries, fish",
-    "Light meals · easy on digestion",
-    "Recovery nutrition · extra protein + complex carbs",
-    "Meal prep for tomorrow",
-    "Mindful eating · slow down, no screens",
-  ],
-  hydrate: [
-    "8+ cups water throughout the day",
-    "10+ cups water + electrolytes",
-    "Herbal tea in the evening",
-    "Start morning with a big glass of water",
-    "Reduce caffeine after 2 pm",
-    "Track water intake today",
-  ],
-  recover: [
-    "Bed by 10:00 pm · wind down at 9:30",
-    "Aim for 8 hours · protect your sleep window",
-    "Wind down 30 min before bed · no screens",
-    "Take a warm bath or shower before bed",
-    "15 min stretch or foam roll",
-    "Epsom salt soak · muscle recovery",
-    "Limit alcohol tonight",
-    "Sleep in / recovery focus",
-  ],
-  mind: [
-    "5 min box breathing",
-    "10 min guided meditation",
-    "Gratitude journaling · 3 things",
-    "15 min screen-free break",
-    "10 min walk outside · no phone",
-    "Body scan relaxation",
-    "Call or connect with someone you care about",
-    "Skip for today",
-  ],
-};
+export const ACTION_OPTIONS: Record<ActionCategory, string[]> = Object.fromEntries(
+  (["move", "fuel", "hydrate", "recover", "mind"] as ActionCategory[]).map(cat => [
+    cat,
+    CATEGORY_OPTIONS[cat].map(o => o.title),
+  ])
+) as Record<ActionCategory, string[]>;
