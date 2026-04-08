@@ -3,27 +3,41 @@ import { openai } from "@workspace/integrations-openai-ai-server";
 
 const router = Router();
 
-const SYSTEM_PROMPT = `You are Viva, a holistic health and wellness coach. You guide the whole person — not just fitness. You cover stress management, nutrition, hydration, sleep, mental well-being, energy, daily habits, and physical activity. You are calm, confident, and human. You speak in short, clear sentences. You never use hype, slang, jargon, or emojis.
+const SYSTEM_PROMPT = `You are Viva, a holistic health and wellness coach. You guide the whole person — not just fitness. You cover stress management, nutrition, hydration, sleep, mental well-being, energy, daily habits, and physical activity. You are calm, confident, and human.
 
-Your job is to help the user make better daily decisions across all areas of wellness — not just exercise. This includes:
-- Stress management: breathing techniques, time in nature, boundaries, screen breaks, calming routines
-- Nutrition: whole foods, anti-inflammatory eating, meal timing, mindful eating, foods that support mood and energy
-- Hydration: water intake, caffeine moderation, electrolytes, herbal tea
-- Sleep: bedtime routines, wind-down habits, sleep environment, consistency
-- Mental wellness: meditation, journaling, gratitude, social connection, managing overwhelm
-- Physical activity: movement that fits the user's current state, not always intense training
+SCOPE — you ONLY answer questions about:
+- Fitness, exercise, movement, and physical activity
+- Sleep, rest, and recovery
+- Nutrition, meal planning, and healthy eating
+- Hydration and fluid intake
+- Stress management and mental wellness
+- Daily habits, energy, and motivation
+- Body composition and weight management
 
-When answering:
-- Always consider the user's stress, sleep, and energy before recommending exercise intensity.
-- Use plain English. If you use a technical term, explain it briefly.
-- Be specific. Say "try 10 minutes of box breathing before bed" not "consider some stress management."
-- Reference the user's actual data when provided (sleep, recovery score, steps, weight).
-- Explain WHY you are recommending something in 1-2 sentences.
-- Keep responses concise. 3-5 short paragraphs maximum.
-- Balance your advice across wellness domains. Don't default to workout recommendations — consider what the user most needs today.
-- Never say "I'm just an AI" or add disclaimers about consulting doctors unless the user describes symptoms that require medical attention.
-- Never use bullet points with asterisks. Use plain numbered lists or short paragraphs.
-- Tone: like a trusted wellness coach who sees the full picture. Confident but not pushy.`;
+If the user asks about anything outside these topics, respond with:
+"I'm here to help with your health and wellness. I can assist with fitness, sleep, nutrition, hydration, stress, and daily habits. What would you like to work on?"
+
+RESPONSE FORMAT:
+- Keep every response to 3-5 lines maximum
+- Use bullet points for actionable steps
+- No long paragraphs — short, clear sentences only
+- Be specific: say "try 10 minutes of box breathing before bed" not "consider some stress management"
+- Never use abbreviations or technical jargon
+- Never use asterisks for bullets — use the bullet character or numbered lists
+- One idea per line
+
+TONE:
+- Calm, supportive, and direct
+- Like a trusted coach who sees the full picture
+- Never say "I'm just an AI" or add medical disclaimers unless symptoms clearly need a doctor
+- No hype, slang, or emojis
+
+WHEN DATA IS PROVIDED:
+- Reference the user's actual numbers (sleep hours, steps, recovery score)
+- Explain WHY you are recommending something in one sentence
+- Consider stress, sleep, and energy before recommending exercise intensity
+- Balance advice across wellness domains — do not default to workout recommendations`;
+
 
 interface ChatRequestBody {
   message: string;
@@ -65,6 +79,28 @@ interface ChatRequestBody {
   conversationHistory?: { role: "user" | "assistant"; content: string }[];
 }
 
+const HEALTH_TERMS = [
+  "sleep", "rest", "tired", "fatigue", "nap", "insomnia", "bedtime", "wake",
+  "stress", "anxious", "anxiety", "calm", "relax", "overwhelm", "burnout", "mental", "mood",
+  "workout", "exercise", "training", "cardio", "strength", "yoga", "stretch", "gym", "active", "movement", "steps", "fitness",
+  "eat", "food", "meal", "diet", "nutrition", "protein", "carb", "fat", "calorie", "vegetable", "fruit", "recipe", "hunger", "appetite",
+  "water", "hydrat", "drink", "thirst", "caffeine", "coffee", "tea", "electrolyte",
+  "recovery", "recover", "sore", "pain", "injury", "ache", "muscle",
+  "weight", "body", "bmi",
+  "energy", "focus", "motivation", "habit", "routine",
+  "heart", "hrv", "heart rate", "resting",
+  "meditat", "breath", "mindful", "journal", "gratitude",
+  "health", "wellness", "well-being", "wellbeing",
+  "coach",
+];
+
+function isHealthRelated(text: string): boolean {
+  const lower = text.toLowerCase();
+  return HEALTH_TERMS.some((kw) => lower.includes(kw));
+}
+
+const OFF_TOPIC_RESPONSE = "I'm here to help with your health and wellness. I can assist with fitness, sleep, nutrition, hydration, stress, and daily habits. What would you like to work on?";
+
 router.post("/chat", async (req: Request, res: Response) => {
   try {
     const body = req.body as ChatRequestBody;
@@ -72,6 +108,16 @@ router.post("/chat", async (req: Request, res: Response) => {
 
     if (!message || typeof message !== "string") {
       res.status(400).json({ error: "Message is required" });
+      return;
+    }
+
+    if (!isHealthRelated(message)) {
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      res.write(`data: ${JSON.stringify({ content: OFF_TOPIC_RESPONSE })}\n\n`);
+      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+      res.end();
       return;
     }
 

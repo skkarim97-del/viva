@@ -1,0 +1,142 @@
+Fix the chat layout and restrict the coach to health and wellness queries only.
+
+## 1. Fix chat layout (no overlap with input bar)
+
+### Problem
+
+Responses are currently overlapping with the input field. This breaks usability and feels unpolished.
+
+### Solution
+
+Implement proper chat layout structure:
+
+### A. Message container
+
+* must be vertically scrollable
+* must take full available height above the input bar
+* must include bottom padding equal to input height
+
+Set:
+
+* padding-bottom: 100–120px (to fully clear the input bar)
+
+---
+
+### B. Input bar
+
+* fixed to bottom of screen
+* always visible
+* sits above the message container
+
+---
+
+### C. Behavior
+
+* latest message should always be fully visible
+* no text should ever sit behind or under the input bar
+* smooth scroll to bottom when new messages appear
+
+---
+
+### UX standard
+
+Match behavior of:
+
+* iMessage
+* WhatsApp
+* ChatGPT mobile
+
+The user should never lose visibility of content.
+
+---
+
+## 2. Restrict coach to health and wellness only
+
+The coach should ONLY respond to:
+
+* fitness
+* sleep
+* recovery
+* nutrition
+* hydration
+* stress
+* mental wellness
+
+---
+
+## 3. Add input validation (before sending to AI)
+
+When user submits a question:
+
+### If relevant:
+
+* proceed normally
+
+### If NOT relevant:
+
+Return a short, friendly response:
+
+Example:
+“I can help with your health, fitness, sleep, or recovery. Try asking about your day, stress, or habits.”
+
+Do NOT send irrelevant queries to the AI.
+
+---
+
+## 4. Add system prompt guardrails
+
+Update the AI system prompt to enforce scope:
+
+### Rules:
+
+* only answer health and wellness questions
+* ignore or redirect unrelated topics
+* keep responses simple and actionable
+* avoid technical jargon
+* no abbreviations
+* short, structured responses
+
+---
+
+## 5. Improve response format
+
+Responses should:
+
+* be concise (3–5 lines max)
+* include actionable steps
+* avoid long paragraphs
+* use bullet points when helpful
+
+---
+
+## 6. Example transformation
+
+Instead of long explanation:
+
+Use:
+
+“Here are a few simple ways to reduce stress:
+
+• Take 5–10 minutes for slow breathing
+• Go for a short walk outside
+• Stay hydrated
+• Wind down earlier tonight
+
+Start small and stay consistent.”
+
+---
+
+## Final goal
+
+The coach should feel:
+
+* focused
+* helpful
+* easy to use
+* clearly built for health and wellness only
+
+And the chat experience should feel:
+
+* clean
+* fully visible
+* native-quality

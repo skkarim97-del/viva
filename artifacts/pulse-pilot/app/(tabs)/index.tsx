@@ -1,17 +1,19 @@
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
+  FlatList,
   Platform,
   Pressable,
   TextInput,
   KeyboardAvoidingView,
   Modal,
+  Dimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -88,6 +90,8 @@ export default function DashboardScreen() {
   const [streamingText, setStreamingText] = useState("");
   const [showRefine, setShowRefine] = useState(false);
   const [editingAction, setEditingAction] = useState<ActionCategory | null>(null);
+  const [showChat, setShowChat] = useState(false);
+  const chatListRef = useRef<FlatList>(null);
 
   if (!todayMetrics || !dailyPlan) {
     return (
@@ -143,8 +147,30 @@ export default function DashboardScreen() {
     setTrainingIntent(trainingIntent === ti ? null : ti);
   };
 
+  const isHealthRelated = (text: string): boolean => {
+    const lower = text.toLowerCase();
+    const healthTerms = [
+      "sleep", "rest", "tired", "fatigue", "nap", "insomnia", "bedtime", "wake",
+      "stress", "anxious", "anxiety", "calm", "relax", "overwhelm", "burnout", "mental", "mood",
+      "workout", "exercise", "training", "cardio", "strength", "yoga", "stretch", "gym", "active", "movement", "steps", "fitness",
+      "eat", "food", "meal", "diet", "nutrition", "protein", "carb", "fat", "calorie", "vegetable", "fruit", "recipe", "hunger", "appetite",
+      "water", "hydrat", "drink", "thirst", "caffeine", "coffee", "tea", "electrolyte",
+      "recovery", "recover", "sore", "pain", "injury", "ache", "muscle",
+      "weight", "body", "bmi",
+      "energy", "focus", "motivation", "habit", "routine",
+      "heart", "hrv", "heart rate", "resting",
+      "meditat", "breath", "mindful", "journal", "gratitude",
+      "health", "wellness", "well-being", "wellbeing",
+      "coach",
+    ];
+    return healthTerms.some((kw) => lower.includes(kw));
+  };
+
   const sendAskMessage = async (text: string) => {
     if (!text.trim() || isTyping) return;
+
+    if (!showChat) setShowChat(true);
+
     const userMsg: ChatMessage = {
       id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
       role: "user",
@@ -154,6 +180,19 @@ export default function DashboardScreen() {
     setAskMessages((prev) => [...prev, userMsg]);
     addChatMessage(userMsg);
     setAskInput("");
+
+    if (!isHealthRelated(text)) {
+      const redirectMsg: ChatMessage = {
+        id: Date.now().toString() + "r",
+        role: "assistant",
+        content: "I'm your health and wellness coach. I can help with fitness, sleep, nutrition, hydration, stress, recovery, and daily habits. Try asking about your day, how to reduce stress, or what to eat for energy.",
+        timestamp: Date.now(),
+      };
+      setAskMessages((prev) => [...prev, redirectMsg]);
+      addChatMessage(redirectMsg);
+      return;
+    }
+
     setIsTyping(true);
     setStreamingText("");
 
@@ -336,40 +375,15 @@ export default function DashboardScreen() {
             <Text style={[styles.coachInsightText, { color: c.foreground }]}>{coachInsight}</Text>
           ) : null}
 
-          {askMessages.length > 0 && (
-            <View style={styles.askMessagesWrap}>
-              {askMessages.slice(-4).map((msg) => (
-                <View key={msg.id} style={[styles.askMsgRow, msg.role === "user" && styles.askMsgRowUser]}>
-                  <View style={[
-                    styles.askBubble,
-                    msg.role === "user"
-                      ? { backgroundColor: c.primary }
-                      : { backgroundColor: c.background },
-                  ]}>
-                    <Text style={[styles.askMsgText, { color: msg.role === "user" ? c.primaryForeground : c.foreground }]}>
-                      {msg.content}
-                    </Text>
-                  </View>
-                </View>
-              ))}
-              {streamingText ? (
-                <View style={styles.askMsgRow}>
-                  <View style={[styles.askBubble, { backgroundColor: c.background }]}>
-                    <Text style={[styles.askMsgText, { color: c.foreground }]}>{streamingText}{"\u258D"}</Text>
-                  </View>
-                </View>
-              ) : isTyping ? (
-                <View style={styles.askMsgRow}>
-                  <View style={[styles.askBubble, { backgroundColor: c.background }]}>
-                    <View style={styles.typingDots}>
-                      <View style={[styles.dot, { backgroundColor: c.mutedForeground }]} />
-                      <View style={[styles.dot, { backgroundColor: c.mutedForeground, opacity: 0.5 }]} />
-                      <View style={[styles.dot, { backgroundColor: c.mutedForeground, opacity: 0.25 }]} />
-                    </View>
-                  </View>
-                </View>
-              ) : null}
-            </View>
+          {askMessages.length > 0 && !showChat && (
+            <Pressable onPress={() => setShowChat(true)}>
+              <View style={[styles.askBubble, { backgroundColor: c.background }]}>
+                <Text style={[styles.askMsgText, { color: c.foreground }]} numberOfLines={2}>
+                  {askMessages[askMessages.length - 1].content}
+                </Text>
+              </View>
+              <Text style={[styles.chatViewAll, { color: c.primary }]}>View conversation</Text>
+            </Pressable>
           )}
 
           <View style={[styles.askInputRow, { backgroundColor: c.background }]}>
@@ -377,11 +391,12 @@ export default function DashboardScreen() {
               style={[styles.askInputField, { color: c.foreground }]}
               value={askInput}
               onChangeText={setAskInput}
-              placeholder="Ask about your day..."
+              placeholder="Ask about your health..."
               placeholderTextColor={c.mutedForeground + "80"}
               onSubmitEditing={() => sendAskMessage(askInput)}
               returnKeyType="send"
               editable={!isTyping}
+              onFocus={() => { if (askMessages.length > 0) setShowChat(true); }}
             />
             <Pressable
               onPress={() => sendAskMessage(askInput)}
@@ -394,7 +409,7 @@ export default function DashboardScreen() {
 
           {askMessages.length === 0 && (
             <View style={styles.askSuggestions}>
-              {["How is my sleep?", "Should I work out today?", "How can I reduce stress?"].map((q) => (
+              {["How is my sleep?", "What should I eat today?", "How can I manage stress?", "Am I drinking enough water?"].map((q) => (
                 <Pressable
                   key={q}
                   onPress={() => sendAskMessage(q)}
@@ -406,6 +421,84 @@ export default function DashboardScreen() {
             </View>
           )}
         </View>
+
+        <Modal visible={showChat} animationType="slide" presentationStyle="overFullScreen" statusBarTranslucent>
+          <View style={[styles.chatModal, { backgroundColor: c.background }]}>
+            <View style={[styles.chatHeader, { borderBottomColor: c.border, paddingTop: Math.max(insets.top, 16) }]}>
+              <Pressable onPress={() => setShowChat(false)} hitSlop={12}>
+                <Feather name="chevron-down" size={24} color={c.foreground} />
+              </Pressable>
+              <Text style={[styles.chatHeaderTitle, { color: c.foreground }]}>Your VIVA Coach</Text>
+              <View style={{ width: 24 }} />
+            </View>
+
+            <FlatList
+              ref={chatListRef}
+              data={[
+                ...askMessages,
+                ...(streamingText ? [{ id: "streaming", role: "assistant" as const, content: streamingText + "\u258D", timestamp: Date.now() }] : []),
+                ...(isTyping && !streamingText ? [{ id: "typing", role: "typing" as const, content: "", timestamp: Date.now() }] : []),
+              ]}
+              keyExtractor={(item) => item.id}
+              style={styles.chatList}
+              contentContainerStyle={styles.chatListContent}
+              onContentSizeChange={() => chatListRef.current?.scrollToEnd({ animated: true })}
+              onLayout={() => chatListRef.current?.scrollToEnd({ animated: false })}
+              renderItem={({ item: msg }) => {
+                if (msg.role === "typing") {
+                  return (
+                    <View style={styles.askMsgRow}>
+                      <View style={[styles.askBubble, { backgroundColor: c.card }]}>
+                        <View style={styles.typingDots}>
+                          <View style={[styles.dot, { backgroundColor: c.mutedForeground }]} />
+                          <View style={[styles.dot, { backgroundColor: c.mutedForeground, opacity: 0.5 }]} />
+                          <View style={[styles.dot, { backgroundColor: c.mutedForeground, opacity: 0.25 }]} />
+                        </View>
+                      </View>
+                    </View>
+                  );
+                }
+                return (
+                  <View style={[styles.askMsgRow, msg.role === "user" && styles.askMsgRowUser]}>
+                    <View style={[
+                      styles.askBubble,
+                      msg.role === "user"
+                        ? { backgroundColor: c.primary }
+                        : { backgroundColor: c.card },
+                    ]}>
+                      <Text style={[styles.askMsgText, { color: msg.role === "user" ? c.primaryForeground : c.foreground }]}>
+                        {msg.content}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              }}
+            />
+
+            <View style={[styles.chatInputContainer, { backgroundColor: c.background, paddingBottom: Math.max(bottomPad, 16) }]}>
+              <View style={[styles.askInputRow, { backgroundColor: c.card }]}>
+                <TextInput
+                  style={[styles.askInputField, { color: c.foreground }]}
+                  value={askInput}
+                  onChangeText={setAskInput}
+                  placeholder="Ask about your health..."
+                  placeholderTextColor={c.mutedForeground + "80"}
+                  onSubmitEditing={() => sendAskMessage(askInput)}
+                  returnKeyType="send"
+                  editable={!isTyping}
+                  autoFocus
+                />
+                <Pressable
+                  onPress={() => sendAskMessage(askInput)}
+                  disabled={isTyping || !askInput.trim()}
+                  style={[styles.askSendBtn, { backgroundColor: askInput.trim() && !isTyping ? c.primary : c.muted }]}
+                >
+                  <Feather name="arrow-up" size={14} color={askInput.trim() && !isTyping ? c.primaryForeground : c.mutedForeground} />
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         <View style={[styles.refineCard, { backgroundColor: c.card }]}>
           <Pressable
@@ -893,6 +986,43 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     lineHeight: 21,
     letterSpacing: -0.1,
+  },
+  chatViewAll: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    marginTop: 8,
+  },
+  chatModal: {
+    flex: 1,
+  },
+  chatHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  chatHeaderTitle: {
+    fontSize: 17,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: -0.3,
+  },
+  chatList: {
+    flex: 1,
+  },
+  chatListContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+    gap: 10,
+  },
+  chatInputContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(0,0,0,0.06)",
   },
   askMessagesWrap: {
     gap: 8,
