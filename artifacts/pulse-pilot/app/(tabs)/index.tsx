@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { useApp } from "@/context/AppContext";
+import { generateCoachInsight } from "@/data/insights";
 import { useColors } from "@/hooks/useColors";
 import { ACTION_OPTIONS } from "@/types";
 import type { MetricKey, FeelingType, EnergyLevel, StressLevel, HydrationLevel, TrainingIntent, ChatMessage, DailyStatusLabel, ActionCategory } from "@/types";
@@ -77,6 +78,7 @@ export default function DashboardScreen() {
     trainingIntent, setTrainingIntent,
     chatMessages, addChatMessage, profile,
     toggleAction, editAction, weeklyConsistency,
+    metrics, completionHistory,
   } = useApp();
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -95,6 +97,13 @@ export default function DashboardScreen() {
       </View>
     );
   }
+
+  const coachInsight = React.useMemo(() => {
+    if (!todayMetrics || metrics.length === 0) return "";
+    return generateCoachInsight(todayMetrics, metrics, {
+      feeling, energy, stress, hydration, trainingIntent, completionHistory,
+    });
+  }, [todayMetrics, metrics, feeling, energy, stress, hydration, trainingIntent, completionHistory]);
 
   const haptic = () => {
     if (Platform.OS !== "web") {
@@ -322,22 +331,24 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        <Pressable
-          onPress={() => setShowAsk(!showAsk)}
-          style={({ pressed }) => [
-            styles.askCard,
-            { backgroundColor: c.card, opacity: pressed ? 0.8 : 1 },
-          ]}
-        >
-          <View style={[styles.askIconWrap, { backgroundColor: c.primary + "10" }]}>
-            <Feather name="message-circle" size={18} color={c.primary} />
-          </View>
-          <View style={styles.askContent}>
-            <Text style={[styles.askTitle, { color: c.foreground }]}>Ask your coach</Text>
-            <Text style={[styles.askSub, { color: c.mutedForeground }]}>Follow up on your day, sleep, stress, or nutrition</Text>
-          </View>
-          <Feather name={showAsk ? "chevron-up" : "chevron-down"} size={16} color={c.mutedForeground + "60"} />
-        </Pressable>
+        <View style={[styles.askCard, { backgroundColor: c.card }]}>
+          {coachInsight ? (
+            <Text style={[styles.coachInsightText, { color: c.foreground }]}>{coachInsight}</Text>
+          ) : null}
+          <Pressable
+            onPress={() => setShowAsk(!showAsk)}
+            style={styles.askToggle}
+          >
+            <View style={[styles.askIconWrap, { backgroundColor: c.primary + "10" }]}>
+              <Feather name="message-circle" size={18} color={c.primary} />
+            </View>
+            <View style={styles.askContent}>
+              <Text style={[styles.askTitle, { color: c.foreground }]}>Ask your coach</Text>
+              <Text style={[styles.askSub, { color: c.mutedForeground }]}>Follow up on your day, sleep, stress, or nutrition</Text>
+            </View>
+            <Feather name={showAsk ? "chevron-up" : "chevron-down"} size={16} color={c.mutedForeground + "60"} />
+          </Pressable>
+        </View>
 
         {showAsk && (
           <View style={[styles.askPanel, { backgroundColor: c.card }]}>
@@ -884,12 +895,21 @@ const styles = StyleSheet.create({
   },
 
   askCard: {
+    padding: 20,
+    borderRadius: 24,
+    gap: 16,
+    marginBottom: 8,
+  },
+  coachInsightText: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 21,
+    letterSpacing: -0.1,
+  },
+  askToggle: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 18,
-    borderRadius: 24,
     gap: 12,
-    marginBottom: 8,
   },
   askIconWrap: {
     width: 42,
