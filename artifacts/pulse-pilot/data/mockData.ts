@@ -153,7 +153,7 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
   let workoutDesc = "";
 
   const isDehydrated = hydration === "dehydrated" || hydration === "low";
-  const hydrateText = isDehydrated ? "10+ cups water + electrolytes" : "8+ cups water";
+  const hydrateText = isDehydrated ? "10+ cups water + electrolytes" : "8+ cups water throughout the day";
 
   const recentHistory = history?.slice(-7) ?? [];
   const weeklyRate = recentHistory.length > 0
@@ -183,14 +183,14 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     yourDay = {
       move: "20 min walk · fresh air",
       fuel: "Warm, nourishing meals · anti-inflammatory foods",
-      hydrate: isDehydrated ? "10+ cups water · herbal tea tonight" : "8+ cups water · herbal tea tonight",
+      hydrate: isDehydrated ? "10+ cups water, herbal tea tonight" : "8+ cups water, herbal tea tonight",
       recover: "Wind down by 9:30 · bed by 10:00 pm",
       mind: "10 min guided meditation or body scan",
     };
     whyThisPlan = [
-      "Stress affects your entire body — sleep, digestion, energy, and mood.",
+      "Stress affects your entire body. sleep, digestion, energy, and mood.",
       "Simplifying today protects the rest of your week.",
-      "Recovery isn't just physical — your mind needs rest too.",
+      "Recovery isn't just physical. your mind needs rest too.",
     ];
     workoutType = "Rest";
     workoutIntensity = "low";
@@ -227,7 +227,7 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     yourDay = {
       move: "30 min yoga or stretch",
       fuel: "Whole foods · magnesium-rich foods (leafy greens, nuts)",
-      hydrate: isDehydrated ? "10+ cups water · reduce caffeine today" : "8+ cups water · reduce caffeine today",
+      hydrate: isDehydrated ? "10+ cups water, reduce caffeine today" : "8+ cups water, reduce caffeine today",
       recover: "Warm bath or shower · bed by 10:00 pm",
       mind: "10 min breathing · box breathing or 4-7-8",
     };
@@ -250,7 +250,7 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
       yourDay = {
         move: "20 min walk · easy pace",
         fuel: "Balanced meals · complex carbs for sustained energy",
-        hydrate: isDehydrated ? "10+ cups water · start with a big glass now" : "8+ cups water · start with a big glass now",
+        hydrate: isDehydrated ? "10+ cups water, start with a big glass now" : "8+ cups water, start with a big glass now",
         recover: "Bed by 10:00 pm · aim for 8 hours",
         mind: "5 min breathing or a screen-free break",
       };
@@ -271,7 +271,7 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
       yourDay = {
         move: "Stretch / mobility · or a nature walk",
         fuel: "Comfort food done right · warm, whole-food meals",
-        hydrate: isDehydrated ? "10+ cups water · herbal tea in the evening" : "8+ cups water · herbal tea in the evening",
+        hydrate: isDehydrated ? "10+ cups water, herbal tea in the evening" : "8+ cups water, herbal tea in the evening",
         recover: "Wind down by 9:30 · bed by 10:00 pm",
         mind: "10 min meditation · body scan or guided",
       };
@@ -294,13 +294,13 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     yourDay = {
       move: "20 min walk · fresh air helps energy",
       fuel: "Balanced meals · iron-rich foods and complex carbs",
-      hydrate: isDehydrated ? "10+ cups water · dehydration drains energy" : "8+ cups water · dehydration drains energy",
+      hydrate: isDehydrated ? "10+ cups water, dehydration drains energy" : "8+ cups water, dehydration drains energy",
       recover: "Bed by 10:00 pm · protect your sleep window",
       mind: "5 min breathing · reset mid-afternoon",
     };
     whyThisPlan = [
       "Low energy often signals dehydration, poor nutrition, or accumulated stress.",
-      "Addressing the basics — water, food, rest — is the fastest fix.",
+      "Addressing the basics. water, food, rest. is the fastest fix.",
       "A gentle day now prevents a forced rest day later.",
     ];
     workoutType = "Light Activity";
@@ -326,7 +326,7 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     whyThisPlan = feelingGreat
       ? [
           "When body and mind are aligned, that's when real progress happens.",
-          "Recovery and sleep are supporting you — take advantage of it.",
+          "Recovery and sleep are supporting you. take advantage of it.",
           "Challenge your body, nourish it well, and rest tonight.",
         ]
       : [
@@ -352,7 +352,7 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
       mind: "5 min breathing or journaling",
     };
     whyThisPlan = [
-      "Your body is partially recharged — a moderate effort keeps you progressing.",
+      "Your body is partially recharged. a moderate effort keeps you progressing.",
       "Good nutrition and hydration will support your recovery overnight.",
       "Consistency in the basics is what separates good weeks from great ones.",
     ];
@@ -374,7 +374,7 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
       mind: "10 min meditation · body scan or breathing",
     };
     whyThisPlan = [
-      "Your body needs time to repair — that includes rest, nutrition, and calm.",
+      "Your body needs time to repair. that includes rest, nutrition, and calm.",
       "Sleep, hydration, and stress management are your best tools right now.",
       "Pushing through fatigue creates more fatigue, not progress.",
     ];
@@ -510,13 +510,13 @@ export function generateWeeklyPlan(): WeeklyPlan {
   ];
 
   const dayConfigs: { move: string; fuel: string; hydrate: string; recover: string; mind: string }[] = [
-    { move: "45 min strength", fuel: "High protein", hydrate: "3L water", recover: "Bed by 10:00 pm", mind: "5 min breathing" },
+    { move: "45 min strength", fuel: "High protein", hydrate: "10+ cups water", recover: "Bed by 10:00 pm", mind: "5 min breathing" },
     { move: "40 min cardio", fuel: "Balanced meals", hydrate: "Water + electrolytes", recover: "Aim for 7 hours", mind: "10 min meditation" },
-    { move: "Active recovery", fuel: "Lighter meals", hydrate: "2L water", recover: "Aim for 8 hours", mind: "Quiet time" },
-    { move: "45 min strength", fuel: "High protein", hydrate: "3L water", recover: "Wind down 30 min early", mind: "5 min breathing" },
+    { move: "Active recovery", fuel: "Lighter meals", hydrate: "8 cups water", recover: "Aim for 8 hours", mind: "Quiet time" },
+    { move: "45 min strength", fuel: "High protein", hydrate: "10+ cups water", recover: "Wind down 30 min early", mind: "5 min breathing" },
     { move: "40 min cardio", fuel: "Balanced meals", hydrate: "Water + electrolytes", recover: "Bed by 10:00 pm", mind: "10 min breathing" },
-    { move: "Rest day", fuel: "Recovery nutrition", hydrate: "2L water", recover: "Aim for 8 hours", mind: "10 min meditation" },
-    { move: "30 min yoga", fuel: "Balanced meals", hydrate: "2L water", recover: "Bed by 10:30 pm", mind: "Quiet time" },
+    { move: "Rest day", fuel: "Recovery nutrition", hydrate: "8 cups water", recover: "Aim for 8 hours", mind: "10 min meditation" },
+    { move: "30 min yoga", fuel: "Balanced meals", hydrate: "8 cups water", recover: "Bed by 10:30 pm", mind: "Quiet time" },
   ];
 
   const categories: ActionCategory[] = ["move", "fuel", "hydrate", "recover", "mind"];

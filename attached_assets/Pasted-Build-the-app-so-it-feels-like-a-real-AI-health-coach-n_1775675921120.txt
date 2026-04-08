@@ -1,0 +1,65 @@
+Build the app so it feels like a real AI health coach, not just a clean tracker. Make these updates:
+
+Core product logic
+The weekly plan on the Plan tab must be generated dynamically from:
+User-entered inputs
+Apple Health / Apple Watch data
+Garmin data
+WHOOP data if connected
+Weight the plan generation as follows:
+40% = self-reported user inputs such as energy, stress, hydration, soreness, motivation, and training preference
+60% = backend wearable data such as sleep, HRV, resting heart rate, strain/load, steps, activity, and recovery trends
+The app should clearly prioritize wearable data over subjective input when the two conflict, but still incorporate the user’s current self-reported state.
+The system should generate a weekly plan that feels adaptive and personalized, not templated. It should reference actual patterns like:
+low recovery
+rising fatigue
+poor sleep consistency
+improved readiness
+missed workouts
+low daily movement
+falling hydration consistency
+Sync between Today and Plan tabs
+The “Your Day” section on the Today tab must match the corresponding day on the Plan tab word for word.
+This must be a two-way sync:
+If a user edits a task in “Your Day” on the Today tab, it immediately updates that same day on the Plan tab
+If a user edits that day inside the Plan tab, it immediately updates “Your Day” on the Today tab
+The Today tab is not a separate layer. It is the live daily view of that exact day from the weekly plan.
+Make the AI feel smarter and more differentiated
+The coach should sound more specific and data-aware. Avoid generic advice.
+Recommendations should explicitly reference user data when possible. Examples:
+“HRV is down versus your baseline, so today should stay light”
+“Sleep debt has built up for 3 straight nights, so recovery should take priority”
+“Your movement has dropped this week, so a short walk is more realistic than a full workout”
+The coach should be confident and directive, not overly soft or vague.
+The app should create stronger “aha” moments by surfacing insights that feel intelligent and personal, for example:
+“Your recovery drops after late nights”
+“You hit your best sleep on days when hydration is higher”
+“Your stress is elevated even when activity is low, so the issue may be recovery, not training”
+Habit loop and retention
+Add a stronger habit loop so users want to come back daily:
+daily completion score
+visible weekly consistency score
+streaks
+positive reinforcement after completing tasks
+gentle nudges when falling behind
+After users complete tasks, show feedback that connects the action to an outcome. Example:
+“Hydration is now on track for the day”
+“3 recovery actions completed this week”
+“You are more consistent than last week”
+Trends tab improvements
+Make the Trends tab less like static reporting and more like true insight generation.
+Show correlations and pattern recognition, not just metric cards. Examples:
+sleep vs HRV
+hydration vs recovery
+steps vs mood/energy
+late meals vs sleep quality
+training load vs next-day readiness
+The Trends tab should help users discover non-obvious patterns about their body and behavior.
+UX and product polish
+Keep the UI clean and premium, but make the value proposition more obvious within 5 seconds.
+Add a clear positioning statement near the top of the first tab that makes the product feel differentiated. It should communicate that this is an AI coach for daily energy, recovery, and performance, not just a tracker.
+Make the outputs feel generated and adaptive. Avoid anything that feels hardcoded or repeated.
+The app should feel like it is making real decisions on behalf of the user based on current readiness, not just displaying wellness content.
+Copy and formatting rules
+Do not use em dashes anywhere in the app.
+In both “Your Day” and the weekly Plan, all water and hydration metrics must be shown in cups, never liters.

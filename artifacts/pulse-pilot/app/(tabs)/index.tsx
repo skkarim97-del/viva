@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
   KeyboardAvoidingView,
   Modal,
   Dimensions,
+  Animated,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -81,6 +82,8 @@ export default function DashboardScreen() {
     chatMessages, addChatMessage, profile,
     toggleAction, editAction, weeklyConsistency,
     metrics, completionHistory,
+    streakDays, todayCompletionRate,
+    lastCompletionFeedback, clearCompletionFeedback,
   } = useApp();
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -92,6 +95,17 @@ export default function DashboardScreen() {
   const [editingAction, setEditingAction] = useState<ActionCategory | null>(null);
   const [showChat, setShowChat] = useState(false);
   const chatListRef = useRef<FlatList>(null);
+  const feedbackOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (lastCompletionFeedback) {
+      Animated.sequence([
+        Animated.timing(feedbackOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+        Animated.delay(2400),
+        Animated.timing(feedbackOpacity, { toValue: 0, duration: 400, useNativeDriver: true }),
+      ]).start(() => clearCompletionFeedback());
+    }
+  }, [lastCompletionFeedback]);
 
   if (!todayMetrics || !dailyPlan) {
     return (
@@ -217,6 +231,8 @@ export default function DashboardScreen() {
               recoveryScore: todayMetrics.recoveryScore,
               weight: todayMetrics.weight,
               strain: todayMetrics.strain,
+              caloriesBurned: todayMetrics.caloriesBurned,
+              activeCalories: todayMetrics.activeCalories,
             },
             profile: {
               age: profile.age,
@@ -233,6 +249,24 @@ export default function DashboardScreen() {
             userHydration: hydration,
             userTrainingIntent: trainingIntent,
             sleepInsight: insights?.sleepIntelligence?.insight,
+            hrvBaseline: metrics.length >= 7
+              ? Math.round(metrics.slice(-7).reduce((s, m) => s + m.hrv, 0) / Math.min(metrics.length, 7))
+              : undefined,
+            sleepDebt: metrics.length >= 3
+              ? +(metrics.slice(-3).reduce((s, m) => s + Math.max(0, 7.5 - m.sleepDuration), 0)).toFixed(1)
+              : undefined,
+            recoveryTrend: metrics.length >= 3
+              ? (() => {
+                  const scores = metrics.slice(-3).map(m => m.recoveryScore);
+                  const diff = scores[scores.length - 1] - scores[0];
+                  if (diff > 5) return "improving";
+                  if (diff < -5) return "declining";
+                  return "stable";
+                })()
+              : undefined,
+            streakDays,
+            weeklyCompletionRate: weeklyConsistency,
+            todayCompletionRate,
           },
           conversationHistory,
         }),
@@ -331,16 +365,41 @@ export default function DashboardScreen() {
       >
         <ScreenHeader />
 
+        <Text style={[styles.tagline, { color: c.mutedForeground }]}>Your Health & Wellness Coach</Text>
+
         <View style={[styles.statusCard, { backgroundColor: c.card }]}>
-          <View style={[styles.statusIndicator, { backgroundColor: statusColor + "14" }]}>
-            <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-            <Text style={[styles.statusLabel, { color: statusColor }]}>{dailyPlan.statusLabel}</Text>
+          <View style={styles.statusTopRow}>
+            <View style={[styles.statusIndicator, { backgroundColor: statusColor + "14" }]}>
+              <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+              <Text style={[styles.statusLabel, { color: statusColor }]}>{dailyPlan.statusLabel}</Text>
+            </View>
+            {streakDays > 0 && (
+              <View style={[styles.streakBadge, { backgroundColor: c.warning + "14" }]}>
+                <Feather name="zap" size={12} color={c.warning} />
+                <Text style={[styles.streakText, { color: c.warning }]}>{streakDays}d streak</Text>
+              </View>
+            )}
           </View>
           <Text style={[styles.headline, { color: c.foreground }]} numberOfLines={1} adjustsFontSizeToFit>{dailyPlan.headline}</Text>
           <Text style={[styles.driversInline, { color: c.mutedForeground }]} numberOfLines={2}>
             {dailyPlan.statusDrivers.join(" · ")}
           </Text>
+          {todayCompletionRate > 0 && (
+            <View style={styles.progressBarWrap}>
+              <View style={[styles.progressBarBg, { backgroundColor: c.border + "40" }]}>
+                <View style={[styles.progressBarFill, { backgroundColor: c.success, width: `${todayCompletionRate}%` }]} />
+              </View>
+              <Text style={[styles.progressLabel, { color: c.mutedForeground }]}>{todayCompletionRate}% complete</Text>
+            </View>
+          )}
         </View>
+
+        {lastCompletionFeedback && (
+          <Animated.View style={[styles.feedbackToast, { backgroundColor: c.success + "14", opacity: feedbackOpacity }]}>
+            <Feather name="check-circle" size={14} color={c.success} />
+            <Text style={[styles.feedbackText, { color: c.success }]}>{lastCompletionFeedback}</Text>
+          </Animated.View>
+        )}
 
         <View style={[styles.feelingCard, { backgroundColor: c.card }]}>
           <Text style={[styles.feelingPrompt, { color: c.mutedForeground }]}>How are you feeling?</Text>
@@ -604,12 +663,28 @@ export default function DashboardScreen() {
           })}
         </View>
 
-        {weeklyConsistency >= 0 && (
-          <View style={[styles.consistencyCard, { backgroundColor: c.card }]}>
-            <Feather name="trending-up" size={14} color={c.success} />
-            <Text style={[styles.consistencyText, { color: c.mutedForeground }]}>
-              Consistency: {weeklyConsistency}% this week
-            </Text>
+        {dailyPlan && (
+          <View style={[styles.habitCard, { backgroundColor: c.card }]}>
+            <Text style={[styles.habitHeader, { color: c.foreground }]}>Habit Tracker</Text>
+            <View style={styles.habitRow}>
+              {weeklyConsistency >= 0 && (
+                <View style={styles.habitStat}>
+                  <Feather name="bar-chart-2" size={14} color={c.primary} />
+                  <Text style={[styles.habitStatValue, { color: c.foreground }]}>{weeklyConsistency}%</Text>
+                  <Text style={[styles.habitStatLabel, { color: c.mutedForeground }]}>weekly</Text>
+                </View>
+              )}
+              <View style={styles.habitStat}>
+                <Feather name="zap" size={14} color={c.warning} />
+                <Text style={[styles.habitStatValue, { color: c.foreground }]}>{streakDays}</Text>
+                <Text style={[styles.habitStatLabel, { color: c.mutedForeground }]}>day streak</Text>
+              </View>
+              <View style={styles.habitStat}>
+                <Feather name="check-circle" size={14} color={c.success} />
+                <Text style={[styles.habitStatValue, { color: c.foreground }]}>{completedCount}/{totalActions}</Text>
+                <Text style={[styles.habitStatLabel, { color: c.mutedForeground }]}>today</Text>
+              </View>
+            </View>
           </View>
         )}
 
@@ -742,6 +817,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
 
+  tagline: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    textAlign: "center",
+    marginBottom: 12,
+    letterSpacing: 0.2,
+    opacity: 0.6,
+  },
   statusCard: {
     alignItems: "center",
     paddingTop: 24,
@@ -750,6 +833,56 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderRadius: 24,
     gap: 10,
+  },
+  statusTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  streakBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+  },
+  streakText: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+  },
+  progressBarWrap: {
+    width: "100%",
+    gap: 4,
+    marginTop: 4,
+  },
+  progressBarBg: {
+    height: 4,
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  progressBarFill: {
+    height: "100%",
+    borderRadius: 2,
+  },
+  progressLabel: {
+    fontSize: 11,
+    fontFamily: "Inter_500Medium",
+    textAlign: "center",
+  },
+  feedbackToast: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    marginBottom: 12,
+  },
+  feedbackText: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    flex: 1,
   },
   statusIndicator: {
     flexDirection: "row",
@@ -925,18 +1058,33 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  consistencyCard: {
+  habitCard: {
     borderRadius: 24,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
+    padding: 20,
     marginBottom: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+    gap: 14,
   },
-  consistencyText: {
-    fontSize: 13,
-    fontFamily: "Inter_500Medium",
+  habitHeader: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: -0.1,
+  },
+  habitRow: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+  },
+  habitStat: {
+    alignItems: "center",
+    gap: 4,
+  },
+  habitStatValue: {
+    fontSize: 18,
+    fontFamily: "Inter_700Bold",
+    letterSpacing: -0.3,
+  },
+  habitStatLabel: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
   },
 
   metricsRow: {

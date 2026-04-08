@@ -193,7 +193,7 @@ export default function PlanScreen() {
               <>
                 <View style={styles.modalHandle} />
                 <Text style={[styles.modalTitle, { color: c.foreground }]}>
-                  {editingDay.dayOfWeek} — {CATEGORY_META[editingCategory].label}
+                  {editingDay.dayOfWeek}: {CATEGORY_META[editingCategory].label}
                 </Text>
                 <Text style={[styles.modalSubtitle, { color: c.mutedForeground }]}>
                   Recommended: {editingDay.actions.find(a => a.category === editingCategory)?.recommended}

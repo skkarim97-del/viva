@@ -1,0 +1,226 @@
+Update the wearable/data integrations flow in the app
+
+Remove WHOOP entirely from the product for now and replace it with Samsung Health.
+
+1. Update all product language and UI
+
+Make these changes across onboarding, settings, connection screens, account screens, landing copy, and any internal labels:
+
+Remove all mentions of WHOOP
+Supported health data sources should now be:
+Apple Health
+Garmin
+Samsung Health
+
+Anywhere the app currently says something like:
+
+“Connect Apple Health, Garmin, or WHOOP”
+change it to:
+“Connect Apple Health, Garmin, or Samsung Health”
+
+Also update any icons, badges, cards, toggles, button labels, and helper text to reflect this new set of integrations.
+
+2. Replace WHOOP connection card with Samsung Health
+
+In the integrations or connected accounts section:
+
+Delete the WHOOP integration card/button
+Add a Samsung Health integration card in its place
+Match the same visual treatment as Apple Health and Garmin
+Show connection state clearly:
+Not Connected
+Connecting
+Connected
+Sync Error
+
+Button states:
+
+Connect Samsung Health
+Reconnect
+Disconnect
+
+Helper text:
+
+“Sync activity, sleep, heart rate, workouts, and recovery-related health data from Samsung Health.”
+3. Treat Samsung Health as a first-class data source
+
+The app should ingest Samsung Health data similarly to Apple Health and Garmin and use it in all coaching, planning, trend analysis, and daily insights.
+
+At minimum, structure Samsung Health ingestion to support the same kinds of core metrics where available:
+
+Steps
+Distance
+Active calories
+Workouts / exercise sessions
+Sleep duration
+Sleep timing
+Heart rate
+Resting heart rate
+HRV if available
+Stress or recovery-related signals if available
+Hydration if available
+Weight / body metrics if available
+
+Important:
+
+Normalize Samsung Health data into the same internal schema as Apple Health and Garmin wherever possible
+Do not create a separate insight engine just for Samsung
+Samsung data should flow into the same user profile, readiness logic, weekly plan generation, trends, and coach responses
+4. Unified data model
+
+Refactor the data layer so the app treats all connected sources through one normalized health data pipeline.
+
+Create or update a source-based schema like this conceptually:
+
+type HealthDataSource = "apple_health" | "garmin" | "samsung_health";
+
+type NormalizedHealthSnapshot = {
+  source: HealthDataSource;
+  date: string;
+  steps?: number;
+  distanceMiles?: number;
+  caloriesBurned?: number;
+  sleepHours?: number;
+  sleepStart?: string;
+  sleepEnd?: string;
+  restingHeartRate?: number;
+  heartRateAvg?: number;
+  hrv?: number;
+  workouts?: Workout[];
+  hydrationOz?: number;
+  weight?: number;
+  stressScore?: number;
+  recoveryScore?: number;
+};
+
+Then make sure all downstream systems consume the normalized data model, not source-specific logic.
+
+5. Update onboarding
+
+In onboarding, where users choose what to connect:
+
+Replace any WHOOP option with Samsung Health.
+
+Recommended order:
+
+Apple Health
+Garmin
+Samsung Health
+
+Suggested onboarding copy:
+
+“Connect your health data to unlock personalized coaching and planning.”
+“We currently support Apple Health, Garmin, and Samsung Health.”
+
+If the user skips integrations, keep a manual-entry fallback.
+
+6. Update the logic for insights and plans
+
+Samsung Health data should feed into:
+
+Today / Your Day
+Weekly Plan
+Recent Trends
+Viva Coach
+Readiness / recovery summaries
+Personalized workout suggestions
+Hydration suggestions
+Nutrition suggestions
+Sleep and recovery prompts
+
+If a Samsung Health user has enough data, the app should generate the same quality of output as Apple Health or Garmin users.
+
+For example:
+
+If sleep was short and resting heart rate is elevated, reduce workout intensity
+If steps and training load are low, suggest more movement
+If recovery metrics are strong, allow a more aggressive workout recommendation
+If hydration and sleep are weak, emphasize recovery before intensity
+7. Make source blending intelligent
+
+If a user connects multiple sources, do not double count data.
+
+Implement source-priority and deduplication rules. For example:
+
+Prefer Apple Health as the aggregation layer on iPhone
+Prefer Garmin workout data for Garmin-recorded workouts
+Prefer Samsung Health as primary for Android Samsung users
+Deduplicate overlapping metrics by timestamp and source confidence
+
+Build a clean merge strategy so the user ends up with one coherent health profile.
+
+8. Update coach context and prompts
+
+Anywhere the AI coach or plan generator references connected platforms, update the instructions.
+
+Remove WHOOP references and replace them with:
+
+Apple Health
+Garmin
+Samsung Health
+
+Also ensure the coach understands Samsung Health as a legitimate wearable/health data input and uses that data in the same way as the others.
+
+Example internal instruction:
+
+“Use normalized health data from Apple Health, Garmin, and Samsung Health to generate coaching insights. Do not mention missing WHOOP support. Treat Samsung Health as a fully supported source.”
+9. Clean up old code and config
+
+Remove:
+
+WHOOP constants
+WHOOP auth references
+WHOOP environment variables
+WHOOP feature flags
+WHOOP mock data
+WHOOP UI assets
+WHOOP onboarding copy
+WHOOP help center references
+
+Add:
+
+Samsung Health provider constants
+Samsung Health auth/config placeholders
+Samsung Health mock/test data
+Samsung Health connection status handling
+10. Add fallback behavior
+
+If Samsung Health does not provide a certain metric:
+
+gracefully omit it
+do not break readiness scoring
+use available data plus manual inputs
+reduce confidence where necessary, but still generate useful output
+
+The app should be resilient even when only partial Samsung Health data is available.
+
+11. QA requirements
+
+Please test these scenarios:
+
+User connects only Apple Health
+User connects only Garmin
+User connects only Samsung Health
+User connects Apple Health + Garmin
+User connects Samsung Health + Garmin
+User has no wearable connected and only manual inputs
+Samsung Health partially syncs but some metrics are missing
+Previously saved WHOOP user state does not break the app
+
+Also verify:
+
+No WHOOP references remain in the UI
+Samsung Health appears anywhere WHOOP previously appeared
+Plans, insights, and coach responses all still work
+Connected account state persists correctly
+12. Product goal
+
+The goal is to make the app feel built for the broadest real-world consumer base, not just niche wearables users.
+
+So the supported stack should now be:
+
+Apple Health
+Garmin
+Samsung Health
+
+And all three should power the same personalized coaching engine through a unified normalized data model.

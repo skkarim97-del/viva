@@ -18,6 +18,7 @@ import type {
   UserProfile,
   HealthMetrics,
   DailyPlan,
+  DailyAction,
   WeeklyPlan,
   WeeklyPlanDay,
   WeeklyDayAction,
@@ -73,6 +74,10 @@ interface AppContextType {
   toggleWeeklyAction: (date: string, category: ActionCategory) => void;
   completionHistory: CompletionRecord[];
   weeklyConsistency: number;
+  streakDays: number;
+  todayCompletionRate: number;
+  lastCompletionFeedback: string | null;
+  clearCompletionFeedback: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -103,6 +108,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [trainingIntent, setTrainingIntentState] = useState<TrainingIntent>(null);
   const [metricsRef, setMetricsRef] = useState<HealthMetrics | null>(null);
   const [completionHistory, setCompletionHistory] = useState<CompletionRecord[]>([]);
+  const [lastCompletionFeedback, setLastCompletionFeedback] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -330,6 +336,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [metricsRef, completionHistory]);
 
+  const generateCompletionFeedback = (action: DailyAction, completed: boolean, completedCount: number, total: number): string | null => {
+    if (!completed) return null;
+    const categoryFeedback: Record<string, string[]> = {
+      move: ["Movement done for the day", "Activity goal checked off", "Your body will feel this tomorrow"],
+      fuel: ["Nutrition on track today", "Good fuel supports everything else", "Nutrition goal complete"],
+      hydrate: ["Hydration is on track for the day", "Water intake looking good", "Staying hydrated helps everything else"],
+      recover: ["Recovery action logged", "Rest and recovery noted", "Your body will thank you tonight"],
+      mind: ["Mental wellness checked off", "That small investment in your mind matters", "Mindfulness goal complete"],
+    };
+    const options = categoryFeedback[action.category] || ["Done"];
+    const msg = options[Math.floor(Math.random() * options.length)];
+    if (completedCount === total) return "All 5 actions complete today. Strong day.";
+    if (completedCount >= 3) return `${msg}. ${completedCount} of ${total} done today.`;
+    return msg;
+  };
+
   const toggleAction = useCallback((actionId: string) => {
     setDailyPlan(prev => {
       if (!prev) return prev;
@@ -344,6 +366,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         actions: updatedActions.map(a => ({ id: a.id, category: a.category, completed: a.completed, recommended: a.recommended, chosen: a.text !== a.recommended ? a.text : undefined })),
         completionRate,
       };
+
+      const toggledAction = updatedActions.find(a => a.id === actionId);
+      if (toggledAction) {
+        const fb = generateCompletionFeedback(toggledAction, toggledAction.completed, completedCount, updatedActions.length);
+        if (fb) setLastCompletionFeedback(fb);
+      }
+
       setCompletionHistory(prevHistory => {
         const filtered = prevHistory.filter(r => r.date !== todayDate);
         const updated = [...filtered, todayRecord];
@@ -351,7 +380,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return updated;
       });
 
-      const toggledAction = updatedActions.find(a => a.id === actionId);
       if (toggledAction) {
         setWeeklyPlan(wp => {
           if (!wp) return wp;
@@ -605,6 +633,37 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return Math.round(recent.reduce((sum, r) => sum + r.completionRate, 0) / recent.length);
   })();
 
+  const streakDays = (() => {
+    if (completionHistory.length === 0) return 0;
+    const sorted = [...completionHistory].sort((a, b) => b.date.localeCompare(a.date));
+    let streak = 0;
+    const todayDate = new Date().toISOString().split("T")[0];
+    for (let i = 0; i < sorted.length; i++) {
+      const checkDate = new Date();
+      checkDate.setDate(checkDate.getDate() - i);
+      const expected = checkDate.toISOString().split("T")[0];
+      const record = sorted.find(r => r.date === expected);
+      if (record && record.completionRate >= 40) {
+        streak++;
+      } else if (expected === todayDate) {
+        continue;
+      } else {
+        break;
+      }
+    }
+    return streak;
+  })();
+
+  const todayCompletionRate = (() => {
+    if (!dailyPlan) return 0;
+    const completed = dailyPlan.actions.filter(a => a.completed).length;
+    return Math.round((completed / dailyPlan.actions.length) * 100);
+  })();
+
+  const clearCompletionFeedback = useCallback(() => {
+    setLastCompletionFeedback(null);
+  }, []);
+
   return (
     <AppContext.Provider
       value={{
@@ -640,6 +699,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         toggleWeeklyAction,
         completionHistory,
         weeklyConsistency,
+        streakDays,
+        todayCompletionRate,
+        lastCompletionFeedback,
+        clearCompletionFeedback,
       }}
     >
       {children}

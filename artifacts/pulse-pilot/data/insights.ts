@@ -267,14 +267,14 @@ function computeRiskFlags(
 ) {
   const flags: string[] = [];
 
-  if (sleepDebt.hours > 7) flags.push("High sleep debt — recovery and performance are compromised");
-  if (hrv.deviation < -8) flags.push("HRV is significantly below baseline — signs of accumulated stress");
-  if (today.restingHeartRate > 70) flags.push("Elevated resting heart rate — possible stress or incomplete recovery");
-  if (load.trend === "rising" && hrv.deviation < -3) flags.push("Training load is rising while recovery is dropping — risk of overreaching");
-  if (today.sleepDuration < 6) flags.push("Slept under 6 hours — cognitive and physical performance will be reduced");
+  if (sleepDebt.hours > 7) flags.push("High sleep debt. recovery and performance are compromised");
+  if (hrv.deviation < -8) flags.push("HRV is significantly below baseline. signs of accumulated stress");
+  if (today.restingHeartRate > 70) flags.push("Elevated resting heart rate. possible stress or incomplete recovery");
+  if (load.trend === "rising" && hrv.deviation < -3) flags.push("Training load is rising while recovery is dropping. risk of overreaching");
+  if (today.sleepDuration < 6) flags.push("Slept under 6 hours. cognitive and physical performance will be reduced");
 
   const consecutivePoorRecovery = last7.slice(-3).every((m) => m.recoveryScore < 50);
-  if (consecutivePoorRecovery) flags.push("Three consecutive days of low recovery — take a rest day");
+  if (consecutivePoorRecovery) flags.push("Three consecutive days of low recovery. take a rest day");
 
   let severity: "none" | "low" | "medium" | "high" = "none";
   if (flags.length >= 3) severity = "high";
@@ -317,7 +317,7 @@ function determineTopPriority(
   if (sleep.hours > 7) return "Sleep debt is your biggest limiter right now. Going to bed 30 minutes earlier tonight is the single most impactful thing you can do.";
   if (recovery.direction === "declining") return "Recovery is trending down. Reduce training intensity until your HRV and recovery scores stabilize.";
   if (load.trend === "rising") return "Training load is building. Watch for fatigue over the next 2-3 days and take a rest day if recovery dips.";
-  if (!weight.onTrack) return "Weight trend is not matching your goal. Review your nutrition — a small calorie adjustment may be needed.";
+  if (!weight.onTrack) return "Weight trend is not matching your goal. Review your nutrition. a small calorie adjustment may be needed.";
   return "You are on track. Keep doing what you are doing. Consistency is your biggest advantage right now.";
 }
 
@@ -360,16 +360,16 @@ function generateWeekSummary(
   }
 
   if (recentWorkouts.length >= 4 && avgSteps >= 7000) {
-    parts.push("You stayed active with " + recentWorkouts.length + " workouts and solid daily movement — that supports everything from stress management to sleep quality.");
+    parts.push("You stayed active with " + recentWorkouts.length + " workouts and solid daily movement. that supports everything from stress management to sleep quality.");
   } else if (recentWorkouts.length >= 3) {
-    parts.push("You got in " + recentWorkouts.length + " workouts this week — good consistency. Regular movement helps regulate mood, appetite, and energy.");
+    parts.push("You got in " + recentWorkouts.length + " workouts this week. good consistency. Regular movement helps regulate mood, appetite, and energy.");
   } else if (recentWorkouts.length <= 1 && avgSteps < 5000) {
-    parts.push("Activity was light this week. Even small increases — a daily walk, some stretching — can make a noticeable difference in energy, stress, and sleep.");
+    parts.push("Activity was light this week. Even small increases. a daily walk, some stretching. can make a noticeable difference in energy, stress, and sleep.");
   }
 
   const avgSleepQuality = last7.reduce((s, m) => s + m.sleepQuality, 0) / last7.length;
   if (avgSleepQuality >= 80 && avgSleep >= 7) {
-    parts.push("Sleep quality has been strong — you're not just getting enough hours, you're getting good rest.");
+    parts.push("Sleep quality has been strong. you're not just getting enough hours, you're getting good rest.");
   } else if (avgSleepQuality < 60) {
     parts.push("Even though you've been in bed, sleep quality has been low. Better wind-down habits or a cooler room might help you get deeper rest.");
   } else if (avgSleepQuality < 70 && avgSleep >= 7) {
@@ -385,15 +385,15 @@ function generateWeekSummary(
   }
 
   if (consistency.score >= 80) {
-    parts.push("Consistency has been excellent across your habits — that steady, holistic effort is what drives lasting wellness.");
+    parts.push("Consistency has been excellent across your habits. that steady, holistic effort is what drives lasting wellness.");
   } else if (consistency.score < 50) {
-    parts.push("Consistency dipped this week. Getting back to a rhythm with the basics — movement, nutrition, hydration, sleep — is the priority.");
+    parts.push("Consistency dipped this week. Getting back to a rhythm with the basics. movement, nutrition, hydration, sleep. is the priority.");
   }
 
   if (weight.onTrack && Math.abs(weight.rate) > 0.1) {
     parts.push("Weight is trending in the right direction at a healthy pace.");
   } else if (!weight.onTrack && Math.abs(weight.rate) > 0.3) {
-    parts.push("Weight isn't moving toward your goal yet. A small nutrition adjustment — more whole foods, consistent meal timing — could help.");
+    parts.push("Weight isn't moving toward your goal yet. A small nutrition adjustment. more whole foods, consistent meal timing. could help.");
   }
 
   if (parts.length <= 2) {
@@ -604,7 +604,7 @@ export function generateCoachInsight(
   const insight = selectInsight(p);
 
   if (p.hydrationLow && !insight.includes("water") && !insight.includes("hydrat")) {
-    return insight + " Also, your water intake is low — sipping throughout the day will help everything else work better.";
+    return insight + " Also, your water intake is low. sipping throughout the day will help everything else work better.";
   }
 
   return insight;
@@ -613,67 +613,67 @@ export function generateCoachInsight(
 function selectInsight(p: SignalProfile): string {
 
   if (p.dayType === "rest" && p.sleepTrend === "down" && p.recoveryStreakDir === "declining") {
-    return "Your recovery has been dropping for " + (p.recoveryStreak || "a few") + " days while sleep keeps getting shorter. These two things feed each other — less sleep means slower recovery, which affects your energy, mood, and even appetite. Today is about rest. Eat nourishing meals, drink plenty of water, and get to bed early tonight.";
+    return "Your recovery has been dropping for " + (p.recoveryStreak || "a few") + " days while sleep keeps getting shorter. These two things feed each other. less sleep means slower recovery, which affects your energy, mood, and even appetite. Today is about rest. Eat nourishing meals, drink plenty of water, and get to bed early tonight.";
   }
 
   if (p.stressHigh && p.sleepLast < 6.5 && p.recoveryLevel !== "strong") {
-    return "High stress on a short night of sleep puts pressure on everything — your energy, focus, digestion, and mood. When both stack up, pushing through usually makes things worse. Focus on three things today: eat whole, calming foods, drink water steadily, and get to bed early. A gentle walk outside will help more than a hard workout.";
+    return "High stress on a short night of sleep puts pressure on everything. your energy, focus, digestion, and mood. When both stack up, pushing through usually makes things worse. Focus on three things today: eat whole, calming foods, drink water steadily, and get to bed early. A gentle walk outside will help more than a hard workout.";
   }
 
   if (p.stressHigh && p.recoveryLevel === "low") {
-    return "Stress is high and your body is feeling it — recovery is lower than usual. When stress takes hold, it affects sleep quality, appetite, and how well your body restores itself. Today, focus on calming your nervous system. Try 10 minutes of breathing, eat warm whole foods, and skip anything intense. Protecting your energy now means a better tomorrow.";
+    return "Stress is high and your body is feeling it. recovery is lower than usual. When stress takes hold, it affects sleep quality, appetite, and how well your body restores itself. Today, focus on calming your nervous system. Try 10 minutes of breathing, eat warm whole foods, and skip anything intense. Protecting your energy now means a better tomorrow.";
   }
 
   if (p.stressHigh && p.hydrationLow) {
-    return "Stress and dehydration are a tough combination. Stress increases your body's demand for water, and being low on fluids makes stress feel worse — it affects concentration, mood, and energy. Start sipping water now and keep it steady throughout the day. Pair that with some breathing or a short walk to help your system settle.";
+    return "Stress and dehydration are a tough combination. Stress increases your body's demand for water, and being low on fluids makes stress feel worse. it affects concentration, mood, and energy. Start sipping water now and keep it steady throughout the day. Pair that with some breathing or a short walk to help your system settle.";
   }
 
   if (p.stressHigh && p.activityLevel === "active" && p.sleepTrend !== "up") {
-    return "You've been staying active while stress has been high. That takes real effort, but without enough recovery, it can wear you down instead of building you up. Consider trading today's intense session for yoga, stretching, or a nature walk. Pair that with good nutrition and an earlier bedtime — your body will thank you.";
+    return "You've been staying active while stress has been high. That takes real effort, but without enough recovery, it can wear you down instead of building you up. Consider trading today's intense session for yoga, stretching, or a nature walk. Pair that with good nutrition and an earlier bedtime. your body will thank you.";
   }
 
   if (p.feelingNegative && p.recoveryLevel === "strong" && !p.energyLow) {
-    return "You're not feeling your best mentally, but physically your body is in good shape — recovery is strong. This is likely more about mental energy than physical fatigue. A change of scenery, a walk outside without your phone, or a short meditation could shift things. Nourish yourself well today and don't put too much pressure on being productive.";
+    return "You're not feeling your best mentally, but physically your body is in good shape. recovery is strong. This is likely more about mental energy than physical fatigue. A change of scenery, a walk outside without your phone, or a short meditation could shift things. Nourish yourself well today and don't put too much pressure on being productive.";
   }
 
   if (p.energyLow && p.sleepTrend === "down" && p.hydrationLow) {
-    return "Low energy, less sleep than usual, and low water intake — these three together explain why today feels harder. The good news is that two of those are fixable right now. Start drinking water, eat something nourishing with complex carbs and protein, and plan for an earlier bedtime. Small fixes in nutrition and hydration make a surprisingly fast difference.";
+    return "Low energy, less sleep than usual, and low water intake. these three together explain why today feels harder. The good news is that two of those are fixable right now. Start drinking water, eat something nourishing with complex carbs and protein, and plan for an earlier bedtime. Small fixes in nutrition and hydration make a surprisingly fast difference.";
   }
 
   if (p.energyLow && p.hydrationLow) {
-    return "Low energy combined with low hydration is more connected than most people realize. Even mild dehydration can drain your focus, mood, and motivation. Before you reach for caffeine, try water first — a big glass now and steady sipping through the day. Pair that with a balanced meal and see how you feel in an hour.";
+    return "Low energy combined with low hydration is more connected than most people realize. Even mild dehydration can drain your focus, mood, and motivation. Before you reach for caffeine, try water first. a big glass now and steady sipping through the day. Pair that with a balanced meal and see how you feel in an hour.";
   }
 
   if (p.energyLow && p.sleepTrend === "down") {
-    return "Your energy is low, and shorter sleep this week is the likely reason. When sleep dips even a little over several days, it compounds — affecting your mood, appetite, and ability to handle stress. A lighter day with nourishing food, steady hydration, and an earlier bedtime is the fastest way to bounce back.";
+    return "Your energy is low, and shorter sleep this week is the likely reason. When sleep dips even a little over several days, it compounds. affecting your mood, appetite, and ability to handle stress. A lighter day with nourishing food, steady hydration, and an earlier bedtime is the fastest way to bounce back.";
   }
 
   if (p.feelingNegative && p.sleepLast < 6.5) {
-    return "Last night's sleep was short, and that's showing up in how you feel today. Less than six and a half hours affects more than energy — it impacts mood, hunger signals, and stress tolerance. Keep today's expectations realistic. Focus on eating well, staying hydrated, and getting a good night's sleep tonight.";
+    return "Last night's sleep was short, and that's showing up in how you feel today. Less than six and a half hours affects more than energy. it impacts mood, hunger signals, and stress tolerance. Keep today's expectations realistic. Focus on eating well, staying hydrated, and getting a good night's sleep tonight.";
   }
 
   if (p.activityVsSleep === "mismatch") {
-    return "You've been active this week, but your sleep has been getting shorter. High activity with declining sleep is a pattern that catches up in every area — energy, mood, stress tolerance, and even appetite control. Keep your movement going, but make winding down earlier tonight your top priority. Your body needs both sides of the equation.";
+    return "You've been active this week, but your sleep has been getting shorter. High activity with declining sleep is a pattern that catches up in every area. energy, mood, stress tolerance, and even appetite control. Keep your movement going, but make winding down earlier tonight your top priority. Your body needs both sides of the equation.";
   }
 
   if (!p.sleepConsistent && p.activityLevel === "active") {
-    return "Your activity has been strong, but your sleep schedule has been up and down. Inconsistent sleep makes it harder for your body to recover, regulate stress hormones, and maintain steady energy. Try going to bed within the same 30-minute window each night — even on weekends. Consistent sleep is one of the most powerful wellness habits you can build.";
+    return "Your activity has been strong, but your sleep schedule has been up and down. Inconsistent sleep makes it harder for your body to recover, regulate stress hormones, and maintain steady energy. Try going to bed within the same 30-minute window each night. even on weekends. Consistent sleep is one of the most powerful wellness habits you can build.";
   }
 
   if (p.movementStrong && p.recoveryHabitWeak) {
-    return "You've been great about staying active, but recovery habits like stretching, good nutrition, hydration, and wind-down time have been falling behind. Movement is only half the picture — without recovery, the benefits plateau and stress accumulates. Try adding one restorative action today: a stretch, a mindful meal, or 10 minutes of quiet time.";
+    return "You've been great about staying active, but recovery habits like stretching, good nutrition, hydration, and wind-down time have been falling behind. Movement is only half the picture. without recovery, the benefits plateau and stress accumulates. Try adding one restorative action today: a stretch, a mindful meal, or 10 minutes of quiet time.";
   }
 
   if (p.completionRate >= 0 && p.completionRate < 35 && p.recoveryLevel !== "low") {
-    return "You've completed less of your daily plan this week. That usually means the plan is too ambitious, not that you're falling short. Your body is in decent shape, so the fix is about simplifying. Pick two or three things that matter most today — maybe a walk, a good meal, and getting to bed on time — and let the rest go.";
+    return "You've completed less of your daily plan this week. That usually means the plan is too ambitious, not that you're falling short. Your body is in decent shape, so the fix is about simplifying. Pick two or three things that matter most today. maybe a walk, a good meal, and getting to bed on time. and let the rest go.";
   }
 
   if (p.completionConsistent && p.recoveryLevel === "strong" && p.sleepTrend !== "down") {
-    return "You've been showing up consistently across all areas — movement, nutrition, sleep, and mental wellness. Recovery is strong and your routine is working. This kind of steady, holistic effort is what creates lasting results. Keep doing what you're doing and trust the process.";
+    return "You've been showing up consistently across all areas. movement, nutrition, sleep, and mental wellness. Recovery is strong and your routine is working. This kind of steady, holistic effort is what creates lasting results. Keep doing what you're doing and trust the process.";
   }
 
   if (p.feelingPositive && p.recoveryLevel === "strong" && p.energyHigh) {
-    return "Everything is aligned today — body, mind, and energy. When you feel this good and recovery backs it up, it's a window to challenge yourself. Push a bit harder in your workout, tackle something demanding, or invest extra effort in meal prep and habits that set up the rest of your week.";
+    return "Everything is aligned today. body, mind, and energy. When you feel this good and recovery backs it up, it's a window to challenge yourself. Push a bit harder in your workout, tackle something demanding, or invest extra effort in meal prep and habits that set up the rest of your week.";
   }
 
   if (p.feelingPositive && p.recoveryVsNormal === "below") {
@@ -681,36 +681,36 @@ function selectInsight(p: SignalProfile): string {
   }
 
   if (p.energyHigh && p.recoveryLevel === "moderate") {
-    return "Your energy is high, which is great. But recovery is only moderate, so there's a tradeoff — pushing hard today could mean feeling it tomorrow. A solid moderate effort is the sweet spot. Complement your activity with good nutrition and plan for a restful evening.";
+    return "Your energy is high, which is great. But recovery is only moderate, so there's a tradeoff. pushing hard today could mean feeling it tomorrow. A solid moderate effort is the sweet spot. Complement your activity with good nutrition and plan for a restful evening.";
   }
 
   if (p.energyHigh && p.activityLevel === "active" && p.sleepTrend === "steady") {
-    return "You've been consistently active, energy is up, and sleep is steady. Your routine is working well across the board. Today is about sustaining this balance rather than ramping up. Consistency in movement, nutrition, sleep, and stress management — that's what drives lasting wellness.";
+    return "You've been consistently active, energy is up, and sleep is steady. Your routine is working well across the board. Today is about sustaining this balance rather than ramping up. Consistency in movement, nutrition, sleep, and stress management. that's what drives lasting wellness.";
   }
 
   if (p.recoveryStreakDir === "improving" && p.recoveryStreak >= 2) {
-    return "Your recovery has been improving for " + p.recoveryStreak + " days in a row. That's a great sign — your body is responding well to your recent habits. Whatever you've been doing with sleep, nutrition, and stress management is working. Lean into your plan today with confidence.";
+    return "Your recovery has been improving for " + p.recoveryStreak + " days in a row. That's a great sign. your body is responding well to your recent habits. Whatever you've been doing with sleep, nutrition, and stress management is working. Lean into your plan today with confidence.";
   }
 
   if (p.recoveryStreakDir === "declining" && p.recoveryStreak >= 2) {
-    return "Recovery has been trending down for " + p.recoveryStreak + " days. When recovery drops over multiple days, it usually means your body needs a break — not just from training, but from accumulated stress. Scale back today, eat nourishing foods, hydrate well, and prioritize a solid night of sleep. You'll bounce back faster by easing off now.";
+    return "Recovery has been trending down for " + p.recoveryStreak + " days. When recovery drops over multiple days, it usually means your body needs a break. not just from training, but from accumulated stress. Scale back today, eat nourishing foods, hydrate well, and prioritize a solid night of sleep. You'll bounce back faster by easing off now.";
   }
 
   if (p.stressHigh && p.recoveryLevel === "strong") {
-    return "Stress is high today, but your body is holding up well — recovery looks solid. That means you have some buffer, but don't spend it all. A moderate day with some dedicated stress relief — breathing, a walk outside, or journaling — will help you manage the stress without draining your reserves.";
+    return "Stress is high today, but your body is holding up well. recovery looks solid. That means you have some buffer, but don't spend it all. A moderate day with some dedicated stress relief. breathing, a walk outside, or journaling. will help you manage the stress without draining your reserves.";
   }
 
   if (p.dayType === "push") {
-    return "Your sleep, recovery, and energy are all in a good place today. When everything lines up like this, it's a window to make real progress — in your workout, your nutrition habits, or something you've been putting off. Challenge yourself, fuel well, and plan a good wind-down tonight.";
+    return "Your sleep, recovery, and energy are all in a good place today. When everything lines up like this, it's a window to make real progress. in your workout, your nutrition habits, or something you've been putting off. Challenge yourself, fuel well, and plan a good wind-down tonight.";
   }
 
   if (p.dayType === "recover") {
-    return "A few signals suggest your body and mind could use a lighter day. That doesn't mean doing nothing — it means being smart about where you spend your energy. Gentle movement, nourishing food, plenty of water, and some quiet time will set you up well for tomorrow.";
+    return "A few signals suggest your body and mind could use a lighter day. That doesn't mean doing nothing. it means being smart about where you spend your energy. Gentle movement, nourishing food, plenty of water, and some quiet time will set you up well for tomorrow.";
   }
 
   if (p.dayType === "maintain") {
-    return "Things look steady today — no major flags, no big green lights. This is a good day to follow your plan and stay consistent across all areas: eat well, stay hydrated, move your body, and protect your sleep tonight. Steady days like this are the foundation of lasting wellness.";
+    return "Things look steady today. no major flags, no big green lights. This is a good day to follow your plan and stay consistent across all areas: eat well, stay hydrated, move your body, and protect your sleep tonight. Steady days like this are the foundation of lasting wellness.";
   }
 
-  return "Your sleep, recovery, and energy are in a balanced range today. Stay consistent with your plan — eat nourishing food, drink enough water, move your body, and take care of your mind. Small, steady effort across all areas is what creates lasting change.";
+  return "Your sleep, recovery, and energy are in a balanced range today. Stay consistent with your plan. eat nourishing food, drink enough water, move your body, and take care of your mind. Small, steady effort across all areas is what creates lasting change.";
 }

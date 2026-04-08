@@ -1,0 +1,44 @@
+Trends tab updates
+On the Trends tab, change the header “Your Week” to “Your Recent Trends”.
+Keep the Trends summary card, but make the layout more readable by spacing the text into shorter paragraphs, similar to premium wellness apps.
+Do not show long dense text blocks. Break insights into 2 to 4 short paragraphs or grouped thought chunks.
+The Trends tab should feel like an insight layer, not a wall of text.
+Plan tab updates
+Add a “Your Week” header near the top of the Plan tab.
+Under that header, add a short weekly summary card similar in spirit to the Trends summary, but focused on the upcoming plan. It should explain:
+what the week is focused on
+why the plan looks the way it does
+how it was shaped by recent user inputs and wearable data
+Space out the text in this Plan summary as well. Keep it easy to scan and premium in presentation.
+Today tab coach card formatting
+In the “Your VIVA Coach” card, space out the response text more cleanly.
+Avoid large unbroken blocks of copy. Use shorter paragraphs so the coaching feels calmer, more readable, and more premium.
+Keep the tone the same, but improve readability through spacing and layout.
+Data storage and intelligence layer
+Make sure all user data being collected is stored properly on the backend per user, including:
+self-reported inputs
+task completions
+changes to daily plan items
+hydration logging
+sleep data
+HRV
+resting heart rate
+steps
+workouts
+recovery metrics
+connected device data
+trends over time
+This data should not just be displayed. It must be stored historically and then actively leveraged for insights, coaching responses, and future plan generation.
+The app should build a growing memory for each user so the system can identify patterns over time, not just react to same-day inputs.
+Insights should improve as more data is collected. The system should be able to detect things like:
+recurring low recovery days
+improved sleep after better hydration
+training inconsistency
+better readiness on rest days
+patterns between stress and sleep
+patterns between movement and mood or energy
+The weekly plan, Trends insights, and Ask Your Coach responses should all pull from this stored historical user data, not just current-day inputs.
+Product standard
+The app should feel like it remembers the user and gets smarter over time.
+Every insight should feel rooted in actual stored behavior and biometrics, not generic copy.
+The more the user uses the app, the more personalized and convincing the product should become.
