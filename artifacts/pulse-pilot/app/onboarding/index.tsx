@@ -239,11 +239,11 @@ export default function OnboardingScreen() {
           {step === "welcome" && (
             <View style={styles.welcomeSection}>
               <View style={[styles.heroIcon, { backgroundColor: c.foreground + "08" }]}>
-                <VivaSymbol size={48} color={c.foreground} />
+                <VivaSymbol size={56} color={c.foreground} />
               </View>
-              <Text style={[styles.welcomeTitle, { color: c.foreground }]}>VIVA</Text>
-              <Text style={[styles.welcomeTagline, { color: c.foreground }]}>Your Health &{"\n"}Wellness Coach</Text>
-              <Text style={[styles.welcomeSub, { color: c.mutedForeground }]}>
+              <Text style={[styles.welcomeTitle, { color: c.foreground }]}>V I V A</Text>
+              <Text style={[styles.welcomeTagline, { color: c.foreground }]}>Your Ai Health Coach</Text>
+              <Text style={[styles.welcomeSub, { color: c.mutedForeground + "CC" }]}>
                 Personalized daily guidance for your body, mind, and habits.
               </Text>
             </View>
@@ -695,21 +695,23 @@ const styles = StyleSheet.create({
 
   welcomeSection: {
     alignItems: "center",
-    gap: 16,
-    paddingTop: 80,
+    justifyContent: "center",
+    flex: 1,
+    gap: 10,
+    paddingTop: 40,
   },
   heroIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 24,
+    width: 88,
+    height: 88,
+    borderRadius: 26,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 8,
+    marginBottom: 4,
   },
   welcomeTitle: {
-    fontSize: 28,
+    fontSize: 24,
     fontFamily: "Inter_500Medium",
-    letterSpacing: 6,
+    letterSpacing: 8,
   },
   welcomeTagline: {
     fontSize: 30,
@@ -717,14 +719,15 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 38,
     letterSpacing: -0.5,
+    marginTop: 6,
   },
   welcomeSub: {
-    fontSize: 16,
+    fontSize: 14,
     fontFamily: "Inter_400Regular",
     textAlign: "center",
-    lineHeight: 24,
-    paddingHorizontal: 20,
-    marginTop: 4,
+    lineHeight: 22,
+    paddingHorizontal: 24,
+    marginTop: 6,
   },
 
   section: {
