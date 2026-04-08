@@ -50,6 +50,7 @@ export default function TrendsScreen() {
 
       {insights && (
         <View style={[styles.summaryCard, { backgroundColor: c.card }]}>
+          <Text style={[styles.summaryHeader, { color: c.foreground }]}>Your Week</Text>
           <Text style={[styles.summaryText, { color: c.foreground }]}>{insights.weekSummary}</Text>
         </View>
       )}
@@ -121,14 +122,19 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   summaryCard: {
-    padding: 16,
-    borderRadius: 16,
+    padding: 20,
+    borderRadius: 20,
+    gap: 10,
+  },
+  summaryHeader: {
+    fontSize: 18,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: -0.3,
   },
   summaryText: {
     fontSize: 14,
     fontFamily: "Inter_400Regular",
-    lineHeight: 21,
-    opacity: 0.75,
+    lineHeight: 22,
   },
   card: {
     padding: 16,

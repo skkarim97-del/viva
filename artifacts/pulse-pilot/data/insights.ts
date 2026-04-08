@@ -44,7 +44,7 @@ export function computeInsights(
   const riskFlags = computeRiskFlags(todayMetrics, last7, sleepDebt, hrvBaseline, trainingLoad);
   const bodyComposition = computeTDEE(todayMetrics, profile);
   const topPriority = determineTopPriority(riskFlags, sleepDebt, recoveryTrend, trainingLoad, weightProjection);
-  const weekSummary = generateWeekSummary(last7, workouts, weightProjection, sleepDebt);
+  const weekSummary = generateWeekSummary(last7, workouts, weightProjection, sleepDebt, recoveryTrend, consistencyScore, trainingLoad);
   const sleepIntelligence = computeSleepIntelligence(last14, last7);
 
   return {
@@ -324,8 +324,11 @@ function determineTopPriority(
 function generateWeekSummary(
   last7: HealthMetrics[],
   workouts: WorkoutEntry[],
-  weight: { rate: number },
-  sleep: { hours: number }
+  weight: { rate: number; onTrack: boolean },
+  sleep: { hours: number; label: string },
+  recovery: { direction: "improving" | "declining" | "stable"; streak: number },
+  consistency: { score: number; label: string },
+  training: { trend: "rising" | "falling" | "stable" }
 ) {
   const avgSleep = last7.reduce((s, m) => s + m.sleepDuration, 0) / last7.length;
   const avgSteps = Math.round(last7.reduce((s, m) => s + m.steps, 0) / last7.length);
@@ -336,7 +339,68 @@ function generateWeekSummary(
     return wDate >= cutoff;
   });
 
-  return `This week: ${avgSleep.toFixed(1)}h avg sleep, ${avgSteps.toLocaleString()} avg steps, ${avgRecovery}% avg recovery, ${recentWorkouts.length} workouts. Weight change: ${weight.rate >= 0 ? "+" : ""}${weight.rate} lbs/week.`;
+  const parts: string[] = [];
+
+  if (avgSleep >= 7.5 && avgRecovery >= 65 && avgSteps >= 7000) {
+    parts.push("Strong week overall. Your sleep, recovery, and activity have all been in a good range.");
+  } else if (avgSleep >= 7 && avgRecovery >= 55) {
+    parts.push("A solid week. Sleep and recovery have held steady, giving your body a stable foundation.");
+  } else if (avgSleep < 6.5 && avgRecovery < 50) {
+    parts.push("A tough week for your body. Sleep has been short and recovery hasn't had a chance to bounce back.");
+  } else if (avgSleep < 7) {
+    parts.push("Sleep was a bit thin this week, averaging " + avgSleep.toFixed(1) + " hours. That puts extra pressure on recovery and energy.");
+  } else {
+    parts.push("A mixed week. Some areas are strong while others have room to improve.");
+  }
+
+  if (recovery.direction === "improving") {
+    parts.push("Recovery has been trending up, which means your body is responding well to your routine.");
+  } else if (recovery.direction === "declining") {
+    parts.push("Recovery has been sliding down, which usually means the pace has been a bit much. Dialing back slightly would help.");
+  }
+
+  if (recentWorkouts.length >= 4 && avgSteps >= 7000) {
+    parts.push("You stayed active with " + recentWorkouts.length + " workouts and solid daily movement.");
+  } else if (recentWorkouts.length >= 3) {
+    parts.push("You got in " + recentWorkouts.length + " workouts this week — good consistency.");
+  } else if (recentWorkouts.length <= 1 && avgSteps < 5000) {
+    parts.push("Activity was light this week. Even small increases in daily movement can make a noticeable difference.");
+  }
+
+  const avgSleepQuality = last7.reduce((s, m) => s + m.sleepQuality, 0) / last7.length;
+  if (avgSleepQuality >= 80 && avgSleep >= 7) {
+    parts.push("Sleep quality has been strong — you're not just getting enough hours, you're getting good rest.");
+  } else if (avgSleepQuality < 60) {
+    parts.push("Even though you've been in bed, sleep quality has been low. Better wind-down habits or a cooler room might help you get deeper rest.");
+  } else if (avgSleepQuality < 70 && avgSleep >= 7) {
+    parts.push("You're getting enough sleep hours, but the quality could be better. Small changes to your evening routine can make a real difference.");
+  }
+
+  if (training.trend === "rising" && recovery.direction !== "improving") {
+    parts.push("Your training load is increasing, but recovery isn't keeping up yet. Watch for fatigue over the next few days.");
+  }
+
+  if (sleep.hours > 5 && recovery.direction === "declining" && recentWorkouts.length >= 3) {
+    parts.push("You've been putting in the effort, but your body is asking for more recovery time between sessions.");
+  }
+
+  if (consistency.score >= 80) {
+    parts.push("Consistency has been excellent — that steady effort is what drives real, lasting progress.");
+  } else if (consistency.score < 50) {
+    parts.push("Consistency dipped this week. Getting back to a regular rhythm, even with lighter sessions, is the priority.");
+  }
+
+  if (weight.onTrack && Math.abs(weight.rate) > 0.1) {
+    parts.push("Weight is trending in the right direction at a healthy pace.");
+  } else if (!weight.onTrack && Math.abs(weight.rate) > 0.3) {
+    parts.push("Weight isn't moving toward your goal yet. A small nutrition adjustment could help get things on track.");
+  }
+
+  if (parts.length <= 2) {
+    parts.push("Keep building on this foundation heading into next week.");
+  }
+
+  return parts.join(" ");
 }
 
 function computeSleepIntelligence(last14: HealthMetrics[], last7: HealthMetrics[]): SleepIntelligence {
