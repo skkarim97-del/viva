@@ -458,7 +458,7 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     readinessLabel,
     dailyState,
     statusLabel,
-    statusDrivers: statusDrivers.slice(0, 2),
+    statusDrivers: statusDrivers.slice(0, 3),
     guidance,
     headline,
     summary,
