@@ -17,6 +17,7 @@ export function ScreenHeader() {
 
 const styles = StyleSheet.create({
   header: {
+    alignItems: "center",
     paddingHorizontal: 24,
     paddingBottom: 4,
   },
