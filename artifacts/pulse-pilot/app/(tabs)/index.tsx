@@ -452,7 +452,7 @@ export default function DashboardScreen() {
                 { backgroundColor: c.card, opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] },
               ]}
             >
-              <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>{item.label}</Text>
+              <Text style={[styles.metricLabel, { color: c.mutedForeground }]} numberOfLines={1}>{item.label}</Text>
               <View style={styles.metricValueRow}>
                 <Text style={[styles.metricValue, { color: c.foreground }]}>{item.value}</Text>
                 <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>{item.unit}</Text>
@@ -886,11 +886,11 @@ const styles = StyleSheet.create({
   metricTile: {
     flex: 1,
     borderRadius: 20,
-    padding: 16,
-    gap: 8,
+    padding: 12,
+    gap: 6,
   },
   metricLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontFamily: "Inter_500Medium",
     letterSpacing: 0.2,
   },
