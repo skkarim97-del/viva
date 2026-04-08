@@ -33,7 +33,7 @@ const API_BASE = Platform.OS === "web"
 export default function CoachScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
-  const { chatMessages, addChatMessage, todayMetrics, profile, trends, dailyPlan } = useApp();
+  const { chatMessages, addChatMessage, todayMetrics, profile, trends, dailyPlan, insights, feeling, energy, stress, hydration, trainingIntent, completionHistory, weeklyConsistency, streakDays } = useApp();
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [streamingText, setStreamingText] = useState("");
@@ -43,6 +43,13 @@ export default function CoachScreen() {
 
   const buildHealthContext = useCallback(() => {
     if (!todayMetrics) return undefined;
+
+    const todayDate = new Date().toISOString().split("T")[0];
+    const todayRecord = completionHistory.find(r => r.date === todayDate);
+    const todayCompletionRate = todayRecord
+      ? Math.round((todayRecord.actions.filter(a => a.completed).length / todayRecord.actions.length) * 100)
+      : 0;
+
     return {
       todayMetrics: {
         hrv: todayMetrics.hrv,
@@ -79,8 +86,26 @@ export default function CoachScreen() {
         : undefined,
       readinessScore: dailyPlan?.readinessScore,
       readinessLabel: dailyPlan?.readinessLabel,
+      dailyState: dailyPlan?.dailyState,
+      userFeeling: feeling || undefined,
+      userEnergy: energy || undefined,
+      userStress: stress || undefined,
+      userHydration: hydration || undefined,
+      userTrainingIntent: trainingIntent || undefined,
+      sleepInsight: insights?.sleepDebt
+        ? `${insights.sleepDebt.hours.toFixed(1)} hours of sleep debt this week. ${insights.sleepDebt.detail}`
+        : undefined,
+      hrvBaseline: insights?.hrvBaseline?.baseline,
+      hrvDeviation: insights?.hrvBaseline
+        ? Math.round(((todayMetrics.hrv - insights.hrvBaseline.baseline) / insights.hrvBaseline.baseline) * 100)
+        : undefined,
+      sleepDebt: insights?.sleepDebt?.hours,
+      recoveryTrend: insights?.recoveryTrend?.direction,
+      weeklyCompletionRate: todayCompletionRate,
+      streakDays,
+      weeklyConsistency,
     };
-  }, [todayMetrics, profile, trends, dailyPlan]);
+  }, [todayMetrics, profile, trends, dailyPlan, insights, feeling, energy, stress, hydration, trainingIntent, completionHistory, streakDays, weeklyConsistency]);
 
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || isTyping) return;
