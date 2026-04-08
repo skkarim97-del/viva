@@ -228,9 +228,9 @@ export const ACTION_OPTIONS: Record<ActionCategory, string[]> = {
     "Recovery nutrition",
   ],
   hydrate: [
-    "2L water",
-    "3L water",
-    "Water + electrolytes",
+    "8+ cups water",
+    "10+ cups water",
+    "8+ cups water + electrolytes",
     "Focus on hydration",
     "Light hydration goal",
   ],

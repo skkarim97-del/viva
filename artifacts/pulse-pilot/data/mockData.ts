@@ -152,7 +152,7 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
   let workoutDesc = "";
 
   const isDehydrated = hydration === "dehydrated" || hydration === "low";
-  const hydrateText = isDehydrated ? "3L water + electrolytes" : "2L water";
+  const hydrateText = isDehydrated ? "10+ cups water + electrolytes" : "8+ cups water";
 
   const recentHistory = history?.slice(-7) ?? [];
   const weeklyRate = recentHistory.length > 0
@@ -318,7 +318,7 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     yourDay = {
       move: trainingIntent === "intense" ? "60 min cardio" : "Strength training",
       fuel: "High protein",
-      hydrate: isDehydrated ? "3L water + electrolytes" : "Water + electrolytes",
+      hydrate: isDehydrated ? "10+ cups water + electrolytes" : "8+ cups water + electrolytes",
       recover: "Bed by 10:00 pm · 8 hours",
       mind: "5 min breathing",
     };
@@ -368,7 +368,7 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     yourDay = {
       move: "Stretch / mobility",
       fuel: "Recovery nutrition",
-      hydrate: isDehydrated ? "3L water + electrolytes" : "2L water",
+      hydrate: isDehydrated ? "10+ cups water + electrolytes" : "8+ cups water",
       recover: "Bed by 10:00 pm · aim for 8 hours",
       mind: "10 min meditation",
     };
