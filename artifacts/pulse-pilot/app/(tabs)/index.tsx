@@ -11,23 +11,25 @@ import {
   Pressable,
   TextInput,
   KeyboardAvoidingView,
+  Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
-import type { MetricKey, FeelingType, EnergyLevel, StressLevel, HydrationLevel, LifeLoad, TrainingIntent, ChatMessage, DailyStatusLabel, ActionCategory } from "@/types";
+import { ACTION_OPTIONS } from "@/types";
+import type { MetricKey, FeelingType, EnergyLevel, StressLevel, HydrationLevel, TrainingIntent, ChatMessage, DailyStatusLabel, ActionCategory } from "@/types";
 
 const FEELINGS: { key: NonNullable<FeelingType>; label: string }[] = [
   { key: "great", label: "Great" },
   { key: "good", label: "Good" },
   { key: "tired", label: "Tired" },
-  { key: "exhausted", label: "Exhausted" },
   { key: "stressed", label: "Stressed" },
 ];
 
 const ENERGY_LEVELS: { key: NonNullable<EnergyLevel>; label: string; color: string }[] = [
+  { key: "excellent", label: "Excellent", color: "#34C759" },
   { key: "high", label: "High", color: "#34C759" },
   { key: "medium", label: "Medium", color: "#86868B" },
   { key: "low", label: "Low", color: "#FF6B6B" },
@@ -37,24 +39,21 @@ const STRESS_LEVELS: { key: NonNullable<StressLevel>; label: string; color: stri
   { key: "low", label: "Low", color: "#34C759" },
   { key: "moderate", label: "Moderate", color: "#FF9500" },
   { key: "high", label: "High", color: "#FF6B6B" },
+  { key: "very_high", label: "Very High", color: "#FF3B30" },
 ];
 
 const HYDRATION_LEVELS: { key: NonNullable<HydrationLevel>; label: string; color: string }[] = [
+  { key: "well_hydrated", label: "Well Hydrated", color: "#5AC8FA" },
   { key: "good", label: "Good", color: "#5AC8FA" },
   { key: "low", label: "Low", color: "#FF9500" },
-];
-
-const LIFE_LOADS: { key: NonNullable<LifeLoad>; label: string; color: string }[] = [
-  { key: "light", label: "Light", color: "#34C759" },
-  { key: "normal", label: "Normal", color: "#86868B" },
-  { key: "busy", label: "Busy", color: "#FF9500" },
-  { key: "overwhelmed", label: "Overwhelmed", color: "#FF6B6B" },
+  { key: "dehydrated", label: "Dehydrated", color: "#FF6B6B" },
 ];
 
 const TRAINING_INTENTS: { key: NonNullable<TrainingIntent>; label: string; color: string }[] = [
   { key: "none", label: "None", color: "#86868B" },
   { key: "light", label: "Light", color: "#5AC8FA" },
-  { key: "training", label: "Training", color: "#1A5CFF" },
+  { key: "moderate", label: "Moderate", color: "#1A5CFF" },
+  { key: "intense", label: "Intense", color: "#AF52DE" },
 ];
 
 const STATUS_COLOR_MAP: Record<DailyStatusLabel, (c: ReturnType<typeof useColors>) => string> = {
@@ -74,10 +73,10 @@ export default function DashboardScreen() {
   const {
     todayMetrics, dailyPlan, insights, feeling, setFeeling,
     energy, setEnergy, stress, setStress,
-    hydration, setHydration, lifeLoad, setLifeLoad,
+    hydration, setHydration,
     trainingIntent, setTrainingIntent,
     chatMessages, addChatMessage, profile,
-    toggleAction, weeklyConsistency,
+    toggleAction, editAction, weeklyConsistency,
   } = useApp();
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -87,6 +86,7 @@ export default function DashboardScreen() {
   const [isTyping, setIsTyping] = useState(false);
   const [streamingText, setStreamingText] = useState("");
   const [showRefine, setShowRefine] = useState(false);
+  const [editingAction, setEditingAction] = useState<ActionCategory | null>(null);
 
   if (!todayMetrics || !dailyPlan) {
     return (
@@ -128,11 +128,6 @@ export default function DashboardScreen() {
   const selectHydration = (h: NonNullable<HydrationLevel>) => {
     haptic();
     setHydration(hydration === h ? null : h);
-  };
-
-  const selectLifeLoad = (ll: NonNullable<LifeLoad>) => {
-    haptic();
-    setLifeLoad(lifeLoad === ll ? null : ll);
   };
 
   const selectTrainingIntent = (ti: NonNullable<TrainingIntent>) => {
@@ -189,7 +184,6 @@ export default function DashboardScreen() {
             userEnergy: energy,
             userStress: stress,
             userHydration: hydration,
-            userLifeLoad: lifeLoad,
             userTrainingIntent: trainingIntent,
             sleepInsight: insights?.sleepIntelligence?.insight,
           },
@@ -262,9 +256,9 @@ export default function DashboardScreen() {
 
   const metricItems: { key: MetricKey; label: string; value: string; unit: string }[] = [
     { key: "sleep", label: "Sleep", value: todayMetrics.sleepDuration.toFixed(1), unit: "hrs" },
-    { key: "recovery", label: "Recovery", value: `${todayMetrics.recoveryScore}`, unit: "%" },
     { key: "steps", label: "Steps", value: todayMetrics.steps >= 1000 ? `${(todayMetrics.steps / 1000).toFixed(1)}` : `${todayMetrics.steps}`, unit: todayMetrics.steps >= 1000 ? "k" : "" },
     { key: "restingHR", label: "Heart Rate", value: `${todayMetrics.restingHeartRate}`, unit: "bpm" },
+    { key: "hrv", label: "HRV", value: `${todayMetrics.hrv}`, unit: "ms" },
   ];
 
   const statusColor = STATUS_COLOR_MAP[dailyPlan.statusLabel](c);
@@ -272,9 +266,9 @@ export default function DashboardScreen() {
   const ACTION_META: Record<ActionCategory, { label: string; icon: keyof typeof Feather.glyphMap; color: string }> = {
     move: { label: "Move", icon: "activity", color: c.primary },
     fuel: { label: "Fuel", icon: "coffee", color: c.warning },
+    hydrate: { label: "Hydrate", icon: "droplet", color: "#5AC8FA" },
     recover: { label: "Recover", icon: "battery-charging", color: c.info },
     mind: { label: "Mind", icon: "sun", color: c.accent },
-    hydrate: { label: "Hydrate", icon: "droplet", color: "#5AC8FA" },
   };
 
   const completedCount = dailyPlan.actions.filter(a => a.completed).length;
@@ -364,14 +358,6 @@ export default function DashboardScreen() {
                 mutedColor={c.mutedForeground}
               />
               <RefineRow
-                label="Life Load"
-                items={LIFE_LOADS}
-                selected={lifeLoad}
-                onSelect={selectLifeLoad}
-                cardBg={c.background}
-                mutedColor={c.mutedForeground}
-              />
-              <RefineRow
                 label="Training"
                 items={TRAINING_INTENTS}
                 selected={trainingIntent}
@@ -400,44 +386,49 @@ export default function DashboardScreen() {
           {dailyPlan.actions.map((action) => {
             const meta = ACTION_META[action.category];
             return (
-              <Pressable
-                key={action.id}
-                onPress={() => { haptic(); toggleAction(action.id); }}
-                style={({ pressed }) => [
-                  styles.actionRow,
-                  {
-                    backgroundColor: action.completed ? c.success + "0A" : "transparent",
-                    opacity: pressed ? 0.8 : 1,
-                    transform: [{ scale: pressed ? 0.98 : 1 }],
-                  },
-                ]}
-              >
-                <View style={[
-                  styles.actionCheck,
-                  {
-                    backgroundColor: action.completed ? c.success : "transparent",
-                    borderColor: action.completed ? c.success : c.border,
-                  },
-                ]}>
-                  {action.completed && <Feather name="check" size={11} color="#fff" />}
-                </View>
-                <View style={[styles.dayIconWrap, { backgroundColor: meta.color + "12" }]}>
-                  <Feather name={meta.icon} size={15} color={meta.color} />
-                </View>
-                <View style={styles.actionContent}>
-                  <Text style={[styles.actionLabel, { color: c.mutedForeground }]}>{meta.label}</Text>
-                  <Text style={[
-                    styles.actionText,
+              <View key={action.id} style={[
+                styles.actionRow,
+                { backgroundColor: action.completed ? c.success + "0A" : "transparent" },
+              ]}>
+                <Pressable
+                  onPress={() => { haptic(); toggleAction(action.id); }}
+                  style={({ pressed }) => [
+                    styles.actionCheck,
                     {
-                      color: action.completed ? c.mutedForeground : c.foreground,
-                      textDecorationLine: action.completed ? "line-through" : "none",
-                      opacity: action.completed ? 0.6 : 1,
+                      backgroundColor: action.completed ? c.success : "transparent",
+                      borderColor: action.completed ? c.success : c.border,
+                      opacity: pressed ? 0.7 : 1,
                     },
-                  ]}>
-                    {action.text}
-                  </Text>
-                </View>
-              </Pressable>
+                  ]}
+                >
+                  {action.completed && <Feather name="check" size={11} color="#fff" />}
+                </Pressable>
+                <Pressable
+                  onPress={() => { haptic(); setEditingAction(action.category); }}
+                  style={({ pressed }) => [
+                    styles.actionBody,
+                    { opacity: pressed ? 0.7 : 1 },
+                  ]}
+                >
+                  <View style={[styles.dayIconWrap, { backgroundColor: meta.color + "12" }]}>
+                    <Feather name={meta.icon} size={15} color={meta.color} />
+                  </View>
+                  <View style={styles.actionContent}>
+                    <Text style={[styles.actionLabel, { color: c.mutedForeground }]}>{meta.label}</Text>
+                    <Text style={[
+                      styles.actionText,
+                      {
+                        color: action.completed ? c.mutedForeground : c.foreground,
+                        textDecorationLine: action.completed ? "line-through" : "none",
+                        opacity: action.completed ? 0.6 : 1,
+                      },
+                    ]}>
+                      {action.text}
+                    </Text>
+                  </View>
+                  <Feather name="chevron-right" size={14} color={c.mutedForeground + "40"} />
+                </Pressable>
+              </View>
             );
           })}
         </View>
@@ -561,6 +552,64 @@ export default function DashboardScreen() {
           </View>
         )}
       </ScrollView>
+
+      <Modal
+        visible={editingAction !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setEditingAction(null)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setEditingAction(null)}>
+          <Pressable style={[styles.modalSheet, { backgroundColor: c.card }]} onPress={(e) => e.stopPropagation()}>
+            {editingAction && (
+              <>
+                <View style={styles.modalHandle}>
+                  <View style={[styles.handleBar, { backgroundColor: c.border }]} />
+                </View>
+                <View style={styles.modalHeader}>
+                  <View style={[styles.modalIconWrap, { backgroundColor: ACTION_META[editingAction].color + "12" }]}>
+                    <Feather name={ACTION_META[editingAction].icon} size={18} color={ACTION_META[editingAction].color} />
+                  </View>
+                  <Text style={[styles.modalTitle, { color: c.foreground }]}>{ACTION_META[editingAction].label}</Text>
+                </View>
+                <View style={styles.modalOptions}>
+                  {ACTION_OPTIONS[editingAction].map((option) => {
+                    const currentAction = dailyPlan.actions.find(a => a.category === editingAction);
+                    const isSelected = currentAction?.text === option;
+                    return (
+                      <Pressable
+                        key={option}
+                        onPress={() => {
+                          haptic();
+                          const action = dailyPlan.actions.find(a => a.category === editingAction);
+                          if (action) {
+                            editAction(action.id, option);
+                          }
+                          setEditingAction(null);
+                        }}
+                        style={({ pressed }) => [
+                          styles.modalOption,
+                          {
+                            backgroundColor: isSelected ? c.primary + "10" : c.background,
+                            borderColor: isSelected ? c.primary + "30" : c.border + "40",
+                            opacity: pressed ? 0.7 : 1,
+                          },
+                        ]}
+                      >
+                        <Text style={[
+                          styles.modalOptionText,
+                          { color: isSelected ? c.primary : c.foreground },
+                        ]}>{option}</Text>
+                        {isSelected && <Feather name="check" size={16} color={c.primary} />}
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -615,11 +664,11 @@ const styles = StyleSheet.create({
 
   statusCard: {
     alignItems: "center",
-    paddingTop: 20,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-    marginBottom: 24,
-    borderRadius: 20,
+    paddingTop: 24,
+    paddingBottom: 24,
+    paddingHorizontal: 24,
+    marginBottom: 16,
+    borderRadius: 24,
     gap: 10,
   },
   statusIndicator: {
@@ -658,10 +707,10 @@ const styles = StyleSheet.create({
   },
 
   feelingCard: {
-    borderRadius: 20,
-    paddingVertical: 18,
-    paddingHorizontal: 16,
-    marginBottom: 24,
+    borderRadius: 24,
+    paddingVertical: 20,
+    paddingHorizontal: 18,
+    marginBottom: 12,
     gap: 14,
   },
   feelingPrompt: {
@@ -675,9 +724,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   feelingChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 22,
   },
   feelingLabel: {
     fontSize: 13,
@@ -685,10 +734,10 @@ const styles = StyleSheet.create({
   },
 
   refineCard: {
-    borderRadius: 20,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    marginBottom: 24,
+    borderRadius: 24,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    marginBottom: 16,
   },
   refineToggle: {
     flexDirection: "row",
@@ -701,30 +750,28 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_500Medium",
   },
   refineSection: {
-    gap: 16,
-    marginTop: 16,
-    paddingBottom: 4,
+    gap: 20,
+    marginTop: 20,
+    paddingBottom: 6,
   },
   refineRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
+    gap: 10,
   },
   refineLabel: {
     fontSize: 12,
-    fontFamily: "Inter_500Medium",
-    width: 70,
-    textAlign: "right",
+    fontFamily: "Inter_600SemiBold",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   refineChipRow: {
     flexDirection: "row",
     gap: 8,
-    flex: 1,
   },
   refineChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 16,
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 18,
+    alignItems: "center",
   },
   refineChipLabel: {
     fontSize: 12,
@@ -732,10 +779,10 @@ const styles = StyleSheet.create({
   },
 
   focusCard: {
-    borderRadius: 20,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    marginBottom: 24,
+    borderRadius: 24,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    marginBottom: 16,
     gap: 4,
   },
   focusLabel: {
@@ -751,19 +798,19 @@ const styles = StyleSheet.create({
   },
 
   dayCard: {
-    borderRadius: 20,
-    padding: 20,
-    gap: 6,
-    marginBottom: 24,
+    borderRadius: 24,
+    padding: 24,
+    gap: 4,
+    marginBottom: 16,
   },
   dayHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 8,
+    marginBottom: 12,
   },
   dayTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontFamily: "Inter_600SemiBold",
     letterSpacing: -0.1,
   },
@@ -775,22 +822,28 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
     alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 4,
-    borderRadius: 12,
-    marginHorizontal: -4,
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+    borderRadius: 14,
+    marginHorizontal: -6,
   },
   actionCheck: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     borderWidth: 1.5,
     alignItems: "center",
     justifyContent: "center",
   },
+  actionBody: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
   dayIconWrap: {
-    width: 32,
-    height: 32,
+    width: 34,
+    height: 34,
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
@@ -812,10 +865,10 @@ const styles = StyleSheet.create({
   },
 
   consistencyCard: {
-    borderRadius: 20,
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    marginBottom: 24,
+    borderRadius: 24,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    marginBottom: 16,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
@@ -828,12 +881,12 @@ const styles = StyleSheet.create({
   metricsRow: {
     flexDirection: "row",
     gap: 10,
-    marginBottom: 24,
+    marginBottom: 16,
   },
   metricTile: {
     flex: 1,
-    borderRadius: 16,
-    padding: 14,
+    borderRadius: 20,
+    padding: 16,
     gap: 8,
   },
   metricLabel: {
@@ -859,15 +912,15 @@ const styles = StyleSheet.create({
   askCard: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 16,
-    borderRadius: 16,
+    padding: 18,
+    borderRadius: 24,
     gap: 12,
     marginBottom: 8,
   },
   askIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 42,
+    height: 42,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -885,8 +938,8 @@ const styles = StyleSheet.create({
   },
 
   askPanel: {
-    borderRadius: 16,
-    padding: 12,
+    borderRadius: 20,
+    padding: 14,
     gap: 10,
     marginBottom: 8,
   },
@@ -924,8 +977,8 @@ const styles = StyleSheet.create({
   askInputRow: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 20,
-    paddingLeft: 14,
+    borderRadius: 22,
+    paddingLeft: 16,
     paddingRight: 4,
   },
   askInputField: {
@@ -935,9 +988,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   askSendBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -948,12 +1001,67 @@ const styles = StyleSheet.create({
   },
   askSuggestion: {
     borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
   askSuggestionText: {
     fontSize: 12,
+    fontFamily: "Inter_500Medium",
+  },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "flex-end",
+  },
+  modalSheet: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingBottom: 40,
+    paddingHorizontal: 24,
+    maxHeight: "60%",
+  },
+  modalHandle: {
+    alignItems: "center",
+    paddingVertical: 12,
+  },
+  handleBar: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 20,
+  },
+  modalIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontFamily: "Inter_600SemiBold",
+  },
+  modalOptions: {
+    gap: 8,
+  },
+  modalOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  modalOptionText: {
+    fontSize: 15,
     fontFamily: "Inter_500Medium",
   },
 });

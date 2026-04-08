@@ -1,0 +1,355 @@
+Refine the Today screen to make it cleaner, more standardized, and more interactive.
+
+## Core product goal
+
+The Today screen should feel:
+
+* simple
+* premium
+* easy to scan
+* easy to customize
+* built for mainstream users
+
+The user should:
+
+* understand the recommendation instantly
+* be able to lightly personalize it
+* not feel overwhelmed by too many options
+
+---
+
+## 1. Simplify “How are you feeling?”
+
+There are too many options right now.
+
+Replace:
+
+* Great
+* Good
+* Tired
+* Exhausted
+* Stressed
+
+With exactly 4 options:
+
+* Great
+* Good
+* Tired
+* Stressed
+
+Remove “Exhausted” from this top-level section.
+
+This section should remain:
+
+* simple
+* fast
+* one row
+* easy to answer in 1 second
+
+---
+
+## 2. Standardize “Refine your day”
+
+This section is still inconsistent and needs to be fixed.
+
+### Keep only these 4 categories:
+
+1. Energy
+2. Stress
+3. Hydration
+4. Training
+
+Remove:
+
+* Life Load
+
+### Each category must have exactly 4 options
+
+#### Energy
+
+* Excellent
+* High
+* Medium
+* Low
+
+#### Stress
+
+* Low
+* Moderate
+* High
+* Very High
+
+#### Hydration
+
+* Well Hydrated
+* Good
+* Low
+* Dehydrated
+
+#### Training
+
+* None
+* Light
+* Moderate
+* Intense
+
+### UX rules
+
+* hidden by default
+* shown only when user taps “Refine your day”
+* each category in its own distinct row
+* each row visually spaced out
+* selected option clearly highlighted
+* unselected options neutral
+
+---
+
+## 3. Update “Your Day” structure
+
+The “Your Day” section should have exactly 5 components:
+
+1. Move
+2. Fuel
+3. Hydrate
+4. Recover
+5. Mind
+
+This section should feel like a simple daily plan for overall health and wellness.
+
+---
+
+## 4. Make every “Your Day” item editable
+
+Each recommendation should have:
+
+* one simple default recommendation
+* ability to edit easily
+* ability to mark complete
+
+When user taps an item, open a clean bottom sheet or dropdown menu.
+
+### A. Move
+
+Example default:
+
+* 40 min cardio
+
+User should be able to change it to options like:
+
+* 20 min walk
+* 40 min cardio
+* 60 min cardio
+* strength training
+* stretch / mobility
+* rest & recovery
+
+Keep wording simple. Do not use advanced jargon like Zone 2 on the main screen.
+
+### B. Fuel
+
+Example default:
+
+* Balanced meals · protein at each meal
+
+User should be able to change it to simple options like:
+
+* High protein
+* Moderate carb
+* Lower carb
+* Balanced meals
+* Light meals
+* Recovery nutrition
+
+Keep food guidance high-level and simple.
+
+### C. Hydrate
+
+Add Hydrate as a new daily item.
+
+Example default:
+
+* 2L water + electrolytes
+
+User should be able to change it to:
+
+* 2L water
+* 3L water
+* Water + electrolytes
+* Focus on hydration only
+* Light hydration goal
+
+### D. Recover
+
+Example default:
+
+* In bed by 10:00 pm · aim for 8 hours
+
+This should be personalized to the user’s normal sleep profile when possible.
+
+User should be able to change it to:
+
+* Bed by 10:00 pm
+* Bed by 10:30 pm
+* Aim for 7 hours
+* Aim for 8 hours
+* Wind down 30 min before bed
+* Sleep in / recovery focus
+
+### E. Mind
+
+Example default:
+
+* 5 min breathing
+
+User should be able to change it to:
+
+* 5 min breathing
+* 10 min breathing
+* 5 min meditation
+* 10 min meditation
+* Quiet time
+* Skip for today
+
+---
+
+## 5. Make “Your Day” wording simpler
+
+Recommendations should be one short line only.
+
+Examples:
+
+* Move → 40 min cardio
+* Fuel → Balanced meals · protein each meal
+* Hydrate → 2L water + electrolytes
+* Recover → Bed by 10:00 pm · 8 hours
+* Mind → 5 min breathing
+
+Avoid:
+
+* long descriptions
+* overly detailed instructions
+* technical language
+
+---
+
+## 6. Update metrics row
+
+Remove:
+
+* Recovery %
+
+Replace it with:
+
+* HRV
+
+The 4 metrics shown should be:
+
+1. Sleep
+2. Steps
+3. Heart Rate
+4. HRV
+
+Display format should be simple:
+
+* Sleep → 6.7 hrs
+* Steps → 7.7k
+* Heart Rate → 62 bpm
+* HRV → 44 ms
+
+Do not show too many metrics on this screen.
+
+---
+
+## 7. Improve visual consistency
+
+The Today screen still feels a bit busy and inconsistent.
+
+### Make sections more distinct
+
+Each major section should feel visually separate:
+
+* Header / status
+* Feeling
+* Refine your day
+* Daily focus
+* Your Day
+* Metrics
+* Ask your coach
+
+### Spacing
+
+Increase spacing between sections and within sections.
+
+### Cards
+
+Use softer, cleaner cards with:
+
+* more padding
+* lighter backgrounds
+* more rounded corners
+* clearer separation
+
+### Chips / options
+
+All chip groups should feel uniform:
+
+* same height
+* same shape
+* same spacing
+* same selected state treatment
+
+---
+
+## 8. Make the experience feel more editable and interactive
+
+The product should feel like:
+
+* Viva recommends
+* the user adjusts
+* Viva learns
+
+When a user edits a task in “Your Day”:
+
+* update the chosen version for that day
+* keep track of recommended vs chosen vs completed
+* use those edits to improve future recommendations
+
+Example:
+
+* recommended: 40 min cardio
+* chosen: strength training
+* completed: strength training
+
+This behavior should feed into personalization.
+
+---
+
+## 9. Keep the top of the screen cleaner
+
+Do not let the top of the Today screen become too dense.
+
+Keep it to:
+
+* status
+* one headline
+* one short driver line
+* feeling
+* optional refine section
+
+Avoid duplicate explanations and too much text.
+
+---
+
+## 10. Final quality bar
+
+The Today screen should feel:
+
+* holistic
+* interactive
+* personalized
+* clean
+* premium
+* not too fitness-heavy
+
+The user should feel:
+“This is a simple daily health plan I can actually adjust to fit my life.”

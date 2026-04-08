@@ -79,12 +79,13 @@ export interface DailyAction {
   id: string;
   category: ActionCategory;
   text: string;
+  recommended: string;
   completed: boolean;
 }
 
 export interface CompletionRecord {
   date: string;
-  actions: { id: string; category: ActionCategory; completed: boolean }[];
+  actions: { id: string; category: ActionCategory; completed: boolean; recommended?: string; chosen?: string }[];
   completionRate: number;
 }
 
@@ -103,6 +104,7 @@ export interface DailyPlan {
   yourDay: {
     move: string;
     fuel: string;
+    hydrate: string;
     recover: string;
     mind: string;
   };
@@ -172,12 +174,11 @@ export interface IntegrationStatus {
   lastSync?: string;
 }
 
-export type FeelingType = "great" | "good" | "tired" | "exhausted" | "stressed" | null;
-export type EnergyLevel = "high" | "medium" | "low" | null;
-export type StressLevel = "low" | "moderate" | "high" | null;
-export type HydrationLevel = "good" | "low" | null;
-export type LifeLoad = "light" | "normal" | "busy" | "overwhelmed" | null;
-export type TrainingIntent = "none" | "light" | "training" | null;
+export type FeelingType = "great" | "good" | "tired" | "stressed" | null;
+export type EnergyLevel = "excellent" | "high" | "medium" | "low" | null;
+export type StressLevel = "low" | "moderate" | "high" | "very_high" | null;
+export type HydrationLevel = "well_hydrated" | "good" | "low" | "dehydrated" | null;
+export type TrainingIntent = "none" | "light" | "moderate" | "intense" | null;
 
 export type MetricKey = "sleep" | "hrv" | "steps" | "restingHR" | "recovery" | "weight";
 
@@ -206,6 +207,47 @@ export interface WellnessInputs {
   energy: EnergyLevel;
   stress: StressLevel;
   hydration: HydrationLevel;
-  lifeLoad: LifeLoad;
   trainingIntent: TrainingIntent;
 }
+
+export const ACTION_OPTIONS: Record<ActionCategory, string[]> = {
+  move: [
+    "20 min walk",
+    "40 min cardio",
+    "60 min cardio",
+    "Strength training",
+    "Stretch / mobility",
+    "Rest & recovery",
+  ],
+  fuel: [
+    "High protein",
+    "Moderate carb",
+    "Lower carb",
+    "Balanced meals",
+    "Light meals",
+    "Recovery nutrition",
+  ],
+  hydrate: [
+    "2L water",
+    "3L water",
+    "Water + electrolytes",
+    "Focus on hydration",
+    "Light hydration goal",
+  ],
+  recover: [
+    "Bed by 10:00 pm",
+    "Bed by 10:30 pm",
+    "Aim for 7 hours",
+    "Aim for 8 hours",
+    "Wind down 30 min before bed",
+    "Sleep in / recovery focus",
+  ],
+  mind: [
+    "5 min breathing",
+    "10 min breathing",
+    "5 min meditation",
+    "10 min meditation",
+    "Quiet time",
+    "Skip for today",
+  ],
+};
