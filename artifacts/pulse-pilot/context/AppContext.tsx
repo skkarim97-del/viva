@@ -8,9 +8,11 @@ import {
   generateDailyPlan,
   generateWeeklyPlan,
   generateTrendData,
+  generateTrendDataFromMetrics,
   integrations as defaultIntegrations,
 } from "@/data/mockData";
 import { computeInsights, type DailyInsights } from "@/data/insights";
+import { fetchHealthData } from "@/data/healthProviders";
 import type {
   UserProfile,
   HealthMetrics,
@@ -68,6 +70,7 @@ const PROFILE_KEY = "@viva_profile";
 const CHAT_KEY = "@viva_chat";
 const WELLNESS_KEY = "@viva_wellness";
 const COMPLETION_KEY = "@viva_completions";
+const INTEGRATIONS_KEY = "@viva_integrations";
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<UserProfile>(defaultProfile);
@@ -135,8 +138,47 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setCompletionHistory(loadedHistory);
       }
 
-      const allMetrics = generateMockMetrics(30);
+      const savedIntegrations = await AsyncStorage.getItem(INTEGRATIONS_KEY);
+      let currentIntegrations = integrationsState;
+      if (savedIntegrations) {
+        const parsed = JSON.parse(savedIntegrations);
+        currentIntegrations = integrationsState.map((i) => {
+          const saved = parsed.find((s: any) => s.id === i.id);
+          return saved ? { ...i, connected: saved.connected } : i;
+        });
+        setIntegrationsState(currentIntegrations);
+      }
+
+      const connectedIds = currentIntegrations
+        .filter((i) => i.connected)
+        .map((i) => i.id);
+
+      let allMetrics: HealthMetrics[];
+      let dataSource: string | null = null;
+
+      if (connectedIds.length > 0) {
+        const result = await fetchHealthData(connectedIds, 28);
+        if (result.metrics.length > 0) {
+          allMetrics = result.metrics;
+          dataSource = result.source;
+        } else {
+          allMetrics = generateMockMetrics(28);
+        }
+      } else {
+        allMetrics = generateMockMetrics(28);
+      }
+
       setMetrics(allMetrics);
+
+      if (dataSource) {
+        setIntegrationsState((prev) =>
+          prev.map((i) =>
+            i.id === dataSource
+              ? { ...i, connected: true, lastSync: new Date().toLocaleTimeString() }
+              : i
+          )
+        );
+      }
 
       const today = allMetrics[allMetrics.length - 1];
       setTodayMetrics(today);
@@ -154,7 +196,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       setDailyPlan(plan);
       setWeeklyPlan(generateWeeklyPlan());
-      setTrends(generateTrendData());
+      setTrends(generateTrendDataFromMetrics(allMetrics));
       const allWorkouts = generateMockWorkouts();
       setWorkouts(allWorkouts);
 
@@ -287,11 +329,43 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const toggleIntegration = useCallback((id: string) => {
-    setIntegrationsState((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, connected: !i.connected } : i))
-    );
+  const syncHealthData = useCallback(async (integrations: IntegrationStatus[]) => {
+    const connectedIds = integrations.filter((i) => i.connected).map((i) => i.id);
+    if (connectedIds.length === 0) {
+      const mockMetrics = generateMockMetrics(28);
+      setMetrics(mockMetrics);
+      setTodayMetrics(mockMetrics[mockMetrics.length - 1]);
+      setTrends(generateTrendDataFromMetrics(mockMetrics));
+      return;
+    }
+    try {
+      const result = await fetchHealthData(connectedIds, 28);
+      if (result.metrics.length > 0) {
+        setMetrics(result.metrics);
+        setTodayMetrics(result.metrics[result.metrics.length - 1]);
+        setTrends(generateTrendDataFromMetrics(result.metrics));
+        if (result.source) {
+          setIntegrationsState((prev) =>
+            prev.map((i) =>
+              i.id === result.source
+                ? { ...i, lastSync: new Date().toLocaleTimeString() }
+                : i
+            )
+          );
+        }
+      }
+    } catch {
+    }
   }, []);
+
+  const toggleIntegration = useCallback((id: string) => {
+    setIntegrationsState((prev) => {
+      const updated = prev.map((i) => (i.id === id ? { ...i, connected: !i.connected } : i));
+      AsyncStorage.setItem(INTEGRATIONS_KEY, JSON.stringify(updated.map((i) => ({ id: i.id, connected: i.connected }))));
+      syncHealthData(updated);
+      return updated;
+    });
+  }, [syncHealthData]);
 
   const upgradeTier = useCallback(
     (tier: SubscriptionTier) => {

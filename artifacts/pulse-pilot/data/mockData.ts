@@ -544,52 +544,84 @@ export function generateWeeklyPlan(): WeeklyPlan {
 }
 
 export function generateTrendData(): TrendData[] {
-  const metrics = generateMockMetrics(30);
+  return generateTrendDataFromMetrics(generateMockMetrics(28));
+}
 
-  return [
-    {
-      label: "Weight",
-      data: metrics.map((m) => ({ date: m.date, value: m.weight })),
-      unit: "lbs",
-      trend: "down",
-      summary: "Down 2.1 lbs over the last 30 days. Steady, sustainable progress.",
-    },
-    {
-      label: "HRV",
-      data: metrics.map((m) => ({ date: m.date, value: m.hrv })),
-      unit: "ms",
-      trend: "up",
-      summary: "Trending up. Your body is adapting well to current training.",
-    },
-    {
-      label: "Resting HR",
-      data: metrics.map((m) => ({ date: m.date, value: m.restingHeartRate })),
-      unit: "bpm",
-      trend: "down",
-      summary: "Gradually decreasing. A sign of improving cardiovascular fitness.",
-    },
-    {
-      label: "Sleep",
-      data: metrics.map((m) => ({ date: m.date, value: m.sleepDuration })),
-      unit: "hrs",
-      trend: "stable",
-      summary: "Consistent around 7.2h. More time in bed would improve recovery.",
-    },
-    {
-      label: "Steps",
-      data: metrics.map((m) => ({ date: m.date, value: m.steps })),
-      unit: "steps",
-      trend: "up",
-      summary: "Averaging 8,200 daily. Above your 8,000 goal.",
-    },
-    {
-      label: "Recovery",
-      data: metrics.map((m) => ({ date: m.date, value: m.recoveryScore })),
-      unit: "%",
-      trend: "stable",
-      summary: "Holding steady. Consistent sleep and rest days are keeping you balanced.",
-    },
+function computeTrend(values: number[]): "up" | "down" | "stable" {
+  if (values.length < 4) return "stable";
+  const firstHalf = values.slice(0, Math.floor(values.length / 2));
+  const secondHalf = values.slice(Math.floor(values.length / 2));
+  const avgFirst = firstHalf.reduce((s, v) => s + v, 0) / firstHalf.length;
+  const avgSecond = secondHalf.reduce((s, v) => s + v, 0) / secondHalf.length;
+  const change = (avgSecond - avgFirst) / (avgFirst || 1);
+  if (change > 0.03) return "up";
+  if (change < -0.03) return "down";
+  return "stable";
+}
+
+function trendSummary(label: string, values: number[], trend: "up" | "down" | "stable", unit: string): string {
+  const avg = values.reduce((s, v) => s + v, 0) / values.length;
+  const latest = values[values.length - 1];
+  const first = values[0];
+  const change = latest - first;
+
+  switch (label) {
+    case "Weight": {
+      if (Math.abs(change) < 0.5) return "Weight has been steady over the last 4 weeks. Your body composition is stable.";
+      return trend === "down"
+        ? `Down ${Math.abs(change).toFixed(1)} lbs over the past 4 weeks. Steady, sustainable progress.`
+        : `Up ${Math.abs(change).toFixed(1)} lbs over the past 4 weeks. Check your nutrition if this isn't intentional.`;
+    }
+    case "HRV": {
+      if (trend === "up") return "Trending up. Your body is adapting well and recovery capacity is improving.";
+      if (trend === "down") return "Trending down over 4 weeks. This may reflect accumulated stress or too little recovery.";
+      return `Holding steady around ${Math.round(avg)} ms. Consistent recovery and rest are keeping things balanced.`;
+    }
+    case "Resting HR": {
+      if (trend === "down") return "Gradually decreasing. This is a sign of improving cardiovascular fitness.";
+      if (trend === "up") return "Trending higher. Consider whether stress, poor sleep, or overtraining may be a factor.";
+      return `Stable around ${Math.round(avg)} bpm. Your heart is in a consistent rhythm.`;
+    }
+    case "Sleep": {
+      if (avg >= 7.5) return `Averaging ${avg.toFixed(1)} hours. Solid sleep is supporting your recovery and energy.`;
+      if (avg < 6.5) return `Averaging only ${avg.toFixed(1)} hours. Getting closer to 7-8 hours would improve recovery and focus.`;
+      return `Averaging ${avg.toFixed(1)} hours. A bit more sleep would give your body extra recovery time.`;
+    }
+    case "Steps": {
+      const avgK = Math.round(avg).toLocaleString();
+      if (avg >= 8000) return `Averaging ${avgK} daily. Strong daily movement that supports your overall health.`;
+      if (avg >= 5000) return `Averaging ${avgK} daily. Adding a short walk could push you into a stronger range.`;
+      return `Averaging ${avgK} daily. Look for ways to add more movement throughout your day.`;
+    }
+    case "Recovery": {
+      if (avg >= 70) return "Recovery has been strong. Your body is bouncing back well between sessions.";
+      if (avg < 50) return "Recovery has been low. More rest and better sleep would help you recharge.";
+      return "Recovery is moderate. Consistent sleep and lighter training days will help it climb.";
+    }
+    default:
+      return "";
+  }
+}
+
+export function generateTrendDataFromMetrics(metrics: HealthMetrics[]): TrendData[] {
+  if (!metrics || metrics.length === 0) return generateTrendData();
+
+  const configs: { label: string; extract: (m: HealthMetrics) => number; unit: string }[] = [
+    { label: "Weight", extract: (m) => m.weight, unit: "lbs" },
+    { label: "HRV", extract: (m) => m.hrv, unit: "ms" },
+    { label: "Resting HR", extract: (m) => m.restingHeartRate, unit: "bpm" },
+    { label: "Sleep", extract: (m) => m.sleepDuration, unit: "hrs" },
+    { label: "Steps", extract: (m) => m.steps, unit: "steps" },
+    { label: "Recovery", extract: (m) => m.recoveryScore, unit: "%" },
   ];
+
+  return configs.map(({ label, extract, unit }) => {
+    const data = metrics.map((m) => ({ date: m.date, value: extract(m) }));
+    const values = data.map((d) => d.value);
+    const trend = computeTrend(values);
+    const summary = trendSummary(label, values, trend, unit);
+    return { label, data, unit, trend, summary };
+  });
 }
 
 export function getMetricDetail(

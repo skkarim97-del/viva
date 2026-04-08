@@ -81,7 +81,11 @@ export default function SettingsScreen() {
               ]}
             />
             <Text style={[styles.statusText, { color: c.mutedForeground }]}>
-              {integration.connected ? "Connected" : "Off"}
+              {integration.connected
+                ? integration.lastSync
+                  ? `Synced ${integration.lastSync}`
+                  : "Connected"
+                : "Off"}
             </Text>
           </Pressable>
         ))}
