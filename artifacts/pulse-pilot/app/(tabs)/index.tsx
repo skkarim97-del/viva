@@ -115,6 +115,13 @@ export default function DashboardScreen() {
     );
   }
 
+  const greetingText = React.useMemo(() => {
+    const hour = new Date().getHours();
+    const timeGreeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+    const firstName = profile?.name?.trim();
+    return firstName ? `${timeGreeting}, ${firstName}` : "Your Ai Health Coach";
+  }, [profile?.name]);
+
   const coachInsight = React.useMemo(() => {
     if (!todayMetrics || metrics.length === 0) return "";
     return generateCoachInsight(todayMetrics, metrics, {
@@ -235,6 +242,7 @@ export default function DashboardScreen() {
               activeCalories: todayMetrics.activeCalories,
             },
             profile: {
+              name: profile.name || undefined,
               age: profile.age,
               sex: profile.sex,
               weight: profile.weight,
@@ -365,7 +373,7 @@ export default function DashboardScreen() {
       >
         <ScreenHeader />
 
-        <Text style={[styles.tagline, { color: c.mutedForeground }]}>Your Health & Wellness Coach</Text>
+        <Text style={[styles.tagline, { color: c.mutedForeground }]}>{greetingText}</Text>
 
         <View style={[styles.statusCard, { backgroundColor: c.card }]}>
           <View style={styles.statusTopRow}>

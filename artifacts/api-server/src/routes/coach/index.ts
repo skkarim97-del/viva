@@ -265,9 +265,11 @@ router.post("/chat", async (req: Request, res: Response) => {
     ];
 
     if (contextBlock) {
+      const userName = healthContext?.profile?.name;
+      const nameNote = userName ? ` Their name is ${userName}. Use it occasionally and naturally. Not every message. Maybe once in a few exchanges. Never force it.` : "";
       messages.push({
         role: "system",
-        content: `This is what you know about this person right now. Use it naturally. Don't list their stats back to them. Instead, interpret what the data means and talk to them like you understand their situation. Keep it human.\n\n${contextBlock}`,
+        content: `This is what you know about this person right now. Use it naturally. Don't list their stats back to them. Instead, interpret what the data means and talk to them like you understand their situation. Keep it human.${nameNote}\n\n${contextBlock}`,
       });
     }
 

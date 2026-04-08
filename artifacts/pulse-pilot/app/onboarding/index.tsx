@@ -81,6 +81,7 @@ export default function OnboardingScreen() {
   const { updateProfile, completeOnboarding, toggleIntegration, integrations } = useApp();
   const [step, setStep] = useState<Step>("welcome");
   const [selectedGoals, setSelectedGoals] = useState<HealthGoal[]>([]);
+  const [userName, setUserName] = useState("");
   const [age, setAge] = useState("32");
   const [sex, setSex] = useState<"male" | "female" | "other">("male");
   const [heightFeet, setHeightFeet] = useState("5");
@@ -136,6 +137,7 @@ export default function OnboardingScreen() {
     const timeMap: Record<string, number> = { under_30: 25, "30_60": 45, "60_90": 75, "90_plus": 100 };
 
     updateProfile({
+      name: userName.trim() || "",
       age: parseInt(age) || 32,
       sex,
       height: ((parseInt(heightFeet) || 5) * 12) + (parseInt(heightInches) || 10),
@@ -293,6 +295,19 @@ export default function OnboardingScreen() {
               <Text style={[styles.stepSub, { color: c.mutedForeground }]}>We'll adapt this over time</Text>
 
               <View style={styles.profileGroup}>
+                <View style={[styles.inputRow, { borderColor: c.border }]}>
+                  <Text style={[styles.inputLabel, { color: c.mutedForeground }]}>First name</Text>
+                  <TextInput
+                    value={userName}
+                    onChangeText={setUserName}
+                    placeholder="Optional"
+                    placeholderTextColor={c.mutedForeground + "60"}
+                    style={[styles.inputField, { color: c.foreground }]}
+                    autoCapitalize="words"
+                    autoCorrect={false}
+                  />
+                </View>
+
                 <View style={styles.sexRow}>
                   {(["male", "female", "other"] as const).map((s) => (
                     <Pressable
@@ -785,6 +800,24 @@ const styles = StyleSheet.create({
 
   profileGroup: {
     gap: 8,
+  },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 14,
+    marginBottom: 4,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontFamily: "Inter_500Medium",
+    width: 90,
+  },
+  inputField: {
+    flex: 1,
+    fontSize: 16,
+    fontFamily: "Inter_400Regular",
+    padding: 0,
   },
   heightRow: {
     flexDirection: "row",
