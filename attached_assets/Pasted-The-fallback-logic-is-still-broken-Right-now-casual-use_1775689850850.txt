@@ -1,0 +1,65 @@
+The fallback logic is still broken.
+
+Right now casual user messages like "how are you", "what's up?", and "what should I do rn?" are being treated as irrelevant and routed to the same canned response:
+"I'm your health and wellness coach..."
+
+This should NOT happen.
+
+Fix the conversation logic so that:
+
+1. Casual conversational messages are treated as valid coach-entry prompts, not irrelevant queries
+   Examples:
+   - "how are you"
+   - "what's up?"
+   - "what should I do rn?"
+   - "help me"
+   - "i feel off"
+   - "i'm tired"
+   - "what now?"
+
+2. Remove the generic hardcoded fallback response entirely:
+   "I'm your health and wellness coach. I can help with fitness, sleep..."
+   This line should never appear again.
+
+3. Replace fallback behavior with intelligent conversational routing:
+   - If the user is greeting casually, respond warmly and turn it into a wellness check-in
+   - If the user asks what to do right now, provide a concrete next action based on available user data
+   - If the question is unrelated, briefly acknowledge it and then intelligently bridge back to energy, recovery, stress, focus, or daily habits
+
+4. Update the intent classification logic:
+   Treat these categories as valid:
+   - greeting
+   - emotional check-in
+   - request for direction
+   - vague wellness question
+   - general lifestyle question
+   Do NOT classify these as irrelevant
+
+5. Add special handling for "what should I do rn?" and similar phrases.
+   These should trigger a "right now recommendation" flow:
+   - look at sleep / recovery / stress / activity data if available
+   - give one clear action
+   - explain why in 1 short sentence
+
+6. If user data is unavailable, still respond intelligently:
+   Example:
+   "Right now, do one thing that moves the needle: take a 10 minute walk, drink water, and reassess your energy after. Small resets work."
+
+7. Make responses sound like a human coach:
+   - concise
+   - warm
+   - intelligent
+   - no generic assistant language
+   - no "I can help with..."
+   - no repetitive fallback wording
+
+8. Audit the codebase for any static fallback strings and remove or replace them.
+   Search for:
+   - "I'm your health and wellness coach"
+   - "I can help with fitness, sleep"
+   - any generic canned irrelevant-query handler
+
+The desired behavior is:
+- every user message should either produce a useful wellness response
+- or be redirected intelligently in a way that still feels valuable
+- never a dead-end chatbot fallback

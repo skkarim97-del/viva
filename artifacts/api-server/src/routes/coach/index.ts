@@ -189,27 +189,6 @@ interface ChatRequestBody {
   conversationHistory?: { role: "user" | "assistant"; content: string }[];
 }
 
-const HEALTH_TERMS = [
-  "sleep", "rest", "tired", "fatigue", "nap", "insomnia", "bedtime", "wake",
-  "stress", "anxious", "anxiety", "calm", "relax", "overwhelm", "burnout", "mental", "mood",
-  "workout", "exercise", "training", "cardio", "strength", "yoga", "stretch", "gym", "active", "movement", "steps", "fitness",
-  "eat", "food", "meal", "diet", "nutrition", "protein", "carb", "fat", "calorie", "vegetable", "fruit", "recipe", "hunger", "appetite",
-  "water", "hydrat", "drink", "thirst", "caffeine", "coffee", "tea", "electrolyte",
-  "recovery", "recover", "sore", "pain", "injury", "ache", "muscle",
-  "weight", "body", "bmi",
-  "energy", "focus", "motivation", "habit", "routine",
-  "heart", "hrv", "heart rate", "resting",
-  "meditat", "breath", "mindful", "journal", "gratitude",
-  "health", "wellness", "well-being", "wellbeing",
-  "coach", "plan", "today", "week", "how", "what", "should", "can", "help",
-];
-
-function isHealthRelated(text: string): boolean {
-  const lower = text.toLowerCase();
-  return HEALTH_TERMS.some((kw) => lower.includes(kw));
-}
-
-const OFF_TOPIC_RESPONSE = "I'm here to help with your health and wellness. I can help with fitness, sleep, nutrition, hydration, stress, recovery, and daily habits. What would you like to work on?";
 
 router.post("/chat", async (req: Request, res: Response) => {
   try {
@@ -218,16 +197,6 @@ router.post("/chat", async (req: Request, res: Response) => {
 
     if (!message || typeof message !== "string") {
       res.status(400).json({ error: "Message is required" });
-      return;
-    }
-
-    if (!isHealthRelated(message)) {
-      res.setHeader("Content-Type", "text/event-stream");
-      res.setHeader("Cache-Control", "no-cache");
-      res.setHeader("Connection", "keep-alive");
-      res.write(`data: ${JSON.stringify({ content: OFF_TOPIC_RESPONSE })}\n\n`);
-      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
-      res.end();
       return;
     }
 

@@ -168,25 +168,6 @@ export default function DashboardScreen() {
     setTrainingIntent(trainingIntent === ti ? null : ti);
   };
 
-  const isHealthRelated = (text: string): boolean => {
-    const lower = text.toLowerCase();
-    const healthTerms = [
-      "sleep", "rest", "tired", "fatigue", "nap", "insomnia", "bedtime", "wake",
-      "stress", "anxious", "anxiety", "calm", "relax", "overwhelm", "burnout", "mental", "mood",
-      "workout", "exercise", "training", "cardio", "strength", "yoga", "stretch", "gym", "active", "movement", "steps", "fitness",
-      "eat", "food", "meal", "diet", "nutrition", "protein", "carb", "fat", "calorie", "vegetable", "fruit", "recipe", "hunger", "appetite",
-      "water", "hydrat", "drink", "thirst", "caffeine", "coffee", "tea", "electrolyte",
-      "recovery", "recover", "sore", "pain", "injury", "ache", "muscle",
-      "weight", "body", "bmi",
-      "energy", "focus", "motivation", "habit", "routine",
-      "heart", "hrv", "heart rate", "resting",
-      "meditat", "breath", "mindful", "journal", "gratitude",
-      "health", "wellness", "well-being", "wellbeing",
-      "coach",
-    ];
-    return healthTerms.some((kw) => lower.includes(kw));
-  };
-
   const sendAskMessage = async (text: string) => {
     if (!text.trim() || isTyping) return;
 
@@ -201,18 +182,6 @@ export default function DashboardScreen() {
     setAskMessages((prev) => [...prev, userMsg]);
     addChatMessage(userMsg);
     setAskInput("");
-
-    if (!isHealthRelated(text)) {
-      const redirectMsg: ChatMessage = {
-        id: Date.now().toString() + "r",
-        role: "assistant",
-        content: "I'm your health and wellness coach. I can help with fitness, sleep, nutrition, hydration, stress, recovery, and daily habits. Try asking about your day, how to reduce stress, or what to eat for energy.",
-        timestamp: Date.now(),
-      };
-      setAskMessages((prev) => [...prev, redirectMsg]);
-      addChatMessage(redirectMsg);
-      return;
-    }
 
     setIsTyping(true);
     setStreamingText("");
