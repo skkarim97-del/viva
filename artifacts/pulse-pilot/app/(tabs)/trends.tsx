@@ -11,6 +11,7 @@ import {
   Pressable,
 } from "react-native";
 
+import Svg, { Polyline } from "react-native-svg";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { useApp } from "@/context/AppContext";
 import { computeHabitStats } from "@/data/insights";
@@ -230,13 +231,69 @@ function buildKeyInsights(metrics: HealthMetrics[], habitStats: { weeklyPercent:
   return insights.slice(0, 5);
 }
 
-const CATEGORY_LABELS: Record<string, string> = {
-  move: "Move",
-  fuel: "Fuel",
-  hydrate: "Hydrate",
-  recover: "Recover",
-  mind: "Mind",
-};
+interface SparkMetric {
+  label: string;
+  value: string;
+  unit: string;
+  data: number[];
+  color: string;
+  detailKey?: string;
+}
+
+function weeklyAverages(daily: number[], weeks: number = 4): number[] {
+  const result: number[] = [];
+  for (let w = 0; w < weeks; w++) {
+    const start = daily.length - (weeks - w) * 7;
+    const end = start + 7;
+    const slice = daily.slice(Math.max(0, start), Math.max(0, end));
+    if (slice.length > 0) {
+      result.push(slice.reduce((s, v) => s + v, 0) / slice.length);
+    }
+  }
+  return result.length > 0 ? result : [0];
+}
+
+function buildSparkPoints(data: number[], width: number, height: number): string {
+  if (data.length < 2) return "";
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+  const pad = 2;
+  return data
+    .map((v, i) => {
+      const x = (i / (data.length - 1)) * width;
+      const y = height - pad - ((v - min) / range) * (height - pad * 2);
+      return `${x},${y}`;
+    })
+    .join(" ");
+}
+
+function computeHabitWeeklyRates(history: { date: string; completionRate: number }[]): number[] {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const rateMap = new Map<string, number>();
+  for (const r of history) {
+    rateMap.set(r.date.slice(0, 10), r.completionRate);
+  }
+  const result: number[] = [];
+  for (let w = 0; w < 4; w++) {
+    let sum = 0;
+    let count = 0;
+    for (let d = 0; d < 7; d++) {
+      const dayOffset = (3 - w) * 7 + (6 - d);
+      const dt = new Date(today);
+      dt.setDate(dt.getDate() - dayOffset);
+      const key = dt.toISOString().slice(0, 10);
+      const rate = rateMap.get(key);
+      if (rate !== undefined) {
+        sum += rate;
+        count++;
+      }
+    }
+    result.push(count > 0 ? Math.round(sum / count) : 0);
+  }
+  return result;
+}
 
 export default function TrendsScreen() {
   const c = useColors();
@@ -262,17 +319,45 @@ export default function TrendsScreen() {
     return "Weak link";
   };
 
-  const last7 = metrics.slice(-7);
-  const avgSleep = last7.length > 0 ? +(last7.reduce((s, m) => s + m.sleepDuration, 0) / last7.length).toFixed(1) : 0;
-  const avgHrv = last7.length > 0 ? Math.round(last7.reduce((s, m) => s + m.hrv, 0) / last7.length) : 0;
-  const avgRHR = last7.length > 0 ? Math.round(last7.reduce((s, m) => s + m.restingHeartRate, 0) / last7.length) : 0;
-  const avgSteps = last7.length > 0 ? Math.round(last7.reduce((s, m) => s + m.steps, 0) / last7.length) : 0;
-  const avgActiveCalories = last7.length > 0 ? Math.round(last7.reduce((s, m) => s + (m.activeCalories || 0), 0) / last7.length) : 0;
+  const last28 = metrics.slice(-28);
+  const avg = (arr: number[]) => arr.length > 0 ? arr.reduce((s, v) => s + v, 0) / arr.length : 0;
 
-  const recentWorkoutCount = last7.filter(m => (m.activeCalories || 0) > 200 || m.steps > 8000).length;
+  const avgSleep = +(avg(last28.map(m => m.sleepDuration))).toFixed(1);
+  const avgHrv = Math.round(avg(last28.map(m => m.hrv)));
+  const avgRHR = Math.round(avg(last28.map(m => m.restingHeartRate)));
+  const avgSteps = Math.round(avg(last28.map(m => m.steps)));
+  const avgActiveCalories = Math.round(avg(last28.map(m => m.activeCalories || 0)));
+  const workoutDays = last28.filter(m => (m.activeCalories || 0) > 200 || m.steps > 8000).length;
+  const workoutsPerWeek = last28.length > 0 ? +((workoutDays / last28.length) * 7).toFixed(1) : 0;
+
+  const sleepData = weeklyAverages(last28.map(m => m.sleepDuration));
+  const hrvData = weeklyAverages(last28.map(m => m.hrv));
+  const rhrData = weeklyAverages(last28.map(m => m.restingHeartRate));
+  const stepsData = weeklyAverages(last28.map(m => m.steps));
+  const workoutData = weeklyAverages(last28.map(m => ((m.activeCalories || 0) > 200 || m.steps > 8000) ? 1 : 0));
+  const activeCalData = weeklyAverages(last28.map(m => m.activeCalories || 0));
+  const habitRateData = computeHabitWeeklyRates(completionHistory);
 
   const completedCount = dailyPlan ? dailyPlan.actions.filter(a => a.completed).length : 0;
   const totalActions = dailyPlan ? dailyPlan.actions.length : 5;
+
+  const recoveryMetrics: SparkMetric[] = [
+    { label: "Sleep", value: `${avgSleep}`, unit: "hrs", data: sleepData, color: "#AF52DE", detailKey: "Sleep" },
+    { label: "HRV", value: `${avgHrv}`, unit: "ms", data: hrvData, color: "#5AC8FA", detailKey: "HRV" },
+    { label: "Resting HR", value: `${avgRHR}`, unit: "bpm", data: rhrData, color: "#FF6B6B", detailKey: "Resting HR" },
+  ];
+
+  const activityMetrics: SparkMetric[] = [
+    { label: "Steps", value: avgSteps >= 1000 ? `${(avgSteps / 1000).toFixed(1)}k` : `${avgSteps}`, unit: "avg", data: stepsData, color: "#34C759", detailKey: "Steps" },
+    { label: "Workouts", value: `${workoutsPerWeek}`, unit: "/week", data: workoutData.map(v => v * 7), color: "#1A5CFF" },
+    { label: "Active Cal", value: `${avgActiveCalories}`, unit: "avg", data: activeCalData, color: "#FF9500" },
+  ];
+
+  const habitsMetrics: SparkMetric[] = [
+    { label: "Weekly", value: `${weeklyConsistency >= 0 ? weeklyConsistency : 0}%`, unit: "completion", data: habitRateData, color: "#1A5CFF" },
+    { label: "Streak", value: `${streakDays}`, unit: "days", data: [streakDays], color: "#FF9500" },
+    { label: "Today", value: `${completedCount}/${totalActions}`, unit: "done", data: [completedCount], color: "#34C759" },
+  ];
 
   return (
     <ScrollView
@@ -352,74 +437,89 @@ export default function TrendsScreen() {
 
       <View style={styles.sectionWrap}>
         <Text style={[styles.sectionTitle, { color: c.foreground }]}>Key Metrics</Text>
+        <Text style={[styles.sectionSub, { color: c.mutedForeground }]}>4-week averages</Text>
 
         <Text style={[styles.categoryLabel, { color: c.mutedForeground }]}>Recovery / Body</Text>
         <View style={styles.metricsRow}>
-          <Pressable
-            onPress={() => openDetail("Sleep")}
-            style={({ pressed }) => [styles.metricTile, { backgroundColor: c.card, opacity: pressed ? 0.8 : 1 }]}
-          >
-            <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>Sleep</Text>
-            <Text style={[styles.metricValue, { color: c.foreground }]}>{avgSleep}</Text>
-            <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>hrs avg</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => openDetail("HRV")}
-            style={({ pressed }) => [styles.metricTile, { backgroundColor: c.card, opacity: pressed ? 0.8 : 1 }]}
-          >
-            <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>HRV</Text>
-            <Text style={[styles.metricValue, { color: c.foreground }]}>{avgHrv}</Text>
-            <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>ms avg</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => openDetail("Resting HR")}
-            style={({ pressed }) => [styles.metricTile, { backgroundColor: c.card, opacity: pressed ? 0.8 : 1 }]}
-          >
-            <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>Resting HR</Text>
-            <Text style={[styles.metricValue, { color: c.foreground }]}>{avgRHR}</Text>
-            <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>bpm avg</Text>
-          </Pressable>
+          {recoveryMetrics.map((m) => (
+            <Pressable
+              key={m.label}
+              onPress={() => m.detailKey && openDetail(m.detailKey)}
+              style={({ pressed }) => [styles.metricTile, { backgroundColor: c.card, opacity: pressed ? 0.8 : 1 }]}
+            >
+              <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>{m.label}</Text>
+              <View style={styles.metricValueRow}>
+                <Text style={[styles.metricValue, { color: c.foreground }]}>{m.value}</Text>
+                <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>{m.unit}</Text>
+              </View>
+              {m.data.length >= 2 && (
+                <Svg width={60} height={20} style={styles.spark}>
+                  <Polyline
+                    points={buildSparkPoints(m.data, 60, 20)}
+                    fill="none"
+                    stroke={m.color}
+                    strokeWidth={1.5}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </Svg>
+              )}
+            </Pressable>
+          ))}
         </View>
 
         <Text style={[styles.categoryLabel, { color: c.mutedForeground }]}>Activity</Text>
         <View style={styles.metricsRow}>
-          <Pressable
-            onPress={() => openDetail("Steps")}
-            style={({ pressed }) => [styles.metricTile, { backgroundColor: c.card, opacity: pressed ? 0.8 : 1 }]}
-          >
-            <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>Steps</Text>
-            <Text style={[styles.metricValue, { color: c.foreground }]}>{avgSteps >= 1000 ? `${(avgSteps / 1000).toFixed(1)}k` : avgSteps}</Text>
-            <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>avg</Text>
-          </Pressable>
-          <View style={[styles.metricTile, { backgroundColor: c.card }]}>
-            <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>Workouts</Text>
-            <Text style={[styles.metricValue, { color: c.foreground }]}>{recentWorkoutCount}</Text>
-            <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>this week</Text>
-          </View>
-          <View style={[styles.metricTile, { backgroundColor: c.card }]}>
-            <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>Active Cal</Text>
-            <Text style={[styles.metricValue, { color: c.foreground }]}>{avgActiveCalories}</Text>
-            <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>avg</Text>
-          </View>
+          {activityMetrics.map((m) => (
+            <Pressable
+              key={m.label}
+              onPress={() => m.detailKey && openDetail(m.detailKey)}
+              style={({ pressed }) => [styles.metricTile, { backgroundColor: c.card, opacity: pressed ? 0.8 : 1 }]}
+            >
+              <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>{m.label}</Text>
+              <View style={styles.metricValueRow}>
+                <Text style={[styles.metricValue, { color: c.foreground }]}>{m.value}</Text>
+                <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>{m.unit}</Text>
+              </View>
+              {m.data.length >= 2 && (
+                <Svg width={60} height={20} style={styles.spark}>
+                  <Polyline
+                    points={buildSparkPoints(m.data, 60, 20)}
+                    fill="none"
+                    stroke={m.color}
+                    strokeWidth={1.5}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </Svg>
+              )}
+            </Pressable>
+          ))}
         </View>
 
         <Text style={[styles.categoryLabel, { color: c.mutedForeground }]}>Habits</Text>
         <View style={styles.metricsRow}>
-          <View style={[styles.metricTile, { backgroundColor: c.card }]}>
-            <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>Weekly</Text>
-            <Text style={[styles.metricValue, { color: c.foreground }]}>{weeklyConsistency >= 0 ? `${weeklyConsistency}%` : "0%"}</Text>
-            <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>completion</Text>
-          </View>
-          <View style={[styles.metricTile, { backgroundColor: c.card }]}>
-            <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>Streak</Text>
-            <Text style={[styles.metricValue, { color: c.foreground }]}>{streakDays}</Text>
-            <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>days</Text>
-          </View>
-          <View style={[styles.metricTile, { backgroundColor: c.card }]}>
-            <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>Today</Text>
-            <Text style={[styles.metricValue, { color: c.foreground }]}>{completedCount}/{totalActions}</Text>
-            <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>done</Text>
-          </View>
+          {habitsMetrics.map((m) => (
+            <View key={m.label} style={[styles.metricTile, { backgroundColor: c.card }]}>
+              <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>{m.label}</Text>
+              <View style={styles.metricValueRow}>
+                <Text style={[styles.metricValue, { color: c.foreground }]}>{m.value}</Text>
+                <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>{m.unit}</Text>
+              </View>
+              {m.data.length >= 2 && (
+                <Svg width={60} height={20} style={styles.spark}>
+                  <Polyline
+                    points={buildSparkPoints(m.data, 60, 20)}
+                    fill="none"
+                    stroke={m.color}
+                    strokeWidth={1.5}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </Svg>
+              )}
+            </View>
+          ))}
         </View>
       </View>
 
@@ -561,12 +661,17 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 16,
     alignItems: "center",
-    gap: 3,
+    gap: 4,
   },
   metricLabel: {
     fontSize: 11,
     fontFamily: "Inter_500Medium",
     letterSpacing: 0.1,
+  },
+  metricValueRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 3,
   },
   metricValue: {
     fontSize: 20,
@@ -576,5 +681,8 @@ const styles = StyleSheet.create({
   metricUnit: {
     fontSize: 11,
     fontFamily: "Inter_400Regular",
+  },
+  spark: {
+    marginTop: 2,
   },
 });
