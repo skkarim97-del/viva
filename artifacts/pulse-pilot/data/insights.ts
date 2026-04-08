@@ -401,106 +401,244 @@ function computeSleepIntelligence(last14: HealthMetrics[], last7: HealthMetrics[
   };
 }
 
+type DayType = "push" | "maintain" | "recover" | "rest";
+
+interface SignalProfile {
+  sleepLast: number;
+  sleepTrend: "down" | "up" | "steady";
+  sleepConsistent: boolean;
+  recoveryLevel: "strong" | "moderate" | "low";
+  recoveryVsNormal: "above" | "below" | "normal";
+  recoveryStreak: number;
+  recoveryStreakDir: "improving" | "declining" | "stable";
+  activityLevel: "active" | "moderate" | "low";
+  activityVsSleep: "mismatch" | "balanced";
+  feelingPositive: boolean;
+  feelingNegative: boolean;
+  energyHigh: boolean;
+  energyLow: boolean;
+  stressHigh: boolean;
+  hydrationLow: boolean;
+  completionRate: number;
+  completionConsistent: boolean;
+  movementStrong: boolean;
+  recoveryHabitWeak: boolean;
+  dayType: DayType;
+}
+
+function buildSignalProfile(
+  todayMetrics: HealthMetrics,
+  allMetrics: HealthMetrics[],
+  userInputs: CoachInsightInputs
+): SignalProfile {
+  const last7 = allMetrics.slice(-7);
+  const last14 = allMetrics.slice(-14);
+
+  const avgSleep7 = last7.reduce((s, m) => s + m.sleepDuration, 0) / last7.length;
+  const sleepLast = todayMetrics.sleepDuration;
+  const sleepTrend: "down" | "up" | "steady" =
+    avgSleep7 > sleepLast + 0.3 ? "down" : sleepLast > avgSleep7 + 0.3 ? "up" : "steady";
+  const sleepVariance = last7.reduce((s, m) => s + Math.abs(m.sleepDuration - avgSleep7), 0) / last7.length;
+  const sleepConsistent = sleepVariance < 0.6;
+
+  const hrvBaseline = last14.reduce((s, m) => s + m.hrv, 0) / last14.length;
+  const hrvDev = ((todayMetrics.hrv - hrvBaseline) / hrvBaseline) * 100;
+
+  const recoveryLevel: "strong" | "moderate" | "low" =
+    todayMetrics.recoveryScore >= 70 ? "strong" : todayMetrics.recoveryScore >= 50 ? "moderate" : "low";
+
+  const avgRecovery14 = last14.reduce((s, m) => s + m.recoveryScore, 0) / last14.length;
+  const recoveryVsNormal: "above" | "below" | "normal" =
+    todayMetrics.recoveryScore > avgRecovery14 + 8 ? "above" :
+    todayMetrics.recoveryScore < avgRecovery14 - 8 ? "below" : "normal";
+
+  let recoveryStreak = 0;
+  let recoveryStreakDir: "improving" | "declining" | "stable" = "stable";
+  for (let i = last7.length - 1; i > 0; i--) {
+    if (last7[i].recoveryScore > last7[i - 1].recoveryScore + 3) {
+      if (recoveryStreakDir === "stable" || recoveryStreakDir === "improving") {
+        recoveryStreakDir = "improving";
+        recoveryStreak++;
+      } else break;
+    } else if (last7[i].recoveryScore < last7[i - 1].recoveryScore - 3) {
+      if (recoveryStreakDir === "stable" || recoveryStreakDir === "declining") {
+        recoveryStreakDir = "declining";
+        recoveryStreak++;
+      } else break;
+    } else break;
+  }
+
+  const avgSteps7 = last7.reduce((s, m) => s + m.steps, 0) / last7.length;
+  const activityLevel: "active" | "moderate" | "low" =
+    avgSteps7 >= 8000 ? "active" : avgSteps7 >= 5000 ? "moderate" : "low";
+
+  const activityVsSleep: "mismatch" | "balanced" =
+    (activityLevel === "active" && sleepTrend === "down") ? "mismatch" : "balanced";
+
+  const { feeling, energy, stress, hydration, completionHistory } = userInputs;
+  const feelingPositive = feeling === "great";
+  const feelingNegative = feeling === "tired" || feeling === "stressed";
+  const energyHigh = energy === "excellent" || energy === "high";
+  const energyLow = energy === "low";
+  const stressHigh = stress === "very_high" || stress === "high";
+  const hydrationLow = hydration === "dehydrated" || hydration === "low";
+
+  const recentHistory = completionHistory.slice(-7);
+  const completionRate = recentHistory.length > 0
+    ? Math.round(recentHistory.reduce((sum, r) => sum + r.completionRate, 0) / recentHistory.length)
+    : -1;
+
+  const completionDays = recentHistory.filter(r => r.completionRate >= 60).length;
+  const completionConsistent = recentHistory.length >= 3 && completionDays >= Math.ceil(recentHistory.length * 0.6);
+
+  const movementActions = recentHistory.flatMap(r => r.actions.filter(a => a.category === "move"));
+  const recoveryActions = recentHistory.flatMap(r => r.actions.filter(a => a.category === "recover"));
+  const movementStrong = movementActions.length > 0 && movementActions.filter(a => a.completed).length / movementActions.length >= 0.7;
+  const recoveryHabitWeak = recoveryActions.length > 0 && recoveryActions.filter(a => a.completed).length / recoveryActions.length < 0.4;
+
+  let dayType: DayType;
+  const negativeSignals =
+    (recoveryLevel === "low" ? 2 : recoveryLevel === "moderate" ? 1 : 0) +
+    (sleepLast < 6 ? 2 : sleepLast < 7 ? 1 : 0) +
+    (stressHigh ? 1 : 0) +
+    (hrvDev < -8 ? 1 : 0) +
+    (feelingNegative ? 1 : 0) +
+    (energyLow ? 1 : 0);
+
+  const positiveSignals =
+    (recoveryLevel === "strong" ? 2 : 0) +
+    (sleepLast >= 7.5 ? 1 : 0) +
+    (hrvDev > 8 ? 1 : 0) +
+    (feelingPositive ? 1 : 0) +
+    (energyHigh ? 1 : 0);
+
+  if (negativeSignals >= 4) dayType = "rest";
+  else if (negativeSignals >= 2) dayType = "recover";
+  else if (positiveSignals >= 3) dayType = "push";
+  else dayType = "maintain";
+
+  return {
+    sleepLast, sleepTrend, sleepConsistent,
+    recoveryLevel, recoveryVsNormal, recoveryStreak, recoveryStreakDir,
+    activityLevel, activityVsSleep,
+    feelingPositive, feelingNegative, energyHigh, energyLow,
+    stressHigh, hydrationLow,
+    completionRate, completionConsistent, movementStrong, recoveryHabitWeak,
+    dayType,
+  };
+}
+
 export function generateCoachInsight(
   todayMetrics: HealthMetrics,
   allMetrics: HealthMetrics[],
   userInputs: CoachInsightInputs
 ): string {
-  const last7 = allMetrics.slice(-7);
-  const last14 = allMetrics.slice(-14);
+  if (allMetrics.length === 0) return "";
 
-  const avgSleep7 = last7.reduce((s, m) => s + m.sleepDuration, 0) / last7.length;
-  const sleepTonight = todayMetrics.sleepDuration;
-  const sleepTrending = avgSleep7 > sleepTonight + 0.3 ? "down" : sleepTonight > avgSleep7 + 0.3 ? "up" : "steady";
+  const p = buildSignalProfile(todayMetrics, allMetrics, userInputs);
 
-  const hrvBaseline = last14.reduce((s, m) => s + m.hrv, 0) / last14.length;
-  const hrvDev = ((todayMetrics.hrv - hrvBaseline) / hrvBaseline) * 100;
-  const hrvState = hrvDev > 8 ? "above" : hrvDev < -8 ? "below" : "normal";
+  const insight = selectInsight(p);
 
-  const recoveryState = todayMetrics.recoveryScore >= 70 ? "strong" : todayMetrics.recoveryScore >= 50 ? "moderate" : "low";
-
-  const avgSteps7 = last7.reduce((s, m) => s + m.steps, 0) / last7.length;
-  const activityState = avgSteps7 >= 8000 ? "active" : avgSteps7 >= 5000 ? "moderate" : "low";
-
-  const last3Recovery = last7.slice(-3);
-  const consecutiveLowRecovery = last3Recovery.every(m => m.recoveryScore < 50);
-  const recentHistory = userInputs.completionHistory.slice(-7);
-  const weeklyCompletionRate = recentHistory.length > 0
-    ? Math.round(recentHistory.reduce((sum, r) => sum + r.completionRate, 0) / recentHistory.length)
-    : -1;
-
-  const { feeling, energy, stress, hydration } = userInputs;
-
-  if (consecutiveLowRecovery && sleepTrending === "down") {
-    return "Your body has been running on empty for a few days, and sleep has been getting shorter. That's a clear sign you need more rest. Keep today easy and try to get to bed earlier tonight.";
+  if (p.hydrationLow && !insight.includes("water") && !insight.includes("hydrat")) {
+    return insight + " Also, your water intake is low — sipping throughout the day will help everything else work better.";
   }
 
-  if (stress === "very_high" || stress === "high") {
-    if (hrvState === "below") {
-      return "You're feeling stressed, and your body data backs that up — your recovery is lower than usual. Today is a good day to take it easy. A short walk or some breathing exercises will do more good than a tough workout.";
-    }
-    if (sleepTonight < 6.5) {
-      return "High stress and short sleep is a tough combination. It can drain your energy fast. Focus on staying hydrated, take a short walk, and make getting to bed early your top priority tonight.";
-    }
+  return insight;
+}
+
+function selectInsight(p: SignalProfile): string {
+
+  if (p.dayType === "rest" && p.sleepTrend === "down" && p.recoveryStreakDir === "declining") {
+    return "Your recovery has been dropping for " + (p.recoveryStreak || "a few") + " days while sleep keeps getting shorter. These two things feed each other — less sleep means slower recovery, which makes everything harder. Today is a rest day. Keep it light and get to bed early tonight.";
   }
 
-  if (feeling === "tired" || energy === "low") {
-    if (recoveryState === "strong" && hrvState !== "below") {
-      return "You're feeling tired, but your body is actually recovering well. This could be more mental fatigue than physical. A light workout might actually help you feel more energized — just keep it easy.";
-    }
-    if (sleepTrending === "down") {
-      return "It makes sense that your energy is low — you've been sleeping a bit less than usual this week. A lighter day today and an earlier bedtime tonight should help you feel better by tomorrow.";
-    }
+  if (p.stressHigh && p.sleepLast < 6.5 && p.recoveryLevel !== "strong") {
+    return "High stress on a short night of sleep is putting extra pressure on your body. When both stack up, energy and focus drop faster than either one alone. Focus on one thing today: getting to bed early. A walk and some water will carry you through the rest.";
   }
 
-  if (hydration === "dehydrated" || hydration === "low") {
-    if (sleepTrending === "down" || energy === "low") {
-      return "Being low on water " + (sleepTrending === "down" ? "combined with less sleep" : "when energy is already low") + " can make you feel worse than you actually are. Start sipping water now — you may feel noticeably better within an hour.";
-    }
+  if (p.stressHigh && p.recoveryLevel === "low") {
+    return "Stress is high and your body is showing it — recovery is lower than usual. That combination means pushing hard today would cost more than it's worth. A short walk or some breathing exercises will do more good than a tough workout. Protect your energy for later in the week.";
   }
 
-  if (feeling === "great" || energy === "excellent" || energy === "high") {
-    if (hrvState === "above" && recoveryState === "strong") {
-      return "Everything is clicking today. You're feeling great, your body is well-recovered, and your energy is strong. This is a perfect day for a challenging workout or focused deep work.";
-    }
-    if (hrvState === "below") {
-      return "You're feeling good today, but your recovery is a bit lower than usual. This can mean your body is still catching up from recent activity. Go ahead with your plans, but keep things moderate and check in with how you feel along the way.";
-    }
-    if (activityState === "active") {
-      return "You've been active and you're feeling strong. That means your routine is working well. Focus on sustaining this level rather than pushing harder — consistency is what gets results.";
-    }
-    return "Good energy today. Your body is in a solid place. Stick to your plan and make the most of it.";
+  if (p.stressHigh && p.activityLevel === "active" && p.sleepTrend !== "up") {
+    return "You've been staying active while stress has been high. That effort is admirable, but without enough recovery time, it can wear you down. Consider a lighter session today so your body can catch up. You'll get more out of tomorrow's effort.";
   }
 
-  if (stress === "very_high" || stress === "high") {
-    return "Stress is high today. That can drain your energy even if your body feels fine. Go a bit easier and protect your energy for the rest of the week.";
+  if (p.feelingNegative && p.recoveryLevel === "strong" && !p.energyLow) {
+    return "You're not feeling your best, but your body is actually in good shape — recovery is strong and your recent sleep supports that. This is likely more mental fatigue than physical. A moderate workout or a change of scenery could shift your energy. Don't push too hard, but don't write the day off either.";
   }
 
-  if (feeling === "tired" || energy === "low") {
-    return "Energy is low today. That's your body telling you it needs a lighter pace. Keep things simple and prioritize rest when you can.";
+  if (p.energyLow && p.sleepTrend === "down" && p.hydrationLow) {
+    return "Low energy, less sleep than usual, and low water intake — these three together explain why today feels harder. The good news is that two of those are fixable right now. Start drinking water and plan for an earlier bedtime. You should feel a difference by this afternoon.";
   }
 
-  if (hrvState === "above" && recoveryState === "strong" && sleepTonight >= 7) {
-    return "You slept well and your body is well-recovered. That puts you in a great spot today. Use this energy for something meaningful — a productive day is ahead.";
-  }
-  if (hrvState === "below" && recoveryState === "low") {
-    return "Your recovery is lower than usual, which often means your body is dealing with recent stress or not enough rest. Take it easy today and focus on sleep tonight — you'll bounce back faster.";
-  }
-  if (weeklyCompletionRate >= 0 && weeklyCompletionRate < 40) {
-    return "You've completed less of your daily plan this week, and that's okay. It might mean the plan needs adjusting, not that you're falling behind. Try simplifying today — a few small wins build momentum.";
-  }
-  if (sleepTrending === "down" && activityState === "active") {
-    return "You've been active, but your sleep has been getting shorter. That combination catches up fast. Keep moving, but make winding down earlier tonight a priority.";
-  }
-  if (recoveryState === "moderate") {
-    return "Your recovery is in the middle today — not bad, but not fully recharged either. A steady, moderate effort is the right call. Save the harder sessions for when you're feeling stronger.";
+  if (p.energyLow && p.sleepTrend === "down") {
+    return "Your energy is low, and shorter sleep this week is the likely reason. When sleep dips even a little over several days, it adds up. A lighter day today and an earlier bedtime tonight is the fastest way to bounce back.";
   }
 
-  let base = "Things look balanced today. Your sleep, recovery, and activity are all in a good range. Stay consistent with your plan and keep building on your routine.";
-
-  if (hydration === "dehydrated" || hydration === "low") {
-    base += " One thing to watch: your hydration is low. Drink water throughout the day, not just when you feel thirsty.";
+  if (p.feelingNegative && p.sleepLast < 6.5) {
+    return "Last night's sleep was short, and that's showing up in how you feel today. Less than six and a half hours doesn't give your body enough time to fully recharge. Keep today's expectations realistic and prioritize sleep tonight — you'll feel like a different person tomorrow.";
   }
 
-  return base;
+  if (p.activityVsSleep === "mismatch") {
+    return "You've been active this week, but your sleep has been getting shorter. High activity with declining sleep is a pattern that catches up quickly — energy, mood, and performance all take a hit. Keep your movement going, but make winding down earlier tonight your top priority.";
+  }
+
+  if (!p.sleepConsistent && p.activityLevel === "active") {
+    return "Your activity has been strong, but your sleep schedule has been up and down. Inconsistent sleep makes it harder for your body to recover from workouts, even when the total hours look okay. Try to go to bed within the same 30-minute window each night this week.";
+  }
+
+  if (p.movementStrong && p.recoveryHabitWeak) {
+    return "You've been great about staying active — your movement consistency is strong. But recovery habits like stretching, rest, and wind-down time have been falling behind. Without recovery, the benefits of movement plateau. Try adding one recovery action to your day today.";
+  }
+
+  if (p.completionRate >= 0 && p.completionRate < 35 && p.recoveryLevel !== "low") {
+    return "You've completed less of your daily plan this week. That usually means the plan is too ambitious, not that you're falling short. Your body is actually in decent shape, so the fix is about simplifying. Pick two or three things that matter most today and focus there.";
+  }
+
+  if (p.completionConsistent && p.recoveryLevel === "strong" && p.sleepTrend !== "down") {
+    return "You've been showing up consistently and it's paying off — recovery is strong and your routine is solid. This kind of steady effort is what creates lasting results. Keep doing what you're doing and trust the process.";
+  }
+
+  if (p.feelingPositive && p.recoveryLevel === "strong" && p.energyHigh) {
+    return "Everything is aligned today. You're feeling good, your body is well-recovered, and energy is high. This is one of those days where you can challenge yourself — push a little harder in your workout or tackle something demanding. Make the most of it.";
+  }
+
+  if (p.feelingPositive && p.recoveryVsNormal === "below") {
+    return "You're feeling good today, but your recovery is a bit lower than your usual. That can mean your body is still catching up from recent days. Go ahead with your plans, but keep things moderate. Check in with how you feel halfway through and adjust if needed.";
+  }
+
+  if (p.energyHigh && p.recoveryLevel === "moderate") {
+    return "Your energy is high, which is great. But recovery is only moderate, so there's a tradeoff — pushing hard today could mean feeling it tomorrow. A solid moderate effort is the sweet spot. You'll get a good session in without borrowing from tomorrow's energy.";
+  }
+
+  if (p.energyHigh && p.activityLevel === "active" && p.sleepTrend === "steady") {
+    return "You've been consistently active, energy is up, and sleep is steady. Your routine is working well. Today is about sustaining this momentum rather than ramping up. Consistency at this level will bring better results than occasional big efforts.";
+  }
+
+  if (p.recoveryStreakDir === "improving" && p.recoveryStreak >= 2) {
+    return "Your recovery has been improving for " + p.recoveryStreak + " days in a row. That's a great sign — your body is responding well to your recent choices. Today you can lean into your plan with confidence. If you've been holding back, now is a good time to step it up slightly.";
+  }
+
+  if (p.recoveryStreakDir === "declining" && p.recoveryStreak >= 2) {
+    return "Recovery has been trending down for " + p.recoveryStreak + " days. When recovery drops over multiple days, it usually means your body needs a break from the current pace. Scale back today and focus on sleep and nutrition. You'll recover faster by easing off now.";
+  }
+
+  if (p.stressHigh && p.recoveryLevel === "strong") {
+    return "Stress is high today, but your body is actually holding up well — recovery looks solid. That means you have some buffer, but don't spend it all. A moderate day will let you manage the stress without draining your reserves. Save the hard efforts for when stress settles.";
+  }
+
+  if (p.dayType === "push") {
+    return "Your sleep, recovery, and energy are all in a good place today. When everything lines up like this, it's a window to push a little harder than usual. Challenge yourself with your workout or tackle something you've been putting off. Days like this are worth making the most of.";
+  }
+
+  if (p.dayType === "recover") {
+    return "A few signals suggest your body could use a lighter day. That doesn't mean doing nothing — it means being smart about where you spend your energy. A moderate pace with some extra attention to hydration and rest will set you up well for tomorrow.";
+  }
+
+  if (p.dayType === "maintain") {
+    return "Things look steady today. No major flags, no big green lights. This is a good day to follow your plan as-is and stay consistent. Steady days like this are the foundation that makes the big days possible.";
+  }
+
+  return "Your sleep, recovery, and activity are in a balanced range today. Stay consistent with your plan and keep building on your routine. Small, steady effort is what creates lasting change.";
 }
