@@ -81,12 +81,21 @@ export interface DailyAction {
   text: string;
   recommended: string;
   completed: boolean;
+  reason?: string;
 }
 
 export interface CompletionRecord {
   date: string;
   actions: { id: string; category: ActionCategory; completed: boolean; recommended?: string; chosen?: string }[];
   completionRate: number;
+}
+
+export interface DailyCheckIn {
+  date: string;
+  energy: "great" | "good" | "low" | "crashed";
+  focus: "sharp" | "decent" | "foggy" | "scattered";
+  mood: "great" | "good" | "flat" | "rough";
+  planRealistic: boolean;
 }
 
 export interface DailyPlan {

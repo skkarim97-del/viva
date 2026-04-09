@@ -34,6 +34,7 @@ import type {
   TrainingIntent,
   CompletionRecord,
   ActionCategory,
+  DailyCheckIn,
 } from "@/types";
 
 const EXPO_PUBLIC_DOMAIN = process.env.EXPO_PUBLIC_DOMAIN || "";
@@ -78,6 +79,9 @@ interface AppContextType {
   todayCompletionRate: number;
   lastCompletionFeedback: string | null;
   clearCompletionFeedback: () => void;
+  checkInHistory: DailyCheckIn[];
+  saveDailyCheckIn: (checkIn: DailyCheckIn) => void;
+  todayCheckIn: DailyCheckIn | null;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -88,6 +92,7 @@ const WELLNESS_KEY = "@viva_wellness";
 const COMPLETION_KEY = "@viva_completions";
 const INTEGRATIONS_KEY = "@viva_integrations";
 const WEEKLY_PLAN_KEY = "@viva_weekly_plan";
+const CHECKIN_KEY = "@viva_checkins";
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<UserProfile>(defaultProfile);
@@ -109,6 +114,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [metricsRef, setMetricsRef] = useState<HealthMetrics | null>(null);
   const [completionHistory, setCompletionHistory] = useState<CompletionRecord[]>([]);
   const [lastCompletionFeedback, setLastCompletionFeedback] = useState<string | null>(null);
+  const [checkInHistory, setCheckInHistory] = useState<DailyCheckIn[]>([]);
 
   useEffect(() => {
     loadData();
@@ -228,6 +234,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (savedCompletions) {
         loadedHistory = JSON.parse(savedCompletions);
         setCompletionHistory(loadedHistory);
+      }
+
+      const savedCheckIns = await AsyncStorage.getItem(CHECKIN_KEY);
+      if (savedCheckIns) {
+        setCheckInHistory(JSON.parse(savedCheckIns));
       }
 
       const savedIntegrations = await AsyncStorage.getItem(INTEGRATIONS_KEY);
@@ -664,6 +675,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setLastCompletionFeedback(null);
   }, []);
 
+  const saveDailyCheckIn = useCallback(async (checkIn: DailyCheckIn) => {
+    const updated = [...checkInHistory.filter(c => c.date !== checkIn.date), checkIn].slice(-30);
+    setCheckInHistory(updated);
+    await AsyncStorage.setItem(CHECKIN_KEY, JSON.stringify(updated));
+  }, [checkInHistory]);
+
+  const todayCheckIn = (() => {
+    const todayDate = new Date().toISOString().split("T")[0];
+    return checkInHistory.find(c => c.date === todayDate) ?? null;
+  })();
+
   return (
     <AppContext.Provider
       value={{
@@ -703,6 +725,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         todayCompletionRate,
         lastCompletionFeedback,
         clearCompletionFeedback,
+        checkInHistory,
+        saveDailyCheckIn,
+        todayCheckIn,
       }}
     >
       {children}

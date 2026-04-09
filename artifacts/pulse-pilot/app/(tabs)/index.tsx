@@ -84,6 +84,7 @@ export default function DashboardScreen() {
     metrics, completionHistory,
     streakDays, todayCompletionRate,
     lastCompletionFeedback, clearCompletionFeedback,
+    saveDailyCheckIn, todayCheckIn,
   } = useApp();
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -94,6 +95,12 @@ export default function DashboardScreen() {
   const [showRefine, setShowRefine] = useState(false);
   const [editingAction, setEditingAction] = useState<ActionCategory | null>(null);
   const [showChat, setShowChat] = useState(false);
+  const [showWhyPlan, setShowWhyPlan] = useState(false);
+  const [showCheckIn, setShowCheckIn] = useState(false);
+  const [checkInEnergy, setCheckInEnergy] = useState<"great" | "good" | "low" | "crashed" | null>(null);
+  const [checkInFocus, setCheckInFocus] = useState<"sharp" | "decent" | "foggy" | "scattered" | null>(null);
+  const [checkInMood, setCheckInMood] = useState<"great" | "good" | "flat" | "rough" | null>(null);
+  const [checkInRealistic, setCheckInRealistic] = useState<boolean | null>(null);
   const chatListRef = useRef<FlatList>(null);
   const feedbackOpacity = useRef(new Animated.Value(0)).current;
 
@@ -656,6 +663,9 @@ export default function DashboardScreen() {
                     ]}>
                       {action.text}
                     </Text>
+                    {action.reason && !action.completed && (
+                      <Text style={[styles.actionReason, { color: c.mutedForeground }]}>{action.reason}</Text>
+                    )}
                   </View>
                   <Feather name="chevron-right" size={14} color={c.mutedForeground + "40"} />
                 </Pressable>
@@ -663,6 +673,28 @@ export default function DashboardScreen() {
             );
           })}
         </View>
+
+        {dailyPlan?.whyThisPlan?.length > 0 && (
+          <Pressable
+            onPress={() => { haptic(); setShowWhyPlan(!showWhyPlan); }}
+            style={[styles.whyPlanCard, { backgroundColor: c.card }]}
+          >
+            <View style={styles.whyPlanHeader}>
+              <View style={styles.whyPlanTitleRow}>
+                <Feather name="info" size={14} color={c.primary} />
+                <Text style={[styles.whyPlanTitle, { color: c.foreground }]}>Why VIVA chose this plan</Text>
+              </View>
+              <Feather name={showWhyPlan ? "chevron-up" : "chevron-down"} size={16} color={c.mutedForeground} />
+            </View>
+            {showWhyPlan && (
+              <View style={styles.whyPlanContent}>
+                {dailyPlan.whyThisPlan.map((reason, i) => (
+                  <Text key={i} style={[styles.whyPlanText, { color: c.mutedForeground }]}>{reason}</Text>
+                ))}
+              </View>
+            )}
+          </Pressable>
+        )}
 
         {dailyPlan && (
           <View style={[styles.habitCard, { backgroundColor: c.card }]}>
@@ -686,6 +718,30 @@ export default function DashboardScreen() {
                 <Text style={[styles.habitStatLabel, { color: c.mutedForeground }]}>today</Text>
               </View>
             </View>
+          </View>
+        )}
+
+        {!todayCheckIn && completedCount >= 3 && (
+          <Pressable
+            onPress={() => { haptic(); setShowCheckIn(true); }}
+            style={({ pressed }) => [
+              styles.checkInButton,
+              { backgroundColor: c.card, borderColor: c.primary + "30", opacity: pressed ? 0.85 : 1 },
+            ]}
+          >
+            <Feather name="sunset" size={16} color={c.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.checkInButtonTitle, { color: c.foreground }]}>End of day check-in</Text>
+              <Text style={[styles.checkInButtonSub, { color: c.mutedForeground }]}>Help VIVA learn what works for you</Text>
+            </View>
+            <Feather name="chevron-right" size={14} color={c.mutedForeground + "60"} />
+          </Pressable>
+        )}
+
+        {todayCheckIn && (
+          <View style={[styles.checkInDone, { backgroundColor: c.card }]}>
+            <Feather name="check-circle" size={14} color={c.success} />
+            <Text style={[styles.checkInDoneText, { color: c.mutedForeground }]}>Today's check-in complete</Text>
           </View>
         )}
 
@@ -793,6 +849,117 @@ export default function DashboardScreen() {
                 </>
               );
             })()}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={showCheckIn}
+        transparent
+        animationType="slide"
+        onRequestClose={() => { setShowCheckIn(false); setCheckInEnergy(null); setCheckInFocus(null); setCheckInMood(null); setCheckInRealistic(null); }}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => { setShowCheckIn(false); setCheckInEnergy(null); setCheckInFocus(null); setCheckInMood(null); setCheckInRealistic(null); }}>
+          <Pressable style={[styles.modalSheet, { backgroundColor: c.card, paddingBottom: Math.max(bottomPad, 24) }]} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHandle}>
+              <View style={[styles.handleBar, { backgroundColor: c.border }]} />
+            </View>
+            <View style={[styles.modalHeader, { marginBottom: 4 }]}>
+              <View style={[styles.modalIconWrap, { backgroundColor: c.primary + "12" }]}>
+                <Feather name="sunset" size={18} color={c.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.modalTitle, { color: c.foreground }]}>End of Day</Text>
+                <Text style={[styles.modalInstruction, { color: c.mutedForeground }]}>Quick reflection to help VIVA learn</Text>
+              </View>
+            </View>
+
+            <View style={{ gap: 16, paddingHorizontal: 4 }}>
+              <View style={{ gap: 6 }}>
+                <Text style={[styles.checkInLabel, { color: c.foreground }]}>How was your energy?</Text>
+                <View style={styles.checkInChipRow}>
+                  {(["great", "good", "low", "crashed"] as const).map(v => (
+                    <Pressable key={v} onPress={() => { haptic(); setCheckInEnergy(v); }}
+                      style={[styles.checkInChip, { backgroundColor: checkInEnergy === v ? c.primary + "18" : c.background, borderColor: checkInEnergy === v ? c.primary + "40" : c.border + "30" }]}>
+                      <Text style={[styles.checkInChipText, { color: checkInEnergy === v ? c.primary : c.foreground }]}>
+                        {v === "great" ? "Great" : v === "good" ? "Good" : v === "low" ? "Low" : "Crashed"}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+
+              <View style={{ gap: 6 }}>
+                <Text style={[styles.checkInLabel, { color: c.foreground }]}>How was your focus?</Text>
+                <View style={styles.checkInChipRow}>
+                  {(["sharp", "decent", "foggy", "scattered"] as const).map(v => (
+                    <Pressable key={v} onPress={() => { haptic(); setCheckInFocus(v); }}
+                      style={[styles.checkInChip, { backgroundColor: checkInFocus === v ? c.primary + "18" : c.background, borderColor: checkInFocus === v ? c.primary + "40" : c.border + "30" }]}>
+                      <Text style={[styles.checkInChipText, { color: checkInFocus === v ? c.primary : c.foreground }]}>
+                        {v === "sharp" ? "Sharp" : v === "decent" ? "Decent" : v === "foggy" ? "Foggy" : "Scattered"}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+
+              <View style={{ gap: 6 }}>
+                <Text style={[styles.checkInLabel, { color: c.foreground }]}>How was your mood?</Text>
+                <View style={styles.checkInChipRow}>
+                  {(["great", "good", "flat", "rough"] as const).map(v => (
+                    <Pressable key={v} onPress={() => { haptic(); setCheckInMood(v); }}
+                      style={[styles.checkInChip, { backgroundColor: checkInMood === v ? c.primary + "18" : c.background, borderColor: checkInMood === v ? c.primary + "40" : c.border + "30" }]}>
+                      <Text style={[styles.checkInChipText, { color: checkInMood === v ? c.primary : c.foreground }]}>
+                        {v === "great" ? "Great" : v === "good" ? "Good" : v === "flat" ? "Flat" : "Rough"}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+
+              <View style={{ gap: 6 }}>
+                <Text style={[styles.checkInLabel, { color: c.foreground }]}>Did today's plan feel realistic?</Text>
+                <View style={styles.checkInChipRow}>
+                  <Pressable onPress={() => { haptic(); setCheckInRealistic(true); }}
+                    style={[styles.checkInChip, { flex: 1, backgroundColor: checkInRealistic === true ? c.success + "18" : c.background, borderColor: checkInRealistic === true ? c.success + "40" : c.border + "30" }]}>
+                    <Text style={[styles.checkInChipText, { color: checkInRealistic === true ? c.success : c.foreground }]}>Yes</Text>
+                  </Pressable>
+                  <Pressable onPress={() => { haptic(); setCheckInRealistic(false); }}
+                    style={[styles.checkInChip, { flex: 1, backgroundColor: checkInRealistic === false ? c.destructive + "18" : c.background, borderColor: checkInRealistic === false ? c.destructive + "40" : c.border + "30" }]}>
+                    <Text style={[styles.checkInChipText, { color: checkInRealistic === false ? c.destructive : c.foreground }]}>No</Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              <Pressable
+                onPress={() => {
+                  if (checkInEnergy && checkInFocus && checkInMood && checkInRealistic !== null) {
+                    haptic();
+                    saveDailyCheckIn({
+                      date: new Date().toISOString().split("T")[0],
+                      energy: checkInEnergy,
+                      focus: checkInFocus,
+                      mood: checkInMood,
+                      planRealistic: checkInRealistic,
+                    });
+                    setShowCheckIn(false);
+                    setCheckInEnergy(null);
+                    setCheckInFocus(null);
+                    setCheckInMood(null);
+                    setCheckInRealistic(null);
+                  }
+                }}
+                style={({ pressed }) => [
+                  styles.checkInSubmit,
+                  {
+                    backgroundColor: (checkInEnergy && checkInFocus && checkInMood && checkInRealistic !== null) ? c.primary : c.primary + "40",
+                    opacity: pressed ? 0.85 : 1,
+                  },
+                ]}
+              >
+                <Text style={styles.checkInSubmitText}>Save check-in</Text>
+              </Pressable>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -1087,6 +1254,104 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Inter_400Regular",
     lineHeight: 20,
+  },
+  actionReason: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 16,
+    marginTop: 2,
+    opacity: 0.7,
+  },
+
+  checkInButton: {
+    borderRadius: 24,
+    padding: 16,
+    marginBottom: 16,
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 14,
+    borderWidth: 1,
+  },
+  checkInButtonTitle: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+  },
+  checkInButtonSub: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    marginTop: 2,
+  },
+  checkInDone: {
+    borderRadius: 24,
+    padding: 14,
+    marginBottom: 16,
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    gap: 8,
+  },
+  checkInDoneText: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+  },
+  checkInLabel: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+  },
+  checkInChipRow: {
+    flexDirection: "row" as const,
+    gap: 8,
+  },
+  checkInChip: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: "center" as const,
+  },
+  checkInChipText: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+  },
+  checkInSubmit: {
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: "center" as const,
+    marginTop: 4,
+  },
+  checkInSubmitText: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    color: "#fff",
+  },
+
+  whyPlanCard: {
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 16,
+  },
+  whyPlanHeader: {
+    flexDirection: "row" as const,
+    justifyContent: "space-between" as const,
+    alignItems: "center" as const,
+  },
+  whyPlanTitleRow: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 8,
+  },
+  whyPlanTitle: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+  },
+  whyPlanContent: {
+    marginTop: 14,
+    gap: 10,
+  },
+  whyPlanText: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 19,
   },
 
   habitCard: {

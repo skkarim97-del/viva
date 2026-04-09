@@ -1,0 +1,436 @@
+VIVA MVP polish and intelligence upgrade
+
+Goal:
+Take the current app from a strong MVP to a polished, trustworthy, highly personalized 10/10 pilot experience. Prioritize logic consistency, personalization, feedback loops, and premium UX polish over adding random new features.
+
+CORE PRODUCT RULE:
+VIVA must feel like a real coach, not a dashboard and not a generic chatbot. Every recommendation should clearly reflect the user’s data, recent trends, and manual inputs.
+
+--------------------------------------------------
+1. BUILD ONE CENTRAL DECISION ENGINE
+--------------------------------------------------
+
+Create a single source of truth called something like:
+generateDailyState(userData, wearableData, habitData, manualInputs)
+
+This engine should power:
+- Today tab
+- Your Day recommendations
+- Plan tab daily recommendations
+- Weekly overview summary
+- Trends insights
+- Coach responses
+
+Do not generate logic separately in different tabs.
+
+Inputs should include:
+- Sleep duration
+- 7-day sleep trend
+- HRV if available
+- Resting heart rate
+- Steps
+- Workouts this week
+- Strain / activity load if available
+- Habit completion %
+- Current streak
+- Today completed count
+- User goal
+- Training days per week
+- Manual inputs: energy, stress, hydration, training intent
+
+Outputs should include:
+- Daily readiness status
+- Daily headline
+- Daily subtext
+- Recommended actions for Move / Fuel / Hydrate / Recover / Mind
+- Why each recommendation was chosen
+- Weekly plan adjustments
+- Key insights
+- Pattern detections
+
+--------------------------------------------------
+2. MAKE ALL RECOMMENDATIONS EXPLICITLY PERSONALIZED
+--------------------------------------------------
+
+Right now the outputs are too generic. Fix that.
+
+Every recommendation must include:
+1. The action
+2. The reason
+3. The intended outcome
+
+Good example:
+- Move: 45 min strength training
+- Why: energy is high, stress is low, recovery is adequate
+- Outcome: maintain momentum without overreaching
+
+Bad example:
+- 60 min strength training
+
+Apply this to every daily card:
+- Move
+- Fuel
+- Hydrate
+- Recover
+- Mind
+
+Recommendation format:
+[action] + short explanation based on data
+
+Examples:
+- 20 min walk because recovery is lagging and sleep has shortened
+- Higher protein meals because training load is moderate and fat loss is the goal
+- Extra hydration today because activity is elevated and hydration input is low
+- Aim for 8 hours tonight because your sleep trend is declining
+- 10 min breathing because stress is elevated and recovery is only moderate
+
+--------------------------------------------------
+3. FIX LOGIC CONSISTENCY ACROSS THE APP
+--------------------------------------------------
+
+Critical requirement:
+The same user state must produce aligned outputs everywhere.
+
+If the Today tab says:
+- sleep is declining
+- recovery is moderate
+- ease off today
+
+then the Plan tab and Trends tab cannot suggest aggressive training without explanation.
+
+Requirements:
+- Today tab and Plan tab must use the same logic engine
+- Manual changes in Today should update that day in the Plan tab word for word where relevant
+- Weekly plan should be generated from the same system, not a separate template
+- Trends summaries should reflect the same actual data driving recommendations
+
+No contradictions.
+
+--------------------------------------------------
+4. UPGRADE THE “YOUR DAY” SYSTEM
+--------------------------------------------------
+
+Your Day is the core product. Make it elite.
+
+Rules:
+- Always show exactly 5 pillars:
+  1. Move
+  2. Fuel
+  3. Hydrate
+  4. Recover
+  5. Mind
+
+- Each pillar should have one clean recommendation only
+- No clutter
+- No conflicting advice
+- Recommendations should feel doable today
+
+Make sure recommendations scale based on state.
+
+Example logic by readiness:
+
+If Great:
+- Move: 45 to 60 min cardio or strength
+- Fuel: heavier performance-focused meals
+- Hydrate: baseline plus workout hydration
+- Recover: maintain 8 hours sleep
+- Mind: short mindfulness or journaling
+
+If Good:
+- Move: 30 to 45 min quality workout
+- Fuel: balanced meals with strong protein
+- Hydrate: steady hydration target
+- Recover: aim for 8 hours
+- Mind: 5 to 10 min reset
+
+If Tired:
+- Move: walk, mobility, or light strength
+- Fuel: mixed balanced meals, not restrictive
+- Hydrate: emphasize hydration
+- Recover: prioritize 8 to 9 hours
+- Mind: calming activity
+
+If Stressed:
+- Move: low-intensity movement only
+- Fuel: lighter, stable meals that are still nutritious
+- Hydrate: hydration support
+- Recover: protect sleep and reduce stimulation
+- Mind: breathing, bath, meditation, journaling
+
+Do not make “Fuel” always sound like diet culture.
+It should stay healthy and practical:
+- heavier meals
+- balanced meals
+- lighter meals
+- protein focus
+- recovery focus
+- performance focus
+
+--------------------------------------------------
+5. ADD A TRUE FEEDBACK LOOP
+--------------------------------------------------
+
+Right now the app tells the user what to do, but does not learn.
+
+Add an end-of-day check-in:
+- How was your energy today
+- How was your focus
+- How was your mood
+- Did the plan feel realistic
+- Which actions did you complete
+
+Use this to influence future recommendations.
+
+Examples:
+- If user repeatedly skips 60 min workouts, reduce recommendation intensity
+- If user performs better on lighter days after poor sleep, reflect that pattern
+- If hydration completion improves energy, surface that insight
+- If journaling gets skipped but breathing gets completed, favor breathing in future Mind suggestions
+
+Goal:
+The app should gradually learn what works for this user.
+
+--------------------------------------------------
+6. MAKE HABIT TRACKING ACTUALLY MATTER
+--------------------------------------------------
+
+Habit tracker should not just be a stats box.
+
+Use habit performance in coaching logic:
+- Low completion this week should reduce plan intensity and simplify actions
+- Strong streaks should unlock harder recommendations
+- Today completed count should influence evening coaching tone
+- Top consistency habit should be surfaced in Trends
+
+Examples:
+- “You’ve had low completion this week, so today’s plan is simpler and more realistic.”
+- “Your hydration habit is your most consistent behavior right now.”
+
+Make habits part of the intelligence layer, not just decoration.
+
+--------------------------------------------------
+7. UPGRADE INSIGHTS TO A BETTER FORMAT
+--------------------------------------------------
+
+Every insight should use this structure:
+1. What changed
+2. Why it matters
+3. What to do next
+
+Examples:
+- Sleep dropped from 8.0 to 7.0 hours this week. That likely contributed to lower readiness. Prioritize 8+ hours tonight.
+- HRV has stayed stable while activity remains high. Your recovery base looks solid. Keep training volume controlled.
+- You completed 4 workouts this week, which supports both recovery and mood. Stay consistent rather than pushing harder.
+
+Avoid vague language like:
+- “looks good”
+- “solid week overall”
+unless followed by a specific implication.
+
+--------------------------------------------------
+8. MAKE TRENDS FEEL SMARTER THAN GARMIN
+--------------------------------------------------
+
+The Trends tab should not just summarize metrics. It should interpret patterns the user would not immediately notice.
+
+Add:
+- Best-performing days based on sleep + completion + energy
+- Most common breakdown point
+- Which input most strongly predicts good days
+- Which behavior is associated with poorer recovery
+- Weekly trend direction per metric: up, down, stable
+
+Examples:
+- “Your best days tend to come after 7.5+ hours of sleep and moderate training.”
+- “Higher activity improves recovery only when sleep stays above 7 hours.”
+- “Low hydration days appear to coincide with lower energy input scores.”
+
+This is a major differentiator. Make it feel insightful.
+
+--------------------------------------------------
+9. IMPROVE THE COACH CHAT EXPERIENCE
+--------------------------------------------------
+
+The coach should sound:
+- human
+- warm
+- concise
+- science-oriented
+- practical
+
+Not robotic. Not like generic ChatGPT.
+
+Rules:
+- Keep answers short unless user asks for detail
+- Reference the user’s actual data when available
+- Redirect irrelevant questions back toward health and wellness in a natural way
+- Be supportive, but not cheesy
+- Give one clear next step when possible
+
+Examples of tone:
+- “Your sleep has shortened while activity stayed high. I’d ease off tonight and protect recovery.”
+- “You’re in a decent spot, but hydration and sleep are the easiest wins today.”
+- “That pattern usually catches up through energy and mood first, so I’d address it now.”
+
+For irrelevant questions:
+Do not hard reject awkwardly.
+Bridge intelligently:
+- “That’s outside VIVA’s focus, but if you want, we can turn it into something useful for your health, stress, sleep, performance, or routine.”
+
+--------------------------------------------------
+10. POLISH THE UX TO FEEL PREMIUM
+--------------------------------------------------
+
+Fix all visual inconsistencies.
+
+Requirements:
+- Standardize fonts across all tabs
+- Standardize card padding, spacing, corner radius, icon sizing
+- Keep headers aligned consistently
+- Make all text summaries easier to scan
+- Break long text into 2 to 3 short paragraphs max
+- Ensure chat response area never overlaps input field
+- Keep bottom nav consistent in spacing and icon weight
+- Ensure all modules feel part of one design system
+
+Also:
+- Today tab should feel like the most premium screen in the app
+- Weekly summary should be chunked and readable
+- Trends summary should be chunked and readable
+- Coach summary should be chunked and readable
+
+--------------------------------------------------
+11. ADD “WHY THIS DAY” EXPLAINABILITY
+--------------------------------------------------
+
+Add a small expandable section on Today:
+“Why VIVA chose this plan”
+
+This should explain in plain English:
+- Sleep trend
+- Recovery status
+- Activity load
+- Manual inputs
+- Goal influence
+
+Example:
+“Today’s plan is lighter because your sleep has declined, stress is moderate, and your recovery is not strong enough for a hard push. Since your goal is fat loss, we’re protecting consistency rather than intensity.”
+
+This builds trust.
+
+--------------------------------------------------
+12. IMPROVE WEEKLY PLAN GENERATION
+--------------------------------------------------
+
+The weekly plan should not feel templated.
+
+Generate the week based on:
+- Training days per week
+- Goal
+- Recovery trend
+- Habit adherence
+- Recent activity consistency
+- User state patterns
+
+Rules:
+- Hard days should be placed logically
+- Recovery days should be intentional
+- Weekly overview should explain the strategy for the week
+- Daily cards should feel connected to the user’s actual state
+
+Examples:
+- If recovery is declining, front-load lighter days
+- If user only trains 3 days/week, do not create 5 hard workout days
+- If fat loss is the goal, emphasize consistency over punishment
+- If stress is elevated, include more recovery and mind actions
+
+--------------------------------------------------
+13. CREATE A PILOT MODE
+--------------------------------------------------
+
+Add a lightweight internal pilot mode for testing on myself.
+
+Pilot mode should:
+- Log every recommendation generated
+- Log which inputs caused it
+- Log which actions were completed
+- Log end-of-day self-rating
+- Log changes to the weekly plan
+- Make it easy to review where the logic was good or wrong
+
+I want to be able to audit:
+- what the app recommended
+- why it recommended it
+- whether it made sense
+- whether I followed it
+- how I felt after
+
+This will help debug the intelligence fast.
+
+--------------------------------------------------
+14. DEFINE SUCCESS METRICS INSIDE THE APP
+--------------------------------------------------
+
+Track the following during pilot:
+- Daily active use
+- % of daily plan completed
+- Workout adherence
+- Hydration adherence
+- Sleep consistency
+- Self-rated energy
+- Self-rated focus
+- Self-rated mood
+- Streak length
+- Recommendation acceptance rate
+
+Show these internally in a simple pilot analytics section if possible.
+
+--------------------------------------------------
+15. WHAT NOT TO DO
+--------------------------------------------------
+
+Do not:
+- add too many new tabs
+- add social features yet
+- clutter the Trends tab
+- overload users with biometrics
+- make recommendations feel medical
+- use generic wellness fluff
+- create contradictions between tabs
+- overcomplicate the UI with too many choices
+
+Focus on:
+- trust
+- clarity
+- actionability
+- personalization
+- consistency
+- learnability over time
+
+--------------------------------------------------
+16. DEFINITION OF DONE FOR THIS NEXT VERSION
+--------------------------------------------------
+
+This version is ready when:
+- Today, Plan, Trends, and Coach all reflect the same underlying state
+- Recommendations clearly reflect user data and manual inputs
+- Every insight explains what changed, why it matters, and what to do
+- Habit tracker meaningfully affects coaching
+- End-of-day feedback changes future recommendations
+- UI feels premium and consistent
+- The app feels like a smart coach, not a template
+
+--------------------------------------------------
+17. FINAL PRODUCT STANDARD
+--------------------------------------------------
+
+The app should make the user feel:
+- understood
+- guided
+- not overwhelmed
+- more consistent
+- more in control of their health
+
+Target outcome:
+A user opens VIVA and immediately feels:
+“This actually gets me and tells me exactly what to do today.”

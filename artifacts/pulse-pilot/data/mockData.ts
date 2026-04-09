@@ -100,7 +100,7 @@ export function generateTodayMetrics(): HealthMetrics {
   return all[0];
 }
 
-function makeActions(yourDay: { move: string; fuel: string; hydrate: string; recover: string; mind: string }): DailyAction[] {
+function makeActions(yourDay: { move: string; fuel: string; hydrate: string; recover: string; mind: string }, reasons?: { move: string; fuel: string; hydrate: string; recover: string; mind: string }): DailyAction[] {
   const categories: ActionCategory[] = ["move", "fuel", "hydrate", "recover", "mind"];
   return categories.map(cat => ({
     id: cat,
@@ -108,6 +108,7 @@ function makeActions(yourDay: { move: string; fuel: string; hydrate: string; rec
     text: yourDay[cat],
     recommended: yourDay[cat],
     completed: false,
+    reason: reasons?.[cat],
   }));
 }
 
@@ -590,6 +591,53 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     mind: pickOptionTitle("mind", recommendedTag),
   };
 
+  const moveReason =
+    dailyState === "recover" ? "Recovery is the priority. Gentle movement protects your progress."
+    : dailyState === "push" ? "Sleep and recovery support intensity today."
+    : sleepLow ? "Sleep was short. Lower intensity reduces injury risk."
+    : stressOverride ? "Stress is elevated. Calming movement helps your nervous system."
+    : noWorkout3Days ? "Three days without activity. Time to rebuild momentum."
+    : consistent5Days ? "Five active days this week. A lighter day helps your body absorb the work."
+    : lowEnergy ? "Energy is low. Gentle movement keeps you active without adding strain."
+    : readinessScore >= 65 ? "Recovery and energy support a solid effort today."
+    : "Moderate effort matches your current readiness.";
+
+  const fuelReason =
+    dailyState === "push" ? "Higher energy output needs more fuel to support performance."
+    : stressOverride ? "Stress depletes nutrients. Nourishing food supports your stress response."
+    : dailyState === "recover" ? "Recovery meals help your body repair without adding digestive load."
+    : lowEnergy ? "Balanced meals help stabilize energy when you're running low."
+    : isDehydrated ? "Hydration and nutrition work together. Focus on water-rich foods too."
+    : readinessScore >= 65 ? "Solid recovery means your body can use fuel efficiently."
+    : "Steady nutrition keeps your energy stable today.";
+
+  const hydrateReason =
+    isDehydrated ? "You're behind on hydration. Extra water and electrolytes today."
+    : dailyState === "push" ? "Higher intensity increases fluid loss. Stay ahead of it."
+    : stressOverride ? "Stress increases cortisol, which affects hydration. Steady sipping helps."
+    : sleepLow ? "Dehydration worsens fatigue from poor sleep."
+    : readinessScore >= 65 ? "Consistent hydration supports the solid day ahead."
+    : "Hydration supports recovery and energy.";
+
+  const recoverReason =
+    sleepDeclining3 ? "Sleep has declined for 3 days. Extra rest tonight breaks the trend."
+    : sleepCritical ? "Under 6 hours with low HRV. Maximum sleep priority tonight."
+    : dailyState === "recover" ? "Your body needs extra rest to bounce back."
+    : dailyState === "push" ? "Good recovery means you can maintain a normal sleep target."
+    : stressOverride ? "Stress disrupts sleep quality. Prioritize wind-down time."
+    : sleepLow ? "Last night was short. Aim higher tonight to offset the deficit."
+    : "Consistent sleep is your most powerful recovery tool.";
+
+  const mindReason =
+    stressOverride ? "Stress is elevated. Calming your nervous system is the priority."
+    : dailyState === "recover" ? "Rest days are a great time for mental recovery too."
+    : dailyState === "push" ? "Capture your clarity. Strong days are worth reflecting on."
+    : feeling === "tired" ? "Fatigue affects your mind too. A short reset helps."
+    : lowEnergy ? "Low energy often responds well to a brief mental reset."
+    : "A few minutes of mental care compounds over time.";
+
+  const actionReasons = { move: moveReason, fuel: fuelReason, hydrate: hydrateReason, recover: recoverReason, mind: mindReason };
+
   const sleepHours = metrics.sleepDuration;
   let sleepSummary = "";
   if (sleepHours < 7) {
@@ -652,7 +700,7 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     headline,
     summary,
     dailyFocus,
-    actions: makeActions(yourDay),
+    actions: makeActions(yourDay, actionReasons),
     yourDay,
     whyThisPlan,
     optional,
