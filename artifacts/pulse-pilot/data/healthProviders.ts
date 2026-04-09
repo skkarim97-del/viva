@@ -383,6 +383,35 @@ export const healthProviders: Record<string, HealthDataProvider> = {
   samsung_health: samsungHealthProvider,
 };
 
+export async function connectProvider(
+  id: string
+): Promise<{ success: boolean; error?: string }> {
+  const provider = healthProviders[id];
+  if (!provider) return { success: false, error: "Unknown provider." };
+
+  try {
+    const available = await provider.isAvailable();
+    if (!available) {
+      if (id === "apple_health" && Platform.OS !== "ios") {
+        return { success: false, error: "Apple Health requires an iOS device with a native build." };
+      }
+      if (id === "health_connect" && Platform.OS !== "android") {
+        return { success: false, error: "Health Connect requires an Android device." };
+      }
+      return { success: false, error: `${provider.name} is not available on this device.` };
+    }
+
+    const permitted = await provider.requestPermissions();
+    if (!permitted) {
+      return { success: false, error: `Permission denied. Open Settings to grant ${provider.name} access.` };
+    }
+
+    return { success: true };
+  } catch {
+    return { success: false, error: `Could not connect to ${provider.name}. Please try again.` };
+  }
+}
+
 export async function fetchHealthData(
   connectedProviders: string[],
   days: number = 28

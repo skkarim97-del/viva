@@ -14,7 +14,14 @@
       "backgroundColor": "#0F1923"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSHealthShareUsageDescription": "VIVA reads your health data including sleep, steps, heart rate, and HRV to provide personalized wellness coaching and daily plans."
+      },
+      "entitlements": {
+        "com.apple.developer.healthkit": true,
+        "com.apple.developer.healthkit.access": []
+      }
     },
     "android": {},
     "web": {
@@ -34,7 +41,8 @@
         {
           "requestPermissionsBackCompat": true
         }
-      ]
+      ],
+      "./plugins/withHealthKit"
     ],
     "experiments": {
       "typedRoutes": true,

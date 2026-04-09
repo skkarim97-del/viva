@@ -39,7 +39,7 @@ The system is a pnpm workspace monorepo using Node.js 24 and TypeScript 5.9. The
 - **AI Coach**: Integrated as an expandable card on the Today screen, offering a full-screen chat modal with streaming SSE responses. Contextual health data is sent to the coach for enriched interactions.
 - **Weekly Plan**: AI-powered weekly coaching layer with 5 categories per day, editable via a bottom sheet. Synchronizes with the Today screen and persists in AsyncStorage.
 - **Metric Drill-Down**: Provides detailed analysis, 30-day charts, and actionable advice for individual metrics.
-- **Health Data Providers**: `data/healthProviders.ts` handles integration with Apple HealthKit, Health Connect (Android), Garmin, and Samsung Health, with a 28-day data window.
+- **Health Data Providers**: `data/healthProviders.ts` handles integration with Apple HealthKit (`react-native-health`), Health Connect (Android, `react-native-health-connect`), Garmin (via backend API), and Samsung Health (delegates to Health Connect), with a 28-day data window. `connectProvider()` handles availability checks, permission requests, and structured error responses. Expo config plugin at `plugins/withHealthKit.js` adds HealthKit entitlements and usage descriptions for iOS builds. `toggleIntegration` in AppContext is async with progressive status feedback (Connecting/Syncing/Connected/Sync failed).
 - **State Management**: Context-based state management (`AppContext`) with computed DailyInsights.
 - **Navigation**: Tab bar for Today, Plan, Trends, Settings. Modals for subscription. Stack for onboarding and metric drill-down.
 

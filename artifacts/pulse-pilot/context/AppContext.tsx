@@ -12,8 +12,8 @@ import {
   integrations as defaultIntegrations,
 } from "@/data/mockData";
 import { computeInsights, type DailyInsights } from "@/data/insights";
-import { fetchHealthData } from "@/data/healthProviders";
-import { Platform } from "react-native";
+import { fetchHealthData, connectProvider } from "@/data/healthProviders";
+import { Platform, Alert } from "react-native";
 import type {
   UserProfile,
   HealthMetrics,
@@ -622,14 +622,75 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const toggleIntegration = useCallback((id: string) => {
+  const toggleIntegration = useCallback(async (id: string) => {
+    const current = integrationsState.find((i) => i.id === id);
+    if (!current) return;
+
+    if (current.connected) {
+      setIntegrationsState((prev) => {
+        const updated = prev.map((i) =>
+          i.id === id ? { ...i, connected: false, lastSync: undefined } : i
+        );
+        AsyncStorage.setItem(INTEGRATIONS_KEY, JSON.stringify(updated.map((i) => ({ id: i.id, connected: i.connected }))));
+        syncHealthData(updated);
+        return updated;
+      });
+      return;
+    }
+
+    setIntegrationsState((prev) =>
+      prev.map((i) => (i.id === id ? { ...i, lastSync: "Connecting..." } : i))
+    );
+
+    const result = await connectProvider(id);
+
+    if (!result.success) {
+      setIntegrationsState((prev) =>
+        prev.map((i) => (i.id === id ? { ...i, lastSync: undefined } : i))
+      );
+      Alert.alert(
+        "Connection Failed",
+        result.error || "Could not connect. Please try again."
+      );
+      return;
+    }
+
     setIntegrationsState((prev) => {
-      const updated = prev.map((i) => (i.id === id ? { ...i, connected: !i.connected } : i));
+      const updated = prev.map((i) =>
+        i.id === id ? { ...i, connected: true, lastSync: "Syncing..." } : i
+      );
       AsyncStorage.setItem(INTEGRATIONS_KEY, JSON.stringify(updated.map((i) => ({ id: i.id, connected: i.connected }))));
-      syncHealthData(updated);
       return updated;
     });
-  }, [syncHealthData]);
+
+    const connectedIds = integrationsState
+      .filter((i) => i.connected || i.id === id)
+      .map((i) => i.id);
+
+    try {
+      const data = await fetchHealthData(connectedIds, 28);
+      if (data.metrics.length > 0) {
+        setMetrics(data.metrics);
+        setTodayMetrics(data.metrics[data.metrics.length - 1]);
+        setTrends(generateTrendDataFromMetrics(data.metrics));
+      }
+      setIntegrationsState((prev) =>
+        prev.map((i) =>
+          i.id === id
+            ? { ...i, connected: true, lastSync: new Date().toLocaleTimeString() }
+            : i
+        )
+      );
+    } catch {
+      setIntegrationsState((prev) =>
+        prev.map((i) =>
+          i.id === id
+            ? { ...i, connected: true, lastSync: "Sync failed" }
+            : i
+        )
+      );
+    }
+  }, [integrationsState, syncHealthData]);
 
   const upgradeTier = useCallback(
     (tier: SubscriptionTier) => {

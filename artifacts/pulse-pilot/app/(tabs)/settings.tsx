@@ -77,15 +77,28 @@ export default function SettingsScreen() {
             <View
               style={[
                 styles.statusDot,
-                { backgroundColor: integration.connected ? c.success : c.muted },
+                {
+                  backgroundColor:
+                    integration.lastSync === "Connecting..." || integration.lastSync === "Syncing..."
+                      ? c.warning || "#F59E0B"
+                      : integration.lastSync === "Sync failed"
+                      ? c.destructive || "#EF4444"
+                      : integration.connected
+                      ? c.success
+                      : c.muted,
+                },
               ]}
             />
             <Text style={[styles.statusText, { color: c.mutedForeground }]}>
-              {integration.connected
+              {integration.lastSync === "Connecting..." || integration.lastSync === "Syncing..."
+                ? integration.lastSync
+                : integration.lastSync === "Sync failed"
+                ? "Sync failed"
+                : integration.connected
                 ? integration.lastSync
                   ? `Synced ${integration.lastSync}`
                   : "Connected"
-                : "Off"}
+                : "Tap to connect"}
             </Text>
           </Pressable>
         ))}
