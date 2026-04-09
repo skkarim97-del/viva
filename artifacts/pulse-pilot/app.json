@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Viva",
+    "name": "VIVA",
     "slug": "viva",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -8,6 +8,7 @@
     "scheme": "viva",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "owner": "viva-health",
     "splash": {
       "image": "./assets/images/icon.png",
       "resizeMode": "contain",
@@ -15,15 +16,25 @@
     },
     "ios": {
       "supportsTablet": false,
+      "bundleIdentifier": "com.vivahealth.app",
+      "buildNumber": "1",
+      "config": {
+        "usesNonExemptEncryption": false
+      },
       "infoPlist": {
-        "NSHealthShareUsageDescription": "VIVA reads your health data including sleep, steps, heart rate, and HRV to provide personalized wellness coaching and daily plans."
+        "NSHealthShareUsageDescription": "VIVA reads your health data including sleep, steps, heart rate, and HRV to provide personalized wellness coaching and daily plans.",
+        "NSHealthUpdateUsageDescription": "VIVA uses write access to sync your wellness goals with Apple Health.",
+        "ITSAppUsesNonExemptEncryption": false
       },
       "entitlements": {
         "com.apple.developer.healthkit": true,
         "com.apple.developer.healthkit.access": []
       }
     },
-    "android": {},
+    "android": {
+      "package": "com.vivahealth.app",
+      "versionCode": 1
+    },
     "web": {
       "favicon": "./assets/images/icon.png"
     },
@@ -47,6 +58,11 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "YOUR_EAS_PROJECT_ID"
+      }
     }
   }
 }
