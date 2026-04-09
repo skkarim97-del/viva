@@ -5,6 +5,7 @@
   "build": {
     "production": {
       "node": "20.0.0",
+      "packageManager": "pnpm",
       "env": {}
     }
   }
