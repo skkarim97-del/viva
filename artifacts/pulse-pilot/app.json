@@ -55,7 +55,12 @@
       ],
       "./plugins/withHealthKit"
     ],
-    "experiments": {
+    "extra": {
+    "eas": {
+      "projectId": "19f7b9ec-e504-4a78-b607-ed889096af35"
+    }
+  },
+  "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     }
