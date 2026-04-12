@@ -1,12 +1,20 @@
 {
   "cli": {
-    "version": ">= 18.0.0"
+    "version": ">= 16.0.0"
   },
   "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal"
+    },
     "production": {
-      "node": "20.0.0",
-      "packageManager": "pnpm",
-      "env": {}
+      "autoIncrement": true
     }
+  },
+  "submit": {
+    "production": {}
   }
 }
