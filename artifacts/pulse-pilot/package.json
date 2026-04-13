@@ -61,6 +61,7 @@
     "zod-validation-error": "^3.4.0"
   },
   "dependencies": {
+    "@expo-google-fonts/montserrat": "^0.4.2",
     "react-native-health": "^1.19.0",
     "react-native-health-connect": "^3.5.0"
   }

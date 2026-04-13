@@ -110,7 +110,7 @@ function buildCorrelations(metrics: HealthMetrics[]): Correlation[] {
     correlations.push({
       title: "Activity vs Recovery",
       icon: "activity",
-      color: "#1A5CFF",
+      color: "#142240",
       strength: stepsRecStrength,
       direction: stepsRecovery > 0 ? "positive" : "negative",
       insight: stepsRecovery > 0
@@ -348,12 +348,12 @@ export default function TrendsScreen() {
 
   const activityMetrics: SparkMetric[] = [
     { label: "Steps", value: avgSteps >= 1000 ? `${(avgSteps / 1000).toFixed(1)}k` : `${avgSteps}`, unit: "avg", data: stepsData, color: "#34C759", detailKey: "Steps" },
-    { label: "Active Days", value: `${activeDaysPerWeek}`, unit: "/week", data: activityData.map(v => v * 7), color: "#1A5CFF" },
+    { label: "Active Days", value: `${activeDaysPerWeek}`, unit: "/week", data: activityData.map(v => v * 7), color: "#142240" },
     { label: "Active Cal", value: `${avgActiveCalories}`, unit: "avg", data: activeCalData, color: "#FF9500" },
   ];
 
   const habitsMetrics: SparkMetric[] = [
-    { label: "Weekly", value: `${weeklyConsistency >= 0 ? weeklyConsistency : 0}%`, unit: "completion", data: habitRateData, color: "#1A5CFF" },
+    { label: "Weekly", value: `${weeklyConsistency >= 0 ? weeklyConsistency : 0}%`, unit: "completion", data: habitRateData, color: "#142240" },
     { label: "Streak", value: `${streakDays}`, unit: "days", data: [streakDays], color: "#FF9500" },
     { label: "Today", value: `${completedCount}/${totalActions}`, unit: "done", data: [completedCount], color: "#34C759" },
   ];
@@ -535,7 +535,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Montserrat_700Bold",
     letterSpacing: -0.5,
     marginBottom: 4,
   },
@@ -546,12 +546,12 @@ const styles = StyleSheet.create({
   },
   summaryHeader: {
     fontSize: 18,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
     letterSpacing: -0.3,
   },
   summaryText: {
     fontSize: 14,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     lineHeight: 22,
   },
   sectionWrap: {
@@ -560,12 +560,12 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
     letterSpacing: -0.3,
   },
   sectionSub: {
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     marginBottom: 2,
     opacity: 0.7,
   },
@@ -579,7 +579,7 @@ const styles = StyleSheet.create({
   insightText: {
     flex: 1,
     fontSize: 14,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     lineHeight: 21,
   },
   corrCard: {
@@ -605,7 +605,7 @@ const styles = StyleSheet.create({
   },
   corrTitle: {
     fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
     letterSpacing: -0.2,
   },
   corrBadgeRow: {
@@ -622,11 +622,11 @@ const styles = StyleSheet.create({
   },
   corrBadgeText: {
     fontSize: 11,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Montserrat_500Medium",
   },
   corrInsight: {
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     lineHeight: 20,
     opacity: 0.8,
   },
@@ -640,12 +640,12 @@ const styles = StyleSheet.create({
   patternText: {
     flex: 1,
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     lineHeight: 20,
   },
   categoryLabel: {
     fontSize: 13,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
     letterSpacing: 0.3,
     textTransform: "uppercase",
     marginTop: 8,
@@ -664,7 +664,7 @@ const styles = StyleSheet.create({
   },
   metricLabel: {
     fontSize: 11,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Montserrat_500Medium",
     letterSpacing: 0.1,
   },
   metricValueRow: {
@@ -674,12 +674,12 @@ const styles = StyleSheet.create({
   },
   metricValue: {
     fontSize: 20,
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Montserrat_700Bold",
     letterSpacing: -0.3,
   },
   metricUnit: {
     fontSize: 11,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
   },
   spark: {
     marginTop: 2,

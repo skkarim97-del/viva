@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 13,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Montserrat_500Medium",
   },
   valueRow: {
     flexDirection: "row",
@@ -83,15 +83,15 @@ const styles = StyleSheet.create({
   },
   value: {
     fontSize: 24,
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Montserrat_700Bold",
   },
   unit: {
     fontSize: 14,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
   },
   trend: {
     fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
     marginLeft: 4,
   },
   chart: {
@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
   },
   summary: {
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     lineHeight: 18,
   },
 });

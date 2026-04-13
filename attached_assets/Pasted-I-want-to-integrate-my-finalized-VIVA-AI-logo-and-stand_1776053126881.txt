@@ -1,0 +1,243 @@
+I want to integrate my finalized VIVA AI logo and standardize the app branding system across the entire app.
+
+BRAND ASSETS TO APPLY
+
+Logo:
+Use my finalized VIVA AI logo in the app header / splash / onboarding / auth or landing areas where appropriate.
+Do not recreate the logo. Use the provided image asset directly.
+
+Brand colors:
+- Primary dark navy: #142240
+- Accent blue: #38B6FF
+- White: #FFFFFF
+
+Typography:
+- Use Montserrat throughout the app
+- Standardize font usage across all screens, tabs, cards, headers, buttons, summaries, and inputs
+- Remove inconsistent font usage and make the app feel cohesive and premium
+
+GOAL
+
+Make the app feel like a polished, premium health-tech product with a consistent brand system.
+Right now I want:
+1. the VIVA AI logo integrated cleanly
+2. Montserrat used consistently across all text
+3. the brand colors applied consistently throughout the app
+4. the UI to feel more premium, cohesive, and intentional
+
+IMPORTANT
+
+Do not redesign the entire app.
+Keep the existing layout and product structure.
+This is a branding and UI consistency pass.
+
+=====================================
+PART 1: LOGO INTEGRATION
+=====================================
+
+Integrate the finalized VIVA AI logo asset into the app in a clean, premium way.
+
+Use the logo in the most relevant places such as:
+- onboarding welcome screen
+- main home header or Today tab header
+- splash/loading screen if one exists
+- any top-level branded empty state or intro area
+
+Guidelines:
+- do not stretch or distort the logo
+- maintain generous spacing around it
+- preserve readability
+- use it in a way that feels premium and understated
+- if needed, create a reusable Logo component
+
+If the current app already has a text header or placeholder brand mark, replace it with the real logo asset.
+
+=====================================
+PART 2: GLOBAL TYPOGRAPHY SYSTEM
+=====================================
+
+Implement Montserrat as the app-wide font system.
+
+Use Montserrat consistently across:
+- screen titles
+- section headers
+- card titles
+- body text
+- buttons
+- tab labels
+- input labels
+- summaries
+- helper text
+- AI coach responses if rendered as styled text
+- onboarding text
+- trends text
+- weekly plan text
+
+Create a consistent font hierarchy such as:
+- Large screen heading: Montserrat Bold or SemiBold
+- Section heading: Montserrat SemiBold
+- Card title: Montserrat SemiBold
+- Body copy: Montserrat Regular or Medium
+- Small supporting text: Montserrat Regular
+
+If Expo / React Native font loading is needed, implement it properly using the existing app stack.
+Make sure the app waits for fonts to load before rendering if necessary.
+
+Most likely:
+- install / use expo-font if needed
+- load Montserrat weights
+- apply globally or through a central theme / text component system
+
+If the app already has a shared typography or theme system, update it there rather than hardcoding styles screen by screen unless necessary.
+
+=====================================
+PART 3: GLOBAL COLOR SYSTEM
+=====================================
+
+Standardize the app around this brand palette:
+
+Primary dark navy:
+#142240
+
+Accent blue:
+#38B6FF
+
+White:
+#FFFFFF
+
+Use these colors consistently and intentionally.
+
+Recommended use:
+- dark navy for primary headers, strong text, selected states, important icons, tab active states where appropriate, primary surfaces if needed
+- light blue for accents, highlights, CTA emphasis, secondary emphasis, key metrics, selected controls, and AI-related highlights
+- white for cards, text on dark backgrounds, and clean contrast
+
+Reduce random or inconsistent blues currently used in the app.
+Replace existing off-brand colors with these brand colors wherever it improves cohesion.
+
+=====================================
+PART 4: UI BRANDING PASS
+=====================================
+
+Apply the new brand system throughout the app without overdoing it.
+
+Specific goals:
+- make all tabs feel like the same product
+- unify the color treatment of headings, icons, buttons, and cards
+- make the app feel more premium and less visually inconsistent
+- remove any colors that clash with the navy / light blue palette
+- keep the UI clean and modern
+
+Use the dark navy and light blue tastefully.
+Do not flood the UI with too much bright blue.
+
+Premium design guidance:
+- use dark navy for trust and structure
+- use light blue as a restrained accent
+- keep plenty of white space
+- avoid making the app feel childish or overly saturated
+
+=====================================
+PART 5: BUTTONS, TABS, AND COMPONENTS
+=====================================
+
+Update shared UI styles so that brand consistency shows up in the components.
+
+Please standardize:
+- primary buttons
+- secondary buttons
+- tab states
+- selected pills / segmented controls
+- inputs
+- headers
+- cards
+- progress / stat highlights
+- icon colors
+- badges / chips
+
+Suggested direction:
+- Primary CTA background: #142240 with white text
+- Accent elements / highlights: #38B6FF
+- Body / default dark text can lean navy instead of harsh black where appropriate
+- Keep corners and spacing consistent with the app’s premium style
+
+=====================================
+PART 6: DARK NAVY + BLUE USAGE GUIDANCE
+=====================================
+
+Please apply color hierarchy thoughtfully.
+
+Examples:
+- Main app heading: dark navy
+- Key supporting emphasis: light blue
+- Selected tab or active indicator: light blue or dark navy depending on what is already more elegant
+- Primary button: dark navy
+- Button pressed / highlight / focus accents: light blue
+- Important metric or recommendation emphasis: light blue
+- Standard card text: dark navy or near-black if better for readability
+- Avoid using random greens, purples, or extra accent colors unless already necessary and well justified
+
+=====================================
+PART 7: CLEANUP OF INCONSISTENT TEXT STYLING
+=====================================
+
+Audit the app for inconsistent text sizing, weights, and font families.
+
+Fix issues such as:
+- some tabs using different font styles than others
+- body copy looking different between screens
+- section titles not matching across tabs
+- summaries appearing visually inconsistent
+- coach / trends / plan / today screens feeling mismatched
+
+I want the app to feel like it was designed by one team with one design system.
+
+=====================================
+PART 8: IMPLEMENTATION DETAILS
+=====================================
+
+Please inspect the current codebase and update the most relevant files for fonts, theme, and branding.
+
+Likely areas include:
+- app layout / root layout
+- theme or constants files
+- shared Text / Typography components
+- shared Button / Card / Header components
+- onboarding screens
+- tab screens
+- navigation config
+- splash / loading screen if present
+
+Create reusable constants if needed, such as:
+- colors.ts
+- typography.ts
+- theme.ts
+- components/Logo.tsx
+
+If there is no centralized theme structure yet, create a lightweight one rather than scattering values everywhere.
+
+=====================================
+PART 9: FINAL QUALITY BAR
+=====================================
+
+The finished app should feel:
+- premium
+- cohesive
+- health-tech credible
+- modern
+- simple
+- consistent
+
+Do not just swap a couple colors.
+Do a full branding consistency pass.
+
+=====================================
+PART 10: FINAL OUTPUT
+=====================================
+
+After making the changes, summarize:
+1. where the logo was integrated
+2. how Montserrat was loaded and applied
+3. which colors were standardized
+4. what reusable theme components or constants were added
+5. any areas that still need manual polish

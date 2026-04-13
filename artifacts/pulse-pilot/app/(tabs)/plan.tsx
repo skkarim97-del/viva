@@ -43,7 +43,7 @@ export default function PlanScreen() {
   if (!weeklyPlan) {
     return (
       <View style={[styles.loading, { backgroundColor: c.background }]}>
-        <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium" }}>Loading...</Text>
+        <Text style={{ color: c.mutedForeground, fontFamily: "Montserrat_500Medium" }}>Loading...</Text>
       </View>
     );
   }
@@ -230,7 +230,7 @@ export default function PlanScreen() {
                               <Text style={[
                                 styles.optionText,
                                 { color: isSelected ? meta.color : c.foreground },
-                                isSelected && { fontFamily: "Inter_600SemiBold" },
+                                isSelected && { fontFamily: "Montserrat_600SemiBold" },
                               ]}>
                                 {option.title}
                               </Text>
@@ -278,7 +278,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Montserrat_700Bold",
     letterSpacing: -0.5,
     marginBottom: 4,
   },
@@ -290,12 +290,12 @@ const styles = StyleSheet.create({
   },
   summaryHeader: {
     fontSize: 18,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
     letterSpacing: -0.3,
   },
   summaryText: {
     fontSize: 14,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     lineHeight: 22,
     opacity: 0.75,
   },
@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
   },
   dayName: {
     fontSize: 17,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
     letterSpacing: -0.2,
   },
   todayBadge: {
@@ -326,15 +326,15 @@ const styles = StyleSheet.create({
   },
   todayText: {
     fontSize: 11,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
   },
   progressText: {
     fontSize: 12,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Montserrat_500Medium",
   },
   focusLabel: {
     fontSize: 13,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Montserrat_500Medium",
     marginBottom: 2,
   },
   actionsGrid: {
@@ -361,12 +361,12 @@ const styles = StyleSheet.create({
   },
   actionLabel: {
     fontSize: 12,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Montserrat_500Medium",
     width: 55,
   },
   actionValue: {
     fontSize: 14,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     flex: 1,
   },
   actionCompleted: {
@@ -383,7 +383,7 @@ const styles = StyleSheet.create({
   },
   adjustText: {
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     lineHeight: 19,
     flex: 1,
     opacity: 0.75,
@@ -423,12 +423,12 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 18,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
     letterSpacing: -0.3,
   },
   modalSubtitle: {
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     marginTop: 2,
   },
   optionsGrid: {
@@ -451,12 +451,12 @@ const styles = StyleSheet.create({
   },
   optionText: {
     fontSize: 15,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Montserrat_500Medium",
     flex: 1,
   },
   optionSubtitle: {
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     opacity: 0.7,
   },
   recBadge: {
@@ -471,7 +471,7 @@ const styles = StyleSheet.create({
   },
   recBadgeText: {
     fontSize: 11,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Montserrat_500Medium",
   },
   supportSection: {
     marginTop: 16,
@@ -487,6 +487,6 @@ const styles = StyleSheet.create({
   },
   supportTip: {
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
   },
 });

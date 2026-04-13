@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 18,
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Montserrat_700Bold",
   },
   content: {
     paddingHorizontal: 20,
@@ -137,14 +137,14 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 15,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     textAlign: "center",
     lineHeight: 22,
     paddingHorizontal: 12,
   },
   trialNote: {
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     textAlign: "center",
     marginTop: 8,
   },

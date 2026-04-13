@@ -60,12 +60,12 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
     flex: 1,
   },
   description: {
     fontSize: 14,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     lineHeight: 20,
   },
   badges: {
@@ -80,6 +80,6 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: 12,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Montserrat_500Medium",
   },
 });

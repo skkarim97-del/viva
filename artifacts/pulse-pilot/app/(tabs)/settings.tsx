@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Montserrat_700Bold",
     letterSpacing: -0.5,
     marginBottom: 4,
   },
@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
   },
   profileInitial: {
     fontSize: 20,
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Montserrat_700Bold",
   },
   profileInfo: {
     flex: 1,
@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
   },
   profileName: {
     fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
   },
   tierBadge: {
     alignSelf: "flex-start",
@@ -229,11 +229,11 @@ const styles = StyleSheet.create({
   },
   tierText: {
     fontSize: 11,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
   },
   sectionLabel: {
     fontSize: 12,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
     textTransform: "uppercase",
     letterSpacing: 0.6,
     marginTop: 8,
@@ -262,12 +262,12 @@ const styles = StyleSheet.create({
   },
   settingLabel: {
     fontSize: 15,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Montserrat_500Medium",
     flex: 1,
   },
   settingValue: {
     fontSize: 14,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     maxWidth: 140,
   },
   statusDot: {
@@ -277,7 +277,7 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
   },
   upgradeCard: {
     flexDirection: "row",
@@ -293,15 +293,15 @@ const styles = StyleSheet.create({
   },
   upgradeTitle: {
     fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
   },
   upgradeDesc: {
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
   },
   disclaimer: {
     fontSize: 12,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     lineHeight: 18,
     textAlign: "center",
     paddingHorizontal: 20,

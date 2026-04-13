@@ -6,7 +6,7 @@ interface VivaSymbolProps {
   color?: string;
 }
 
-export function VivaSymbol({ size = 24, color = "#1A1A1A" }: VivaSymbolProps) {
+export function VivaSymbol({ size = 24, color = "#142240" }: VivaSymbolProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 32 32" fill="none">
       <Path

@@ -343,12 +343,12 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 28,
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Montserrat_700Bold",
     letterSpacing: -0.5,
   },
   headerSub: {
     fontSize: 14,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     lineHeight: 20,
     opacity: 0.7,
   },
@@ -374,7 +374,7 @@ const styles = StyleSheet.create({
   },
   quickLabel: {
     fontSize: 15,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Montserrat_500Medium",
     flex: 1,
   },
   messageList: {
@@ -398,12 +398,12 @@ const styles = StyleSheet.create({
   },
   msgText: {
     fontSize: 15,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     lineHeight: 22,
   },
   msgTime: {
     fontSize: 11,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     marginTop: 6,
     alignSelf: "flex-end",
   },
@@ -435,7 +435,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 15,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     paddingVertical: 14,
   },
   sendBtn: {

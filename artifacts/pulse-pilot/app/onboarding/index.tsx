@@ -15,7 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useApp } from "@/context/AppContext";
-import { VivaSymbol } from "@/components/VivaSymbol";
+import { Logo } from "@/components/Logo";
 import { useColors } from "@/hooks/useColors";
 import type { HealthGoal, SideEffectType } from "@/types";
 
@@ -236,11 +236,8 @@ export default function OnboardingScreen() {
         >
           {step === "welcome" && (
             <View style={styles.welcomeSection}>
-              <View style={[styles.heroIcon, { backgroundColor: c.foreground + "08" }]}>
-                <VivaSymbol size={56} color={c.foreground} />
-              </View>
-              <Text style={[styles.welcomeTitle, { color: c.foreground }]}>V I V A</Text>
-              <Text style={[styles.welcomeTagline, { color: c.foreground }]}>Your Ai Health Coach</Text>
+              <Logo size="large" />
+              <Text style={[styles.welcomeTagline, { color: c.foreground }]}>Your AI Health Coach</Text>
               <Text style={[styles.welcomeSub, { color: c.mutedForeground + "CC" }]}>
                 Stay on track between visits. Viva combines wearable data with simple daily check-ins to help you feel your best on GLP-1.
               </Text>
@@ -607,8 +604,8 @@ function SummaryRow({ label, value, colors: c }: {
 
 const sumStyles = StyleSheet.create({
   row: { gap: 4, paddingVertical: 2 },
-  label: { fontSize: 11, fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 0.6 },
-  value: { fontSize: 15, fontFamily: "Inter_500Medium", lineHeight: 22 },
+  label: { fontSize: 11, fontFamily: "Montserrat_600SemiBold", textTransform: "uppercase", letterSpacing: 0.6 },
+  value: { fontSize: 15, fontFamily: "Montserrat_500Medium", lineHeight: 22 },
 });
 
 const styles = StyleSheet.create({
@@ -623,48 +620,48 @@ const styles = StyleSheet.create({
   contentInner: { paddingHorizontal: 24, paddingBottom: 24 },
   welcomeSection: { alignItems: "center", justifyContent: "center", flex: 1, gap: 10, paddingTop: 40 },
   heroIcon: { width: 88, height: 88, borderRadius: 26, alignItems: "center", justifyContent: "center", marginBottom: 4 },
-  welcomeTitle: { fontSize: 24, fontFamily: "Inter_500Medium", letterSpacing: 8 },
-  welcomeTagline: { fontSize: 30, fontFamily: "Inter_700Bold", textAlign: "center", lineHeight: 38, letterSpacing: -0.5, marginTop: 6 },
-  welcomeSub: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 22, paddingHorizontal: 24, marginTop: 6 },
+  welcomeTitle: { fontSize: 24, fontFamily: "Montserrat_500Medium", letterSpacing: 8 },
+  welcomeTagline: { fontSize: 30, fontFamily: "Montserrat_700Bold", textAlign: "center", lineHeight: 38, letterSpacing: -0.5, marginTop: 6 },
+  welcomeSub: { fontSize: 14, fontFamily: "Montserrat_400Regular", textAlign: "center", lineHeight: 22, paddingHorizontal: 24, marginTop: 6 },
   section: { gap: 16, paddingTop: 8 },
-  stepTitle: { fontSize: 28, fontFamily: "Inter_700Bold", lineHeight: 36, letterSpacing: -0.4 },
-  stepSub: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22, marginTop: -8 },
-  sectionLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 },
+  stepTitle: { fontSize: 28, fontFamily: "Montserrat_700Bold", lineHeight: 36, letterSpacing: -0.4 },
+  stepSub: { fontSize: 15, fontFamily: "Montserrat_400Regular", lineHeight: 22, marginTop: -8 },
+  sectionLabel: { fontSize: 12, fontFamily: "Montserrat_600SemiBold", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 },
   goalGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 4 },
   goalCard: { width: "47%", flexGrow: 1, flexDirection: "row", alignItems: "center", paddingVertical: 14, paddingHorizontal: 14, borderRadius: 16, gap: 10 },
   goalIconWrap: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  goalLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold", flex: 1 },
+  goalLabel: { fontSize: 14, fontFamily: "Montserrat_600SemiBold", flex: 1 },
   goalCheck: { width: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center" },
   optionList: { gap: 8 },
   optionCard: { flexDirection: "row", alignItems: "center", paddingVertical: 16, paddingHorizontal: 16, borderRadius: 16, gap: 12 },
   optionContent: { flex: 1, gap: 2 },
-  optionLabel: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
-  optionSub: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  optionLabel: { fontSize: 16, fontFamily: "Montserrat_600SemiBold" },
+  optionSub: { fontSize: 13, fontFamily: "Montserrat_400Regular" },
   optionCheck: { width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center" },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14 },
-  chipText: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  chipText: { fontSize: 14, fontFamily: "Montserrat_500Medium" },
   segmentRow: { flexDirection: "row", gap: 8 },
   segment: { flex: 1, paddingVertical: 12, borderRadius: 14, alignItems: "center" },
-  segmentText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  segmentText: { fontSize: 14, fontFamily: "Montserrat_600SemiBold" },
   inlineField: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 14 },
-  inlineLabel: { fontSize: 15, fontFamily: "Inter_400Regular" },
-  inlineInput: { fontSize: 18, fontFamily: "Inter_600SemiBold", textAlign: "right", minWidth: 60, paddingVertical: 0 },
+  inlineLabel: { fontSize: 15, fontFamily: "Montserrat_400Regular" },
+  inlineInput: { fontSize: 18, fontFamily: "Montserrat_600SemiBold", textAlign: "right", minWidth: 60, paddingVertical: 0 },
   dayScroll: { marginHorizontal: -24 },
   dayRow: { flexDirection: "row", gap: 8, paddingHorizontal: 24, paddingVertical: 4 },
   dayChip: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14 },
-  dayChipText: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  dayChipText: { fontSize: 13, fontFamily: "Montserrat_500Medium" },
   integrationCard: { flexDirection: "row", alignItems: "center", padding: 16, borderRadius: 16, gap: 12 },
   integrationIcon: { width: 42, height: 42, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   skipBtn: { alignSelf: "center", paddingVertical: 8, marginTop: 4 },
-  skipText: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  skipText: { fontSize: 14, fontFamily: "Montserrat_500Medium" },
   summarySection: { alignItems: "center", gap: 16, paddingTop: 40 },
   summaryIconWrap: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center" },
-  summaryTitle: { fontSize: 28, fontFamily: "Inter_700Bold", letterSpacing: -0.3 },
-  summarySub: { fontSize: 15, fontFamily: "Inter_400Regular", marginTop: -8 },
+  summaryTitle: { fontSize: 28, fontFamily: "Montserrat_700Bold", letterSpacing: -0.3 },
+  summarySub: { fontSize: 15, fontFamily: "Montserrat_400Regular", marginTop: -8 },
   summaryCard: { width: "100%", borderRadius: 20, padding: 20, gap: 14, marginTop: 8 },
   summaryDivider: { height: StyleSheet.hairlineWidth },
-  summaryNote: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20, paddingHorizontal: 20, marginTop: 8 },
+  summaryNote: { fontSize: 13, fontFamily: "Montserrat_400Regular", textAlign: "center", lineHeight: 20, paddingHorizontal: 20, marginTop: 8 },
   ctaButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginHorizontal: 24, marginBottom: 16, paddingVertical: 16, borderRadius: 16 },
-  ctaText: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  ctaText: { fontSize: 17, fontFamily: "Montserrat_600SemiBold" },
 });

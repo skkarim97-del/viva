@@ -48,14 +48,14 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 12,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Montserrat_500Medium",
   },
   value: {
     fontSize: 22,
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Montserrat_700Bold",
   },
   subtitle: {
     fontSize: 11,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
   },
 });

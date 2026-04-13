@@ -143,7 +143,7 @@ const styles = StyleSheet.create({
   backBtn: { padding: 4 },
   headerTitle: {
     fontSize: 17,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
   },
   content: {
     paddingHorizontal: 24,
@@ -160,38 +160,38 @@ const styles = StyleSheet.create({
   },
   heroValue: {
     fontSize: 48,
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Montserrat_700Bold",
     letterSpacing: -2,
   },
   heroUnit: {
     fontSize: 18,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
   },
   heroTrend: {
     fontSize: 22,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
     marginLeft: 4,
   },
   heroHeadline: {
     fontSize: 16,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Montserrat_500Medium",
     lineHeight: 23,
     opacity: 0.85,
   },
   section: {
     padding: 18,
-    borderRadius: 16,
+    borderRadius: 20,
     gap: 10,
   },
   sectionLabel: {
     fontSize: 12,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
     textTransform: "uppercase",
     letterSpacing: 0.6,
   },
   sectionBody: {
     fontSize: 15,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     lineHeight: 22,
   },
   chart: {
@@ -203,22 +203,22 @@ const styles = StyleSheet.create({
   },
   chartLabel: {
     fontSize: 11,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
   },
   recommendSection: {
     padding: 18,
-    borderRadius: 16,
+    borderRadius: 20,
     gap: 8,
   },
   recommendLabel: {
     fontSize: 12,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
     textTransform: "uppercase",
     letterSpacing: 0.6,
   },
   recommendText: {
     fontSize: 15,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     lineHeight: 22,
   },
 });

@@ -27,13 +27,13 @@ The system is a pnpm workspace monorepo using Node.js 24 and TypeScript 5.9. The
 
 - **Design Philosophy**: Optimize for clarity, confidence, simplicity, and action. The app should feel like a supportive daily companion for GLP-1 patients, not a cluttered dashboard or medical portal.
 - **Design System**:
-    - **Colors**: Primary blue (#1A5CFF light / #5B8AFF dark), Sky blue accent (#5AC8FA), Apple-like neutrals. Green (#34C759) is used only for positive states, readiness, and progress.
-    - **Card Style**: Background contrast only (no borders), #F7F7FA cards on white, radius 20 on all cards (16 on inner elements like bubbles/pills).
-    - **Typography**: Inter font family, negative letter-spacing on large text, 11-12px uppercase labels. Page titles are 28px Inter_700Bold, section headers 18px Inter_600SemiBold, body text 14px Inter_400Regular.
+    - **Colors**: Primary dark navy (#142240 light / #38B6FF dark), Accent blue (#38B6FF), White (#FFFFFF). Green (#34C759) for positive states only. Category colors: Move (#FF6B6B), Fuel (#F0A500), Hydrate (#5AC8FA), Recover (#8B5CF6), Consistent (#142240).
+    - **Card Style**: Background contrast only (no borders), #F5F6FA cards on white, radius 20 on all cards (16 on inner elements like bubbles/pills).
+    - **Typography**: Montserrat font family (400Regular, 500Medium, 600SemiBold, 700Bold). Loaded via @expo-google-fonts/montserrat. Page titles 28px Montserrat_700Bold, section headers 18px Montserrat_600SemiBold, body 14px Montserrat_400Regular.
     - **Spacing**: Generous whitespace, 24px horizontal padding, 28px section gaps.
     - **Interactions**: Press scale (0.97-0.98) and opacity (0.8) on interactive elements. Subtle scale (1.02x selected, 0.96x pressed) for selection animations.
     - **Dividers**: HairlineWidth only, using background color rather than border color.
-- **Brand**: "VIVA" wordmark (all caps, Inter_500Medium, letter-spacing 3) with a stylized V pulse line symbol. App icon is a white V-pulse mark on a black background.
+- **Brand**: "VIVA AI" logo image asset (dark navy pill with white "VIVA" + blue "AI" text). Logo file: assets/viva-logo-cropped.png. Displayed via Logo component (components/Logo.tsx) and VivaWordmark component.
 
 ### GLP-1 Data Model
 

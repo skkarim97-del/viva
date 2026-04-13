@@ -83,15 +83,15 @@ const styles = StyleSheet.create({
   },
   recommendedText: {
     fontSize: 11,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
   },
   title: {
     fontSize: 20,
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Montserrat_700Bold",
   },
   price: {
     fontSize: 28,
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Montserrat_700Bold",
   },
   features: {
     gap: 8,
@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
   },
   featureText: {
     fontSize: 14,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     flex: 1,
   },
   activeButton: {
@@ -115,7 +115,7 @@ const styles = StyleSheet.create({
   },
   activeButtonText: {
     fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
   },
   selectButton: {
     paddingVertical: 12,
@@ -126,6 +126,6 @@ const styles = StyleSheet.create({
   },
   selectButtonText: {
     fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
   },
 });

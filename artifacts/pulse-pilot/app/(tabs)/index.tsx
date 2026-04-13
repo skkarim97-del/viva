@@ -116,7 +116,7 @@ export default function DashboardScreen() {
   if (!todayMetrics || !dailyPlan) {
     return (
       <View style={[styles.loading, { backgroundColor: c.background }]}>
-        <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium" }}>Loading...</Text>
+        <Text style={{ color: c.mutedForeground, fontFamily: "Montserrat_500Medium" }}>Loading...</Text>
       </View>
     );
   }
@@ -768,7 +768,7 @@ export default function DashboardScreen() {
                               <Text style={[
                                 styles.modalOptionText,
                                 { color: isSelected ? meta.color : c.foreground },
-                                isSelected && { fontFamily: "Inter_600SemiBold" },
+                                isSelected && { fontFamily: "Montserrat_600SemiBold" },
                               ]}>{option.title}</Text>
                               {isSelected && <Feather name="check-circle" size={18} color={meta.color} />}
                             </View>
@@ -952,7 +952,7 @@ const styles = StyleSheet.create({
 
   tagline: {
     fontSize: 13,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Montserrat_500Medium",
     textAlign: "center",
     marginBottom: 12,
     letterSpacing: 0.2,
@@ -982,7 +982,7 @@ const styles = StyleSheet.create({
   },
   streakText: {
     fontSize: 12,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
   },
   progressBarWrap: {
     width: "100%",
@@ -1009,7 +1009,7 @@ const styles = StyleSheet.create({
   },
   feedbackText: {
     fontSize: 13,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Montserrat_500Medium",
     flex: 1,
   },
   statusIndicator: {
@@ -1027,12 +1027,12 @@ const styles = StyleSheet.create({
   },
   statusLabel: {
     fontSize: 13,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
     letterSpacing: 0.3,
   },
   headline: {
     fontSize: 20,
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Montserrat_700Bold",
     letterSpacing: -0.5,
     textAlign: "center",
     lineHeight: 26,
@@ -1040,7 +1040,7 @@ const styles = StyleSheet.create({
   },
   driversInline: {
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     textAlign: "center",
     lineHeight: 19,
     marginTop: 4,
@@ -1060,7 +1060,7 @@ const styles = StyleSheet.create({
   },
   feelingLabel: {
     fontSize: 13,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Montserrat_500Medium",
   },
 
   refineSection: {
@@ -1073,7 +1073,7 @@ const styles = StyleSheet.create({
   },
   refineLabel: {
     fontSize: 12,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
@@ -1089,7 +1089,7 @@ const styles = StyleSheet.create({
   },
   refineChipLabel: {
     fontSize: 12,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Montserrat_500Medium",
   },
 
   dayCard: {
@@ -1106,12 +1106,12 @@ const styles = StyleSheet.create({
   },
   dayTitle: {
     fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
     letterSpacing: -0.1,
   },
   dayProgress: {
     fontSize: 13,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Montserrat_500Medium",
   },
   actionRow: {
     flexDirection: "row",
@@ -1149,18 +1149,18 @@ const styles = StyleSheet.create({
   },
   actionLabel: {
     fontSize: 11,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
     textTransform: "uppercase",
     letterSpacing: 0.6,
   },
   actionText: {
     fontSize: 14,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     lineHeight: 20,
   },
   actionReason: {
     fontSize: 12,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     lineHeight: 16,
     marginTop: 2,
     opacity: 0.7,
@@ -1177,11 +1177,11 @@ const styles = StyleSheet.create({
   },
   checkInButtonTitle: {
     fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
   },
   checkInButtonSub: {
     fontSize: 12,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     marginTop: 2,
   },
   checkInDone: {
@@ -1195,11 +1195,11 @@ const styles = StyleSheet.create({
   },
   checkInDoneText: {
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
   },
   checkInLabel: {
     fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
   },
   checkInChipRow: {
     flexDirection: "row" as const,
@@ -1214,7 +1214,7 @@ const styles = StyleSheet.create({
   },
   checkInChipText: {
     fontSize: 13,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Montserrat_500Medium",
   },
   checkInSubmit: {
     paddingVertical: 14,
@@ -1226,7 +1226,7 @@ const styles = StyleSheet.create({
   },
   checkInSubmitText: {
     fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
     color: "#fff",
   },
 
@@ -1247,7 +1247,7 @@ const styles = StyleSheet.create({
   },
   whyPlanTitle: {
     fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
   },
   whyPlanContent: {
     marginTop: 14,
@@ -1255,7 +1255,7 @@ const styles = StyleSheet.create({
   },
   whyPlanText: {
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     lineHeight: 19,
   },
 
@@ -1272,7 +1272,7 @@ const styles = StyleSheet.create({
   },
   metricLabel: {
     fontSize: 10,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Montserrat_500Medium",
     letterSpacing: 0.2,
   },
   metricValueRow: {
@@ -1282,12 +1282,12 @@ const styles = StyleSheet.create({
   },
   metricValue: {
     fontSize: 22,
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Montserrat_700Bold",
     letterSpacing: -0.5,
   },
   metricUnit: {
     fontSize: 12,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
   },
 
   askCard: {
@@ -1298,13 +1298,13 @@ const styles = StyleSheet.create({
   },
   coachInsightText: {
     fontSize: 14,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     lineHeight: 22,
     letterSpacing: -0.1,
   },
   chatViewAll: {
     fontSize: 13,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Montserrat_500Medium",
     marginTop: 8,
   },
   chatModal: {
@@ -1321,7 +1321,7 @@ const styles = StyleSheet.create({
   },
   chatHeaderTitle: {
     fontSize: 17,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
     letterSpacing: -0.3,
   },
   chatList: {
@@ -1353,7 +1353,7 @@ const styles = StyleSheet.create({
   },
   askMsgText: {
     fontSize: 14,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     lineHeight: 20,
   },
   typingDots: {
@@ -1376,7 +1376,7 @@ const styles = StyleSheet.create({
   askInputField: {
     flex: 1,
     fontSize: 14,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     paddingVertical: 10,
   },
   askSendBtn: {
@@ -1399,7 +1399,7 @@ const styles = StyleSheet.create({
   },
   askSuggestionText: {
     fontSize: 12,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Montserrat_500Medium",
   },
 
   modalOverlay: {
@@ -1438,11 +1438,11 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 18,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Montserrat_600SemiBold",
   },
   modalInstruction: {
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     marginTop: 2,
   },
   modalOptions: {
@@ -1464,12 +1464,12 @@ const styles = StyleSheet.create({
   },
   modalOptionText: {
     fontSize: 15,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Montserrat_500Medium",
     flex: 1,
   },
   modalOptionSubtitle: {
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
     opacity: 0.7,
   },
   recommendedBadge: {
@@ -1484,7 +1484,7 @@ const styles = StyleSheet.create({
   },
   recommendedText: {
     fontSize: 11,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Montserrat_500Medium",
   },
   supportSection: {
     marginTop: 16,
@@ -1500,6 +1500,6 @@ const styles = StyleSheet.create({
   },
   supportText: {
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
   },
 });
