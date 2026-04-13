@@ -17,7 +17,7 @@
     "ios": {
       "icon": "./assets/icon.png",
       "supportsTablet": false,
-      "bundleIdentifier": "com.sullyk97.vivahealth.app",
+      "bundleIdentifier": "com.sullyk97.vivaai",
       "buildNumber": "1",
       "config": {
         "usesNonExemptEncryption": false
