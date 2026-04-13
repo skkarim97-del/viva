@@ -866,7 +866,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(updated));
       return updated;
     });
-  }, []);
+    if (updates.medicationProfile) {
+      setTimeout(regenerateFromGlp1, 0);
+    }
+  }, [regenerateFromGlp1]);
 
   const completeOnboarding = useCallback(() => {
     updateProfile({ onboardingComplete: true });

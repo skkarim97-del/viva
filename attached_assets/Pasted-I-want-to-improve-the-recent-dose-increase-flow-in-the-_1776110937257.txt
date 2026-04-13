@@ -1,0 +1,194 @@
+I want to improve the recent dose increase flow in the “Your Treatment” section.
+
+Right now, if the patient says their dose increased recently, they should NOT have to type the new dose freely if they are on a standard medication.
+
+Instead, the app should show pill-shaped dose options that are specific to the medication they are taking.
+
+This should feel clean, fast, and premium.
+
+=====================================
+GOAL
+=====================================
+
+If the patient indicates that their dose increased recently, allow them to select the new dose using pill-shaped options that are dynamically tied to their selected medication.
+
+This should work for:
+- Wegovy
+- Ozempic
+- Zepbound
+- Mounjaro
+- Saxenda
+- Other GLP-1 / weight loss med
+
+=====================================
+PART 1: USE MEDICATION-SPECIFIC DOSE OPTIONS
+=====================================
+
+When a user has a known medication selected, dose options shown in “Your Treatment” must match that medication only.
+
+Use these standard options:
+
+Wegovy
+- 0.25 mg weekly
+- 0.5 mg weekly
+- 1.0 mg weekly
+- 1.7 mg weekly
+- 2.4 mg weekly
+
+Ozempic
+- 0.25 mg weekly
+- 0.5 mg weekly
+- 1.0 mg weekly
+- 2.0 mg weekly
+
+Zepbound
+- 2.5 mg weekly
+- 5 mg weekly
+- 7.5 mg weekly
+- 10 mg weekly
+- 12.5 mg weekly
+- 15 mg weekly
+
+Mounjaro
+- 2.5 mg weekly
+- 5 mg weekly
+- 7.5 mg weekly
+- 10 mg weekly
+- 12.5 mg weekly
+- 15 mg weekly
+
+Saxenda
+- 0.6 mg daily
+- 1.2 mg daily
+- 1.8 mg daily
+- 2.4 mg daily
+- 3.0 mg daily
+
+Other GLP-1 / weight loss med
+- allow manual entry for:
+  - medication name
+  - dose
+  - frequency
+
+=====================================
+PART 2: DOSE INCREASE FLOW
+=====================================
+
+In the “Your Treatment” section:
+
+If the patient selects:
+“Did your dose increase recently?” -> Yes
+
+Then show:
+
+1. “Previous dose”
+2. “New dose”
+3. “Date changed”
+
+For standard medications:
+- Previous dose should use medication-specific pill options
+- New dose should use medication-specific pill options
+- These pill options should match the medication
+
+Important:
+The dose increase should feel structured and fast.
+Do NOT force typing when the medication has known standard doses.
+
+=====================================
+PART 3: PILL-STYLE UI
+=====================================
+
+Use pill-shaped selectable options for dose choices.
+
+Requirements:
+- visually clean
+- premium
+- easy to tap
+- consistent with the rest of the app
+- no dropdowns unless absolutely necessary
+- no clutter
+
+If there are many dose options, wrapping across rows is okay, but it should still look clean and aligned.
+
+=====================================
+PART 4: VALIDATION LOGIC
+=====================================
+
+Make the dose increase flow logically valid.
+
+Examples:
+- Previous dose and new dose must both match the selected medication
+- New dose should generally represent an increase relative to previous dose
+- If possible, prevent obviously invalid titration paths for standard meds
+- If that validation is too heavy for now, at least ensure both values are selected from the medication’s valid options
+
+For “Other” medication:
+allow manual fields and skip strict validation
+
+=====================================
+PART 5: STATE / DATA STORAGE
+=====================================
+
+Store structured fields such as:
+- medication_brand
+- previous_dose_value
+- previous_dose_unit
+- current_dose_value
+- current_dose_unit
+- frequency
+- recent_titration
+- dose_change_date
+- days_since_dose_change
+
+Make sure the selected new dose updates the current medication context used by the intelligence layer.
+
+=====================================
+PART 6: INTELLIGENCE LAYER IMPACT
+=====================================
+
+The selected new dose should flow into:
+- Today support logic
+- weekly plan logic
+- trends and insights
+- coach context
+- treatment summaries
+
+Examples:
+- moving from 2.5 mg to 5 mg on Mounjaro should create more treatment-aware support
+- moving to a higher dose should increase attention on hydration, fueling, recovery, and symptom tolerance
+
+=====================================
+PART 7: ONBOARDING + TREATMENT CONSISTENCY
+=====================================
+
+Ensure this dose option system is consistent with onboarding.
+
+Meaning:
+- the same medication-specific dose options used in onboarding should also be used in the treatment update / dose increase flow
+- do not create two conflicting dose systems
+
+If helpful, centralize dose option definitions into one shared source of truth.
+
+=====================================
+PART 8: UX QUALITY BAR
+=====================================
+
+This should feel:
+- fast
+- elegant
+- simple
+- premium
+- medically coherent
+
+Do NOT make it feel like a form-heavy medical intake.
+
+=====================================
+PART 9: FINAL OUTPUT
+=====================================
+
+After implementing, summarize:
+1. how medication-specific dose options are now shown
+2. how previous vs new dose selection works
+3. how this is validated
+4. how the selected new dose updates intelligence across the app
+5. whether dose definitions were centralized into one shared source

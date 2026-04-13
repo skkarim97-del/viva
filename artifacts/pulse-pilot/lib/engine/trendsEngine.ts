@@ -1,4 +1,5 @@
 import type { HealthMetrics, MedicationProfile, MedicationLogEntry, CompletionRecord } from "@/types";
+import { buildTitrationContext, type TitrationContext } from "./titrationHelper";
 
 export interface TrendCorrelation {
   title: string;
@@ -237,7 +238,46 @@ export function buildGLP1Insights(
     }
   }
 
-  if (medicationProfile.recentTitration && recent14.length >= 10) {
+  const titration = buildTitrationContext(medicationProfile);
+  if (titration.isWithinTitrationWindow && recent14.length >= 5) {
+    const daysSince = titration.daysSinceDoseChange ?? 0;
+    if (daysSince <= 3) {
+      insights.push({
+        text: `Your dose changed ${daysSince === 0 ? "today" : daysSince === 1 ? "yesterday" : `${daysSince} days ago`}. Side effects often peak in the first few days. Give your body time to adjust.`,
+        icon: "clock",
+        color: "#FF9500",
+      });
+    }
+
+    const firstHalf = recent14.slice(0, Math.floor(recent14.length / 2));
+    const secondHalf = recent14.slice(Math.floor(recent14.length / 2));
+    if (firstHalf.length >= 2 && secondHalf.length >= 2) {
+      const avgRecFirst = firstHalf.reduce((s, m) => s + m.recoveryScore, 0) / firstHalf.length;
+      const avgRecSecond = secondHalf.reduce((s, m) => s + m.recoveryScore, 0) / secondHalf.length;
+      if (avgRecFirst - avgRecSecond > 5) {
+        insights.push({
+          text: `Recovery appears to have dipped since your recent dose increase. This may be related to the adjustment period and usually stabilizes within 1-2 weeks.`,
+          icon: "battery-charging",
+          color: "#FF6B6B",
+        });
+      } else if (avgRecSecond >= avgRecFirst) {
+        insights.push({
+          text: `Recovery has held steady since your dose change. Your body appears to be adjusting well to the new level.`,
+          icon: "battery-charging",
+          color: "#34C759",
+        });
+      }
+    }
+
+    const avgSleepRecent = recent7.reduce((s, m) => s + m.sleepDuration, 0) / recent7.length;
+    if (avgSleepRecent < 6.5) {
+      insights.push({
+        text: `Sleep has been shorter recently. This may line up with your dose change. Prioritizing rest during the adjustment window can help.`,
+        icon: "moon",
+        color: "#AF52DE",
+      });
+    }
+  } else if (medicationProfile.recentTitration && recent14.length >= 10) {
     const firstHalf = recent14.slice(0, 7);
     const secondHalf = recent14.slice(7);
     const avgRecFirst = firstHalf.reduce((s, m) => s + m.recoveryScore, 0) / firstHalf.length;

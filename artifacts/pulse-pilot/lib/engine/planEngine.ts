@@ -22,6 +22,7 @@ import {
 } from "@/types";
 import { getDoseTier, getMedicationFrequency, type MedicationBrand } from "@/data/medicationData";
 import { shouldApplyPostDoseAdjustment } from "@/data/patternEngine";
+import { buildTitrationContext, titrationReadinessPenalty } from "./titrationHelper";
 
 export type MedContext = {
   doseTier: "low" | "mid" | "high";
@@ -29,6 +30,7 @@ export type MedContext = {
   daysSinceDose: number | null;
   frequency: "weekly" | "daily";
   isNewToMed: boolean;
+  titrationIntensity?: "none" | "mild" | "moderate" | "peak";
 };
 
 interface WhyPlanContext {
@@ -201,12 +203,14 @@ function safeMedFrequency(brand: string): "weekly" | "daily" {
 
 function buildMedContext(medicationProfile?: MedicationProfile, medicationLog?: MedicationLogEntry[]): MedContext | null {
   if (!medicationProfile) return null;
+  const titration = buildTitrationContext(medicationProfile);
   return {
     doseTier: getDoseTier(medicationProfile.medicationBrand, medicationProfile.doseValue),
     recentTitration: medicationProfile.recentTitration === true,
     daysSinceDose: computeDaysSinceLastDose(medicationLog),
     frequency: medicationProfile.frequency || safeMedFrequency(medicationProfile.medicationBrand),
     isNewToMed: medicationProfile.timeOnMedicationBucket === "less_1_month",
+    titrationIntensity: titration.titrationIntensity,
   };
 }
 
@@ -227,7 +231,11 @@ function pickMedAwarePlanTier(
   const drop = (n: number) => { idx = Math.max(0, idx - n); };
 
   if (medCtx) {
-    if (medCtx.recentTitration) {
+    if (medCtx.titrationIntensity === "peak") {
+      if (needsMoreWhenStressed) bump(2); else drop(2);
+    } else if (medCtx.titrationIntensity === "moderate") {
+      if (needsMoreWhenStressed) bump(2); else drop(1);
+    } else if (medCtx.recentTitration) {
       if (needsMoreWhenStressed) bump(1); else drop(1);
     }
     if (medCtx.doseTier === "high") {
@@ -436,7 +444,13 @@ export function generateDailyPlan(
 
   if (medicationProfile) {
     const tier = getDoseTier(medicationProfile.medicationBrand, medicationProfile.doseValue);
-    if (medicationProfile.recentTitration) readinessScore = Math.max(readinessScore - 8, 0);
+    const titration = buildTitrationContext(medicationProfile);
+    const titrationPenalty = titrationReadinessPenalty(titration);
+    if (titrationPenalty > 0) {
+      readinessScore = Math.max(readinessScore - titrationPenalty, 0);
+    } else if (medicationProfile.recentTitration) {
+      readinessScore = Math.max(readinessScore - 8, 0);
+    }
     if (tier === "high" && (glp1Inputs?.nausea === "moderate" || glp1Inputs?.nausea === "severe")) {
       readinessScore = Math.max(readinessScore - 5, 0);
     }

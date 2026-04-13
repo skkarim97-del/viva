@@ -15,6 +15,7 @@ import type {
   PatientSummary,
 } from "@/types";
 import type { DailyInsights } from "@/data/insights";
+import { buildTitrationContext } from "./titrationHelper";
 
 export interface CoachContext {
   todayMetrics: {
@@ -49,6 +50,9 @@ export interface CoachContext {
     frequency: string;
     recentTitration: boolean;
     timeOnMedicationBucket: string;
+    daysSinceDoseChange?: number | null;
+    previousDoseValue?: number | null;
+    titrationIntensity?: "none" | "mild" | "moderate" | "peak";
   };
   recentDoseLog: { date: string; status: string; doseValue: number; doseUnit: string }[];
   readinessScore?: number;
@@ -149,15 +153,21 @@ export function buildCoachContext(
       proteinConfidence: profile.proteinConfidence,
       strengthTrainingBaseline: profile.strengthTrainingBaseline,
     },
-    medicationProfile: profile.medicationProfile ? {
-      medicationBrand: profile.medicationProfile.medicationBrand,
-      genericName: profile.medicationProfile.genericName,
-      doseValue: profile.medicationProfile.doseValue,
-      doseUnit: profile.medicationProfile.doseUnit,
-      frequency: profile.medicationProfile.frequency,
-      recentTitration: profile.medicationProfile.recentTitration,
-      timeOnMedicationBucket: profile.medicationProfile.timeOnMedicationBucket,
-    } : undefined,
+    medicationProfile: profile.medicationProfile ? (() => {
+      const titration = buildTitrationContext(profile.medicationProfile);
+      return {
+        medicationBrand: profile.medicationProfile!.medicationBrand,
+        genericName: profile.medicationProfile!.genericName,
+        doseValue: profile.medicationProfile!.doseValue,
+        doseUnit: profile.medicationProfile!.doseUnit,
+        frequency: profile.medicationProfile!.frequency,
+        recentTitration: profile.medicationProfile!.recentTitration,
+        timeOnMedicationBucket: profile.medicationProfile!.timeOnMedicationBucket,
+        daysSinceDoseChange: titration.daysSinceDoseChange,
+        previousDoseValue: titration.previousDoseValue,
+        titrationIntensity: titration.titrationIntensity,
+      };
+    })() : undefined,
     recentDoseLog: medicationLog.slice(-5).map(e => ({ date: e.date, status: e.status, doseValue: e.doseValue, doseUnit: e.doseUnit })),
     readinessScore: dailyPlan?.readinessScore,
     dailyState: dailyPlan?.dailyState,

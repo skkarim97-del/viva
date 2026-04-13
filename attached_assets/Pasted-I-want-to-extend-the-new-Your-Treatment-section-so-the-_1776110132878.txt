@@ -1,0 +1,193 @@
+I want to extend the new Your Treatment section so the patient can also log if their dose increased, and that event should flow into the intelligence layer across the entire app.
+
+This is important.
+
+A recent dose increase should not just be stored passively.
+It should actively affect:
+- Today support logic
+- Weekly plan logic
+- Trends and insights
+- Coach context
+- treatment-aware summaries
+
+=====================================
+GOAL
+=====================================
+
+Allow the patient to indicate from the Your Treatment section that their dose increased, and make that dose-change event part of the core product intelligence.
+
+The app should understand:
+- current medication
+- current dose
+- frequency
+- whether dose recently increased
+- when it increased
+- previous dose if available
+
+And it should adjust support logic accordingly.
+
+=====================================
+PART 1: ADD DOSE INCREASE INPUT TO “YOUR TREATMENT”
+=====================================
+
+In the Your Treatment section, add a lightweight way for the user to indicate:
+
+“Did your dose increase recently?”
+
+Options:
+- No
+- Yes
+
+If Yes:
+Show simple follow-up fields:
+- previous dose
+- date dose changed
+
+Keep this compact, clean, and premium.
+Do NOT make it feel like a complicated form.
+
+This should live inside the treatment area, not buried in settings.
+
+=====================================
+PART 2: STORE DOSE CHANGE STRUCTURED DATA
+=====================================
+
+Store normalized fields such as:
+- recent_titration: boolean
+- previous_dose_value
+- previous_dose_unit
+- previous_frequency
+- dose_change_date
+- days_since_dose_change
+
+If frequency is unchanged, keep frequency inherited from medication.
+If previous dose is not entered, allow nullable fallback.
+
+Also keep:
+- medication_brand
+- current_dose_value
+- current_dose_unit
+- frequency
+
+=====================================
+PART 3: TODAY LOGIC IMPACT
+=====================================
+
+A recent dose increase should influence the Today screen.
+
+Examples:
+If dose increased recently, bias Today logic toward:
+- more hydration emphasis
+- more protein / fuel support
+- simpler meals
+- lighter movement
+- more symptom-aware recommendations
+- more recovery emphasis
+
+This should be especially true if recent titration is combined with:
+- low appetite
+- nausea
+- diarrhea / digestion issues
+- low energy
+- mental burnout
+
+The Today summary, Your Plan recommendations, Why this matters, and coach context should all reflect this.
+
+=====================================
+PART 4: WEEKLY PLAN IMPACT
+=====================================
+
+A recent dose increase should also influence the adaptive weekly plan.
+
+Examples:
+If titration happened in the last 14 days:
+- reduce plan intensity
+- bias 2–3 days toward simpler support
+- increase hydration targets
+- increase recovery emphasis
+- make movement lighter or more flexible
+- simplify fueling guidance
+
+The weekly plan should feel clearly more defensive and supportive during the titration window, then gradually normalize as the patient stabilizes.
+
+=====================================
+PART 5: TRENDS + INSIGHTS IMPACT
+=====================================
+
+Dose increases should be taken into account in Trends and insights.
+
+Examples:
+- “Appetite has been lower since your recent dose increase”
+- “Recovery has been a bit less steady since your dose changed”
+- “Hydration may matter more in the first few days after a dose increase”
+- “Your recent symptoms may be lining up with the change in dose”
+
+Important:
+Frame these as observations or possible patterns, not medical claims.
+
+Use language like:
+- may be related
+- appears to line up with
+- may be worth watching
+- often shows up after a dose increase
+
+=====================================
+PART 6: COACH CONTEXT
+=====================================
+
+The coach should know if the user recently increased dose.
+
+This should influence:
+- how it explains symptoms
+- how it prioritizes hydration / protein / movement / rest
+- how it advises around the next few days
+
+Examples:
+- more careful and supportive around recent titration
+- more likely to recommend simpler routines and easier meals
+- less likely to push higher effort plans
+
+=====================================
+PART 7: INTELLIGENCE LAYER INTEGRATION
+=====================================
+
+This should live in the intelligence layer, not just UI.
+
+Make sure recent titration is passed into:
+- generateTodayView(...)
+- generateDailyPlan(...)
+- generateSummary(...)
+- generateInsights(...)
+- generateTrendsView(...)
+- baselineWeeklyPlan(...)
+- applyWeeklyOverrides(...)
+- buildCoachContext(...)
+
+The system should treat recent dose increase as a key modifier across flows.
+
+=====================================
+PART 8: TREATMENT SECTION UX
+=====================================
+
+Keep the UX simple.
+
+The user should be able to:
+- see their current medication and dose
+- log their treatment
+- indicate if dose changed recently
+
+Do not make this section long or cluttered.
+Use clean conditional logic:
+- only show previous dose + date if “Yes” is selected
+
+=====================================
+PART 9: FINAL OUTPUT
+=====================================
+
+After implementing, summarize:
+1. how dose increase can now be logged in Your Treatment
+2. what fields are stored
+3. how recent titration affects Today logic
+4. how it affects the weekly plan
+5. how it affects trends and coach context
+6. any placeholder assumptions still being used

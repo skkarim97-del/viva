@@ -14,6 +14,7 @@ import type {
 } from "@/types";
 import { CATEGORY_OPTIONS } from "@/types";
 import { getDoseTier } from "@/data/medicationData";
+import { buildTitrationContext, titrationSeverityBoost } from "./titrationHelper";
 
 interface SeverityInput {
   recentInputs: GLP1DailyInputs[];
@@ -106,7 +107,15 @@ export function computeInternalSeverity(input: SeverityInput): SeverityResult {
 
   if (medicationProfile) {
     const tier = getDoseTier(medicationProfile.medicationBrand, medicationProfile.doseValue);
-    if (medicationProfile.recentTitration) {
+    const titration = buildTitrationContext(medicationProfile);
+    if (titration.isWithinTitrationWindow) {
+      const boost = titrationSeverityBoost(titration);
+      compositeScore += boost;
+      drivers.push("recent_titration");
+      if (titration.titrationIntensity === "peak") {
+        drivers.push("titration_peak_window");
+      }
+    } else if (medicationProfile.recentTitration) {
       compositeScore += 2;
       drivers.push("recent_titration");
     }
@@ -198,7 +207,9 @@ function adaptiveDayNote(severity: InternalSeverity, drivers: string[]): string 
   const parts: string[] = [];
 
   if (severity === "red") {
-    if (drivers.includes("recent_titration")) {
+    if (drivers.includes("titration_peak_window")) {
+      parts.push("Your dose just changed. Your body needs a few days to settle in. Today is about rest and comfort.");
+    } else if (drivers.includes("recent_titration")) {
       parts.push("Your body is adjusting to the dose change. Taking it easy is the right move.");
     } else if (drivers.includes("multi_day_difficulty")) {
       parts.push("The last few days have been tough. Today is lighter so your body can catch up.");
@@ -232,6 +243,9 @@ function adaptiveWeekSummary(severity: InternalSeverity, drivers: string[], orig
   if (severity === "green") return originalSummary;
 
   if (severity === "red") {
+    if (drivers.includes("titration_peak_window")) {
+      return "Your dose just changed. The first few days are often the hardest. This week focuses entirely on comfort, hydration, and rest. You will ease back into your routine once your body settles.";
+    }
     if (drivers.includes("recent_titration")) {
       return "Your dose recently changed, and your body is adapting. This week focuses on rest, hydration, and easy nutrition. Strength sessions are paused so you can settle in. You will build back up once things stabilize.";
     }

@@ -77,7 +77,7 @@ export default function TrendsScreen() {
     }
     return combined.slice(0, 6);
   }, [baseInsights, inputAnalytics]);
-  const glp1Insights = useMemo(() => buildGLP1Insights(metrics, profile, medicationLog, completionHistory), [metrics, profile, medicationLog, completionHistory]);
+  const glp1Insights = useMemo(() => buildGLP1Insights(metrics, profile.medicationProfile, medicationLog, completionHistory), [metrics, profile.medicationProfile, medicationLog, completionHistory]);
 
   const openDetail = (label: string) => {
     const key = metricKeyMap[label];

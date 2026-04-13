@@ -47,10 +47,10 @@ The system is a pnpm workspace monorepo using Node.js 24 and TypeScript 5.9. The
 
 -   **Onboarding**: A 13-step GLP-1 specific flow covering personal details, medication, lifestyle, and integrations.
 -   **Dashboard (Today tab)**: Displays greeting, status, "Your Treatment" section, daily inputs, "Your Plan" actions, coach insights, and metrics. Medication profile and dose log inform the coach API.
--   **Your Treatment Section**: Manages medication brand, dose, and frequency logging, separate from daily actions.
+-   **Your Treatment Section**: Manages medication brand, dose, and frequency logging, separate from daily actions. Includes dose increase logging with previous dose + date capture. Dose increase flows into all engines via `titrationHelper.ts`.
 -   **Adaptive Coaching**: Employs a rules-based risk engine (`calculateDropoutRisk`) and a GLP-1 focused coach system prompt prioritizing recovery, side effect management, protein, muscle preservation, and hydration over performance.
 -   **Daily Actions ("Your Plan")**: Four checkable actions per day (Move/Fuel/Hydrate/Recover) with flexible ranges and medication-aware `planTier` selection.
--   **Plan Engine**: `pickMedAwarePlanTier()` adjusts plan tiers based on dose level, titration, days since last dose, and daily inputs.
+-   **Plan Engine**: `pickMedAwarePlanTier()` adjusts plan tiers based on dose level, titration, days since last dose, and daily inputs. `titrationHelper.ts` provides `TitrationContext` with intensity levels (none/mild/moderate/peak) based on days since dose change, used by all engines for graduated adjustments within a 14-day window.
 -   **Weekly Plan**: AI-powered weekly coaching with GLP-1 specific rules. An adaptive engine (`lib/engine/weeklyAdaptiveEngine.ts`) computes internal severity to adjust daily plans and provide patient-facing adaptive notes, including anti-snowballing logic.
 -   **Trends Tab**: Features Recovery/Body, Movement, Consistency, and Medication sections. Includes "Treatment Patterns" with GLP-1 specific intelligence insights and "What We're Noticing" for detected patterns.
 -   **AI Coach**: Full-screen chat modal with streaming SSE responses, offering GLP-1 focused quick actions and a rewritten system prompt.
