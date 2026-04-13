@@ -129,7 +129,7 @@ function buildCorrelations(metrics: HealthMetrics[]): Correlation[] {
       strength: rhrRecStrength,
       direction: rhrRecovery > 0 ? "positive" : "negative",
       insight: rhrRecovery < 0
-        ? `Lower resting heart rate correlates with better recovery. This is a sign your cardiovascular fitness supports your recovery.`
+        ? `Lower resting heart rate correlates with better recovery. This is a sign your body is adapting well to treatment.`
         : `Your resting heart rate rises with recovery, which may reflect your body working harder to bounce back on certain days.`,
     });
   }
@@ -326,14 +326,14 @@ export default function TrendsScreen() {
   const avgRHR = Math.round(avg(last28.map(m => m.restingHeartRate)));
   const avgSteps = Math.round(avg(last28.map(m => m.steps)));
   const avgActiveCalories = Math.round(avg(last28.map(m => m.activeCalories || 0)));
-  const workoutDays = last28.filter(m => (m.activeCalories || 0) > 200 || m.steps > 8000).length;
-  const workoutsPerWeek = last28.length > 0 ? +((workoutDays / last28.length) * 7).toFixed(1) : 0;
+  const activeDays = last28.filter(m => (m.activeCalories || 0) > 200 || m.steps > 8000).length;
+  const activeDaysPerWeek = last28.length > 0 ? +((activeDays / last28.length) * 7).toFixed(1) : 0;
 
   const sleepData = weeklyAverages(last28.map(m => m.sleepDuration));
   const hrvData = weeklyAverages(last28.map(m => m.hrv));
   const rhrData = weeklyAverages(last28.map(m => m.restingHeartRate));
   const stepsData = weeklyAverages(last28.map(m => m.steps));
-  const workoutData = weeklyAverages(last28.map(m => ((m.activeCalories || 0) > 200 || m.steps > 8000) ? 1 : 0));
+  const activityData = weeklyAverages(last28.map(m => ((m.activeCalories || 0) > 200 || m.steps > 8000) ? 1 : 0));
   const activeCalData = weeklyAverages(last28.map(m => m.activeCalories || 0));
   const habitRateData = computeHabitWeeklyRates(completionHistory);
 
@@ -348,7 +348,7 @@ export default function TrendsScreen() {
 
   const activityMetrics: SparkMetric[] = [
     { label: "Steps", value: avgSteps >= 1000 ? `${(avgSteps / 1000).toFixed(1)}k` : `${avgSteps}`, unit: "avg", data: stepsData, color: "#34C759", detailKey: "Steps" },
-    { label: "Workouts", value: `${workoutsPerWeek}`, unit: "/week", data: workoutData.map(v => v * 7), color: "#1A5CFF" },
+    { label: "Active Days", value: `${activeDaysPerWeek}`, unit: "/week", data: activityData.map(v => v * 7), color: "#1A5CFF" },
     { label: "Active Cal", value: `${avgActiveCalories}`, unit: "avg", data: activeCalData, color: "#FF9500" },
   ];
 

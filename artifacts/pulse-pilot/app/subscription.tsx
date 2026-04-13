@@ -36,9 +36,9 @@ const plans = [
     features: [
       "Full wearable integrations",
       "Full AI daily coaching",
-      "Weekly workout & recovery plan",
-      "Nutrition coaching",
-      "Fasting recommendations",
+      "Weekly movement & recovery plan",
+      "Protein & nutrition coaching",
+      "GLP-1 side effect guidance",
       "Trend analysis",
       "Chat with AI coach",
       "Smart alerts",

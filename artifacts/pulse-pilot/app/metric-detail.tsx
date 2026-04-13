@@ -125,7 +125,7 @@ function getInsightForMetric(key: MetricKey, insights: any): string | null {
     case "recovery": return insights.recoveryTrend.detail;
     case "steps": return insights.calorieBalance.detail;
     case "weight": return insights.weightProjection.detail;
-    case "restingHR": return insights.trainingLoad.detail;
+    case "restingHR": return insights.trainingLoad?.detail ?? "Resting heart rate reflects how your body is adapting to treatment. Lower values generally indicate better cardiovascular recovery.";
     default: return null;
   }
 }

@@ -251,7 +251,7 @@ export default function CoachScreen() {
       <View style={[styles.header, { paddingTop: topPad + 16 }]}>
         <Text style={[styles.headerTitle, { color: c.foreground }]}>Coach</Text>
         <Text style={[styles.headerSub, { color: c.mutedForeground }]}>
-          Ask about your training, recovery, nutrition, or trends.
+          Ask about your treatment, recovery, nutrition, or trends.
         </Text>
       </View>
 

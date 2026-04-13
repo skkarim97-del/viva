@@ -666,22 +666,6 @@ export default function DashboardScreen() {
                 cardBg={c.background}
                 mutedColor={c.mutedForeground}
               />
-              <RefineRow
-                label="Energy"
-                items={ENERGY_LEVELS}
-                selected={energy}
-                onSelect={selectEnergy}
-                cardBg={c.background}
-                mutedColor={c.mutedForeground}
-              />
-              <RefineRow
-                label="Hydration"
-                items={HYDRATION_LEVELS}
-                selected={hydration}
-                onSelect={selectHydration}
-                cardBg={c.background}
-                mutedColor={c.mutedForeground}
-              />
             </View>
           )}
         </View>

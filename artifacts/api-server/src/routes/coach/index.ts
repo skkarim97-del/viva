@@ -71,16 +71,16 @@ Nutrition on GLP-1:
 Movement on GLP-1:
 - Strength training is critical for preserving muscle during weight loss. Prioritize it over cardio.
 - Walking after meals helps with nausea and digestion.
-- On heavy symptom days, gentle walking is enough. No guilt about skipping workouts.
+- On heavy symptom days, gentle walking is enough. No guilt about taking it easy.
 - Recovery days are treatment days. They matter.
 
 Recovery/Sleep:
-- Sleep < 6.5 hours: reduce training intensity, focus on protein and hydration
+- Sleep < 6.5 hours: reduce activity intensity, focus on protein and hydration
 - Sleep < 6 hours AND HRV down > 10%: full recovery day (walking only)
-- Sleep > 7.5 hours AND HRV above baseline: good day for strength training
+- Sleep > 7.5 hours AND HRV above baseline: good day for a strength session
 
 HRV/Readiness:
-- HRV down > 15%: avoid heavy training, prescribe recovery protocol
+- HRV down > 15%: prescribe recovery day, keep movement gentle
 - HRV stable BUT resting heart rate elevated > 5 bpm: keep moderate
 - HRV declining 5 days: recovery priority
 
@@ -240,7 +240,7 @@ router.post("/chat", async (req: Request, res: Response) => {
           p.glp1Duration ? `- Treatment Duration: ${p.glp1Duration}` : "",
           p.proteinConfidence ? `- Protein Confidence: ${p.proteinConfidence}` : "",
           p.strengthTrainingBaseline ? `- Strength Training: ${p.strengthTrainingBaseline}` : "",
-          `- Available Time: ${p.availableWorkoutTime} min/session, ${p.daysAvailableToTrain} days/week`,
+          `- Available Time: ${p.availableWorkoutTime} min/session, ${p.daysAvailableToTrain} active days/week`,
         );
       }
 
@@ -332,7 +332,7 @@ DATA WEIGHTING:
 - 40% = self-reported inputs (energy, appetite, side effects, hydration, protein confidence)
 - When the two conflict, prioritize wearable data but still acknowledge the user's current state
 
-Based on the user's health data, goals, GLP-1 treatment status, recent behavior, and trends, generate a 7-day plan covering 5 wellness categories each day:
+Based on the user's health data, goals, GLP-1 treatment status, recent behavior, and trends, generate a 7-day plan covering 5 daily support categories:
 
 1. Move: movement recommendation ("30 min strength", "20 min walk", "Gentle walk", "Rest day", etc.)
 2. Fuel: nutrition focus ("Protein-rich meals", "Small frequent meals", "Recovery nutrition", etc.)
@@ -351,10 +351,10 @@ GLP-1 SPECIFIC RULES:
 - NEVER use these words: dropout risk, churn, adherence risk, compliance risk, failing treatment
 
 DECISION RULES (apply to each day):
-- Sleep < 6.5h: reduce intensity, no HIIT
+- Sleep < 6.5h: reduce intensity, keep movement gentle
 - Sleep < 6h AND HRV down > 10%: full recovery day (walk only)
-- Sleep declining 3+ days: prioritize sleep over training
-- Sleep > 7.5h AND HRV above baseline: good day for strength training
+- Sleep declining 3+ days: prioritize sleep over activity
+- Sleep > 7.5h AND HRV above baseline: good day for strength session or longer walk
 - HRV down > 15% from average: recovery protocol
 - HRV stable BUT resting HR elevated > 5 bpm: moderate only
 - Low appetite: emphasize nutrient-dense, protein-rich foods
@@ -369,7 +369,7 @@ IMPORTANT RULES:
 - Make the plan feel supportive and personalized, not templated
 - Include 2-3 lighter/recovery days per week
 - Balance the week: don't put all hard days together
-- Each day should have a focusArea that pairs physical + wellness themes
+- Each day should have a focusArea that pairs physical and recovery themes
 
 The weekSummary should be 2-3 sentences explaining the week's focus and how it was shaped by the user's actual data patterns. Be specific, not generic.
 
@@ -451,9 +451,9 @@ router.post("/weekly-plan", async (req: Request, res: Response) => {
         parts.push(
           `\nUSER PROFILE:`,
           `- Age: ${p.age}, Sex: ${p.sex}`,
-          `- Goals: ${p.goals?.join(", ") || "general wellness"}`,
-          `- Days available to train: ${p.daysAvailableToTrain || 4}`,
-          `- Available time per session: ${p.availableWorkoutTime || 45} min`,
+          `- Goals: ${p.goals?.join(", ") || "feel better on treatment"}`,
+          `- Active days per week: ${p.daysAvailableToTrain || 4}`,
+          `- Available time per session: ${p.availableWorkoutTime || 45} min for activity`,
         );
       }
 
@@ -511,7 +511,7 @@ router.post("/weekly-plan", async (req: Request, res: Response) => {
     } else {
       messages.push({
         role: "user",
-        content: "Generate a balanced weekly wellness plan for someone on GLP-1 treatment. Focus on protein intake, gentle movement, hydration, and treatment consistency.",
+        content: "Generate a balanced weekly support plan for someone on GLP-1 treatment. Focus on protein intake, gentle movement, hydration, and treatment consistency.",
       });
     }
 

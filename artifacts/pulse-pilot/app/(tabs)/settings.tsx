@@ -109,7 +109,7 @@ export default function SettingsScreen() {
         {[
           { label: "Weight", value: `${profile.weight} lbs`, icon: "trending-down" as const },
           { label: "Goal Weight", value: `${profile.goalWeight} lbs`, icon: "target" as const },
-          { label: "Training Days", value: `${profile.daysAvailableToTrain}/week`, icon: "calendar" as const },
+          { label: "Active Days", value: `${profile.daysAvailableToTrain}/week`, icon: "calendar" as const },
           {
             label: "Goals",
             value: profile.goals.map((g) => g.replace("_", " ")).join(", ") || "Not set",
@@ -175,7 +175,7 @@ export default function SettingsScreen() {
       </Pressable>
 
       <Text style={[styles.disclaimer, { color: c.mutedForeground }]}>
-        Viva is for wellness purposes only and does not provide medical advice.
+        Viva is for informational purposes only and does not provide medical advice.
       </Text>
 
       <View style={{ height: 100 }} />

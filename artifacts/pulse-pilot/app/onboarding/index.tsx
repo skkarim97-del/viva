@@ -461,7 +461,7 @@ export default function OnboardingScreen() {
                 </Pressable>
               </View>
 
-              <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>Strength training currently?</Text>
+              <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>Do you do any strength exercises?</Text>
               <View style={styles.segmentRow}>
                 {STRENGTH_OPTIONS.map((opt) => (
                   <Pressable

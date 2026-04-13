@@ -89,7 +89,7 @@ export function generateMockMetrics(days: number = 30): HealthMetrics[] {
 
 export function generateMockWorkouts(): WorkoutEntry[] {
   const workouts: WorkoutEntry[] = [];
-  const types = ["Walking", "Strength Training", "Walking", "Light Yoga", "Walking", "Walking"];
+  const types = ["Walking", "Strength Session", "Walking", "Gentle Stretching", "Walking", "Walking"];
   for (let i = 13; i >= 0; i--) {
     if (i % 2 === 0) {
       const type = types[i % types.length];
@@ -98,7 +98,7 @@ export function generateMockWorkouts(): WorkoutEntry[] {
         date: generateDateString(i),
         type,
         duration: 20 + Math.round(Math.random() * 20),
-        intensity: type === "Strength Training" ? "moderate" : type === "Light Yoga" ? "low" : "low",
+        intensity: type === "Strength Session" ? "moderate" : type === "Gentle Stretching" ? "low" : "low",
         caloriesBurned: 100 + Math.round(Math.random() * 150),
       });
     }
@@ -339,7 +339,7 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     whyThisPlan = [
       "Lower recovery signals often show up before you feel tired.",
       "Catching it early prevents bigger dips in energy and consistency.",
-      "Prioritize sleep and hydration over training today.",
+      "Prioritize sleep and hydration over activity today.",
     ];
     workoutType = "Light Walk";
     workoutIntensity = "low";
@@ -349,18 +349,18 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
   } else if (sleepGoodHrvGood && readinessScore >= 75 && !appetiteLow) {
     dailyState = "push";
     headline = "You're in a good place today.";
-    summary = "Sleep was solid, recovery is strong, and your body is ready. A good day for strength training or a longer walk.";
+    summary = "Sleep was solid, recovery is strong, and your body is ready. A good day for a strength session or a longer walk.";
     dailyFocus = "Make the most of today";
     whyThisPlan = [
       "Good recovery and sleep support muscle-preserving activity.",
-      "Strength training is especially important on GLP-1 to preserve lean mass.",
+      "Strength sessions are especially important on GLP-1 to preserve lean mass.",
       "Fuel well around your activity today.",
     ];
-    workoutType = "Strength Training";
+    workoutType = "Strength Session";
     workoutIntensity = "moderate";
     workoutDuration = 30;
-    workoutDesc = "Strength training focused on compound movements.";
-    optional = "Include a protein-rich meal within an hour after training.";
+    workoutDesc = "Strength session focused on compound movements.";
+    optional = "Include a protein-rich meal within an hour after your session.";
   } else if (readinessScore >= 65) {
     dailyState = "build";
     headline = "A solid day to build momentum.";
@@ -371,10 +371,10 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
       "Your body can handle activity today without adding extra strain.",
       "Pair your movement with good fueling for the best results.",
     ];
-    workoutType = "Walk or Light Strength";
+    workoutType = "Walk or Light Activity";
     workoutIntensity = "moderate";
     workoutDuration = 30;
-    workoutDesc = "30 min walk or light strength session.";
+    workoutDesc = "30 min walk or light activity session.";
     optional = "If energy drops, a walk is always a great fallback.";
   } else if (readinessScore >= 45) {
     dailyState = "maintain";
@@ -399,7 +399,7 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     summary = "Recovery is low. Focus on rest, hydration, and nourishing food. Movement can wait.";
     dailyFocus = "Rest and restore";
     whyThisPlan = [
-      "Rest days help your body adjust to treatment and recover from accumulated strain.",
+      "Rest days help your body adjust to treatment and recover.",
       "Good nutrition and hydration are your best tools right now.",
       "Pushing through fatigue creates more fatigue, not progress.",
     ];
