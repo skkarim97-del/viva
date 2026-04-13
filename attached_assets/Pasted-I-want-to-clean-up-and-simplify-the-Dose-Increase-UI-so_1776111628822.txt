@@ -1,0 +1,279 @@
+I want to clean up and simplify the “Dose Increase” UI so it feels realistic, structured, and premium.
+
+Right now it is too cluttered and shows too many options.
+I want it to feel fast, medically coherent, and easy to use.
+
+=====================================
+GOAL
+=====================================
+
+Refactor the Dose Increase modal into 3 clean sections:
+
+1. Previous Dose
+2. New Dose
+3. When did it change
+
+Each section should have a MAX of 4 options.
+
+This should feel:
+- simple
+- fast
+- realistic
+- premium
+- treatment-aware
+- not overwhelming
+
+=====================================
+PART 1: OVERALL STRUCTURE
+=====================================
+
+The Dose Increase flow should have this exact order:
+
+1. Previous Dose
+2. New Dose
+3. When did it change
+
+Use clean pill-shaped options for each section.
+Keep the UI compact, aligned, and visually consistent with the rest of the app.
+
+Do NOT make this look like a long form or medical chart.
+
+=====================================
+PART 2: PREVIOUS DOSE (MAX 4 OPTIONS)
+=====================================
+
+Do NOT show the full medication dose ladder.
+
+Instead, show only the most realistic options:
+- the user’s current known dose or prior likely dose
+- 1–2 nearby lower relevant doses
+- optionally “Not sure”
+
+Examples:
+
+If medication is Mounjaro or Zepbound and the user is currently on 5 mg:
+Show only:
+- 2.5 mg weekly
+- 5 mg weekly
+- Not sure
+
+If currently on 10 mg:
+Show only:
+- 5 mg weekly
+- 7.5 mg weekly
+- 10 mg weekly
+- Not sure
+
+Logic:
+- keep this limited to the most relevant nearby options
+- max 4 visible pills
+- no giant list of all doses
+
+=====================================
+PART 3: NEW DOSE (MAX 4 OPTIONS)
+=====================================
+
+The New Dose section should ONLY show realistic next-step doses based on the previous dose selected.
+
+Examples:
+
+If previous dose = 2.5 mg:
+Show:
+- 5 mg weekly
+- 7.5 mg weekly
+- Same dose
+- Not sure
+
+If previous dose = 5 mg:
+Show:
+- 7.5 mg weekly
+- 10 mg weekly
+- Same dose
+- Not sure
+
+If previous dose = 10 mg:
+Show:
+- 12.5 mg weekly
+- 15 mg weekly
+- Same dose
+- Not sure
+
+For Ozempic / Wegovy / Saxenda, use the same principle:
+- only show the next 1–2 realistic higher options
+- optionally show “Same dose”
+- optionally show “Not sure”
+- never show the full dose ladder
+
+Important:
+The New Dose section should dynamically update based on the selected Previous Dose.
+
+=====================================
+PART 4: WHEN DID IT CHANGE (MAX 4 OPTIONS)
+=====================================
+
+Use exactly these 4 options:
+
+- Today
+- Yesterday
+- This week
+- Over a week ago
+
+Do NOT use other timing options.
+Do NOT make this more complicated.
+
+These 4 are clean and realistic enough for MVP.
+
+=====================================
+PART 5: MEDICATION-SPECIFIC DOSE LOGIC
+=====================================
+
+Dose options must always be relative to the selected medication.
+
+Use these standard medication ladders behind the scenes:
+
+Wegovy
+- 0.25 mg weekly
+- 0.5 mg weekly
+- 1.0 mg weekly
+- 1.7 mg weekly
+- 2.4 mg weekly
+
+Ozempic
+- 0.25 mg weekly
+- 0.5 mg weekly
+- 1.0 mg weekly
+- 2.0 mg weekly
+
+Zepbound
+- 2.5 mg weekly
+- 5 mg weekly
+- 7.5 mg weekly
+- 10 mg weekly
+- 12.5 mg weekly
+- 15 mg weekly
+
+Mounjaro
+- 2.5 mg weekly
+- 5 mg weekly
+- 7.5 mg weekly
+- 10 mg weekly
+- 12.5 mg weekly
+- 15 mg weekly
+
+Saxenda
+- 0.6 mg daily
+- 1.2 mg daily
+- 1.8 mg daily
+- 2.4 mg daily
+- 3.0 mg daily
+
+Use these ladders to dynamically determine which 3–4 options to show in Previous Dose and New Dose.
+
+For “Other GLP-1 / weight loss med”:
+- allow manual entry
+- keep the UI clean
+- do not force a full standard ladder
+
+=====================================
+PART 6: UX RULES
+=====================================
+
+The UI should:
+- keep every section to 4 options or fewer
+- keep pills on one line where possible
+- allow wrapping only if needed, but keep it clean
+- make selection obvious
+- feel premium and uncluttered
+
+Remove:
+- any huge dose lists
+- redundant helper text
+- unnecessary explanation
+
+Use short, clear section headers:
+- Previous Dose
+- New Dose
+- When did it change
+
+=====================================
+PART 7: VALIDATION / BEHAVIOR
+=====================================
+
+Validation rules:
+- Previous Dose and New Dose must match the selected medication
+- New Dose should represent a realistic step relative to Previous Dose
+- If possible, prevent obviously invalid jumps
+- If validation is too strict for now, at minimum limit the visible options to realistic nearby choices
+
+If “Same dose” is selected:
+- interpret that as no actual increase
+- either block save with a gentle message
+or
+- allow save but set recent_titration = false
+
+Use whichever is cleaner for MVP.
+
+=====================================
+PART 8: DATA STORAGE
+=====================================
+
+On save, store:
+- previousDoseValue
+- previousDoseUnit
+- currentDoseValue
+- currentDoseUnit
+- medicationBrand
+- frequency
+- recentTitration
+- doseChangeTimeBucket
+- daysSinceDoseChange (derived from Today / Yesterday / This week / Over a week ago)
+
+This should update the active medication context used across the app.
+
+=====================================
+PART 9: INTELLIGENCE LAYER IMPACT
+=====================================
+
+This dose increase event should flow into:
+- Today support logic
+- weekly plan logic
+- trends and pattern detection
+- coach context
+- treatment summaries
+
+Recent dose increase should bias the app toward:
+- more hydration emphasis
+- more protein / fueling emphasis
+- simpler meals
+- lighter movement
+- more recovery support
+- more symptom-aware guidance
+
+=====================================
+PART 10: KEEP IT PREMIUM
+=====================================
+
+This should feel like:
+- a premium health-tech product
+- a fast treatment update flow
+- not a cluttered medical form
+- not a spreadsheet
+- not admin-heavy
+
+The user should be able to update recent dose increase quickly and confidently.
+
+=====================================
+PART 11: FINAL OUTPUT
+=====================================
+
+After implementing, summarize:
+1. how the Dose Increase modal was simplified
+2. how Previous Dose options are filtered
+3. how New Dose options are dynamically filtered
+4. how the “When did it change” section now works using:
+   - Today
+   - Yesterday
+   - This week
+   - Over a week ago
+5. how the saved dose increase updates the intelligence layer across the app
+6. what clutter was removed

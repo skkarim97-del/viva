@@ -107,6 +107,7 @@ export default function DashboardScreen() {
   const [showDoseIncrease, setShowDoseIncrease] = useState(false);
   const [doseIncreaseStep, setDoseIncreaseStep] = useState<"ask" | "details">("ask");
   const [selectedPrevDose, setSelectedPrevDose] = useState<number | null>(null);
+  const [selectedNewDose, setSelectedNewDose] = useState<number | null>(null);
   const [selectedDoseDate, setSelectedDoseDate] = useState<string>("today");
   const chatListRef = useRef<FlatList>(null);
   const feedbackOpacity = useRef(new Animated.Value(0)).current;
@@ -503,7 +504,9 @@ export default function DashboardScreen() {
                   <View style={styles.doseChangeStatus}>
                     <Feather name="check-circle" size={12} color={c.success} />
                     <Text style={[styles.doseChangeStatusText, { color: c.mutedForeground }]}>
-                      Dose increase logged{mp.previousDoseValue ? ` (from ${mp.previousDoseValue} ${mp.doseUnit})` : ""}
+                      {mp.previousDoseValue
+                        ? `${mp.previousDoseValue} ${mp.previousDoseUnit ?? mp.doseUnit} \u2192 ${mp.doseValue} ${mp.doseUnit}`
+                        : `Dose increase logged (now ${mp.doseValue} ${mp.doseUnit})`}
                     </Text>
                     <Pressable
                       onPress={() => {
@@ -520,6 +523,7 @@ export default function DashboardScreen() {
                         });
                       }}
                       hitSlop={8}
+                      accessibilityLabel="Dismiss dose increase"
                     >
                       <Feather name="x" size={14} color={c.mutedForeground} />
                     </Pressable>
@@ -530,6 +534,7 @@ export default function DashboardScreen() {
                       haptic();
                       setDoseIncreaseStep("ask");
                       setSelectedPrevDose(null);
+                      setSelectedNewDose(null);
                       setSelectedDoseDate("today");
                       setShowDoseIncrease(true);
                     }}
@@ -1083,7 +1088,8 @@ export default function DashboardScreen() {
               {doseIncreaseStep === "details" && (() => {
                 const mp = profile.medicationProfile!;
                 const brandKey = mp.medicationBrand.toLowerCase() as MedicationBrand;
-                const doses = getDoseOptions(brandKey).filter(d => d.value < mp.doseValue);
+                const allDoses = getDoseOptions(brandKey);
+                const isOther = brandKey === "other" || allDoses.length === 0;
 
                 const computeDateStr = (key: string): string => {
                   const d = new Date();
@@ -1100,62 +1106,126 @@ export default function DashboardScreen() {
                   { key: "1_week", label: "About a week ago" },
                 ];
 
+                const newDoseOptions = selectedPrevDose !== null && selectedPrevDose !== -1
+                  ? allDoses.filter(d => d.value > selectedPrevDose)
+                  : allDoses;
+
+                const canSave = isOther
+                  ? (selectedPrevDose !== null && selectedPrevDose > 0 && selectedNewDose !== null && selectedNewDose > selectedPrevDose)
+                  : selectedPrevDose !== null && selectedNewDose !== null;
+
                 return (
                   <View style={{ gap: 16 }}>
-                    <Text style={[styles.doseDetailLabel, { color: c.foreground }]}>Previous dose</Text>
-                    <View style={styles.dosePillRow}>
-                      {doses.length > 0 ? doses.map((d) => (
-                        <Pressable
-                          key={d.value}
-                          onPress={() => { haptic(); setSelectedPrevDose(selectedPrevDose === d.value ? null : d.value); }}
-                          style={[
-                            styles.dosePill,
-                            {
-                              backgroundColor: selectedPrevDose === d.value ? c.accent : c.accent + "0A",
-                              borderColor: selectedPrevDose === d.value ? c.accent : c.border + "40",
-                            },
-                          ]}
-                        >
-                          <Text style={[
-                            styles.dosePillText,
-                            { color: selectedPrevDose === d.value ? "#FFFFFF" : c.foreground },
-                          ]}>{d.label}</Text>
-                        </Pressable>
-                      )) : (
-                        <Pressable
-                          onPress={() => { haptic(); setSelectedPrevDose(-1); }}
-                          style={[
-                            styles.dosePill,
-                            {
-                              backgroundColor: selectedPrevDose === -1 ? c.accent : c.accent + "0A",
-                              borderColor: selectedPrevDose === -1 ? c.accent : c.border + "40",
-                            },
-                          ]}
-                        >
-                          <Text style={[
-                            styles.dosePillText,
-                            { color: selectedPrevDose === -1 ? "#FFFFFF" : c.foreground },
-                          ]}>I am not sure</Text>
-                        </Pressable>
-                      )}
-                      {doses.length > 0 && (
-                        <Pressable
-                          onPress={() => { haptic(); setSelectedPrevDose(-1); }}
-                          style={[
-                            styles.dosePill,
-                            {
-                              backgroundColor: selectedPrevDose === -1 ? c.accent : c.accent + "0A",
-                              borderColor: selectedPrevDose === -1 ? c.accent : c.border + "40",
-                            },
-                          ]}
-                        >
-                          <Text style={[
-                            styles.dosePillText,
-                            { color: selectedPrevDose === -1 ? "#FFFFFF" : c.foreground },
-                          ]}>Not sure</Text>
-                        </Pressable>
-                      )}
-                    </View>
+                    {!isOther ? (
+                      <>
+                        <Text style={[styles.doseDetailLabel, { color: c.foreground }]}>Previous dose</Text>
+                        <View style={styles.dosePillRow}>
+                          {allDoses.map((d) => (
+                            <Pressable
+                              key={d.value}
+                              onPress={() => {
+                                haptic();
+                                if (selectedPrevDose === d.value) {
+                                  setSelectedPrevDose(null);
+                                  setSelectedNewDose(null);
+                                } else {
+                                  setSelectedPrevDose(d.value);
+                                  if (selectedNewDose !== null && selectedNewDose <= d.value) {
+                                    setSelectedNewDose(null);
+                                  }
+                                }
+                              }}
+                              style={[
+                                styles.dosePill,
+                                {
+                                  backgroundColor: selectedPrevDose === d.value ? c.accent : c.accent + "0A",
+                                  borderColor: selectedPrevDose === d.value ? c.accent : c.border + "40",
+                                },
+                              ]}
+                            >
+                              <Text style={[
+                                styles.dosePillText,
+                                { color: selectedPrevDose === d.value ? "#FFFFFF" : c.foreground },
+                              ]}>{d.label}</Text>
+                            </Pressable>
+                          ))}
+                          <Pressable
+                            onPress={() => { haptic(); setSelectedPrevDose(-1); setSelectedNewDose(null); }}
+                            style={[
+                              styles.dosePill,
+                              {
+                                backgroundColor: selectedPrevDose === -1 ? c.accent : c.accent + "0A",
+                                borderColor: selectedPrevDose === -1 ? c.accent : c.border + "40",
+                              },
+                            ]}
+                          >
+                            <Text style={[
+                              styles.dosePillText,
+                              { color: selectedPrevDose === -1 ? "#FFFFFF" : c.foreground },
+                            ]}>Not sure</Text>
+                          </Pressable>
+                        </View>
+
+                        {selectedPrevDose !== null && (
+                          <>
+                            <Text style={[styles.doseDetailLabel, { color: c.foreground, marginTop: 4 }]}>New dose</Text>
+                            {newDoseOptions.length > 0 ? (
+                              <View style={styles.dosePillRow}>
+                                {newDoseOptions.map((d) => (
+                                  <Pressable
+                                    key={d.value}
+                                    onPress={() => { haptic(); setSelectedNewDose(selectedNewDose === d.value ? null : d.value); }}
+                                    style={[
+                                      styles.dosePill,
+                                      {
+                                        backgroundColor: selectedNewDose === d.value ? c.primary : c.primary + "0A",
+                                        borderColor: selectedNewDose === d.value ? c.primary : c.border + "40",
+                                      },
+                                    ]}
+                                  >
+                                    <Text style={[
+                                      styles.dosePillText,
+                                      { color: selectedNewDose === d.value ? "#FFFFFF" : c.foreground },
+                                    ]}>{d.label}</Text>
+                                  </Pressable>
+                                ))}
+                              </View>
+                            ) : selectedPrevDose !== -1 ? (
+                              <Text style={[styles.doseDetailHint, { color: c.mutedForeground }]}>
+                                That is already the highest standard dose. Select a lower previous dose.
+                              </Text>
+                            ) : null}
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <Text style={[styles.doseDetailLabel, { color: c.foreground }]}>Previous dose (mg)</Text>
+                        <TextInput
+                          style={[styles.otherDoseInput, { color: c.foreground, borderColor: c.border + "40", backgroundColor: c.accent + "06" }]}
+                          keyboardType="decimal-pad"
+                          placeholder="e.g. 2.5"
+                          placeholderTextColor={c.mutedForeground + "80"}
+                          value={selectedPrevDose !== null && selectedPrevDose > 0 ? String(selectedPrevDose) : ""}
+                          onChangeText={(t) => {
+                            const v = parseFloat(t);
+                            setSelectedPrevDose(t === "" ? null : (isNaN(v) ? null : v));
+                          }}
+                        />
+                        <Text style={[styles.doseDetailLabel, { color: c.foreground, marginTop: 4 }]}>New dose (mg)</Text>
+                        <TextInput
+                          style={[styles.otherDoseInput, { color: c.foreground, borderColor: c.border + "40", backgroundColor: c.accent + "06" }]}
+                          keyboardType="decimal-pad"
+                          placeholder="e.g. 5"
+                          placeholderTextColor={c.mutedForeground + "80"}
+                          value={selectedNewDose !== null && selectedNewDose > 0 ? String(selectedNewDose) : ""}
+                          onChangeText={(t) => {
+                            const v = parseFloat(t);
+                            setSelectedNewDose(t === "" ? null : (isNaN(v) ? null : v));
+                          }}
+                        />
+                      </>
+                    )}
 
                     <Text style={[styles.doseDetailLabel, { color: c.foreground, marginTop: 4 }]}>When did it change?</Text>
                     <View style={styles.dosePillRow}>
@@ -1181,14 +1251,20 @@ export default function DashboardScreen() {
 
                     <Pressable
                       onPress={() => {
-                        if (selectedPrevDose === null) return;
+                        if (!canSave) return;
                         haptic();
                         const dateStr = computeDateStr(selectedDoseDate);
+                        const prevVal = selectedPrevDose === -1 ? null : selectedPrevDose;
+                        const newVal = selectedNewDose!;
+                        const newDoseInfo = !isOther ? allDoses.find(d => d.value === newVal) : null;
                         updateProfile({
                           medicationProfile: {
                             ...mp,
+                            doseValue: newVal,
+                            doseUnit: newDoseInfo?.unit ?? mp.doseUnit,
+                            frequency: newDoseInfo?.frequency ?? mp.frequency,
                             recentTitration: true,
-                            previousDoseValue: selectedPrevDose === -1 ? null : selectedPrevDose,
+                            previousDoseValue: prevVal,
                             previousDoseUnit: mp.doseUnit,
                             previousFrequency: mp.frequency,
                             doseChangeDate: dateStr,
@@ -1196,11 +1272,12 @@ export default function DashboardScreen() {
                         });
                         setShowDoseIncrease(false);
                         setSelectedPrevDose(null);
+                        setSelectedNewDose(null);
                       }}
                       style={({ pressed }) => [
                         styles.checkInSubmit,
                         {
-                          backgroundColor: selectedPrevDose !== null ? c.primary : c.primary + "40",
+                          backgroundColor: canSave ? c.primary : c.primary + "40",
                           opacity: pressed ? 0.85 : 1,
                         },
                       ]}
@@ -1925,5 +2002,18 @@ const styles = StyleSheet.create({
   dosePillText: {
     fontSize: 14,
     fontFamily: "Montserrat_500Medium",
+  },
+  otherDoseInput: {
+    borderWidth: 1.5,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    fontFamily: "Montserrat_500Medium",
+  },
+  doseDetailHint: {
+    fontSize: 13,
+    fontFamily: "Montserrat_400Regular",
+    fontStyle: "italic",
   },
 });
