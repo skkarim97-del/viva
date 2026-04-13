@@ -89,7 +89,8 @@ export default function PlanScreen() {
 
         {weeklyPlan.days.map((day) => {
           const isToday = day.date === today;
-          const completedCount = day.actions.filter(a => a.completed).length;
+          const supportActions = day.actions.filter(a => a.category !== "consistent");
+          const completedCount = supportActions.filter(a => a.completed).length;
           return (
             <View
               key={day.date}
@@ -110,7 +111,7 @@ export default function PlanScreen() {
                 </View>
                 {completedCount > 0 && (
                   <Text style={[styles.progressText, { color: c.mutedForeground }]}>
-                    {completedCount}/{day.actions.length}
+                    {completedCount}/{supportActions.length}
                   </Text>
                 )}
               </View>
@@ -118,54 +119,56 @@ export default function PlanScreen() {
               <Text style={[styles.focusLabel, { color: c.accent }]}>{day.focusArea}</Text>
 
               <View style={styles.actionsGrid}>
-                {day.actions.map((action) => {
+                {day.actions.filter(a => a.category !== "consistent").map((action) => {
                   const meta = CATEGORY_META[action.category];
-                  const isEdited = action.chosen !== action.recommended;
                   return (
-                    <Pressable
+                    <View
                       key={action.category}
-                      style={styles.actionRow}
-                      onPress={() => openEdit(day, action.category)}
+                      style={[
+                        styles.actionRow,
+                        { backgroundColor: action.completed ? c.success + "0A" : "transparent" },
+                      ]}
                     >
                       <Pressable
-                        onPress={(e) => { e.stopPropagation(); handleToggle(day.date, action.category); }}
-                        style={[
-                          styles.checkBox,
-                          action.completed && { backgroundColor: meta.color + "20", borderColor: meta.color + "40" },
-                          !action.completed && { borderColor: c.border },
+                        onPress={() => handleToggle(day.date, action.category)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        style={({ pressed }) => [
+                          styles.actionCheck,
+                          {
+                            backgroundColor: action.completed ? c.success : "transparent",
+                            borderColor: action.completed ? c.success : c.border,
+                            opacity: pressed ? 0.7 : 1,
+                          },
                         ]}
                       >
-                        {action.completed && (
-                          <Feather name="check" size={13} color={meta.color} />
-                        )}
+                        {action.completed && <Feather name="check" size={11} color="#fff" />}
                       </Pressable>
-
-                      <Feather name={meta.icon} size={14} color={meta.color} style={{ marginRight: 4 }} />
-
-                      <Text
-                        style={[
-                          styles.actionLabel,
-                          { color: c.mutedForeground },
-                          action.completed && styles.actionCompleted,
+                      <Pressable
+                        onPress={() => openEdit(day, action.category)}
+                        style={({ pressed }) => [
+                          styles.actionBody,
+                          { opacity: pressed ? 0.7 : 1 },
                         ]}
-                        numberOfLines={1}
                       >
-                        {meta.label}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.actionValue,
-                          { color: c.foreground },
-                          action.completed && { ...styles.actionCompleted, color: c.mutedForeground },
-                          isEdited && !action.completed && { color: c.accent },
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {action.chosen}
-                      </Text>
-
-                      <Feather name="chevron-right" size={12} color={c.mutedForeground + "40"} />
-                    </Pressable>
+                        <View style={[styles.dayIconWrap, { backgroundColor: meta.color + "12" }]}>
+                          <Feather name={meta.icon} size={15} color={meta.color} />
+                        </View>
+                        <View style={styles.actionContent}>
+                          <Text style={[styles.actionLabel, { color: c.mutedForeground }]}>{meta.label}</Text>
+                          <Text style={[
+                            styles.actionText,
+                            {
+                              color: action.completed ? c.mutedForeground : c.foreground,
+                              textDecorationLine: action.completed ? "line-through" : "none",
+                              opacity: action.completed ? 0.6 : 1,
+                            },
+                          ]} numberOfLines={1}>
+                            {action.chosen}
+                          </Text>
+                        </View>
+                        <Feather name="chevron-right" size={14} color={c.mutedForeground + "40"} />
+                      </Pressable>
+                    </View>
                   );
                 })}
               </View>
@@ -338,40 +341,52 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   actionsGrid: {
-    gap: 10,
+    gap: 2,
   },
   actionRow: {
     flexDirection: "row",
+    gap: 10,
     alignItems: "center",
-    gap: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+    marginHorizontal: -6,
+    borderRadius: 14,
   },
-  checkBox: {
+  actionCheck: {
     width: 24,
     height: 24,
-    borderRadius: 6,
+    borderRadius: 12,
     borderWidth: 1.5,
     alignItems: "center",
     justifyContent: "center",
   },
-  actionTextWrap: {
+  actionBody: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: 10,
+  },
+  dayIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actionContent: {
+    flex: 1,
+    gap: 1,
   },
   actionLabel: {
-    fontSize: 12,
-    fontFamily: "Montserrat_500Medium",
-    width: 55,
+    fontSize: 11,
+    fontFamily: "Montserrat_600SemiBold",
+    textTransform: "uppercase" as const,
+    letterSpacing: 0.6,
   },
-  actionValue: {
+  actionText: {
     fontSize: 14,
     fontFamily: "Montserrat_400Regular",
-    flex: 1,
-  },
-  actionCompleted: {
-    textDecorationLine: "line-through",
-    opacity: 0.5,
+    lineHeight: 20,
   },
   adjustNote: {
     flexDirection: "row",
