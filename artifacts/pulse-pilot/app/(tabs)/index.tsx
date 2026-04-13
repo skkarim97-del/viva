@@ -465,7 +465,10 @@ export default function DashboardScreen() {
 
           const handleLogDay = (dateStr: string) => {
             haptic();
-            if (thisWeekDoseEntry && thisWeekDoseEntry.date === dateStr) return;
+            if (thisWeekDoseEntry && thisWeekDoseEntry.date === dateStr) {
+              removeMedicationDose(thisWeekDoseEntry.id);
+              return;
+            }
             if (thisWeekDoseEntry) {
               removeMedicationDose(thisWeekDoseEntry.id);
             }
@@ -575,10 +578,13 @@ export default function DashboardScreen() {
               {isDaily && (
                 <View style={styles.treatmentDaily}>
                   {todayDoseEntry ? (
-                    <View style={[styles.dailyLoggedRow, { backgroundColor: c.success + "0A" }]}>
+                    <Pressable
+                      onPress={() => { haptic(); removeMedicationDose(todayDoseEntry.id); }}
+                      style={({ pressed }) => [styles.dailyLoggedRow, { backgroundColor: c.success + "0A", opacity: pressed ? 0.7 : 1 }]}
+                    >
                       <Feather name="check-circle" size={15} color={c.success} />
                       <Text style={[styles.dailyLoggedText, { color: c.success }]}>Taken today</Text>
-                    </View>
+                    </Pressable>
                   ) : (
                     <Pressable
                       onPress={handleLogToday}
@@ -1599,8 +1605,9 @@ const styles = StyleSheet.create({
     fontFamily: "Montserrat_400Regular",
   },
   treatmentCard: {
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 16,
+    marginBottom: 12,
   },
   treatmentHeader: {
     flexDirection: "row",
