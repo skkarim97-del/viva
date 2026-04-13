@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -13,7 +13,6 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Modal,
-  Dimensions,
   Animated,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -23,41 +22,13 @@ import { useApp } from "@/context/AppContext";
 import { generateCoachInsight } from "@/data/insights";
 import { useColors } from "@/hooks/useColors";
 import { CATEGORY_OPTIONS } from "@/types";
-import type { MetricKey, FeelingType, EnergyLevel, StressLevel, HydrationLevel, TrainingIntent, ChatMessage, DailyStatusLabel, ActionCategory, CategoryOption, AppetiteLevel, SideEffectSeverity, ProteinConfidenceDaily, MovementIntent, EnergyDaily, HydrationDaily } from "@/types";
+import type { MetricKey, FeelingType, ChatMessage, DailyStatusLabel, ActionCategory, AppetiteLevel, SideEffectSeverity, ProteinConfidenceDaily, MovementIntent, EnergyDaily } from "@/types";
 
 const FEELINGS: { key: NonNullable<FeelingType>; label: string }[] = [
   { key: "great", label: "Great" },
   { key: "good", label: "Good" },
   { key: "tired", label: "Tired" },
   { key: "stressed", label: "Stressed" },
-];
-
-const ENERGY_LEVELS: { key: NonNullable<EnergyLevel>; label: string; color: string }[] = [
-  { key: "excellent", label: "Excellent", color: "#34C759" },
-  { key: "high", label: "High", color: "#34C759" },
-  { key: "medium", label: "Medium", color: "#86868B" },
-  { key: "low", label: "Low", color: "#FF6B6B" },
-];
-
-const STRESS_LEVELS: { key: NonNullable<StressLevel>; label: string; color: string }[] = [
-  { key: "low", label: "Low", color: "#34C759" },
-  { key: "moderate", label: "Moderate", color: "#FF9500" },
-  { key: "high", label: "High", color: "#FF6B6B" },
-  { key: "very_high", label: "Very High", color: "#FF3B30" },
-];
-
-const HYDRATION_LEVELS: { key: NonNullable<HydrationLevel>; label: string; color: string }[] = [
-  { key: "hydrated", label: "Hydrated", color: "#5AC8FA" },
-  { key: "good", label: "Good", color: "#5AC8FA" },
-  { key: "low", label: "Low", color: "#FF9500" },
-  { key: "dehydrated", label: "Dehydrated", color: "#FF6B6B" },
-];
-
-const TRAINING_INTENTS: { key: NonNullable<TrainingIntent>; label: string; color: string }[] = [
-  { key: "none", label: "None", color: "#86868B" },
-  { key: "light", label: "Light", color: "#5AC8FA" },
-  { key: "moderate", label: "Moderate", color: "#1A5CFF" },
-  { key: "intense", label: "Intense", color: "#AF52DE" },
 ];
 
 const APPETITE_LEVELS: { key: NonNullable<AppetiteLevel>; label: string; color: string }[] = [
@@ -122,17 +93,13 @@ export default function DashboardScreen() {
   const [askMessages, setAskMessages] = useState<ChatMessage[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [streamingText, setStreamingText] = useState("");
-  const [showRefine, setShowRefine] = useState(false);
   const [editingAction, setEditingAction] = useState<ActionCategory | null>(null);
   const [showChat, setShowChat] = useState(false);
   const [showWhyPlan, setShowWhyPlan] = useState(false);
   const [showCheckIn, setShowCheckIn] = useState(false);
   const [checkInEnergy, setCheckInEnergy] = useState<EnergyDaily>(null);
-  const [checkInAppetite, setCheckInAppetite] = useState<AppetiteLevel>(null);
-  const [checkInHydration, setCheckInHydration] = useState<HydrationDaily>(null);
   const [checkInProtein, setCheckInProtein] = useState<ProteinConfidenceDaily>(null);
   const [checkInSideEffects, setCheckInSideEffects] = useState<SideEffectSeverity>(null);
-  const [checkInMovement, setCheckInMovement] = useState<MovementIntent>(null);
   const chatListRef = useRef<FlatList>(null);
   const feedbackOpacity = useRef(new Animated.Value(0)).current;
 
@@ -158,7 +125,7 @@ export default function DashboardScreen() {
     const hour = new Date().getHours();
     const timeGreeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
     const firstName = profile?.name?.trim();
-    return firstName ? `${timeGreeting}, ${firstName}` : "Your Ai Health Coach";
+    return firstName ? `${timeGreeting}, ${firstName}` : "Your AI Health Coach";
   }, [profile?.name]);
 
   const coachInsight = React.useMemo(() => {
@@ -185,26 +152,6 @@ export default function DashboardScreen() {
     }
     const newVal = feeling === f ? null : f;
     setFeeling(newVal);
-  };
-
-  const selectEnergy = (e: NonNullable<EnergyLevel>) => {
-    haptic();
-    setEnergy(energy === e ? null : e);
-  };
-
-  const selectStress = (s: NonNullable<StressLevel>) => {
-    haptic();
-    setStress(stress === s ? null : s);
-  };
-
-  const selectHydration = (h: NonNullable<HydrationLevel>) => {
-    haptic();
-    setHydration(hydration === h ? null : h);
-  };
-
-  const selectTrainingIntent = (ti: NonNullable<TrainingIntent>) => {
-    haptic();
-    setTrainingIntent(trainingIntent === ti ? null : ti);
   };
 
   const selectAppetite = (a: NonNullable<AppetiteLevel>) => {
@@ -416,33 +363,14 @@ export default function DashboardScreen() {
             {streakDays > 0 && (
               <View style={[styles.streakBadge, { backgroundColor: c.warning + "14" }]}>
                 <Feather name="zap" size={12} color={c.warning} />
-                <Text style={[styles.streakText, { color: c.warning }]}>{streakDays}d streak</Text>
+                <Text style={[styles.streakText, { color: c.warning }]}>{streakDays}d</Text>
               </View>
             )}
           </View>
-          <Text style={[styles.headline, { color: c.foreground }]} numberOfLines={1} adjustsFontSizeToFit>{dailyPlan.headline}</Text>
+          <Text style={[styles.headline, { color: c.foreground }]} numberOfLines={2} adjustsFontSizeToFit>{dailyPlan.headline}</Text>
           <Text style={[styles.driversInline, { color: c.mutedForeground }]} numberOfLines={2}>
             {dailyPlan.statusDrivers.join(" · ")}
           </Text>
-          {todayCompletionRate > 0 && (
-            <View style={styles.progressBarWrap}>
-              <View style={[styles.progressBarBg, { backgroundColor: c.border + "40" }]}>
-                <View style={[styles.progressBarFill, { backgroundColor: c.success, width: `${todayCompletionRate}%` }]} />
-              </View>
-              <Text style={[styles.progressLabel, { color: c.mutedForeground }]}>{todayCompletionRate}% complete</Text>
-            </View>
-          )}
-        </View>
-
-        {lastCompletionFeedback && (
-          <Animated.View style={[styles.feedbackToast, { backgroundColor: c.success + "14", opacity: feedbackOpacity }]}>
-            <Feather name="check-circle" size={14} color={c.success} />
-            <Text style={[styles.feedbackText, { color: c.success }]}>{lastCompletionFeedback}</Text>
-          </Animated.View>
-        )}
-
-        <View style={[styles.feelingCard, { backgroundColor: c.card }]}>
-          <Text style={[styles.feelingPrompt, { color: c.mutedForeground }]}>How are you feeling today?</Text>
           <View style={styles.feelingRow}>
             {FEELINGS.map(({ key, label }) => {
               const isSelected = feeling === key;
@@ -466,74 +394,21 @@ export default function DashboardScreen() {
               );
             })}
           </View>
-        </View>
-
-        <View style={[styles.askCard, { backgroundColor: c.card }]}>
-          <Text style={[styles.coachHeader, { color: c.foreground }]}>Your VIVA Coach</Text>
-          {coachInsight ? (
-            <View style={styles.coachInsightWrap}>
-              {coachInsight.split(/(?<=\.)\s+/).reduce((acc: string[][], sentence, i) => {
-                const lastGroup = acc[acc.length - 1];
-                if (lastGroup && lastGroup.join(" ").length + sentence.length < 140) {
-                  lastGroup.push(sentence);
-                } else {
-                  acc.push([sentence]);
-                }
-                return acc;
-              }, [] as string[][]).map((group, i) => (
-                <Text key={i} style={[styles.coachInsightText, { color: c.foreground }]}>
-                  {group.join(" ")}
-                </Text>
-              ))}
-            </View>
-          ) : null}
-
-          {askMessages.length > 0 && !showChat && (
-            <Pressable onPress={() => setShowChat(true)}>
-              <View style={[styles.askBubble, { backgroundColor: c.background }]}>
-                <Text style={[styles.askMsgText, { color: c.foreground }]} numberOfLines={2}>
-                  {askMessages[askMessages.length - 1].content}
-                </Text>
+          {todayCompletionRate > 0 && (
+            <View style={styles.progressBarWrap}>
+              <View style={[styles.progressBarBg, { backgroundColor: c.border + "40" }]}>
+                <View style={[styles.progressBarFill, { backgroundColor: c.success, width: `${todayCompletionRate}%` }]} />
               </View>
-              <Text style={[styles.chatViewAll, { color: c.primary }]}>View conversation</Text>
-            </Pressable>
-          )}
-
-          <View style={[styles.askInputRow, { backgroundColor: c.background }]}>
-            <TextInput
-              style={[styles.askInputField, { color: c.foreground }]}
-              value={askInput}
-              onChangeText={setAskInput}
-              placeholder="Ask about your health..."
-              placeholderTextColor={c.mutedForeground + "80"}
-              onSubmitEditing={() => sendAskMessage(askInput)}
-              returnKeyType="send"
-              editable={!isTyping}
-              onFocus={() => { if (askMessages.length > 0) setShowChat(true); }}
-            />
-            <Pressable
-              onPress={() => sendAskMessage(askInput)}
-              disabled={isTyping || !askInput.trim()}
-              style={[styles.askSendBtn, { backgroundColor: askInput.trim() && !isTyping ? c.primary : c.muted }]}
-            >
-              <Feather name="arrow-up" size={14} color={askInput.trim() && !isTyping ? c.primaryForeground : c.mutedForeground} />
-            </Pressable>
-          </View>
-
-          {askMessages.length === 0 && (
-            <View style={styles.askSuggestions}>
-              {["How are my side effects?", "Am I eating enough protein?", "Should I exercise today?", "Am I drinking enough water?"].map((q) => (
-                <Pressable
-                  key={q}
-                  onPress={() => sendAskMessage(q)}
-                  style={({ pressed }) => [styles.askSuggestion, { borderColor: c.border, opacity: pressed ? 0.7 : 1 }]}
-                >
-                  <Text style={[styles.askSuggestionText, { color: c.foreground }]}>{q}</Text>
-                </Pressable>
-              ))}
             </View>
           )}
         </View>
+
+        {lastCompletionFeedback && (
+          <Animated.View style={[styles.feedbackToast, { backgroundColor: c.success + "14", opacity: feedbackOpacity }]}>
+            <Feather name="check-circle" size={14} color={c.success} />
+            <Text style={[styles.feedbackText, { color: c.success }]}>{lastCompletionFeedback}</Text>
+          </Animated.View>
+        )}
 
         <Modal visible={showChat} animationType="slide" presentationStyle="overFullScreen" statusBarTranslucent>
           <View style={[styles.chatModal, { backgroundColor: c.background }]}>
@@ -623,56 +498,9 @@ export default function DashboardScreen() {
           </View>
         </Modal>
 
-        <View style={[styles.refineCard, { backgroundColor: c.card }]}>
-          <Pressable
-            onPress={() => { haptic(); setShowRefine(!showRefine); }}
-            style={styles.refineToggle}
-          >
-            <Text style={[styles.refineText, { color: c.foreground }]}>Refine your day</Text>
-            <Feather name={showRefine ? "chevron-up" : "chevron-down"} size={14} color={c.mutedForeground} />
-          </Pressable>
-
-          {showRefine && (
-            <View style={styles.refineSection}>
-              <RefineRow
-                label="Appetite"
-                items={APPETITE_LEVELS}
-                selected={appetite}
-                onSelect={selectAppetite}
-                cardBg={c.background}
-                mutedColor={c.mutedForeground}
-              />
-              <RefineRow
-                label="Side Effects"
-                items={SIDE_EFFECT_LEVELS}
-                selected={sideEffects}
-                onSelect={selectSideEffects}
-                cardBg={c.background}
-                mutedColor={c.mutedForeground}
-              />
-              <RefineRow
-                label="Protein"
-                items={PROTEIN_CONFIDENCE_LEVELS}
-                selected={proteinConfidence}
-                onSelect={selectProteinConfidence}
-                cardBg={c.background}
-                mutedColor={c.mutedForeground}
-              />
-              <RefineRow
-                label="Movement"
-                items={MOVEMENT_INTENTS}
-                selected={movementIntent}
-                onSelect={selectMovementIntent}
-                cardBg={c.background}
-                mutedColor={c.mutedForeground}
-              />
-            </View>
-          )}
-        </View>
-
         <View style={[styles.dayCard, { backgroundColor: c.card }]}>
           <View style={styles.dayHeader}>
-            <Text style={[styles.dayTitle, { color: c.foreground }]}>Your Day</Text>
+            <Text style={[styles.dayTitle, { color: c.foreground }]}>Today</Text>
             <Text style={[styles.dayProgress, { color: c.mutedForeground }]}>
               {completedCount}/{totalActions}
             </Text>
@@ -730,6 +558,95 @@ export default function DashboardScreen() {
           })}
         </View>
 
+        <View style={styles.refineSection}>
+          <RefineRow
+            label="Appetite"
+            items={APPETITE_LEVELS}
+            selected={appetite}
+            onSelect={selectAppetite}
+            cardBg={c.card}
+            mutedColor={c.mutedForeground}
+          />
+          <RefineRow
+            label="Side Effects"
+            items={SIDE_EFFECT_LEVELS}
+            selected={sideEffects}
+            onSelect={selectSideEffects}
+            cardBg={c.card}
+            mutedColor={c.mutedForeground}
+          />
+          <RefineRow
+            label="Protein"
+            items={PROTEIN_CONFIDENCE_LEVELS}
+            selected={proteinConfidence}
+            onSelect={selectProteinConfidence}
+            cardBg={c.card}
+            mutedColor={c.mutedForeground}
+          />
+          <RefineRow
+            label="Movement"
+            items={MOVEMENT_INTENTS}
+            selected={movementIntent}
+            onSelect={selectMovementIntent}
+            cardBg={c.card}
+            mutedColor={c.mutedForeground}
+          />
+        </View>
+
+        <View style={[styles.askCard, { backgroundColor: c.card }]}>
+          {coachInsight ? (
+            <Text style={[styles.coachInsightText, { color: c.foreground }]}>
+              {coachInsight}
+            </Text>
+          ) : null}
+
+          {askMessages.length > 0 && !showChat && (
+            <Pressable onPress={() => setShowChat(true)}>
+              <View style={[styles.askBubble, { backgroundColor: c.background }]}>
+                <Text style={[styles.askMsgText, { color: c.foreground }]} numberOfLines={2}>
+                  {askMessages[askMessages.length - 1].content}
+                </Text>
+              </View>
+              <Text style={[styles.chatViewAll, { color: c.primary }]}>View conversation</Text>
+            </Pressable>
+          )}
+
+          <View style={[styles.askInputRow, { backgroundColor: c.background }]}>
+            <TextInput
+              style={[styles.askInputField, { color: c.foreground }]}
+              value={askInput}
+              onChangeText={setAskInput}
+              placeholder="Ask your coach anything..."
+              placeholderTextColor={c.mutedForeground + "80"}
+              onSubmitEditing={() => sendAskMessage(askInput)}
+              returnKeyType="send"
+              editable={!isTyping}
+              onFocus={() => { if (askMessages.length > 0) setShowChat(true); }}
+            />
+            <Pressable
+              onPress={() => sendAskMessage(askInput)}
+              disabled={isTyping || !askInput.trim()}
+              style={[styles.askSendBtn, { backgroundColor: askInput.trim() && !isTyping ? c.primary : c.muted }]}
+            >
+              <Feather name="arrow-up" size={14} color={askInput.trim() && !isTyping ? c.primaryForeground : c.mutedForeground} />
+            </Pressable>
+          </View>
+
+          {askMessages.length === 0 && (
+            <View style={styles.askSuggestions}>
+              {["Managing side effects", "Protein on low appetite days", "Is it okay to rest today?"].map((q) => (
+                <Pressable
+                  key={q}
+                  onPress={() => sendAskMessage(q)}
+                  style={({ pressed }) => [styles.askSuggestion, { borderColor: c.border, opacity: pressed ? 0.7 : 1 }]}
+                >
+                  <Text style={[styles.askSuggestionText, { color: c.foreground }]}>{q}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </View>
+
         {dailyPlan?.whyThisPlan?.length > 0 && (
           <Pressable
             onPress={() => { haptic(); setShowWhyPlan(!showWhyPlan); }}
@@ -738,7 +655,7 @@ export default function DashboardScreen() {
             <View style={styles.whyPlanHeader}>
               <View style={styles.whyPlanTitleRow}>
                 <Feather name="info" size={14} color={c.primary} />
-                <Text style={[styles.whyPlanTitle, { color: c.foreground }]}>Why VIVA chose this plan</Text>
+                <Text style={[styles.whyPlanTitle, { color: c.foreground }]}>Why this plan</Text>
               </View>
               <Feather name={showWhyPlan ? "chevron-up" : "chevron-down"} size={16} color={c.mutedForeground} />
             </View>
@@ -752,31 +669,6 @@ export default function DashboardScreen() {
           </Pressable>
         )}
 
-        {dailyPlan && (
-          <View style={[styles.habitCard, { backgroundColor: c.card }]}>
-            <Text style={[styles.habitHeader, { color: c.foreground }]}>Habit Tracker</Text>
-            <View style={styles.habitRow}>
-              {weeklyConsistency >= 0 && (
-                <View style={styles.habitStat}>
-                  <Feather name="bar-chart-2" size={14} color={c.primary} />
-                  <Text style={[styles.habitStatValue, { color: c.foreground }]}>{weeklyConsistency}%</Text>
-                  <Text style={[styles.habitStatLabel, { color: c.mutedForeground }]}>weekly</Text>
-                </View>
-              )}
-              <View style={styles.habitStat}>
-                <Feather name="zap" size={14} color={c.warning} />
-                <Text style={[styles.habitStatValue, { color: c.foreground }]}>{streakDays}</Text>
-                <Text style={[styles.habitStatLabel, { color: c.mutedForeground }]}>day streak</Text>
-              </View>
-              <View style={styles.habitStat}>
-                <Feather name="check-circle" size={14} color={c.success} />
-                <Text style={[styles.habitStatValue, { color: c.foreground }]}>{completedCount}/{totalActions}</Text>
-                <Text style={[styles.habitStatLabel, { color: c.mutedForeground }]}>today</Text>
-              </View>
-            </View>
-          </View>
-        )}
-
         {!todayCheckIn && completedCount >= 3 && (
           <Pressable
             onPress={() => { haptic(); setShowCheckIn(true); }}
@@ -787,8 +679,8 @@ export default function DashboardScreen() {
           >
             <Feather name="sunset" size={16} color={c.primary} />
             <View style={{ flex: 1 }}>
-              <Text style={[styles.checkInButtonTitle, { color: c.foreground }]}>End of day check-in</Text>
-              <Text style={[styles.checkInButtonSub, { color: c.mutedForeground }]}>Help VIVA learn what works for you</Text>
+              <Text style={[styles.checkInButtonTitle, { color: c.foreground }]}>Quick reflection</Text>
+              <Text style={[styles.checkInButtonSub, { color: c.mutedForeground }]}>Takes 15 seconds</Text>
             </View>
             <Feather name="chevron-right" size={14} color={c.mutedForeground + "60"} />
           </Pressable>
@@ -797,7 +689,7 @@ export default function DashboardScreen() {
         {todayCheckIn && (
           <View style={[styles.checkInDone, { backgroundColor: c.card }]}>
             <Feather name="check-circle" size={14} color={c.success} />
-            <Text style={[styles.checkInDoneText, { color: c.mutedForeground }]}>Today's check-in complete</Text>
+            <Text style={[styles.checkInDoneText, { color: c.mutedForeground }]}>Reflection saved</Text>
           </View>
         )}
 
@@ -913,143 +805,96 @@ export default function DashboardScreen() {
         visible={showCheckIn}
         transparent
         animationType="slide"
-        onRequestClose={() => { setShowCheckIn(false); setCheckInEnergy(null); setCheckInAppetite(null); setCheckInHydration(null); setCheckInProtein(null); setCheckInSideEffects(null); setCheckInMovement(null); }}
+        onRequestClose={() => { setShowCheckIn(false); setCheckInEnergy(null); setCheckInProtein(null); setCheckInSideEffects(null); }}
       >
-        <Pressable style={styles.modalOverlay} onPress={() => { setShowCheckIn(false); setCheckInEnergy(null); setCheckInAppetite(null); setCheckInHydration(null); setCheckInProtein(null); setCheckInSideEffects(null); setCheckInMovement(null); }}>
+        <Pressable style={styles.modalOverlay} onPress={() => { setShowCheckIn(false); setCheckInEnergy(null); setCheckInProtein(null); setCheckInSideEffects(null); }}>
           <Pressable style={[styles.modalSheet, { backgroundColor: c.card, paddingBottom: Math.max(bottomPad, 24) }]} onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalHandle}>
               <View style={[styles.handleBar, { backgroundColor: c.border }]} />
             </View>
-            <View style={[styles.modalHeader, { marginBottom: 4 }]}>
+            <View style={[styles.modalHeader, { marginBottom: 8 }]}>
               <View style={[styles.modalIconWrap, { backgroundColor: c.primary + "12" }]}>
                 <Feather name="sunset" size={18} color={c.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.modalTitle, { color: c.foreground }]}>End of Day</Text>
-                <Text style={[styles.modalInstruction, { color: c.mutedForeground }]}>Quick reflection to help VIVA learn</Text>
+                <Text style={[styles.modalTitle, { color: c.foreground }]}>How was today?</Text>
               </View>
             </View>
 
-            <ScrollView style={{ maxHeight: 400 }} showsVerticalScrollIndicator={false}>
-              <View style={{ gap: 16, paddingHorizontal: 4 }}>
-                <View style={{ gap: 6 }}>
-                  <Text style={[styles.checkInLabel, { color: c.foreground }]}>How was your energy?</Text>
-                  <View style={styles.checkInChipRow}>
-                    {(["great", "good", "tired", "depleted"] as const).map(v => (
-                      <Pressable key={v} onPress={() => { haptic(); setCheckInEnergy(checkInEnergy === v ? null : v); }}
-                        style={[styles.checkInChip, { backgroundColor: checkInEnergy === v ? c.primary + "18" : c.background, borderColor: checkInEnergy === v ? c.primary + "40" : c.border + "30" }]}>
-                        <Text style={[styles.checkInChipText, { color: checkInEnergy === v ? c.primary : c.foreground }]}>
-                          {v === "great" ? "Great" : v === "good" ? "Good" : v === "tired" ? "Tired" : "Depleted"}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
+            <View style={{ gap: 20, paddingHorizontal: 4 }}>
+              <View style={{ gap: 8 }}>
+                <Text style={[styles.checkInLabel, { color: c.foreground }]}>Energy</Text>
+                <View style={styles.checkInChipRow}>
+                  {(["great", "good", "tired", "depleted"] as const).map(v => (
+                    <Pressable key={v} onPress={() => { haptic(); setCheckInEnergy(checkInEnergy === v ? null : v); }}
+                      style={[styles.checkInChip, { flex: 1, backgroundColor: checkInEnergy === v ? c.primary + "18" : c.background, borderColor: checkInEnergy === v ? c.primary + "40" : c.border + "30" }]}>
+                      <Text style={[styles.checkInChipText, { color: checkInEnergy === v ? c.primary : c.foreground }]}>
+                        {v === "great" ? "Great" : v === "good" ? "Good" : v === "tired" ? "Tired" : "Low"}
+                      </Text>
+                    </Pressable>
+                  ))}
                 </View>
-
-                <View style={{ gap: 6 }}>
-                  <Text style={[styles.checkInLabel, { color: c.foreground }]}>How was your appetite?</Text>
-                  <View style={styles.checkInChipRow}>
-                    {(["normal", "low", "very_low"] as const).map(v => (
-                      <Pressable key={v} onPress={() => { haptic(); setCheckInAppetite(checkInAppetite === v ? null : v); }}
-                        style={[styles.checkInChip, { backgroundColor: checkInAppetite === v ? c.primary + "18" : c.background, borderColor: checkInAppetite === v ? c.primary + "40" : c.border + "30" }]}>
-                        <Text style={[styles.checkInChipText, { color: checkInAppetite === v ? c.primary : c.foreground }]}>
-                          {v === "normal" ? "Normal" : v === "low" ? "Low" : "Very Low"}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
-
-                <View style={{ gap: 6 }}>
-                  <Text style={[styles.checkInLabel, { color: c.foreground }]}>Side effects today?</Text>
-                  <View style={styles.checkInChipRow}>
-                    {(["none", "mild", "moderate", "rough"] as const).map(v => (
-                      <Pressable key={v} onPress={() => { haptic(); setCheckInSideEffects(checkInSideEffects === v ? null : v); }}
-                        style={[styles.checkInChip, { backgroundColor: checkInSideEffects === v ? c.primary + "18" : c.background, borderColor: checkInSideEffects === v ? c.primary + "40" : c.border + "30" }]}>
-                        <Text style={[styles.checkInChipText, { color: checkInSideEffects === v ? c.primary : c.foreground }]}>
-                          {v === "none" ? "None" : v === "mild" ? "Mild" : v === "moderate" ? "Moderate" : "Rough"}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
-
-                <View style={{ gap: 6 }}>
-                  <Text style={[styles.checkInLabel, { color: c.foreground }]}>Protein intake?</Text>
-                  <View style={styles.checkInChipRow}>
-                    {(["good", "okay", "poor"] as const).map(v => (
-                      <Pressable key={v} onPress={() => { haptic(); setCheckInProtein(checkInProtein === v ? null : v); }}
-                        style={[styles.checkInChip, { backgroundColor: checkInProtein === v ? c.primary + "18" : c.background, borderColor: checkInProtein === v ? c.primary + "40" : c.border + "30" }]}>
-                        <Text style={[styles.checkInChipText, { color: checkInProtein === v ? c.primary : c.foreground }]}>
-                          {v === "good" ? "Good" : v === "okay" ? "Okay" : "Poor"}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
-
-                <View style={{ gap: 6 }}>
-                  <Text style={[styles.checkInLabel, { color: c.foreground }]}>Hydration today?</Text>
-                  <View style={styles.checkInChipRow}>
-                    {(["good", "okay", "poor"] as const).map(v => (
-                      <Pressable key={v} onPress={() => { haptic(); setCheckInHydration(checkInHydration === v ? null : v); }}
-                        style={[styles.checkInChip, { backgroundColor: checkInHydration === v ? c.primary + "18" : c.background, borderColor: checkInHydration === v ? c.primary + "40" : c.border + "30" }]}>
-                        <Text style={[styles.checkInChipText, { color: checkInHydration === v ? c.primary : c.foreground }]}>
-                          {v === "good" ? "Good" : v === "okay" ? "Okay" : "Poor"}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
-
-                <View style={{ gap: 6 }}>
-                  <Text style={[styles.checkInLabel, { color: c.foreground }]}>Movement today?</Text>
-                  <View style={styles.checkInChipRow}>
-                    {(["strength", "walk", "light_recovery", "rest"] as const).map(v => (
-                      <Pressable key={v} onPress={() => { haptic(); setCheckInMovement(checkInMovement === v ? null : v); }}
-                        style={[styles.checkInChip, { backgroundColor: checkInMovement === v ? c.primary + "18" : c.background, borderColor: checkInMovement === v ? c.primary + "40" : c.border + "30" }]}>
-                        <Text style={[styles.checkInChipText, { color: checkInMovement === v ? c.primary : c.foreground }]}>
-                          {v === "strength" ? "Strength" : v === "walk" ? "Walk" : v === "light_recovery" ? "Light" : "Rest"}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
-
-                <Pressable
-                  onPress={() => {
-                    if (checkInEnergy) {
-                      haptic();
-                      saveDailyCheckIn({
-                        date: new Date().toISOString().split("T")[0],
-                        energy: checkInEnergy,
-                        appetite: checkInAppetite ?? null,
-                        hydration: checkInHydration ?? null,
-                        proteinConfidence: checkInProtein ?? null,
-                        sideEffects: checkInSideEffects ?? null,
-                        movementIntent: checkInMovement ?? null,
-                      });
-                      setShowCheckIn(false);
-                      setCheckInEnergy(null);
-                      setCheckInAppetite(null);
-                      setCheckInHydration(null);
-                      setCheckInProtein(null);
-                      setCheckInSideEffects(null);
-                      setCheckInMovement(null);
-                    }
-                  }}
-                  style={({ pressed }) => [
-                    styles.checkInSubmit,
-                    {
-                      backgroundColor: checkInEnergy ? c.primary : c.primary + "40",
-                      opacity: pressed ? 0.85 : 1,
-                    },
-                  ]}
-                >
-                  <Text style={styles.checkInSubmitText}>Save check-in</Text>
-                </Pressable>
               </View>
-            </ScrollView>
+
+              <View style={{ gap: 8 }}>
+                <Text style={[styles.checkInLabel, { color: c.foreground }]}>Side effects</Text>
+                <View style={styles.checkInChipRow}>
+                  {(["none", "mild", "moderate", "rough"] as const).map(v => (
+                    <Pressable key={v} onPress={() => { haptic(); setCheckInSideEffects(checkInSideEffects === v ? null : v); }}
+                      style={[styles.checkInChip, { flex: 1, backgroundColor: checkInSideEffects === v ? c.primary + "18" : c.background, borderColor: checkInSideEffects === v ? c.primary + "40" : c.border + "30" }]}>
+                      <Text style={[styles.checkInChipText, { color: checkInSideEffects === v ? c.primary : c.foreground }]}>
+                        {v === "none" ? "None" : v === "mild" ? "Mild" : v === "moderate" ? "Some" : "Rough"}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+
+              <View style={{ gap: 8 }}>
+                <Text style={[styles.checkInLabel, { color: c.foreground }]}>Protein</Text>
+                <View style={styles.checkInChipRow}>
+                  {(["good", "okay", "poor"] as const).map(v => (
+                    <Pressable key={v} onPress={() => { haptic(); setCheckInProtein(checkInProtein === v ? null : v); }}
+                      style={[styles.checkInChip, { flex: 1, backgroundColor: checkInProtein === v ? c.primary + "18" : c.background, borderColor: checkInProtein === v ? c.primary + "40" : c.border + "30" }]}>
+                      <Text style={[styles.checkInChipText, { color: checkInProtein === v ? c.primary : c.foreground }]}>
+                        {v === "good" ? "Good" : v === "okay" ? "Okay" : "Low"}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+
+              <Pressable
+                onPress={() => {
+                  if (checkInEnergy) {
+                    haptic();
+                    saveDailyCheckIn({
+                      date: new Date().toISOString().split("T")[0],
+                      energy: checkInEnergy,
+                      appetite: null,
+                      hydration: null,
+                      proteinConfidence: checkInProtein ?? null,
+                      sideEffects: checkInSideEffects ?? null,
+                      movementIntent: null,
+                    });
+                    setShowCheckIn(false);
+                    setCheckInEnergy(null);
+                    setCheckInProtein(null);
+                    setCheckInSideEffects(null);
+                  }
+                }}
+                style={({ pressed }) => [
+                  styles.checkInSubmit,
+                  {
+                    backgroundColor: checkInEnergy ? c.primary : c.primary + "40",
+                    opacity: pressed ? 0.85 : 1,
+                  },
+                ]}
+              >
+                <Feather name="check" size={16} color="#fff" style={{ marginRight: 6 }} />
+                <Text style={styles.checkInSubmitText}>Done</Text>
+              </Pressable>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -1115,12 +960,12 @@ const styles = StyleSheet.create({
   },
   statusCard: {
     alignItems: "center",
-    paddingTop: 24,
-    paddingBottom: 24,
+    paddingTop: 20,
+    paddingBottom: 20,
     paddingHorizontal: 24,
-    marginBottom: 16,
-    borderRadius: 24,
-    gap: 10,
+    marginBottom: 12,
+    borderRadius: 20,
+    gap: 8,
   },
   statusTopRow: {
     flexDirection: "row",
@@ -1153,18 +998,13 @@ const styles = StyleSheet.create({
     height: "100%",
     borderRadius: 2,
   },
-  progressLabel: {
-    fontSize: 11,
-    fontFamily: "Inter_500Medium",
-    textAlign: "center",
-  },
   feedbackToast: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: 16,
+    borderRadius: 20,
     marginBottom: 12,
   },
   feedbackText: {
@@ -1191,12 +1031,12 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   headline: {
-    fontSize: 22,
+    fontSize: 20,
     fontFamily: "Inter_700Bold",
     letterSpacing: -0.5,
     textAlign: "center",
-    lineHeight: 28,
-    marginTop: 4,
+    lineHeight: 26,
+    marginTop: 2,
   },
   driversInline: {
     fontSize: 13,
@@ -1207,22 +1047,11 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
 
-  feelingCard: {
-    borderRadius: 24,
-    paddingVertical: 20,
-    paddingHorizontal: 18,
-    marginBottom: 12,
-    gap: 14,
-  },
-  feelingPrompt: {
-    fontSize: 13,
-    fontFamily: "Inter_500Medium",
-    textAlign: "center",
-  },
   feelingRow: {
     flexDirection: "row",
     justifyContent: "center",
     gap: 8,
+    marginTop: 4,
   },
   feelingChip: {
     paddingHorizontal: 16,
@@ -1234,26 +1063,10 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_500Medium",
   },
 
-  refineCard: {
-    borderRadius: 24,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    marginBottom: 16,
-  },
-  refineToggle: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 2,
-  },
-  refineText: {
-    fontSize: 14,
-    fontFamily: "Inter_500Medium",
-  },
   refineSection: {
-    gap: 20,
-    marginTop: 20,
-    paddingBottom: 6,
+    gap: 16,
+    marginBottom: 12,
+    paddingHorizontal: 4,
   },
   refineRow: {
     gap: 10,
@@ -1280,10 +1093,10 @@ const styles = StyleSheet.create({
   },
 
   dayCard: {
-    borderRadius: 24,
-    padding: 24,
-    gap: 4,
-    marginBottom: 16,
+    borderRadius: 20,
+    padding: 20,
+    gap: 2,
+    marginBottom: 12,
   },
   dayHeader: {
     flexDirection: "row",
@@ -1354,9 +1167,9 @@ const styles = StyleSheet.create({
   },
 
   checkInButton: {
-    borderRadius: 24,
+    borderRadius: 20,
     padding: 16,
-    marginBottom: 16,
+    marginBottom: 12,
     flexDirection: "row" as const,
     alignItems: "center" as const,
     gap: 14,
@@ -1372,9 +1185,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   checkInDone: {
-    borderRadius: 24,
+    borderRadius: 20,
     padding: 14,
-    marginBottom: 16,
+    marginBottom: 12,
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
@@ -1407,6 +1220,8 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 14,
     alignItems: "center" as const,
+    justifyContent: "center" as const,
+    flexDirection: "row" as const,
     marginTop: 4,
   },
   checkInSubmitText: {
@@ -1416,9 +1231,9 @@ const styles = StyleSheet.create({
   },
 
   whyPlanCard: {
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 16,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 12,
   },
   whyPlanHeader: {
     flexDirection: "row" as const,
@@ -1444,35 +1259,6 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
 
-  habitCard: {
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 16,
-    gap: 14,
-  },
-  habitHeader: {
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
-    letterSpacing: -0.1,
-  },
-  habitRow: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-  },
-  habitStat: {
-    alignItems: "center",
-    gap: 4,
-  },
-  habitStatValue: {
-    fontSize: 18,
-    fontFamily: "Inter_700Bold",
-    letterSpacing: -0.3,
-  },
-  habitStatLabel: {
-    fontSize: 11,
-    fontFamily: "Inter_400Regular",
-  },
-
   metricsRow: {
     flexDirection: "row",
     gap: 10,
@@ -1482,7 +1268,7 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 20,
     padding: 12,
-    gap: 6,
+    gap: 4,
   },
   metricLabel: {
     fontSize: 10,
@@ -1506,17 +1292,9 @@ const styles = StyleSheet.create({
 
   askCard: {
     padding: 20,
-    borderRadius: 24,
-    gap: 16,
-    marginBottom: 8,
-  },
-  coachHeader: {
-    fontSize: 18,
-    fontFamily: "Inter_600SemiBold",
-    letterSpacing: -0.3,
-  },
-  coachInsightWrap: {
-    gap: 10,
+    borderRadius: 20,
+    gap: 14,
+    marginBottom: 12,
   },
   coachInsightText: {
     fontSize: 14,
@@ -1560,10 +1338,6 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "rgba(0,0,0,0.06)",
-  },
-  askMessagesWrap: {
-    gap: 8,
-    maxHeight: 300,
   },
   askMsgRow: {
     flexDirection: "row",

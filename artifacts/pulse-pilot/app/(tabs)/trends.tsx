@@ -296,7 +296,7 @@ function computeHabitWeeklyRates(history: { date: string; completionRate: number
 
 export default function TrendsScreen() {
   const c = useColors();
-  const { trends, insights, metrics, completionHistory, weeklyConsistency, streakDays, todayCompletionRate, dailyPlan } = useApp();
+  const { insights, metrics, completionHistory, weeklyConsistency, streakDays, todayCompletionRate, dailyPlan } = useApp();
 
   const correlations = useMemo(() => buildCorrelations(metrics), [metrics]);
   const patterns = useMemo(() => detectPatterns(metrics), [metrics]);
@@ -369,7 +369,7 @@ export default function TrendsScreen() {
 
       {insights && (
         <View style={[styles.summaryCard, { backgroundColor: c.card }]}>
-          <Text style={[styles.summaryHeader, { color: c.foreground }]}>Your Recent Trends</Text>
+          <Text style={[styles.summaryHeader, { color: c.foreground }]}>How You're Doing</Text>
           {insights.weekSummary.split("\n\n").map((line, i) => (
             <Text key={i} style={[styles.summaryText, { color: c.foreground }]}>{line}</Text>
           ))}
@@ -391,7 +391,7 @@ export default function TrendsScreen() {
       {correlations.length > 0 && (
         <View style={styles.sectionWrap}>
           <Text style={[styles.sectionTitle, { color: c.foreground }]}>Correlations</Text>
-          <Text style={[styles.sectionSub, { color: c.mutedForeground }]}>How your body signals connect during treatment</Text>
+          <Text style={[styles.sectionSub, { color: c.mutedForeground }]}>How your body signals connect</Text>
           {correlations.map((corr, i) => (
             <View key={i} style={[styles.corrCard, { backgroundColor: c.card }]}>
               <View style={styles.corrHeader}>
@@ -658,7 +658,7 @@ const styles = StyleSheet.create({
   metricTile: {
     flex: 1,
     padding: 14,
-    borderRadius: 16,
+    borderRadius: 20,
     alignItems: "center",
     gap: 4,
   },

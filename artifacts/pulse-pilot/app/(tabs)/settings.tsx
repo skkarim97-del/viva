@@ -109,7 +109,7 @@ export default function SettingsScreen() {
         {[
           { label: "Weight", value: `${profile.weight} lbs`, icon: "trending-down" as const },
           { label: "Goal Weight", value: `${profile.goalWeight} lbs`, icon: "target" as const },
-          { label: "Active Days", value: `${profile.daysAvailableToTrain}/week`, icon: "calendar" as const },
+          { label: "Training Days", value: `${profile.daysAvailableToTrain}/week`, icon: "calendar" as const },
           {
             label: "Goals",
             value: profile.goals.map((g) => g.replace("_", " ")).join(", ") || "Not set",
@@ -240,7 +240,7 @@ const styles = StyleSheet.create({
     paddingLeft: 4,
   },
   section: {
-    borderRadius: 16,
+    borderRadius: 20,
     overflow: "hidden",
   },
   settingRow: {
@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     padding: 18,
-    borderRadius: 16,
+    borderRadius: 20,
     gap: 14,
     marginTop: 4,
   },

@@ -28,7 +28,7 @@ The system is a pnpm workspace monorepo using Node.js 24 and TypeScript 5.9. The
 - **Design Philosophy**: Optimize for clarity, confidence, simplicity, and action. The app should feel like a supportive daily companion for GLP-1 patients, not a cluttered dashboard or medical portal.
 - **Design System**:
     - **Colors**: Primary blue (#1A5CFF light / #5B8AFF dark), Sky blue accent (#5AC8FA), Apple-like neutrals. Green (#34C759) is used only for positive states, readiness, and progress.
-    - **Card Style**: Background contrast only (no borders), #F7F7FA cards on white, radius 16-20.
+    - **Card Style**: Background contrast only (no borders), #F7F7FA cards on white, radius 20 on all cards (16 on inner elements like bubbles/pills).
     - **Typography**: Inter font family, negative letter-spacing on large text, 11-12px uppercase labels. Page titles are 28px Inter_700Bold, section headers 18px Inter_600SemiBold, body text 14px Inter_400Regular.
     - **Spacing**: Generous whitespace, 24px horizontal padding, 28px section gaps.
     - **Interactions**: Press scale (0.97-0.98) and opacity (0.8) on interactive elements. Subtle scale (1.02x selected, 0.96x pressed) for selection animations.
@@ -44,7 +44,7 @@ The system is a pnpm workspace monorepo using Node.js 24 and TypeScript 5.9. The
 ### Technical Implementations & Features
 
 - **Onboarding**: 8-step GLP-1 flow: welcome, goals, glp1_context (medication/reason/duration/dose/injection day), side_effects, nutrition (protein/hydration confidence, meals, under-eating, strength training), activity, integrations, summary.
-- **Dashboard (Today tab)**: Status card with GLP-1-aware daily status, feeling card, coach insight, GLP-1 daily inputs (appetite, side effects, protein confidence, movement intent) in the "Refine your day" section, Your Day actions, habit tracker, end-of-day check-in, and metric tiles. Simplified from 6 refine inputs to 4 (removed redundant Energy/Hydration rows).
+- **Dashboard (Today tab)**: Status card with feeling chips merged inline (Great/Good/Tired/Stressed), "Today" actions card (Move/Fuel/Hydrate/Recover/Stay Consistent) above coach card, always-visible refine chips (Appetite/Side Effects/Protein/Movement), coach insight with "Ask your coach anything..." input, end-of-day check-in (3 questions: energy, side effects, protein), and metric tiles (Sleep/Steps/Heart Rate/HRV). Layout order: status card → feedback toast → actions → refine → coach → why plan → check-in → metrics.
 - **Adaptive Coaching**: Risk engine (calculateDropoutRisk) with rules-based scoring. GLP-1 coach system prompt covers side effect management, protein coaching, muscle preservation, hydration, and treatment consistency. Recovery > performance. Side effect management > training goals. Protein > calories. Consistency > intensity.
 - **Daily Actions**: 5 checkable actions per day (Move/Fuel/Hydrate/Recover/Stay Consistent), with GLP-1-informed recommendations.
 - **Weekly Plan**: AI-powered weekly coaching with Move/Fuel/Hydrate/Recover/Consistent categories. GLP-1 specific rules (strength training for muscle preservation, gentler plans on symptom days, protein-forward fueling).

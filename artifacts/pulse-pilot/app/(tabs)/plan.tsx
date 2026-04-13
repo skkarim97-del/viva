@@ -81,7 +81,7 @@ export default function PlanScreen() {
         <Text style={[styles.title, { color: c.foreground }]}>Your Week</Text>
 
         <View style={[styles.summaryCard, { backgroundColor: c.card }]}>
-          <Text style={[styles.summaryHeader, { color: c.foreground }]}>Week Overview</Text>
+          <Text style={[styles.summaryHeader, { color: c.foreground }]}>This Week</Text>
           {weeklyPlan.weekSummary.split("\n\n").map((line, i) => (
             <Text key={i} style={[styles.summaryText, { color: c.foreground }, i > 0 && { marginTop: 10 }]}>{line}</Text>
           ))}
@@ -90,7 +90,6 @@ export default function PlanScreen() {
         {weeklyPlan.days.map((day) => {
           const isToday = day.date === today;
           const completedCount = day.actions.filter(a => a.completed).length;
-          const isPast = day.date < today;
           return (
             <View
               key={day.date}
@@ -286,7 +285,7 @@ const styles = StyleSheet.create({
   summaryCard: {
     padding: 20,
     borderRadius: 20,
-    marginBottom: 4,
+    marginBottom: 8,
     gap: 10,
   },
   summaryHeader: {
@@ -303,7 +302,7 @@ const styles = StyleSheet.create({
   dayCard: {
     padding: 16,
     borderRadius: 20,
-    gap: 10,
+    gap: 8,
   },
   dayHeader: {
     flexDirection: "row",
