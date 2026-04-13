@@ -112,6 +112,7 @@ interface AppContextType {
   glp1InputHistory: GLP1DailyInputs[];
   medicationLog: MedicationLogEntry[];
   logMedicationDose: (entry: MedicationLogEntry) => void;
+  removeMedicationDose: (entryId: string) => void;
   inputAnalytics: InputAnalytics | null;
   patientSummary: PatientSummary | null;
 }
@@ -528,11 +529,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       fuel: ["Fueling on track today", "Good nutrition supports your treatment", "Protein goal noted"],
       hydrate: ["Hydration is on track", "Water intake looking good", "Staying hydrated helps with side effects"],
       recover: ["Recovery action logged", "Rest noted", "Your body will thank you"],
-      consistent: ["Check-in complete", "Consistency builds momentum", "Showing up is what matters"],
     };
     const options = categoryFeedback[action.category] || ["Done"];
     const msg = options[Math.floor(Math.random() * options.length)];
-    if (completedCount === total) return "All 5 actions complete today. Strong day.";
+    if (completedCount === total) return "All actions complete today. Strong day.";
     if (completedCount >= 3) return `${msg}. ${completedCount} of ${total} done today.`;
     return msg;
   };
@@ -544,8 +544,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         a.id === actionId ? { ...a, completed: !a.completed } : a
       );
       const todayDate = new Date().toISOString().split("T")[0];
-      const completedCount = updatedActions.filter(a => a.completed).length;
-      const completionRate = Math.round((completedCount / updatedActions.length) * 100);
+      const supportActions = updatedActions.filter(a => a.category !== "consistent");
+      const completedCount = supportActions.filter(a => a.completed).length;
+      const completionRate = supportActions.length > 0 ? Math.round((completedCount / supportActions.length) * 100) : 0;
       const todayRecord: CompletionRecord = {
         date: todayDate,
         actions: updatedActions.map(a => ({ id: a.id, category: a.category, completed: a.completed, recommended: a.recommended, chosen: a.text !== a.recommended ? a.text : undefined })),
@@ -554,7 +555,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       const toggledAction = updatedActions.find(a => a.id === actionId);
       if (toggledAction) {
-        const fb = generateCompletionFeedback(toggledAction, toggledAction.completed, completedCount, updatedActions.length);
+        const fb = generateCompletionFeedback(toggledAction, toggledAction.completed, completedCount, supportActions.length);
         if (fb) setLastCompletionFeedback(fb);
       }
 
@@ -597,8 +598,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         a.id === actionId ? { ...a, text: newText } : a
       );
       const todayDate = new Date().toISOString().split("T")[0];
-      const completedCount = updatedActions.filter(a => a.completed).length;
-      const completionRate = Math.round((completedCount / updatedActions.length) * 100);
+      const sa = updatedActions.filter(a => a.category !== "consistent");
+      const completedCount = sa.filter(a => a.completed).length;
+      const completionRate = sa.length > 0 ? Math.round((completedCount / sa.length) * 100) : 0;
       const todayRecord: CompletionRecord = {
         date: todayDate,
         actions: updatedActions.map(a => ({ id: a.id, category: a.category, completed: a.completed, recommended: a.recommended, chosen: a.text !== a.recommended ? a.text : undefined })),
@@ -697,8 +699,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const updatedActions = prevPlan.actions.map(a =>
             a.category === category ? { ...a, completed: newCompleted } : a
           );
-          const completedCount = updatedActions.filter(a => a.completed).length;
-          const completionRate = Math.round((completedCount / updatedActions.length) * 100);
+          const sa2 = updatedActions.filter(a => a.category !== "consistent");
+          const completedCount = sa2.filter(a => a.completed).length;
+          const completionRate = sa2.length > 0 ? Math.round((completedCount / sa2.length) * 100) : 0;
           const todayRecord: CompletionRecord = {
             date: todayDate,
             actions: updatedActions.map(a => ({ id: a.id, category: a.category, completed: a.completed, recommended: a.recommended, chosen: a.text !== a.recommended ? a.text : undefined })),
@@ -939,8 +942,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const todayCompletionRate = (() => {
     if (!dailyPlan) return 0;
-    const completed = dailyPlan.actions.filter(a => a.completed).length;
-    return Math.round((completed / dailyPlan.actions.length) * 100);
+    const supportActions = dailyPlan.actions.filter(a => a.category !== "consistent");
+    const completed = supportActions.filter(a => a.completed).length;
+    return supportActions.length > 0 ? Math.round((completed / supportActions.length) * 100) : 0;
   })();
 
   const clearCompletionFeedback = useCallback(() => {
@@ -970,6 +974,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       });
     }
   }, [profile, updateProfile, glp1InputHistory, completionHistory, recomputeAnalytics]);
+
+  const removeMedicationDose = useCallback(async (entryId: string) => {
+    setMedicationLog(prev => {
+      const updated = prev.filter(e => e.id !== entryId);
+      AsyncStorage.setItem(MED_LOG_KEY, JSON.stringify(updated));
+      recomputeAnalytics(glp1InputHistory, profile.medicationProfile, updated, completionHistory);
+      return updated;
+    });
+  }, [glp1InputHistory, profile.medicationProfile, completionHistory, recomputeAnalytics]);
 
   const todayCheckIn = (() => {
     const todayDate = new Date().toISOString().split("T")[0];
@@ -1034,6 +1047,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         glp1InputHistory,
         medicationLog,
         logMedicationDose,
+        removeMedicationDose,
         inputAnalytics,
         patientSummary,
       }}

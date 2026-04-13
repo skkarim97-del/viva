@@ -105,7 +105,7 @@ export default function DashboardScreen() {
     movementIntent, setMovementIntent,
     glp1Energy, setGlp1Energy,
     glp1Hydration, setGlp1Hydration,
-    medicationLog, logMedicationDose,
+    medicationLog, logMedicationDose, removeMedicationDose,
   } = useApp();
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -385,16 +385,39 @@ export default function DashboardScreen() {
   const statusColor = STATUS_COLOR_MAP[dailyPlan.statusLabel](c);
 
   const hasMedProfile = !!profile.medicationProfile;
-  const ACTION_META: Record<ActionCategory, { label: string; icon: keyof typeof Feather.glyphMap; color: string }> = {
+  const ACTION_META: Record<string, { label: string; icon: keyof typeof Feather.glyphMap; color: string }> = {
     move: { label: "Move", icon: "activity", color: c.primary },
     fuel: { label: "Fuel", icon: "coffee", color: c.warning },
     hydrate: { label: "Hydrate", icon: "droplet", color: "#5AC8FA" },
     recover: { label: "Recover", icon: "battery-charging", color: c.info },
-    consistent: { label: "Medication", icon: "shield", color: c.accent },
   };
 
-  const completedCount = dailyPlan.actions.filter(a => a.completed).length;
-  const totalActions = dailyPlan.actions.length;
+  const planActions = dailyPlan.actions.filter(a => a.category !== "consistent");
+  const completedCount = planActions.filter(a => a.completed).length;
+  const totalActions = planActions.length;
+
+  const WEEK_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
+  const getWeekDates = () => {
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + mondayOffset);
+    return WEEK_DAYS.map((label, i) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const dateStr = d.toISOString().split("T")[0];
+      const isToday = dateStr === today.toISOString().split("T")[0];
+      const isFuture = d > today && !isToday;
+      return { label, dateStr, isToday, isFuture, dayNum: d.getDate() };
+    });
+  };
+  const weekDates = getWeekDates();
+  const weekStartStr = weekDates[0].dateStr;
+  const weekEndStr = weekDates[6].dateStr;
+  const thisWeekDoseEntry = medicationLog.find(e => e.date >= weekStartStr && e.date <= weekEndStr && e.status === "taken");
+  const todayDateStr = new Date().toISOString().split("T")[0];
+  const todayDoseEntry = medicationLog.find(e => e.date === todayDateStr && e.status === "taken");
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={0}>
@@ -407,100 +430,6 @@ export default function DashboardScreen() {
         <ScreenHeader />
 
         <Text style={[styles.tagline, { color: c.mutedForeground }]}>{greetingText}</Text>
-
-        {profile.medicationProfile && (
-          <View style={[styles.medPillRow, { backgroundColor: c.card }]}>
-            <View style={styles.medPillLeft}>
-              <Feather name="package" size={14} color={c.accent} />
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.medPillText, { color: c.foreground }]}>
-                  {formatDoseDisplay(
-                    profile.medicationProfile.medicationBrand,
-                    profile.medicationProfile.doseValue,
-                    profile.medicationProfile.doseUnit,
-                    profile.medicationProfile.frequency as "weekly" | "daily"
-                  )}
-                </Text>
-                <View style={styles.medPillSubRow}>
-                  {(() => {
-                    const parts: string[] = [];
-                    const lastDose = medicationLog.filter(e => e.status === "taken").sort((a, b) => b.date.localeCompare(a.date))[0];
-                    if (lastDose) {
-                      const todayStr = new Date().toISOString().split("T")[0];
-                      const doseParts = lastDose.date.split("-").map(Number);
-                      const todayParts = todayStr.split("-").map(Number);
-                      const doseDate = new Date(doseParts[0], doseParts[1] - 1, doseParts[2]);
-                      const todayDate = new Date(todayParts[0], todayParts[1] - 1, todayParts[2]);
-                      const daysAgo = Math.round((todayDate.getTime() - doseDate.getTime()) / 86400000);
-                      if (daysAgo <= 0) parts.push("Dosed today");
-                      else if (daysAgo === 1) parts.push("Last dose: yesterday");
-                      else parts.push(`Last dose: ${daysAgo} days ago`);
-                    }
-                    if (profile.medicationProfile?.telehealthPlatform) {
-                      parts.push(`Via ${profile.medicationProfile.telehealthPlatform}`);
-                    }
-                    if (!lastDose && profile.medicationProfile?.plannedDoseDay) {
-                      const today = new Date().toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
-                      const doseDay = profile.medicationProfile.plannedDoseDay.toLowerCase();
-                      if (today === doseDay) parts.push("Dose day");
-                      else {
-                        const days = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
-                        const todayIdx = days.indexOf(today);
-                        const doseIdx = days.indexOf(doseDay);
-                        const diff = (doseIdx - todayIdx + 7) % 7;
-                        if (diff === 1) parts.push("Dose due tomorrow");
-                        else if (diff > 0) parts.push(`Dose in ${diff} days`);
-                      }
-                    }
-                    if (parts.length === 0) return null;
-                    return <Text style={[styles.medPillSubText, { color: c.mutedForeground }]}>{parts.join(" · ")}</Text>;
-                  })()}
-                </View>
-              </View>
-              {profile.medicationProfile.recentTitration && (
-                <View style={[styles.titrationBadge, { backgroundColor: "#FF950018" }]}>
-                  <Text style={[styles.titrationText, { color: "#FF9500" }]}>Titrated</Text>
-                </View>
-              )}
-            </View>
-            {(() => {
-              const todayDate = new Date().toISOString().split("T")[0];
-              const todayLog = medicationLog.find(e => e.date === todayDate);
-              const isDaily = profile.medicationProfile?.frequency === "daily";
-              const showLogBtn = isDaily || (profile.medicationProfile?.plannedDoseDay && new Date().toLocaleDateString("en-US", { weekday: "long" }).toLowerCase() === profile.medicationProfile.plannedDoseDay.toLowerCase());
-              if (todayLog) {
-                return (
-                  <View style={[styles.doseLoggedBadge, { backgroundColor: "#34C75914" }]}>
-                    <Feather name="check" size={12} color="#34C759" />
-                    <Text style={[styles.doseLoggedText, { color: "#34C759" }]}>Logged</Text>
-                  </View>
-                );
-              }
-              if (showLogBtn) {
-                return (
-                  <Pressable
-                    onPress={() => {
-                      haptic();
-                      logMedicationDose({
-                        id: Date.now().toString(),
-                        date: todayDate,
-                        medicationBrand: profile.medicationProfile!.medicationBrand,
-                        doseValue: profile.medicationProfile!.doseValue,
-                        doseUnit: profile.medicationProfile!.doseUnit,
-                        status: "taken",
-                        timestamp: Date.now(),
-                      });
-                    }}
-                    style={({ pressed }) => [styles.logDoseBtn, { backgroundColor: c.accent, opacity: pressed ? 0.8 : 1 }]}
-                  >
-                    <Text style={styles.logDoseBtnText}>Log Dose</Text>
-                  </Pressable>
-                );
-              }
-              return null;
-            })()}
-          </View>
-        )}
 
         <View style={[styles.statusCard, { backgroundColor: c.card }]}>
           <View style={styles.statusTopRow}>
@@ -527,6 +456,146 @@ export default function DashboardScreen() {
             </View>
           )}
         </View>
+
+        {profile.medicationProfile && (() => {
+          const mp = profile.medicationProfile!;
+          const isWeekly = mp.frequency !== "daily";
+          const isDaily = mp.frequency === "daily";
+          const medDisplay = formatDoseDisplay(mp.medicationBrand, mp.doseValue, mp.doseUnit, mp.frequency as "weekly" | "daily");
+
+          const handleLogDay = (dateStr: string) => {
+            haptic();
+            if (thisWeekDoseEntry && thisWeekDoseEntry.date === dateStr) return;
+            if (thisWeekDoseEntry) {
+              removeMedicationDose(thisWeekDoseEntry.id);
+            }
+            logMedicationDose({
+              id: `dose_${Date.now()}`,
+              date: dateStr,
+              medicationBrand: mp.medicationBrand,
+              status: "taken",
+              doseValue: mp.doseValue,
+              doseUnit: mp.doseUnit,
+              timestamp: Date.now(),
+            });
+          };
+
+          const handleLogToday = () => {
+            if (todayDoseEntry) return;
+            haptic();
+            logMedicationDose({
+              id: `dose_${Date.now()}`,
+              date: todayDateStr,
+              medicationBrand: mp.medicationBrand,
+              status: "taken",
+              doseValue: mp.doseValue,
+              doseUnit: mp.doseUnit,
+              timestamp: Date.now(),
+            });
+          };
+
+          const selectedDayLabel = thisWeekDoseEntry
+            ? new Date(thisWeekDoseEntry.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long" })
+            : null;
+
+          return (
+            <View style={[styles.treatmentCard, { backgroundColor: c.card }]}>
+              <View style={styles.treatmentHeader}>
+                <View style={styles.treatmentTitleRow}>
+                  <Feather name="shield" size={14} color={c.accent} />
+                  <Text style={[styles.treatmentTitle, { color: c.foreground }]}>Your Treatment</Text>
+                </View>
+                {mp.recentTitration && (
+                  <View style={[styles.titrationBadge, { backgroundColor: "#FF950018" }]}>
+                    <Text style={[styles.titrationText, { color: "#FF9500" }]}>Titrated</Text>
+                  </View>
+                )}
+              </View>
+
+              <Text style={[styles.treatmentMedName, { color: c.foreground }]}>{medDisplay}</Text>
+
+              {isWeekly && (
+                <View style={styles.treatmentWeekly}>
+                  <View style={styles.weekDayRow}>
+                    {weekDates.map((day) => {
+                      const isSelected = thisWeekDoseEntry?.date === day.dateStr;
+                      const isPast = !day.isFuture && !day.isToday;
+                      return (
+                        <Pressable
+                          key={day.dateStr}
+                          onPress={() => !day.isFuture ? handleLogDay(day.dateStr) : null}
+                          style={({ pressed }) => [
+                            styles.weekDayBtn,
+                            {
+                              backgroundColor: isSelected ? c.accent : day.isToday ? c.accent + "12" : "transparent",
+                              borderColor: day.isToday && !isSelected ? c.accent + "40" : "transparent",
+                              borderWidth: day.isToday && !isSelected ? 1 : 0,
+                              opacity: day.isFuture ? 0.3 : pressed ? 0.7 : 1,
+                            },
+                          ]}
+                        >
+                          <Text style={[
+                            styles.weekDayLabel,
+                            { color: isSelected ? "#FFFFFF" : isPast ? c.mutedForeground : c.foreground },
+                          ]}>{day.label}</Text>
+                          <Text style={[
+                            styles.weekDayNum,
+                            { color: isSelected ? "#FFFFFF" : isPast ? c.mutedForeground : c.foreground },
+                          ]}>{day.dayNum}</Text>
+                          {isSelected && (
+                            <Feather name="check" size={10} color="#FFFFFF" style={{ marginTop: 1 }} />
+                          )}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                  <View style={styles.treatmentStatus}>
+                    {thisWeekDoseEntry ? (
+                      <>
+                        <Feather name="check-circle" size={13} color={c.success} />
+                        <Text style={[styles.treatmentStatusText, { color: c.success }]}>
+                          Dose logged this week
+                        </Text>
+                        <Text style={[styles.treatmentStatusSub, { color: c.mutedForeground }]}>
+                          Taken on {selectedDayLabel}
+                        </Text>
+                      </>
+                    ) : (
+                      <>
+                        <Feather name="circle" size={13} color={c.mutedForeground} />
+                        <Text style={[styles.treatmentStatusText, { color: c.mutedForeground }]}>
+                          Not logged yet this week
+                        </Text>
+                      </>
+                    )}
+                  </View>
+                </View>
+              )}
+
+              {isDaily && (
+                <View style={styles.treatmentDaily}>
+                  {todayDoseEntry ? (
+                    <View style={[styles.dailyLoggedRow, { backgroundColor: c.success + "0A" }]}>
+                      <Feather name="check-circle" size={15} color={c.success} />
+                      <Text style={[styles.dailyLoggedText, { color: c.success }]}>Taken today</Text>
+                    </View>
+                  ) : (
+                    <Pressable
+                      onPress={handleLogToday}
+                      style={({ pressed }) => [
+                        styles.dailyLogBtn,
+                        { backgroundColor: c.accent, opacity: pressed ? 0.85 : 1 },
+                      ]}
+                    >
+                      <Feather name="plus" size={14} color="#FFFFFF" />
+                      <Text style={styles.dailyLogBtnText}>Log today's dose</Text>
+                    </Pressable>
+                  )}
+                </View>
+              )}
+            </View>
+          );
+        })()}
 
         {lastCompletionFeedback && (
           <Animated.View style={[styles.feedbackToast, { backgroundColor: c.success + "14", opacity: feedbackOpacity }]}>
@@ -648,90 +717,8 @@ export default function DashboardScreen() {
               {completedCount}/{totalActions}
             </Text>
           </View>
-          {dailyPlan.actions.map((action) => {
+          {planActions.map((action) => {
             const meta = ACTION_META[action.category];
-            const isMedAction = action.category === "consistent" && hasMedProfile;
-            const doseAlreadyLogged = action.text.includes("\u2713");
-            const medLogged = isMedAction && (action.completed || doseAlreadyLogged);
-
-            if (isMedAction) {
-              const mp = profile.medicationProfile!;
-              const lastDoseEntry = medicationLog.filter(e => e.status === "taken").sort((a, b) => b.date.localeCompare(a.date))[0];
-              const lastDoseDaysAgo = lastDoseEntry ? Math.floor((Date.now() - new Date(lastDoseEntry.date).getTime()) / (1000 * 60 * 60 * 24)) : null;
-              const medLine = `${mp.medicationBrand} · ${mp.doseValue} ${mp.doseUnit} ${mp.frequency}`;
-              const handleLogDose = () => {
-                if (medLogged) return;
-                haptic();
-                const todayStr = new Date().toISOString().split("T")[0];
-                logMedicationDose({
-                  id: `dose_${Date.now()}`,
-                  date: todayStr,
-                  medicationBrand: mp.medicationBrand,
-                  status: "taken",
-                  doseValue: mp.doseValue,
-                  doseUnit: mp.doseUnit,
-                  timestamp: Date.now(),
-                });
-                toggleAction(action.id);
-              };
-
-              return (
-                <View key={action.id} style={[
-                  styles.actionRow,
-                  { backgroundColor: medLogged ? c.success + "0A" : "transparent" },
-                ]}>
-                  <Pressable
-                    onPress={handleLogDose}
-                    style={({ pressed }) => [
-                      styles.actionCheck,
-                      {
-                        backgroundColor: medLogged ? c.success : "transparent",
-                        borderColor: medLogged ? c.success : c.border,
-                        opacity: pressed ? 0.7 : 1,
-                      },
-                    ]}
-                  >
-                    {medLogged && <Feather name="check" size={11} color="#fff" />}
-                  </Pressable>
-                  <Pressable
-                    onPress={handleLogDose}
-                    style={({ pressed }) => [
-                      styles.actionBody,
-                      { opacity: pressed ? 0.7 : 1 },
-                    ]}
-                  >
-                    <View style={[styles.dayIconWrap, { backgroundColor: meta.color + "12" }]}>
-                      <Feather name={meta.icon as any} size={15} color={meta.color} />
-                    </View>
-                    <View style={styles.actionContent}>
-                      <Text style={[styles.actionLabel, { color: c.mutedForeground }]}>{meta.label}</Text>
-                      <Text style={[
-                        styles.actionText,
-                        {
-                          color: medLogged ? c.success : c.foreground,
-                          textDecorationLine: "none",
-                        },
-                      ]}>
-                        {medLogged
-                          ? (mp.frequency === "daily" ? "Taken today" : "Dose logged")
-                          : (mp.frequency === "daily" ? "Log today's dose" : "Log your dose this week")}
-                        {medLogged && " \u2713"}
-                      </Text>
-                      <Text style={[styles.medContext, { color: c.mutedForeground }]}>{medLine}</Text>
-                      {medLogged && lastDoseDaysAgo !== null && lastDoseDaysAgo === 0 && (
-                        <Text style={[styles.medContext, { color: c.success }]}>Logged today</Text>
-                      )}
-                      {medLogged && lastDoseDaysAgo !== null && lastDoseDaysAgo > 0 && (
-                        <Text style={[styles.medContext, { color: c.mutedForeground }]}>Last dose: {lastDoseDaysAgo} day{lastDoseDaysAgo !== 1 ? "s" : ""} ago</Text>
-                      )}
-                      {!medLogged && lastDoseDaysAgo !== null && lastDoseDaysAgo > 0 && (
-                        <Text style={[styles.medContext, { color: c.mutedForeground }]}>Last dose: {lastDoseDaysAgo} day{lastDoseDaysAgo !== 1 ? "s" : ""} ago</Text>
-                      )}
-                    </View>
-                  </Pressable>
-                </View>
-              );
-            }
 
             return (
               <View key={action.id} style={[
@@ -911,7 +898,7 @@ export default function DashboardScreen() {
       </ScrollView>
 
       <Modal
-        visible={editingAction !== null && !(editingAction === "consistent" && hasMedProfile)}
+        visible={editingAction !== null && editingAction !== "consistent"}
         transparent
         animationType="slide"
         onRequestClose={() => setEditingAction(null)}
@@ -1286,12 +1273,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
     opacity: 0.7,
   },
-  medContext: {
-    fontSize: 11,
-    fontFamily: "Montserrat_400Regular",
-    lineHeight: 15,
-    marginTop: 2,
-  },
 
   checkInButton: {
     borderRadius: 20,
@@ -1617,30 +1598,98 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Montserrat_400Regular",
   },
-  medPillRow: {
+  treatmentCard: {
+    borderRadius: 16,
+    padding: 16,
+  },
+  treatmentHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 16,
+    marginBottom: 10,
   },
-  medPillLeft: {
+  treatmentTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  treatmentTitle: {
+    fontSize: 15,
+    fontFamily: "Montserrat_600SemiBold",
+  },
+  treatmentMedName: {
+    fontSize: 14,
+    fontFamily: "Montserrat_500Medium",
+    marginBottom: 14,
+  },
+  treatmentWeekly: {
+    gap: 10,
+  },
+  weekDayRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 4,
+  },
+  weekDayBtn: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 8,
+    borderRadius: 10,
+    minWidth: 36,
+  },
+  weekDayLabel: {
+    fontSize: 10,
+    fontFamily: "Montserrat_500Medium",
+    textTransform: "uppercase" as const,
+    letterSpacing: 0.3,
+  },
+  weekDayNum: {
+    fontSize: 14,
+    fontFamily: "Montserrat_600SemiBold",
+    marginTop: 2,
+  },
+  treatmentStatus: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingTop: 4,
+  },
+  treatmentStatusText: {
+    fontSize: 13,
+    fontFamily: "Montserrat_500Medium",
+  },
+  treatmentStatusSub: {
+    fontSize: 12,
+    fontFamily: "Montserrat_400Regular",
+    marginLeft: 2,
+  },
+  treatmentDaily: {
+    marginTop: 2,
+  },
+  dailyLoggedRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
   },
-  medPillText: {
+  dailyLoggedText: {
+    fontSize: 14,
+    fontFamily: "Montserrat_500Medium",
+  },
+  dailyLogBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 11,
+    borderRadius: 10,
+  },
+  dailyLogBtnText: {
     fontSize: 14,
     fontFamily: "Montserrat_600SemiBold",
-  },
-  medPillSubRow: {
-    marginTop: 2,
-  },
-  medPillSubText: {
-    fontSize: 12,
-    fontFamily: "Montserrat_400Regular",
+    color: "#FFFFFF",
   },
   titrationBadge: {
     paddingHorizontal: 8,
@@ -1650,27 +1699,5 @@ const styles = StyleSheet.create({
   titrationText: {
     fontSize: 11,
     fontFamily: "Montserrat_500Medium",
-  },
-  doseLoggedBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
-  },
-  doseLoggedText: {
-    fontSize: 12,
-    fontFamily: "Montserrat_500Medium",
-  },
-  logDoseBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 10,
-  },
-  logDoseBtnText: {
-    fontSize: 12,
-    fontFamily: "Montserrat_600SemiBold",
-    color: "#FFFFFF",
   },
 });

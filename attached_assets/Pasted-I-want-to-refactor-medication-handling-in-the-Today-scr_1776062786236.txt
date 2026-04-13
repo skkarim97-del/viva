@@ -1,0 +1,238 @@
+I want to refactor medication handling in the Today screen and onboarding.
+
+The current approach of putting medication inside “Your Plan” is not right.
+
+Medication should NOT be one of the plan actions like Move / Fuel / Hydrate / Recover.
+
+Instead, I want a separate standalone section above “How are things today?” called:
+
+Your Treatment
+
+This section should be the patient’s treatment status and medication logging area.
+
+=====================================
+PART 1: REMOVE MEDICATION FROM YOUR PLAN
+=====================================
+
+Completely remove the Medication section from “Your Plan”.
+
+Do NOT show medication as one of the 5 plan actions anymore.
+Do NOT include medication inside the plan completion count.
+
+“Your Plan” should now focus only on support actions like:
+- Move
+- Fuel
+- Hydrate
+- Recover
+
+Medication should live separately in its own section.
+
+=====================================
+PART 2: ADD NEW SECTION ABOVE “HOW ARE THINGS TODAY?”
+=====================================
+
+Create a new section near the top of the Today screen, above the daily input section.
+
+Title:
+Your Treatment
+
+This should feel like a premium, compact treatment status card.
+
+It should show:
+- medication name
+- dose
+- frequency
+- current logging status
+
+Examples:
+- Mounjaro · 5 mg weekly
+- Ozempic · 1.0 mg weekly
+- Saxenda · 1.8 mg daily
+
+This section should make it immediately obvious:
+- what medication the user is on
+- whether they’ve logged it
+- when they last took it
+- what they need to do next
+
+=====================================
+PART 3: WEEKLY MEDICATION LOGGING UX
+=====================================
+
+For weekly medications, the Your Treatment section should let the user:
+
+1. See current medication and dose
+2. See whether they have logged this week’s dose
+3. Select which day this week they took it
+
+Weekly med UX requirements:
+- show the medication summary
+- show a row of the days of the week, or another very clean weekly selector
+- allow the user to choose the day they took the medication this week
+- once selected, show that dose as logged for the week
+- if not selected yet, show something like:
+  “Dose not logged this week”
+- if selected, show something like:
+  “Dose logged this week ✓”
+  “Taken on Tuesday”
+
+Important:
+This should feel simple and premium.
+Do NOT make it feel like a complicated calendar.
+
+The user should be able to quickly mark:
+- what day this week they took it
+
+If it’s already logged this week, allow them to edit the selected day if needed.
+
+=====================================
+PART 4: DAILY MEDICATION LOGGING UX
+=====================================
+
+For daily medications, the Your Treatment section should let the user:
+
+1. See current medication and dose
+2. Mark whether they took it today
+
+Daily med UX requirements:
+- show the medication summary
+- show a simple state:
+  - Not taken today
+  - Taken today ✓
+- allow 1-tap logging
+- optional missed state if easy
+
+Examples:
+- “Log today’s dose”
+- “Taken today ✓”
+
+This should be very lightweight.
+
+=====================================
+PART 5: ONBOARDING UPDATE - FREQUENCY
+=====================================
+
+In onboarding, make sure the user inputs whether the medication is:
+- weekly
+- daily
+
+For standard meds, this should auto-populate from the medication selection:
+- Wegovy = weekly
+- Ozempic = weekly
+- Zepbound = weekly
+- Mounjaro = weekly
+- Saxenda = daily
+
+For “Other GLP-1 / weight loss med”:
+allow the user to explicitly choose:
+- weekly
+- daily
+
+Store frequency cleanly in state.
+
+=====================================
+PART 6: TREATMENT SECTION CONTENT
+=====================================
+
+The Your Treatment section should show the most important info only.
+
+Suggested content:
+- medication brand + dose
+- frequency
+- weekly or daily status
+- last logged day / today status
+
+Examples for weekly:
+“Mounjaro · 5 mg weekly”
+“Dose logged this week ✓”
+“Taken on Tuesday”
+
+Examples for daily:
+“Saxenda · 1.8 mg daily”
+“Taken today ✓”
+
+Optional:
+If not logged yet:
+- “Not logged yet this week”
+or
+- “Not taken today yet”
+
+=====================================
+PART 7: FEED THIS INTO LOGIC
+=====================================
+
+The treatment logging section should feed into:
+- Trends
+- Treatment adherence insights
+- Coach context
+- Medication-aware recommendations
+
+Examples:
+- missed weekly dose should affect adherence / insight summaries
+- daily missed doses should be reflected in trends
+- coach can reference whether user logged their dose
+- time since last weekly dose can affect support logic
+
+=====================================
+PART 8: TODAY SCREEN FLOW
+=====================================
+
+The top of the Today screen should now flow like this:
+
+1. top summary / support headline
+2. Your Treatment
+3. How are things today?
+4. Your Plan
+5. Why this matters
+6. Coach prompt
+
+This should feel more logical and better organized.
+
+=====================================
+PART 9: UI / DESIGN GUIDANCE
+=====================================
+
+Keep the Your Treatment section:
+- compact
+- premium
+- calm
+- visually cohesive with the rest of the app
+
+Do NOT make it look like a medical chart.
+Do NOT make it feel admin-heavy.
+
+The weekly day selector should look elegant and lightweight.
+The daily taken / not taken state should be clear and simple.
+
+=====================================
+PART 10: STATE / DATA MODEL
+=====================================
+
+Update state and storage to support:
+- medication frequency
+- current weekly logged day if weekly
+- taken today if daily
+- last logged dose date
+- medication adherence history
+
+For weekly meds, store:
+- logged_this_week
+- logged_day_of_week
+- last_dose_date if available
+
+For daily meds, store:
+- taken_today
+- last_dose_date
+- adherence streak if already supported
+
+=====================================
+PART 11: FINAL OUTPUT
+=====================================
+
+After implementing, summarize:
+1. how medication was removed from Your Plan
+2. how the new Your Treatment section works
+3. how weekly logging works
+4. how daily logging works
+5. how onboarding now captures daily vs weekly meds
+6. how treatment logging feeds into app logic
