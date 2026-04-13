@@ -98,8 +98,8 @@ function buildCorrelations(metrics: HealthMetrics[]): Correlation[] {
       strength: sleepRecStrength,
       direction: sleepRecovery > 0 ? "positive" : "negative",
       insight: sleepRecovery > 0
-        ? `Better sleep consistently drives higher recovery scores. This is one of your strongest levers for feeling good the next day.`
-        : `Recovery scores drop when you sleep longer, possibly due to oversleeping on lower-quality nights.`,
+        ? `Better sleep consistently drives higher recovery. This is one of your strongest levers for feeling good the next day.`
+        : `Recovery tends to drop when you sleep longer, possibly due to oversleeping on lower-quality nights.`,
     });
   }
 

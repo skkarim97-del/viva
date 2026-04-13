@@ -25,53 +25,52 @@ import { useColors } from "@/hooks/useColors";
 import { CATEGORY_OPTIONS } from "@/types";
 import type { MetricKey, FeelingType, ChatMessage, DailyStatusLabel, ActionCategory, AppetiteLevel, SideEffectSeverity, ProteinConfidenceDaily, MovementIntent, EnergyDaily, HydrationDaily } from "@/types";
 
-const FEELINGS: { key: NonNullable<FeelingType>; label: string }[] = [
-  { key: "great", label: "Great" },
-  { key: "good", label: "Good" },
-  { key: "tired", label: "Tired" },
-  { key: "stressed", label: "Stressed" },
+const TINT_GREEN = "#34C759";
+const TINT_BLUE = "#38B6FF";
+const TINT_PURPLE = "#AF52DE";
+const TINT_RED = "#FF6B6B";
+const TINT_MUTED = "#8E8E93";
+
+const ENERGY_OPTIONS: { key: NonNullable<EnergyDaily>; label: string; tint: string }[] = [
+  { key: "great", label: "Great", tint: TINT_GREEN },
+  { key: "good", label: "Good", tint: TINT_BLUE },
+  { key: "tired", label: "Tired", tint: TINT_PURPLE },
+  { key: "depleted", label: "Depleted", tint: TINT_RED },
 ];
 
-const ENERGY_OPTIONS: { key: NonNullable<EnergyDaily>; label: string }[] = [
-  { key: "great", label: "Great" },
-  { key: "good", label: "Good" },
-  { key: "tired", label: "Tired" },
-  { key: "depleted", label: "Depleted" },
+const APPETITE_OPTIONS: { key: NonNullable<AppetiteLevel>; label: string; tint: string }[] = [
+  { key: "strong", label: "Strong", tint: TINT_GREEN },
+  { key: "normal", label: "Normal", tint: TINT_BLUE },
+  { key: "low", label: "Low", tint: TINT_PURPLE },
+  { key: "very_low", label: "Very Low", tint: TINT_RED },
 ];
 
-const APPETITE_OPTIONS: { key: NonNullable<AppetiteLevel>; label: string }[] = [
-  { key: "strong", label: "Strong" },
-  { key: "normal", label: "Normal" },
-  { key: "low", label: "Low" },
-  { key: "very_low", label: "Very Low" },
+const HYDRATION_OPTIONS: { key: NonNullable<HydrationDaily>; label: string; tint: string }[] = [
+  { key: "high", label: "High", tint: TINT_GREEN },
+  { key: "good", label: "Good", tint: TINT_BLUE },
+  { key: "okay", label: "Okay", tint: TINT_PURPLE },
+  { key: "poor", label: "Poor", tint: TINT_RED },
 ];
 
-const HYDRATION_OPTIONS: { key: NonNullable<HydrationDaily>; label: string }[] = [
-  { key: "high", label: "High" },
-  { key: "good", label: "Good" },
-  { key: "okay", label: "Okay" },
-  { key: "poor", label: "Poor" },
+const PROTEIN_OPTIONS: { key: NonNullable<ProteinConfidenceDaily>; label: string; tint: string }[] = [
+  { key: "high", label: "High", tint: TINT_GREEN },
+  { key: "good", label: "Good", tint: TINT_BLUE },
+  { key: "okay", label: "Okay", tint: TINT_PURPLE },
+  { key: "low", label: "Low", tint: TINT_RED },
 ];
 
-const PROTEIN_OPTIONS: { key: NonNullable<ProteinConfidenceDaily>; label: string }[] = [
-  { key: "high", label: "High" },
-  { key: "good", label: "Good" },
-  { key: "okay", label: "Okay" },
-  { key: "low", label: "Low" },
+const SIDE_EFFECT_OPTIONS: { key: NonNullable<SideEffectSeverity>; label: string; tint: string }[] = [
+  { key: "none", label: "None", tint: TINT_GREEN },
+  { key: "mild", label: "Mild", tint: TINT_BLUE },
+  { key: "moderate", label: "Moderate", tint: TINT_PURPLE },
+  { key: "rough", label: "Rough", tint: TINT_RED },
 ];
 
-const SIDE_EFFECT_OPTIONS: { key: NonNullable<SideEffectSeverity>; label: string }[] = [
-  { key: "none", label: "None" },
-  { key: "mild", label: "Mild" },
-  { key: "moderate", label: "Moderate" },
-  { key: "rough", label: "Rough" },
-];
-
-const MOVEMENT_OPTIONS: { key: NonNullable<MovementIntent>; label: string }[] = [
-  { key: "strength", label: "Strength" },
-  { key: "walk", label: "Walk" },
-  { key: "light_recovery", label: "Light" },
-  { key: "rest", label: "Rest" },
+const MOVEMENT_OPTIONS: { key: NonNullable<MovementIntent>; label: string; tint: string }[] = [
+  { key: "strength", label: "Strength", tint: TINT_GREEN },
+  { key: "walk", label: "Walk", tint: TINT_BLUE },
+  { key: "light_recovery", label: "Light", tint: TINT_PURPLE },
+  { key: "rest", label: "Rest", tint: TINT_MUTED },
 ];
 
 const STATUS_COLOR_MAP: Record<DailyStatusLabel, (c: ReturnType<typeof useColors>) => string> = {
@@ -154,6 +153,33 @@ export default function DashboardScreen() {
     });
   }, [todayMetrics, metrics, feeling, energy, stress, hydration, trainingIntent, completionHistory]);
 
+  const inputSummary = React.useMemo(() => {
+    const filled = [glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent].filter(Boolean).length;
+    if (filled === 0) return "Tap each row to log how you are doing. Your plan and coach will adjust.";
+
+    const parts: string[] = [];
+    if (glp1Energy === "depleted" || glp1Energy === "tired") parts.push("energy is low");
+    else if (glp1Energy === "great") parts.push("energy is strong");
+
+    if (appetite === "very_low") parts.push("appetite is very low");
+    else if (appetite === "low") parts.push("appetite is reduced");
+
+    if (sideEffects === "rough") parts.push("side effects are rough");
+    else if (sideEffects === "moderate") parts.push("some side effects");
+
+    if (glp1Hydration === "poor") parts.push("hydration needs attention");
+    if (proteinConfidence === "low") parts.push("protein intake is low");
+
+    if (parts.length === 0) {
+      if (filled >= 4) return "Things are looking good today. Your plan reflects that.";
+      return null;
+    }
+
+    const concern = parts.length >= 3 ? "Your body may need more support today" :
+      parts.length >= 2 ? "A few things to watch today" : "Something to keep in mind today";
+    return `${concern}. ${parts.join(", ").replace(/^./, (c: string) => c.toUpperCase())}.`;
+  }, [glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent]);
+
   const haptic = () => {
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -163,14 +189,6 @@ export default function DashboardScreen() {
   const openMetric = (key: MetricKey) => {
     haptic();
     router.push({ pathname: "/metric-detail", params: { key } });
-  };
-
-  const selectFeeling = (f: NonNullable<FeelingType>) => {
-    if (Platform.OS !== "web") {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    }
-    const newVal = feeling === f ? null : f;
-    setFeeling(newVal);
   };
 
   const selectAppetite = (a: NonNullable<AppetiteLevel>) => {
@@ -258,6 +276,14 @@ export default function DashboardScreen() {
             userStress: stress,
             userHydration: hydration,
             userTrainingIntent: trainingIntent,
+            glp1DailyInputs: {
+              energy: glp1Energy,
+              appetite,
+              hydration: glp1Hydration,
+              proteinConfidence,
+              sideEffects,
+              movementIntent,
+            },
             sleepInsight: insights?.sleepIntelligence?.insight,
             hrvBaseline: metrics.length >= 7
               ? Math.round(metrics.slice(-7).reduce((s, m) => s + m.hrv, 0) / Math.min(metrics.length, 7))
@@ -394,29 +420,6 @@ export default function DashboardScreen() {
           <Text style={[styles.driversInline, { color: c.mutedForeground }]} numberOfLines={2}>
             {dailyPlan.statusDrivers.join(" · ")}
           </Text>
-          <View style={styles.feelingRow}>
-            {FEELINGS.map(({ key, label }) => {
-              const isSelected = feeling === key;
-              return (
-                <Pressable
-                  key={key}
-                  onPress={() => selectFeeling(key)}
-                  style={({ pressed }) => [
-                    styles.feelingChip,
-                    {
-                      backgroundColor: isSelected ? c.foreground : c.background,
-                      opacity: pressed ? 0.8 : 1,
-                      transform: [{ scale: pressed ? 0.96 : isSelected ? 1.02 : 1 }],
-                    },
-                  ]}
-                >
-                  <Text style={[styles.feelingLabel, { color: isSelected ? c.background : c.mutedForeground }]}>
-                    {label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
           {todayCompletionRate > 0 && (
             <View style={styles.progressBarWrap}>
               <View style={[styles.progressBarBg, { backgroundColor: c.border + "40" }]}>
@@ -581,13 +584,22 @@ export default function DashboardScreen() {
           })}
         </View>
 
-        <View style={styles.refineSection}>
-          <InputRow label="Energy" options={ENERGY_OPTIONS} selected={glp1Energy} onSelect={selectGlp1Energy} />
-          <InputRow label="Appetite" options={APPETITE_OPTIONS} selected={appetite} onSelect={selectAppetite} />
-          <InputRow label="Hydration" options={HYDRATION_OPTIONS} selected={glp1Hydration} onSelect={selectGlp1Hydration} />
-          <InputRow label="Protein" options={PROTEIN_OPTIONS} selected={proteinConfidence} onSelect={selectProteinConfidence} />
-          <InputRow label="Side Effects" options={SIDE_EFFECT_OPTIONS} selected={sideEffects} onSelect={selectSideEffects} />
-          <InputRow label="Movement" options={MOVEMENT_OPTIONS} selected={movementIntent} onSelect={selectMovementIntent} />
+        <View style={[styles.inputContainer, { backgroundColor: c.card }]}>
+          <View style={styles.inputHeader}>
+            <Feather name="edit-3" size={14} color={c.accent} />
+            <Text style={[styles.inputTitle, { color: c.foreground }]}>How are things today?</Text>
+          </View>
+          {inputSummary ? (
+            <Text style={[styles.inputSummaryText, { color: c.mutedForeground }]}>{inputSummary}</Text>
+          ) : null}
+          <View style={styles.inputRows}>
+            <InputRow label="Energy" options={ENERGY_OPTIONS} selected={glp1Energy} onSelect={selectGlp1Energy} containerBg={c.background} />
+            <InputRow label="Appetite" options={APPETITE_OPTIONS} selected={appetite} onSelect={selectAppetite} containerBg={c.background} />
+            <InputRow label="Hydration" options={HYDRATION_OPTIONS} selected={glp1Hydration} onSelect={selectGlp1Hydration} containerBg={c.background} />
+            <InputRow label="Protein" options={PROTEIN_OPTIONS} selected={proteinConfidence} onSelect={selectProteinConfidence} containerBg={c.background} />
+            <InputRow label="Side Effects" options={SIDE_EFFECT_OPTIONS} selected={sideEffects} onSelect={selectSideEffects} containerBg={c.background} />
+            <InputRow label="Movement" options={MOVEMENT_OPTIONS} selected={movementIntent} onSelect={selectMovementIntent} containerBg={c.background} />
+          </View>
         </View>
 
         <View style={[styles.askCard, { backgroundColor: c.card }]}>
@@ -983,25 +995,30 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
 
-  feelingRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 8,
-    marginTop: 4,
-  },
-  feelingChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 22,
-  },
-  feelingLabel: {
-    fontSize: 13,
-    fontFamily: "Montserrat_500Medium",
-  },
-
-  refineSection: {
-    gap: 20,
+  inputContainer: {
+    borderRadius: 20,
+    padding: 20,
     marginBottom: 12,
+    gap: 14,
+  },
+  inputHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  inputTitle: {
+    fontSize: 15,
+    fontFamily: "Montserrat_600SemiBold",
+    letterSpacing: -0.1,
+  },
+  inputSummaryText: {
+    fontSize: 13,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 19,
+    marginTop: -4,
+  },
+  inputRows: {
+    gap: 18,
   },
 
   dayCard: {

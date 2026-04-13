@@ -33,7 +33,7 @@ const API_BASE = Platform.OS === "web"
 export default function CoachScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
-  const { chatMessages, addChatMessage, todayMetrics, profile, trends, dailyPlan, insights, feeling, energy, stress, hydration, trainingIntent, completionHistory, weeklyConsistency, streakDays } = useApp();
+  const { chatMessages, addChatMessage, todayMetrics, profile, trends, dailyPlan, insights, feeling, energy, stress, hydration, trainingIntent, completionHistory, weeklyConsistency, streakDays, glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent } = useApp();
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [streamingText, setStreamingText] = useState("");
@@ -92,6 +92,14 @@ export default function CoachScreen() {
       userStress: stress || undefined,
       userHydration: hydration || undefined,
       userTrainingIntent: trainingIntent || undefined,
+      glp1DailyInputs: {
+        energy: glp1Energy,
+        appetite,
+        hydration: glp1Hydration,
+        proteinConfidence,
+        sideEffects,
+        movementIntent,
+      },
       sleepInsight: insights?.sleepDebt
         ? `${insights.sleepDebt.hours.toFixed(1)} hours of sleep debt this week. ${insights.sleepDebt.detail}`
         : undefined,
@@ -105,7 +113,7 @@ export default function CoachScreen() {
       streakDays,
       weeklyConsistency,
     };
-  }, [todayMetrics, profile, trends, dailyPlan, insights, feeling, energy, stress, hydration, trainingIntent, completionHistory, streakDays, weeklyConsistency]);
+  }, [todayMetrics, profile, trends, dailyPlan, insights, feeling, energy, stress, hydration, trainingIntent, completionHistory, streakDays, weeklyConsistency, glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent]);
 
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || isTyping) return;

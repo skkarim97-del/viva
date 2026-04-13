@@ -1,0 +1,369 @@
+I want to upgrade the onboarding and medication intelligence layer in the app so it is much more useful for GLP-1 patients while still staying very quick and simple.
+
+This is a high-priority product improvement.
+
+The onboarding should now capture:
+1. which GLP-1 medication the user is taking
+2. the current dose, using only valid dose options for that medication
+3. which telehealth platform or clinic they are using
+4. whether they recently titrated / changed dose
+5. how long they have been on the medication overall
+
+Important:
+This should NOT feel like a long medical intake form.
+It should feel fast, simple, polished, and easy to complete.
+
+Medication and dose should directly affect support logic and recommendations throughout the app.
+Higher doses or recently increased doses should create more emphasis on:
+- nutrition
+- protein
+- hydration
+- lighter training / recovery
+- side effect awareness
+
+Lower doses or more stable long-term users may have less of that emphasis.
+
+=====================================
+PART 1: ONBOARDING MEDICATION FLOW
+=====================================
+
+Refactor onboarding so the medication section works like this:
+
+STEP 1: SELECT MEDICATION
+
+Question:
+“Which medication are you currently taking?”
+
+Options:
+- Wegovy
+- Ozempic
+- Zepbound
+- Mounjaro
+- Saxenda
+- Other GLP-1 / weight loss med
+
+Make this a clean, fast tap-based selection.
+
+-------------------------------------
+STEP 2: SHOW DYNAMIC DOSE OPTIONS
+-------------------------------------
+
+Once the user selects a medication, only show the valid standard dose options for that medication.
+
+Wegovy dose options:
+- 0.25 mg weekly
+- 0.5 mg weekly
+- 1.0 mg weekly
+- 1.7 mg weekly
+- 2.4 mg weekly
+
+Ozempic dose options:
+- 0.25 mg weekly
+- 0.5 mg weekly
+- 1.0 mg weekly
+- 2.0 mg weekly
+
+Zepbound dose options:
+- 2.5 mg weekly
+- 5 mg weekly
+- 7.5 mg weekly
+- 10 mg weekly
+- 12.5 mg weekly
+- 15 mg weekly
+
+Mounjaro dose options:
+- 2.5 mg weekly
+- 5 mg weekly
+- 7.5 mg weekly
+- 10 mg weekly
+- 12.5 mg weekly
+- 15 mg weekly
+
+Saxenda dose options:
+- 0.6 mg daily
+- 1.2 mg daily
+- 1.8 mg daily
+- 2.4 mg daily
+- 3.0 mg daily
+
+Other GLP-1 / weight loss med:
+Allow manual entry for:
+- medication name
+- dose
+- frequency
+
+Use a clean conditional UI:
+- if standard med selected -> show tap options
+- if Other selected -> show compact manual fields
+
+-------------------------------------
+STEP 3: RECENT TITRATION
+-------------------------------------
+
+Question:
+“Did your dose change in the last 14 days?”
+
+Options:
+- Yes
+- No
+
+If Yes:
+Show:
+- previous dose
+- date changed
+
+Keep this simple and conditional.
+
+-------------------------------------
+STEP 4: TIME ON MEDICATION
+-------------------------------------
+
+Question:
+“How long have you been on this medication overall?”
+
+Options:
+- Less than 1 month
+- 1–3 months
+- 3–6 months
+- 6+ months
+
+-------------------------------------
+STEP 5: TELEHEALTH PLATFORM / CLINIC
+-------------------------------------
+
+Question:
+“Which platform or clinic are you using?”
+
+Use a searchable or selectable list of common telehealth / GLP-1 platforms.
+
+Include options such as:
+- Ro
+- Hims & Hers
+- WeightWatchers Clinic / Sequence
+- Noom Med
+- Found
+- Calibrate
+- Form Health
+- Sesame
+- PlushCare
+- LifeMD
+- Push Health
+- Mochi Health
+- Fridays
+- Henry Meds
+- Joinamble
+- Teladoc
+- Local doctor / clinic
+- Other
+
+If Other:
+Allow manual entry.
+
+This should still feel fast and lightweight.
+
+=====================================
+PART 2: NORMALIZED DATA MODEL
+=====================================
+
+Store medication data in normalized fields, not one giant string.
+
+Use a structure like:
+
+{
+  "medication_brand": "Mounjaro",
+  "generic_name": "tirzepatide",
+  "indication": "weight loss",
+  "dose_value": 5,
+  "dose_unit": "mg",
+  "frequency": "weekly",
+  "week_on_current_dose": 2,
+  "start_date": null,
+  "last_injection_date": null,
+  "recent_titration": true,
+  "previous_dose_value": 2.5,
+  "previous_dose_unit": "mg",
+  "previous_frequency": "weekly",
+  "dose_change_date": "2026-04-10",
+  "time_on_medication_bucket": "1-3 months",
+  "telehealth_platform": "Ro"
+}
+
+If exact dates are not already collected, keep fields nullable for now.
+But structure the model so they can be added later.
+
+Also map brand to generic name:
+- Wegovy -> semaglutide
+- Ozempic -> semaglutide
+- Zepbound -> tirzepatide
+- Mounjaro -> tirzepatide
+- Saxenda -> liraglutide
+
+For Other:
+- allow custom generic_name if unknown / typed
+- allow manual medication_brand
+
+=====================================
+PART 3: KEEP ONBOARDING QUICK
+=====================================
+
+This is very important.
+
+Do NOT make onboarding feel long or heavy.
+
+Guidelines:
+- use tap-based cards or chips wherever possible
+- show conditional questions only when relevant
+- reduce typing as much as possible
+- keep screen copy concise
+- avoid long explanations
+- one question per screen if that matches current flow
+- if multiple related items are on one screen, keep spacing clean and minimal
+
+The onboarding should feel:
+- simple
+- premium
+- fast
+- medically relevant
+- not overwhelming
+
+=====================================
+PART 4: MEDICATION SHOULD IMPACT RECOMMENDATIONS
+=====================================
+
+Medication and dose should directly influence support logic.
+
+Update the recommendation engine / support logic so that medication context matters.
+
+Examples:
+
+1. Higher dose users
+If on higher dose tiers, increase emphasis on:
+- hydration
+- protein / fueling
+- lighter training when symptoms or recovery decline
+- symptom management
+- meal consistency
+
+2. Recent titration users
+If dose changed in the last 14 days, increase emphasis on:
+- keeping routines simple
+- hydration
+- smaller meals / protein
+- lighter activity
+- side effect monitoring
+
+3. Early therapy users
+If user has been on medication less than 1 month, support logic should assume more adaptation is happening and give more foundational guidance.
+
+4. Stable lower-dose / longer-term users
+If dose is stable and user is further into treatment, recommendations can lean more toward consistency, activity, and sustainable routines, with slightly less symptom-prevention emphasis.
+
+This logic should affect:
+- Today screen recommendations
+- explanation / insight block
+- weekly plan guidance
+- coach context and responses
+
+=====================================
+PART 5: EXAMPLES OF PRODUCT LOGIC
+=====================================
+
+Use medication-aware logic like:
+
+- user on tirzepatide 10 mg weekly with low appetite + rough side effects
+-> recommend simplified meals, hydration, lighter movement, reduced load
+
+- user just escalated from 2.5 mg to 5 mg in last 7 days
+-> explain that increased dose changes can increase support needs and recommend keeping nutrition and hydration dialed in
+
+- user on semaglutide 0.25 mg weekly with stable symptoms and decent recovery
+-> less emphasis on symptom management, more emphasis on consistency and movement
+
+Do not make medical claims beyond reasonable lifestyle-support logic.
+Keep it framed as supportive guidance, not diagnosis.
+
+=====================================
+PART 6: TODAY SCREEN DISPLAY
+=====================================
+
+Show medication context somewhere in the app, likely near the top of Today or in a compact profile / summary section.
+
+It should display something like:
+- Ozempic · 0.5 mg weekly
+- Mounjaro · 5 mg weekly
+- Wegovy · 1.7 mg weekly
+
+Also show platform context somewhere subtle if helpful, such as:
+- via Ro
+- via Hims & Hers
+- via Local clinic
+
+Do this in a clean premium way, not in a cluttered way.
+
+Medication context should feel visible and useful, not buried.
+
+=====================================
+PART 7: COACH CONTEXT
+=====================================
+
+Make sure the coach / chat context includes:
+- medication brand
+- dose
+- frequency
+- recent titration status
+- time on medication
+- telehealth platform if relevant
+
+This should affect how the coach answers.
+
+For example:
+A user on a higher dose with recent dose increase should get more careful, supportive responses around hydration, protein, appetite, and activity.
+
+Also remove any patient-facing references to a “score” if there are still any left.
+
+=====================================
+PART 8: TYPES / STATE / STORAGE
+=====================================
+
+Update the relevant app types, onboarding state, app context, mock data, and persistence layer to support:
+- medication brand
+- generic name
+- dose value
+- dose unit
+- frequency
+- recent titration
+- previous dose
+- dose change date
+- time on medication bucket
+- telehealth platform
+
+Preserve clean persistence and backward compatibility where possible.
+
+=====================================
+PART 9: UX POLISH
+=====================================
+
+Keep all of this premium and simple.
+
+Do not turn onboarding into a complicated medical workflow.
+Do not add too much copy.
+Do not make the medication area look cluttered.
+
+The result should feel:
+- fast
+- smart
+- credible
+- polished
+- health-tech premium
+
+=====================================
+PART 10: FINAL OUTPUT
+=====================================
+
+After implementing, summarize:
+1. how medication selection was added
+2. how dynamic dose options were implemented
+3. how telehealth platform selection was added
+4. how normalized medication fields are stored
+5. how medication / dose / titration now affect recommendations and coach logic
+6. any areas still using placeholder logic

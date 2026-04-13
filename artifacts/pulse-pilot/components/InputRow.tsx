@@ -7,6 +7,7 @@ import { useColors } from "@/hooks/useColors";
 interface InputOption<T extends string> {
   key: T;
   label: string;
+  tint?: string;
 }
 
 interface InputRowProps<T extends string> {
@@ -14,9 +15,10 @@ interface InputRowProps<T extends string> {
   options: InputOption<T>[];
   selected: T | null;
   onSelect: (key: T) => void;
+  containerBg?: string;
 }
 
-export function InputRow<T extends string>({ label, options, selected, onSelect }: InputRowProps<T>) {
+export function InputRow<T extends string>({ label, options, selected, onSelect, containerBg }: InputRowProps<T>) {
   const c = useColors();
 
   const handlePress = (key: T) => {
@@ -26,12 +28,15 @@ export function InputRow<T extends string>({ label, options, selected, onSelect 
     onSelect(key);
   };
 
+  const unselectedBg = containerBg ?? c.card;
+
   return (
     <View style={styles.row}>
       <Text style={[styles.label, { color: c.mutedForeground }]}>{label}</Text>
       <View style={styles.optionsRow}>
-        {options.map(({ key, label: optLabel }) => {
+        {options.map(({ key, label: optLabel, tint }) => {
           const isSelected = selected === key;
+          const color = tint ?? c.primary;
           return (
             <Pressable
               key={key}
@@ -39,7 +44,9 @@ export function InputRow<T extends string>({ label, options, selected, onSelect 
               style={({ pressed }) => [
                 styles.option,
                 {
-                  backgroundColor: isSelected ? c.primary : c.card,
+                  backgroundColor: isSelected ? color + "16" : unselectedBg,
+                  borderWidth: 1.5,
+                  borderColor: isSelected ? color + "30" : "transparent",
                   opacity: pressed ? 0.8 : 1,
                   transform: [{ scale: pressed ? 0.96 : 1 }],
                 },
@@ -48,7 +55,10 @@ export function InputRow<T extends string>({ label, options, selected, onSelect 
               <Text
                 style={[
                   styles.optionText,
-                  { color: isSelected ? c.primaryForeground : c.foreground },
+                  {
+                    color: isSelected ? color : c.mutedForeground,
+                    fontFamily: isSelected ? "Montserrat_600SemiBold" : "Montserrat_500Medium",
+                  },
                 ]}
                 numberOfLines={1}
               >
@@ -85,6 +95,5 @@ const styles = StyleSheet.create({
   },
   optionText: {
     fontSize: 13,
-    fontFamily: "Montserrat_500Medium",
   },
 });

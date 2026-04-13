@@ -770,7 +770,7 @@ export function getMetricDetail(
         : todayMetrics.recoveryScore >= 50
         ? "Recovery is moderate."
         : "Recovery is low. Take it easy.",
-      explanation: `Recovery score: ${todayMetrics.recoveryScore}%. Based on HRV, resting heart rate, and sleep quality.`,
+      explanation: `Recovery is at ${todayMetrics.recoveryScore}%. Based on HRV, resting heart rate, and sleep quality.`,
       whatItMeans: "Recovery shows how prepared your body is for activity. On GLP-1, listening to recovery signals helps you stay consistent.",
       recommendation: todayMetrics.recoveryScore < 50
         ? "Focus on rest, hydration, and protein today. Skip intense activity."

@@ -166,6 +166,14 @@ interface ChatRequestBody {
     userStress?: string;
     userHydration?: string;
     userTrainingIntent?: string;
+    glp1DailyInputs?: {
+      energy?: string | null;
+      appetite?: string | null;
+      hydration?: string | null;
+      proteinConfidence?: string | null;
+      sideEffects?: string | null;
+      movementIntent?: string | null;
+    };
     sleepInsight?: string;
     hrvBaseline?: number;
     hrvDeviation?: number;
@@ -223,6 +231,20 @@ router.post("/chat", async (req: Request, res: Response) => {
       if (healthContext.userTrainingIntent) selfReported.push(`Training intent: ${healthContext.userTrainingIntent}`);
       if (selfReported.length > 0) {
         parts.push(`\nSELF-REPORTED STATE: ${selfReported.join(", ")}`);
+      }
+
+      if (healthContext.glp1DailyInputs) {
+        const g = healthContext.glp1DailyInputs;
+        const glp1Parts: string[] = [];
+        if (g.energy) glp1Parts.push(`Energy: ${g.energy}`);
+        if (g.appetite) glp1Parts.push(`Appetite: ${g.appetite}`);
+        if (g.hydration) glp1Parts.push(`Hydration: ${g.hydration}`);
+        if (g.proteinConfidence) glp1Parts.push(`Protein confidence: ${g.proteinConfidence}`);
+        if (g.sideEffects) glp1Parts.push(`Side effects: ${g.sideEffects}`);
+        if (g.movementIntent) glp1Parts.push(`Movement intent: ${g.movementIntent}`);
+        if (glp1Parts.length > 0) {
+          parts.push(`\nTODAY'S GLP-1 CHECK-IN: ${glp1Parts.join(", ")}`);
+        }
       }
 
       if (healthContext.sleepInsight) {

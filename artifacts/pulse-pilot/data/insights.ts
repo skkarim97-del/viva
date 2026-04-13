@@ -146,10 +146,10 @@ function computeRecoveryTrend(last7: HealthMetrics[]) {
 
   const detail =
     direction === "improving"
-      ? `Recovery has been improving for ${streak} days. Average score: ${Math.round(avg)}%. Your body is adapting well to your current routine.`
+      ? `Recovery has been improving for ${streak} days, averaging around ${Math.round(avg)}%. Your body is adapting well to your current routine.`
       : direction === "declining"
-      ? `Recovery has been declining for ${streak} days. Average: ${Math.round(avg)}%. A lighter day with better sleep tonight will help your body catch up.`
-      : `Recovery is holding steady at an average of ${Math.round(avg)}%. Consistent inputs are producing consistent results.`;
+      ? `Recovery has been declining for ${streak} days, averaging around ${Math.round(avg)}%. A lighter day with better sleep tonight will help your body catch up.`
+      : `Recovery is holding steady around ${Math.round(avg)}%. Consistent inputs are producing consistent results.`;
 
   return { direction, streak, detail };
 }
@@ -254,8 +254,8 @@ function computeConsistency(last14: HealthMetrics[], workouts: WorkoutEntry[]) {
   if (activityConsistency < 0.5) parts.push("regular activity");
 
   const detail = parts.length > 0
-    ? `Score: ${score}/100. Areas to improve: ${parts.join(", ")}. Consistency is the strongest predictor of long-term success on treatment.`
-    : `Score: ${score}/100. You are showing strong consistency across sleep, movement, and daily habits. This supports your treatment.`;
+    ? `Areas to improve: ${parts.join(", ")}. Consistency is the strongest predictor of long-term success on treatment.`
+    : `You are showing strong consistency across sleep, movement, and daily habits. This supports your treatment.`;
 
   return { score, label, detail };
 }
