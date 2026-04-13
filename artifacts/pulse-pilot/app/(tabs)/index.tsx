@@ -1094,25 +1094,71 @@ export default function DashboardScreen() {
                 const computeDateStr = (key: string): string => {
                   const d = new Date();
                   if (key === "yesterday") d.setDate(d.getDate() - 1);
-                  else if (key === "3_days") d.setDate(d.getDate() - 3);
-                  else if (key === "1_week") d.setDate(d.getDate() - 7);
+                  else if (key === "this_week") d.setDate(d.getDate() - 4);
+                  else if (key === "over_week") d.setDate(d.getDate() - 10);
                   return d.toISOString().split("T")[0];
                 };
 
                 const DATE_OPTIONS: { key: string; label: string }[] = [
                   { key: "today", label: "Today" },
                   { key: "yesterday", label: "Yesterday" },
-                  { key: "3_days", label: "A few days ago" },
-                  { key: "1_week", label: "About a week ago" },
+                  { key: "this_week", label: "This week" },
+                  { key: "over_week", label: "Over a week ago" },
                 ];
 
-                const newDoseOptions = selectedPrevDose !== null && selectedPrevDose !== -1
-                  ? allDoses.filter(d => d.value > selectedPrevDose)
-                  : allDoses;
+                const currentIdx = allDoses.findIndex(d => d.value === mp.doseValue);
+                const nearbyPrev = (() => {
+                  if (isOther) return [];
+                  const idx = currentIdx >= 0 ? currentIdx : allDoses.length - 1;
+                  const start = Math.max(0, idx - 2);
+                  return allDoses.slice(start, idx + 1).slice(-3);
+                })();
+
+                const nearbyNew = (() => {
+                  if (isOther || selectedPrevDose === null) return [];
+                  if (selectedPrevDose === -1) {
+                    const idx = currentIdx >= 0 ? currentIdx : 0;
+                    return allDoses.slice(idx, idx + 2);
+                  }
+                  const prevIdx = allDoses.findIndex(d => d.value === selectedPrevDose);
+                  if (prevIdx < 0) return allDoses.slice(0, 2);
+                  return allDoses.slice(prevIdx + 1, prevIdx + 3);
+                })();
+
+                const SAME_DOSE = -2;
+                const isSameDose = selectedNewDose === SAME_DOSE;
 
                 const canSave = isOther
                   ? (selectedPrevDose !== null && selectedPrevDose > 0 && selectedNewDose !== null && selectedNewDose > selectedPrevDose)
                   : selectedPrevDose !== null && selectedNewDose !== null;
+
+                const renderPill = (
+                  value: number,
+                  label: string,
+                  isSelected: boolean,
+                  onPress: () => void,
+                  variant: "accent" | "primary" = "accent",
+                ) => {
+                  const bg = variant === "accent" ? c.accent : c.primary;
+                  return (
+                    <Pressable
+                      key={value}
+                      onPress={onPress}
+                      style={[
+                        styles.dosePill,
+                        {
+                          backgroundColor: isSelected ? bg : bg + "0A",
+                          borderColor: isSelected ? bg : c.border + "40",
+                        },
+                      ]}
+                    >
+                      <Text style={[
+                        styles.dosePillText,
+                        { color: isSelected ? "#FFFFFF" : c.foreground },
+                      ]}>{label}</Text>
+                    </Pressable>
+                  );
+                };
 
                 return (
                   <View style={{ gap: 16 }}>
@@ -1120,81 +1166,34 @@ export default function DashboardScreen() {
                       <>
                         <Text style={[styles.doseDetailLabel, { color: c.foreground }]}>Previous dose</Text>
                         <View style={styles.dosePillRow}>
-                          {allDoses.map((d) => (
-                            <Pressable
-                              key={d.value}
-                              onPress={() => {
-                                haptic();
-                                if (selectedPrevDose === d.value) {
-                                  setSelectedPrevDose(null);
-                                  setSelectedNewDose(null);
-                                } else {
-                                  setSelectedPrevDose(d.value);
-                                  if (selectedNewDose !== null && selectedNewDose <= d.value) {
-                                    setSelectedNewDose(null);
-                                  }
-                                }
-                              }}
-                              style={[
-                                styles.dosePill,
-                                {
-                                  backgroundColor: selectedPrevDose === d.value ? c.accent : c.accent + "0A",
-                                  borderColor: selectedPrevDose === d.value ? c.accent : c.border + "40",
-                                },
-                              ]}
-                            >
-                              <Text style={[
-                                styles.dosePillText,
-                                { color: selectedPrevDose === d.value ? "#FFFFFF" : c.foreground },
-                              ]}>{d.label}</Text>
-                            </Pressable>
-                          ))}
-                          <Pressable
-                            onPress={() => { haptic(); setSelectedPrevDose(-1); setSelectedNewDose(null); }}
-                            style={[
-                              styles.dosePill,
-                              {
-                                backgroundColor: selectedPrevDose === -1 ? c.accent : c.accent + "0A",
-                                borderColor: selectedPrevDose === -1 ? c.accent : c.border + "40",
-                              },
-                            ]}
-                          >
-                            <Text style={[
-                              styles.dosePillText,
-                              { color: selectedPrevDose === -1 ? "#FFFFFF" : c.foreground },
-                            ]}>Not sure</Text>
-                          </Pressable>
+                          {nearbyPrev.map((d) =>
+                            renderPill(d.value, d.label, selectedPrevDose === d.value, () => {
+                              haptic();
+                              if (selectedPrevDose === d.value) { setSelectedPrevDose(null); setSelectedNewDose(null); }
+                              else { setSelectedPrevDose(d.value); setSelectedNewDose(null); }
+                            })
+                          )}
+                          {renderPill(-1, "Not sure", selectedPrevDose === -1, () => {
+                            haptic(); setSelectedPrevDose(-1); setSelectedNewDose(null);
+                          })}
                         </View>
 
                         {selectedPrevDose !== null && (
                           <>
                             <Text style={[styles.doseDetailLabel, { color: c.foreground, marginTop: 4 }]}>New dose</Text>
-                            {newDoseOptions.length > 0 ? (
-                              <View style={styles.dosePillRow}>
-                                {newDoseOptions.map((d) => (
-                                  <Pressable
-                                    key={d.value}
-                                    onPress={() => { haptic(); setSelectedNewDose(selectedNewDose === d.value ? null : d.value); }}
-                                    style={[
-                                      styles.dosePill,
-                                      {
-                                        backgroundColor: selectedNewDose === d.value ? c.primary : c.primary + "0A",
-                                        borderColor: selectedNewDose === d.value ? c.primary : c.border + "40",
-                                      },
-                                    ]}
-                                  >
-                                    <Text style={[
-                                      styles.dosePillText,
-                                      { color: selectedNewDose === d.value ? "#FFFFFF" : c.foreground },
-                                    ]}>{d.label}</Text>
-                                  </Pressable>
-                                ))}
-                              </View>
-                            ) : selectedPrevDose !== -1 ? (
-                              <Text style={[styles.doseDetailHint, { color: c.mutedForeground }]}>
-                                That is already the highest standard dose. Select a lower previous dose.
-                              </Text>
-                            ) : null}
+                            <View style={styles.dosePillRow}>
+                              {nearbyNew.map((d) =>
+                                renderPill(d.value, d.label, selectedNewDose === d.value, () => {
+                                  haptic(); setSelectedNewDose(selectedNewDose === d.value ? null : d.value);
+                                }, "primary")
+                              )}
+                              {renderPill(SAME_DOSE, "Same dose", isSameDose, () => {
+                                haptic(); setSelectedNewDose(isSameDose ? null : SAME_DOSE);
+                              }, "primary")}
+                              {renderPill(-1, "Not sure", selectedNewDose === -1, () => {
+                                haptic(); setSelectedNewDose(selectedNewDose === -1 ? null : -1);
+                              }, "primary")}
+                            </View>
                           </>
                         )}
                       </>
@@ -1229,28 +1228,38 @@ export default function DashboardScreen() {
 
                     <Text style={[styles.doseDetailLabel, { color: c.foreground, marginTop: 4 }]}>When did it change?</Text>
                     <View style={styles.dosePillRow}>
-                      {DATE_OPTIONS.map((opt) => (
-                        <Pressable
-                          key={opt.key}
-                          onPress={() => { haptic(); setSelectedDoseDate(opt.key); }}
-                          style={[
-                            styles.dosePill,
-                            {
-                              backgroundColor: selectedDoseDate === opt.key ? c.accent : c.accent + "0A",
-                              borderColor: selectedDoseDate === opt.key ? c.accent : c.border + "40",
-                            },
-                          ]}
-                        >
-                          <Text style={[
-                            styles.dosePillText,
-                            { color: selectedDoseDate === opt.key ? "#FFFFFF" : c.foreground },
-                          ]}>{opt.label}</Text>
-                        </Pressable>
-                      ))}
+                      {DATE_OPTIONS.map((opt) => {
+                        const sel = selectedDoseDate === opt.key;
+                        return (
+                          <Pressable
+                            key={opt.key}
+                            onPress={() => { haptic(); setSelectedDoseDate(opt.key); }}
+                            style={[
+                              styles.dosePill,
+                              {
+                                backgroundColor: sel ? c.accent : c.accent + "0A",
+                                borderColor: sel ? c.accent : c.border + "40",
+                              },
+                            ]}
+                          >
+                            <Text style={[
+                              styles.dosePillText,
+                              { color: sel ? "#FFFFFF" : c.foreground },
+                            ]}>{opt.label}</Text>
+                          </Pressable>
+                        );
+                      })}
                     </View>
 
                     <Pressable
                       onPress={() => {
+                        if (isSameDose) {
+                          haptic();
+                          setShowDoseIncrease(false);
+                          setSelectedPrevDose(null);
+                          setSelectedNewDose(null);
+                          return;
+                        }
                         if (!canSave) return;
                         haptic();
                         const dateStr = computeDateStr(selectedDoseDate);
@@ -1260,7 +1269,7 @@ export default function DashboardScreen() {
                         updateProfile({
                           medicationProfile: {
                             ...mp,
-                            doseValue: newVal,
+                            doseValue: newVal > 0 ? newVal : mp.doseValue,
                             doseUnit: newDoseInfo?.unit ?? mp.doseUnit,
                             frequency: newDoseInfo?.frequency ?? mp.frequency,
                             recentTitration: true,
@@ -1277,13 +1286,13 @@ export default function DashboardScreen() {
                       style={({ pressed }) => [
                         styles.checkInSubmit,
                         {
-                          backgroundColor: canSave ? c.primary : c.primary + "40",
+                          backgroundColor: (canSave || isSameDose) ? c.primary : c.primary + "40",
                           opacity: pressed ? 0.85 : 1,
                         },
                       ]}
                     >
                       <Feather name="check" size={16} color="#fff" style={{ marginRight: 6 }} />
-                      <Text style={styles.checkInSubmitText}>Save</Text>
+                      <Text style={styles.checkInSubmitText}>{isSameDose ? "Close" : "Save"}</Text>
                     </Pressable>
                   </View>
                 );
