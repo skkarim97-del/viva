@@ -41,7 +41,7 @@ The system is a pnpm workspace monorepo using Node.js 24 and TypeScript 5.9. The
 - **MedicationProfile** (normalized): medicationBrand, genericName, doseValue, doseUnit, frequency (weekly/daily), recentTitration, previousDoseValue, timeOnMedicationBucket, telehealthPlatform, plannedDoseDay
 - **MedicationLogEntry**: id, date, medicationBrand, doseValue, doseUnit, status (taken/skipped/delayed), notes, timestamp
 - **Medication Data** (`data/medicationData.ts`): Brand DB (Wegovy/Ozempic/Zepbound/Mounjaro/Saxenda), dynamic dose options per brand, telehealth platforms list, helpers (getDoseTier, getBrandGeneric, formatDoseDisplay, etc.)
-- **GLP-1 Daily Inputs**: appetite (strong/normal/low/very_low), sideEffects (none/mild/moderate/rough), proteinConfidence (high/good/okay/low), movementIntent (walk/strength/light_recovery/rest), energy (great/good/tired/depleted), hydration (high/good/okay/poor)
+- **GLP-1 Daily Inputs (4 fields)**: energy (great/good/tired/depleted), appetite (strong/normal/low/very_low), nausea (none/mild/moderate/severe), digestion (fine/bloated/constipated/diarrhea). Old fields (hydration, proteinConfidence, sideEffects, movementIntent) removed from daily check-in. Plan recommendations (Move/Fuel/Hydrate/Recover) remain in "Your Plan".
 - **AsyncStorage keys**: @viva_glp1_inputs, @viva_glp1_history, @viva_profile, @viva_chat, @viva_wellness, @viva_completions, @viva_integrations, @viva_weekly_plan, @viva_checkins, @viva_med_log
 
 ### Technical Implementations & Features

@@ -2,10 +2,8 @@ import type {
   GLP1DailyInputs,
   EnergyDaily,
   AppetiteLevel,
-  HydrationDaily,
-  ProteinConfidenceDaily,
-  SideEffectSeverity,
-  MovementIntent,
+  NauseaLevel,
+  DigestionStatus,
   InputCategory,
   TrendDirection,
   CategoryAnalytics,
@@ -35,32 +33,18 @@ const APPETITE_SCORES: Record<string, number> = {
   very_low: 1,
 };
 
-const HYDRATION_SCORES: Record<string, number> = {
-  high: 4,
-  good: 3,
-  okay: 2,
-  poor: 1,
-};
-
-const PROTEIN_SCORES: Record<string, number> = {
-  high: 4,
-  good: 3,
-  okay: 2,
-  low: 1,
-};
-
-const SIDE_EFFECT_SCORES: Record<string, number> = {
+const NAUSEA_SCORES: Record<string, number> = {
   none: 4,
   mild: 3,
   moderate: 2,
-  rough: 1,
+  severe: 1,
 };
 
-const MOVEMENT_SCORES: Record<string, number> = {
-  strength: 4,
-  walk: 3,
-  light_recovery: 2,
-  rest: 1,
+const DIGESTION_SCORES: Record<string, number> = {
+  fine: 4,
+  bloated: 3,
+  constipated: 2,
+  diarrhea: 1,
 };
 
 export function scoreEnergy(val: EnergyDaily): number {
@@ -71,30 +55,20 @@ export function scoreAppetite(val: AppetiteLevel): number {
   return val ? (APPETITE_SCORES[val] ?? 0) : 0;
 }
 
-export function scoreHydration(val: HydrationDaily): number {
-  return val ? (HYDRATION_SCORES[val] ?? 0) : 0;
+export function scoreNausea(val: NauseaLevel): number {
+  return val ? (NAUSEA_SCORES[val] ?? 0) : 0;
 }
 
-export function scoreProtein(val: ProteinConfidenceDaily): number {
-  return val ? (PROTEIN_SCORES[val] ?? 0) : 0;
-}
-
-export function scoreSideEffects(val: SideEffectSeverity): number {
-  return val ? (SIDE_EFFECT_SCORES[val] ?? 0) : 0;
-}
-
-export function scoreMovement(val: MovementIntent): number {
-  return val ? (MOVEMENT_SCORES[val] ?? 0) : 0;
+export function scoreDigestion(val: DigestionStatus): number {
+  return val ? (DIGESTION_SCORES[val] ?? 0) : 0;
 }
 
 export function scoreInput(category: InputCategory, inputs: GLP1DailyInputs): number {
   switch (category) {
     case "energy": return scoreEnergy(inputs.energy);
     case "appetite": return scoreAppetite(inputs.appetite);
-    case "hydration": return scoreHydration(inputs.hydration);
-    case "protein": return scoreProtein(inputs.proteinConfidence);
-    case "sideEffects": return scoreSideEffects(inputs.sideEffects);
-    case "movement": return scoreMovement(inputs.movementIntent);
+    case "nausea": return scoreNausea(inputs.nausea);
+    case "digestion": return scoreDigestion(inputs.digestion);
   }
 }
 
@@ -116,7 +90,7 @@ function computeTrend(values: number[]): TrendDirection {
   return "flat";
 }
 
-const ALL_CATEGORIES: InputCategory[] = ["energy", "appetite", "hydration", "protein", "sideEffects", "movement"];
+const ALL_CATEGORIES: InputCategory[] = ["energy", "appetite", "nausea", "digestion"];
 
 export function computeCategoryAnalytics(history: GLP1DailyInputs[]): CategoryAnalytics[] {
   const last7 = history.slice(-7);
@@ -137,12 +111,10 @@ export function computeCorrelations(history: GLP1DailyInputs[]): InputCorrelatio
   const correlations: InputCorrelation[] = [];
 
   const pairs: [InputCategory, InputCategory, string, string][] = [
-    ["appetite", "protein", "Lower appetite tends to reduce protein intake", "Better appetite supports protein goals"],
-    ["hydration", "energy", "Lower hydration may be affecting energy levels", "Good hydration is supporting energy"],
-    ["sideEffects", "movement", "Side effects may be limiting activity", "Fewer side effects support staying active"],
-    ["sideEffects", "appetite", "Side effects may be suppressing appetite", "Manageable side effects help maintain appetite"],
-    ["energy", "movement", "Lower energy is reducing activity", "Good energy supports staying active"],
-    ["hydration", "sideEffects", "Low hydration may be worsening side effects", "Hydration helps manage side effects"],
+    ["appetite", "nausea", "Nausea may be suppressing appetite", "Manageable nausea is helping maintain appetite"],
+    ["nausea", "digestion", "Nausea and digestive issues are co-occurring", "Both nausea and digestion are in a good range"],
+    ["energy", "appetite", "Lower energy correlates with reduced appetite", "Good energy supports healthy appetite"],
+    ["digestion", "energy", "Digestive discomfort may be affecting energy", "Good digestion supports steadier energy"],
   ];
 
   for (const [catA, catB, negInsight, posInsight] of pairs) {
@@ -195,31 +167,35 @@ export function generateInputInsights(analytics: CategoryAnalytics[], correlatio
   const categoryLabels: Record<InputCategory, string> = {
     energy: "energy",
     appetite: "appetite",
-    hydration: "hydration",
-    protein: "protein intake",
-    sideEffects: "side effects",
-    movement: "activity",
+    nausea: "nausea",
+    digestion: "digestion",
   };
 
   for (const cat of analytics) {
     if (cat.avg7d === 0) continue;
 
     if (cat.trend === "down" && cat.avg7d <= 2.5) {
-      if (cat.category === "sideEffects") {
-        insights.push("Side effects have been more noticeable this week");
+      if (cat.category === "nausea") {
+        insights.push("Nausea has been more noticeable this week");
+      } else if (cat.category === "digestion") {
+        insights.push("Digestion has been more unsettled this week");
       } else {
         insights.push(`Your ${categoryLabels[cat.category]} has been lower than usual this week`);
       }
     } else if (cat.trend === "up" && cat.avg7d >= 3) {
-      if (cat.category === "sideEffects") {
-        insights.push("Side effects have been easing up recently");
+      if (cat.category === "nausea") {
+        insights.push("Nausea has been easing up recently");
+      } else if (cat.category === "digestion") {
+        insights.push("Digestion has been settling down");
       } else {
         insights.push(`Your ${categoryLabels[cat.category]} has been improving`);
       }
-    } else if (cat.avg7d <= 1.5 && cat.category !== "sideEffects") {
+    } else if (cat.avg7d <= 1.5 && cat.category !== "nausea" && cat.category !== "digestion") {
       insights.push(`Your ${categoryLabels[cat.category]} has been consistently low this week`);
-    } else if (cat.avg7d <= 1.5 && cat.category === "sideEffects") {
-      insights.push("You have been dealing with significant side effects this week");
+    } else if (cat.avg7d <= 1.5 && cat.category === "nausea") {
+      insights.push("You have been dealing with significant nausea this week");
+    } else if (cat.avg7d <= 1.5 && cat.category === "digestion") {
+      insights.push("Digestive issues have been persistent this week");
     }
   }
 
@@ -301,18 +277,20 @@ function generateWeeklySummaryLines(analytics: CategoryAnalytics[], adherence: A
   const labels: Record<InputCategory, string> = {
     energy: "Energy",
     appetite: "Appetite",
-    hydration: "Hydration",
-    protein: "Protein intake",
-    sideEffects: "Side effects",
-    movement: "Activity",
+    nausea: "Nausea",
+    digestion: "Digestion",
   };
 
   for (const cat of analytics) {
     if (cat.avg7d === 0) continue;
-    if (cat.category === "sideEffects") {
-      if (cat.trend === "down") lines.push("Side effects have increased after recent changes");
-      else if (cat.trend === "up") lines.push("Side effects have improved this week");
-      else if (cat.avg7d <= 2) lines.push("Side effects remain noticeable this week");
+    if (cat.category === "nausea") {
+      if (cat.trend === "down") lines.push("Nausea has increased after recent changes");
+      else if (cat.trend === "up") lines.push("Nausea has improved this week");
+      else if (cat.avg7d <= 2) lines.push("Nausea remains noticeable this week");
+    } else if (cat.category === "digestion") {
+      if (cat.trend === "down") lines.push("Digestion has worsened this week");
+      else if (cat.trend === "up") lines.push("Digestion has improved this week");
+      else if (cat.avg7d <= 2) lines.push("Digestive discomfort continues this week");
     } else {
       if (cat.trend === "down" && cat.avg7d <= 2.5) lines.push(`${labels[cat.category]} dipped compared to last week`);
       else if (cat.trend === "up" && cat.avg7d >= 3) lines.push(`${labels[cat.category]} improved this week`);
@@ -343,20 +321,15 @@ export function buildPatientSummary(
   const findCat = (cat: InputCategory) => analytics.find(a => a.category === cat);
 
   const appetite = findCat("appetite");
-  const hydration = findCat("hydration");
-  const protein = findCat("protein");
+  const nausea = findCat("nausea");
   const energy = findCat("energy");
-  const sideEffects = findCat("sideEffects");
-  const movement = findCat("movement");
+  const digestion = findCat("digestion");
 
   if (appetite && appetite.avg7d <= 2 && appetite.avg7d > 0) flags.push("low_appetite");
   if (appetite && appetite.trend === "up" && appetite.avg7d >= 3) flags.push("improving_appetite");
-  if (hydration && hydration.avg7d <= 2 && hydration.avg7d > 0) flags.push("low_hydration");
-  if (hydration && hydration.trend === "up" && hydration.avg7d >= 3) flags.push("improving_hydration");
-  if (protein && protein.avg7d <= 2 && protein.avg7d > 0) flags.push("low_protein");
+  if (nausea && nausea.avg7d <= 2 && nausea.avg7d > 0) flags.push("high_side_effects");
   if (energy && energy.avg7d <= 2 && energy.avg7d > 0) flags.push("poor_energy");
-  if (sideEffects && sideEffects.avg7d <= 2 && sideEffects.avg7d > 0) flags.push("high_side_effects");
-  if (movement && movement.trend === "down" && movement.avg7d <= 2) flags.push("declining_activity");
+  if (digestion && digestion.avg7d <= 2 && digestion.avg7d > 0) flags.push("low_hydration");
   if (adherence.dosesMissed > 0) flags.push("missed_dose");
 
   const last7Completions = completionHistory.slice(-7);
@@ -407,10 +380,8 @@ export function buildPatientSummary(
     trendSummary: {
       energy: trendFor("energy"),
       appetite: trendFor("appetite"),
-      hydration: trendFor("hydration"),
-      protein: trendFor("protein"),
-      sideEffects: trendFor("sideEffects"),
-      movement: trendFor("movement"),
+      nausea: trendFor("nausea"),
+      digestion: trendFor("digestion"),
     },
     last7DayOverview: {
       avgCompletionRate: avgCompletion,

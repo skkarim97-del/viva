@@ -14,10 +14,8 @@ import type {
   TrainingIntent,
   EnergyDaily,
   AppetiteLevel,
-  HydrationDaily,
-  ProteinConfidenceDaily,
-  SideEffectSeverity,
-  MovementIntent,
+  NauseaLevel,
+  DigestionStatus,
   PatientSummary,
   DailyStatusLabel,
 } from "@/types";
@@ -80,10 +78,8 @@ export function buildTodayViewModel(
   glp1Inputs: {
     energy: EnergyDaily;
     appetite: AppetiteLevel;
-    hydration: HydrationDaily;
-    proteinConfidence: ProteinConfidenceDaily;
-    sideEffects: SideEffectSeverity;
-    movementIntent: MovementIntent;
+    nausea: NauseaLevel;
+    digestion: DigestionStatus;
   },
   adaptiveInsights: AdaptiveInsight[],
 ): TodayViewModel {
@@ -152,10 +148,8 @@ export function buildCoachViewModel(
   glp1Inputs: {
     energy: EnergyDaily;
     appetite: AppetiteLevel;
-    hydration: HydrationDaily;
-    proteinConfidence: ProteinConfidenceDaily;
-    sideEffects: SideEffectSeverity;
-    movementIntent: MovementIntent;
+    nausea: NauseaLevel;
+    digestion: DigestionStatus;
   },
   wellnessInputs: {
     feeling: FeelingType;

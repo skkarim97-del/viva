@@ -10,10 +10,8 @@ import type {
   TrainingIntent,
   EnergyDaily,
   AppetiteLevel,
-  HydrationDaily,
-  ProteinConfidenceDaily,
-  SideEffectSeverity,
-  MovementIntent,
+  NauseaLevel,
+  DigestionStatus,
   PatientSummary,
 } from "@/types";
 import type { DailyInsights } from "@/data/insights";
@@ -63,10 +61,8 @@ export interface CoachContext {
   glp1DailyInputs: {
     energy: EnergyDaily;
     appetite: AppetiteLevel;
-    hydration: HydrationDaily;
-    proteinConfidence: ProteinConfidenceDaily;
-    sideEffects: SideEffectSeverity;
-    movementIntent: MovementIntent;
+    nausea: NauseaLevel;
+    digestion: DigestionStatus;
   };
   sleepInsight?: string;
   hrvBaseline?: number;
@@ -107,10 +103,8 @@ export function buildCoachContext(
   glp1Inputs: {
     energy: EnergyDaily;
     appetite: AppetiteLevel;
-    hydration: HydrationDaily;
-    proteinConfidence: ProteinConfidenceDaily;
-    sideEffects: SideEffectSeverity;
-    movementIntent: MovementIntent;
+    nausea: NauseaLevel;
+    digestion: DigestionStatus;
   },
   wellnessInputs: {
     feeling: FeelingType;

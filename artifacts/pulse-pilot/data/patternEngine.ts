@@ -14,7 +14,7 @@ import type {
 } from "@/types";
 import { scoreInput } from "./inputScoring";
 
-const ALL_CATEGORIES: InputCategory[] = ["energy", "appetite", "hydration", "protein", "sideEffects", "movement"];
+const ALL_CATEGORIES: InputCategory[] = ["energy", "appetite", "nausea", "digestion"];
 
 function avg(values: number[]): number {
   const valid = values.filter(v => v > 0);
@@ -121,18 +121,24 @@ function findSignificantPostDoseDrops(postDose: PostDosePattern[], rollingAvgs: 
     const categoryLabels: Record<InputCategory, string> = {
       energy: "energy",
       appetite: "appetite",
-      hydration: "hydration",
-      protein: "protein intake",
-      sideEffects: "side effects",
-      movement: "activity",
+      nausea: "nausea",
+      digestion: "digestion",
     };
 
     if (day1 && day1.avgScore < baseline.avg7d - 0.5 && day1.sampleSize >= 2) {
       const confidence = day1.sampleSize >= 4 ? "high" : day1.sampleSize >= 3 ? "medium" : "low";
-      if (cat === "sideEffects") {
+      if (cat === "nausea") {
         patterns.push({
           id: `post_dose_${cat}_day1`,
-          description: `Side effects tend to increase 1 day after your dose`,
+          description: `Nausea tends to increase 1 day after your dose`,
+          confidence: confidence as PatternConfidence,
+          dataPoints: day1.sampleSize,
+          lastSeen: today,
+        });
+      } else if (cat === "digestion") {
+        patterns.push({
+          id: `post_dose_${cat}_day1`,
+          description: `Digestion tends to be more unsettled 1 day after your dose`,
           confidence: confidence as PatternConfidence,
           dataPoints: day1.sampleSize,
           lastSeen: today,
@@ -150,10 +156,18 @@ function findSignificantPostDoseDrops(postDose: PostDosePattern[], rollingAvgs: 
 
     if (day2 && day2.avgScore < baseline.avg7d - 0.5 && day2.sampleSize >= 2) {
       const confidence = day2.sampleSize >= 4 ? "high" : day2.sampleSize >= 3 ? "medium" : "low";
-      if (cat === "sideEffects") {
+      if (cat === "nausea") {
         patterns.push({
           id: `post_dose_${cat}_day2`,
-          description: `Side effects tend to linger for 2 days after your dose`,
+          description: `Nausea tends to linger for 2 days after your dose`,
+          confidence: confidence as PatternConfidence,
+          dataPoints: day2.sampleSize,
+          lastSeen: today,
+        });
+      } else if (cat === "digestion") {
+        patterns.push({
+          id: `post_dose_${cat}_day2`,
+          description: `Digestive issues tend to persist for 2 days after your dose`,
           confidence: confidence as PatternConfidence,
           dataPoints: day2.sampleSize,
           lastSeen: today,
@@ -171,7 +185,7 @@ function findSignificantPostDoseDrops(postDose: PostDosePattern[], rollingAvgs: 
 
     if (day0 && day0.avgScore > baseline.avg7d + 0.3 && day0.sampleSize >= 2) {
       const confidence = day0.sampleSize >= 4 ? "high" : "medium";
-      if (cat !== "sideEffects") {
+      if (cat !== "nausea" && cat !== "digestion") {
         patterns.push({
           id: `dose_day_boost_${cat}`,
           description: `Your ${categoryLabels[cat]} tends to be better on dose day`,
@@ -196,109 +210,94 @@ function detectBehavioralPatterns(
 
   if (history.length < 5) return patterns;
 
-  const hydration = rollingAvgs.find(r => r.category === "hydration");
+  const nausea = rollingAvgs.find(r => r.category === "nausea");
   const energy = rollingAvgs.find(r => r.category === "energy");
-  const sideEffects = rollingAvgs.find(r => r.category === "sideEffects");
   const appetite = rollingAvgs.find(r => r.category === "appetite");
-  const protein = rollingAvgs.find(r => r.category === "protein");
-  const movement = rollingAvgs.find(r => r.category === "movement");
+  const digestion = rollingAvgs.find(r => r.category === "digestion");
 
-  let lowHydrationLowEnergy = 0;
-  let goodHydrationGoodEnergy = 0;
-  let totalPairs = 0;
+  let nauseaLowAppLow = 0;
+  let nauseaGoodAppGood = 0;
+  let nauseaAppPairs = 0;
   for (const day of history.slice(-14)) {
-    const h = scoreInput("hydration", day);
-    const e = scoreInput("energy", day);
-    if (h === 0 || e === 0) continue;
-    totalPairs++;
-    if (h <= 2 && e <= 2) lowHydrationLowEnergy++;
-    if (h >= 3 && e >= 3) goodHydrationGoodEnergy++;
-  }
-  if (totalPairs >= 5 && (lowHydrationLowEnergy + goodHydrationGoodEnergy) / totalPairs >= 0.6) {
-    patterns.push({
-      id: "hydration_energy_link",
-      description: "Your energy tends to track closely with your hydration",
-      confidence: totalPairs >= 10 ? "high" : "medium",
-      dataPoints: totalPairs,
-      lastSeen: today,
-    });
-  }
-
-  let lowAppLowProtein = 0;
-  let appProtPairs = 0;
-  for (const day of history.slice(-14)) {
+    const n = scoreInput("nausea", day);
     const a = scoreInput("appetite", day);
-    const p = scoreInput("protein", day);
-    if (a === 0 || p === 0) continue;
-    appProtPairs++;
-    if (a <= 2 && p <= 2) lowAppLowProtein++;
+    if (n === 0 || a === 0) continue;
+    nauseaAppPairs++;
+    if (n <= 2 && a <= 2) nauseaLowAppLow++;
+    if (n >= 3 && a >= 3) nauseaGoodAppGood++;
   }
-  if (appProtPairs >= 5 && lowAppLowProtein / appProtPairs >= 0.5) {
+  if (nauseaAppPairs >= 5 && (nauseaLowAppLow + nauseaGoodAppGood) / nauseaAppPairs >= 0.6) {
     patterns.push({
-      id: "appetite_protein_struggle",
-      description: "When appetite drops, your protein intake tends to follow",
-      confidence: appProtPairs >= 10 ? "high" : "medium",
-      dataPoints: appProtPairs,
+      id: "nausea_appetite_link",
+      description: "Your appetite tends to track closely with your nausea levels",
+      confidence: nauseaAppPairs >= 10 ? "high" : "medium",
+      dataPoints: nauseaAppPairs,
       lastSeen: today,
     });
   }
 
-  let lowEnergyRestBetter = 0;
-  let lowEnergyMoveBetter = 0;
+  let digestionLowEnergyLow = 0;
+  let digestionGoodEnergyGood = 0;
+  let digEnergyPairs = 0;
+  for (const day of history.slice(-14)) {
+    const d = scoreInput("digestion", day);
+    const e = scoreInput("energy", day);
+    if (d === 0 || e === 0) continue;
+    digEnergyPairs++;
+    if (d <= 2 && e <= 2) digestionLowEnergyLow++;
+    if (d >= 3 && e >= 3) digestionGoodEnergyGood++;
+  }
+  if (digEnergyPairs >= 5 && (digestionLowEnergyLow + digestionGoodEnergyGood) / digEnergyPairs >= 0.6) {
+    patterns.push({
+      id: "digestion_energy_link",
+      description: "Your energy tends to track closely with your digestion",
+      confidence: digEnergyPairs >= 10 ? "high" : "medium",
+      dataPoints: digEnergyPairs,
+      lastSeen: today,
+    });
+  }
+
+  if (nausea && digestion) {
+    let nauseaDigBothBad = 0;
+    let nauseaDays = 0;
+    for (const day of history.slice(-14)) {
+      const n = scoreInput("nausea", day);
+      const d = scoreInput("digestion", day);
+      if (n === 0 || d === 0) continue;
+      if (n <= 2) {
+        nauseaDays++;
+        if (d <= 2) nauseaDigBothBad++;
+      }
+    }
+    if (nauseaDays >= 3 && nauseaDigBothBad >= 2 && nauseaDigBothBad / nauseaDays >= 0.5) {
+      patterns.push({
+        id: "nausea_digestion_co_occur",
+        description: "Nausea and digestive issues tend to appear together",
+        confidence: nauseaDays >= 5 ? "high" : "medium",
+        dataPoints: nauseaDays,
+        lastSeen: today,
+      });
+    }
+  }
+
+  let lowEnergyNextDayBetter = 0;
   let lowEnergyDays = 0;
   for (let i = 0; i < history.length - 1; i++) {
     const eToday = scoreInput("energy", history[i]);
     if (eToday > 2 || eToday === 0) continue;
     lowEnergyDays++;
-    const mToday = scoreInput("movement", history[i]);
     const eTomorrow = scoreInput("energy", history[i + 1]);
     if (eTomorrow === 0) continue;
-    if (mToday <= 2 && eTomorrow >= 3) lowEnergyRestBetter++;
-    if (mToday >= 3 && eTomorrow >= 3) lowEnergyMoveBetter++;
+    if (eTomorrow >= 3) lowEnergyNextDayBetter++;
   }
-  if (lowEnergyDays >= 3) {
-    if (lowEnergyRestBetter > lowEnergyMoveBetter && lowEnergyRestBetter >= 2) {
-      patterns.push({
-        id: "rest_helps_recovery",
-        description: "You tend to bounce back better when you rest on low energy days",
-        confidence: lowEnergyDays >= 5 ? "high" : "medium",
-        dataPoints: lowEnergyDays,
-        lastSeen: today,
-      });
-    } else if (lowEnergyMoveBetter > lowEnergyRestBetter && lowEnergyMoveBetter >= 2) {
-      patterns.push({
-        id: "light_movement_helps",
-        description: "Light movement on low energy days tends to help you feel better the next day",
-        confidence: lowEnergyDays >= 5 ? "high" : "medium",
-        dataPoints: lowEnergyDays,
-        lastSeen: today,
-      });
-    }
-  }
-
-  if (sideEffects && hydration) {
-    let seLowHydLow = 0;
-    let seLowHydHigh = 0;
-    let seDays = 0;
-    for (const day of history.slice(-14)) {
-      const se = scoreInput("sideEffects", day);
-      const h = scoreInput("hydration", day);
-      if (se === 0 || h === 0) continue;
-      if (se <= 2) {
-        seDays++;
-        if (h <= 2) seLowHydLow++;
-        if (h >= 3) seLowHydHigh++;
-      }
-    }
-    if (seDays >= 3 && seLowHydLow >= 2 && seLowHydLow > seLowHydHigh) {
-      patterns.push({
-        id: "hydration_manages_side_effects",
-        description: "Staying hydrated seems to help keep your side effects more manageable",
-        confidence: seDays >= 5 ? "high" : "medium",
-        dataPoints: seDays,
-        lastSeen: today,
-      });
-    }
+  if (lowEnergyDays >= 3 && lowEnergyNextDayBetter >= 2) {
+    patterns.push({
+      id: "energy_bounce_back",
+      description: "Your energy tends to bounce back the day after a low energy day",
+      confidence: lowEnergyDays >= 5 ? "high" : "medium",
+      dataPoints: lowEnergyDays,
+      lastSeen: today,
+    });
   }
 
   const last7Completions = completionHistory.slice(-7);
@@ -315,16 +314,6 @@ function detectBehavioralPatterns(
     }
   }
 
-  if (movement && movement.trend14d === "up" && movement.avg14d >= 2.5) {
-    patterns.push({
-      id: "activity_improving",
-      description: "Your activity levels have been gradually improving over the past two weeks",
-      confidence: "medium",
-      dataPoints: history.slice(-14).length,
-      lastSeen: today,
-    });
-  }
-
   return patterns;
 }
 
@@ -335,58 +324,47 @@ function generateAdaptiveOverrides(
 ): AdaptiveOverride[] {
   const overrides: AdaptiveOverride[] = [];
 
-  const appetiteProtein = patterns.find(p => p.id === "appetite_protein_struggle");
-  if (appetiteProtein && appetiteProtein.confidence !== "low") {
+  const nauseaAppetite = patterns.find(p => p.id === "nausea_appetite_link");
+  if (nauseaAppetite && nauseaAppetite.confidence !== "low") {
     overrides.push({
       ruleId: "fuel_low_appetite",
       baseRecommendation: "Small frequent meals",
-      adaptedRecommendation: "Protein-first small meals. Start each meal with protein.",
-      reason: "Your data shows protein tends to drop when appetite is low",
-      confidence: appetiteProtein.confidence,
+      adaptedRecommendation: "Protein-first small meals. Start each meal with protein when nausea is manageable.",
+      reason: "Your data shows appetite tends to drop when nausea increases",
+      confidence: nauseaAppetite.confidence,
     });
   }
 
-  const restHelps = patterns.find(p => p.id === "rest_helps_recovery");
-  if (restHelps && restHelps.confidence !== "low") {
+  const energyBounce = patterns.find(p => p.id === "energy_bounce_back");
+  if (energyBounce && energyBounce.confidence !== "low") {
     overrides.push({
       ruleId: "move_low_energy",
       baseRecommendation: "Light walk",
-      adaptedRecommendation: "Rest day or very gentle stretching",
-      reason: "You tend to recover better with rest on low energy days",
-      confidence: restHelps.confidence,
+      adaptedRecommendation: "Rest day or very gentle stretching. Your energy tends to recover well with rest.",
+      reason: "You tend to bounce back better when you rest on low energy days",
+      confidence: energyBounce.confidence,
     });
   }
 
-  const movementHelps = patterns.find(p => p.id === "light_movement_helps");
-  if (movementHelps && movementHelps.confidence !== "low") {
-    overrides.push({
-      ruleId: "move_low_energy",
-      baseRecommendation: "Rest",
-      adaptedRecommendation: "Short gentle walk",
-      reason: "Light movement on tired days tends to help you feel better afterward",
-      confidence: movementHelps.confidence,
-    });
-  }
-
-  const hydrationSE = patterns.find(p => p.id === "hydration_manages_side_effects");
-  if (hydrationSE && hydrationSE.confidence !== "low") {
+  const nauseaDigestion = patterns.find(p => p.id === "nausea_digestion_co_occur");
+  if (nauseaDigestion && nauseaDigestion.confidence !== "low") {
     overrides.push({
       ruleId: "hydrate_side_effects",
       baseRecommendation: "6-8 cups water",
-      adaptedRecommendation: "8+ cups with electrolytes",
-      reason: "Hydration has helped keep your side effects more manageable",
-      confidence: hydrationSE.confidence,
+      adaptedRecommendation: "8+ cups with electrolytes. Extra hydration helps when nausea and digestive issues appear together.",
+      reason: "Nausea and digestive issues tend to appear together for you",
+      confidence: nauseaDigestion.confidence,
     });
   }
 
-  const hydrationEnergy = patterns.find(p => p.id === "hydration_energy_link");
-  if (hydrationEnergy && hydrationEnergy.confidence !== "low") {
+  const digestionEnergy = patterns.find(p => p.id === "digestion_energy_link");
+  if (digestionEnergy && digestionEnergy.confidence !== "low") {
     overrides.push({
       ruleId: "hydrate_energy",
       baseRecommendation: "6-8 cups water",
-      adaptedRecommendation: "8+ cups. Hydration is closely tied to your energy levels.",
-      reason: "Your energy tends to track with your hydration",
-      confidence: hydrationEnergy.confidence,
+      adaptedRecommendation: "8+ cups. Good digestion and hydration are closely tied to your energy levels.",
+      reason: "Your energy tends to track with your digestion",
+      confidence: digestionEnergy.confidence,
     });
   }
 
@@ -444,15 +422,18 @@ export function generateAdaptiveInsights(patterns: UserPatterns): AdaptiveInsigh
       if (ALL_CATEGORIES.includes(catMatch as InputCategory)) {
         category = catMatch as InputCategory;
       }
-    } else if (pattern.id.includes("hydration") || pattern.id.includes("energy")) {
+    } else if (pattern.id.includes("nausea")) {
       type = "correlation";
-      category = pattern.id.includes("hydration") ? "hydration" : "energy";
-    } else if (pattern.id.includes("appetite") || pattern.id.includes("protein")) {
+      category = "nausea";
+    } else if (pattern.id.includes("digestion")) {
       type = "correlation";
-      category = pattern.id.includes("appetite") ? "appetite" : "protein";
-    } else if (pattern.id.includes("movement") || pattern.id.includes("activity")) {
-      type = "trend";
-      category = "movement";
+      category = "digestion";
+    } else if (pattern.id.includes("appetite")) {
+      type = "correlation";
+      category = "appetite";
+    } else if (pattern.id.includes("energy")) {
+      type = "correlation";
+      category = "energy";
     }
 
     insights.push({
@@ -471,15 +452,21 @@ export function generateAdaptiveInsights(patterns: UserPatterns): AdaptiveInsigh
       const labels: Record<InputCategory, string> = {
         energy: "energy",
         appetite: "appetite",
-        hydration: "hydration",
-        protein: "protein intake",
-        sideEffects: "side effects",
-        movement: "activity",
+        nausea: "nausea",
+        digestion: "digestion",
       };
-      if (rolling.category === "sideEffects") {
+      if (rolling.category === "nausea") {
         insights.push({
           id: `trend_improving_${rolling.category}`,
-          text: "Side effects have been steadily improving over the past two weeks",
+          text: "Nausea has been steadily improving over the past two weeks",
+          category: rolling.category,
+          confidence: "high",
+          type: "trend",
+        });
+      } else if (rolling.category === "digestion") {
+        insights.push({
+          id: `trend_improving_${rolling.category}`,
+          text: "Digestion has been steadily settling down over the past two weeks",
           category: rolling.category,
           confidence: "high",
           type: "trend",

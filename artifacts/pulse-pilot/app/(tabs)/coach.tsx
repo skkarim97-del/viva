@@ -33,7 +33,7 @@ const API_BASE = Platform.OS === "web"
 export default function CoachScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
-  const { chatMessages, addChatMessage, todayMetrics, profile, trends, dailyPlan, insights, feeling, energy, stress, hydration, trainingIntent, completionHistory, weeklyConsistency, streakDays, glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent, medicationLog } = useApp();
+  const { chatMessages, addChatMessage, todayMetrics, profile, trends, dailyPlan, insights, feeling, energy, stress, hydration, trainingIntent, completionHistory, weeklyConsistency, streakDays, glp1Energy, appetite, nausea, digestion, medicationLog } = useApp();
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [streamingText, setStreamingText] = useState("");
@@ -95,10 +95,8 @@ export default function CoachScreen() {
       glp1DailyInputs: {
         energy: glp1Energy,
         appetite,
-        hydration: glp1Hydration,
-        proteinConfidence,
-        sideEffects,
-        movementIntent,
+        nausea,
+        digestion,
       },
       sleepInsight: insights?.sleepDebt
         ? `${insights.sleepDebt.hours.toFixed(1)} hours of sleep debt this week. ${insights.sleepDebt.detail}`

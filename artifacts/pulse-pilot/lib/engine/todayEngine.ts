@@ -5,10 +5,8 @@ import type {
   GLP1DailyInputs,
   EnergyDaily,
   AppetiteLevel,
-  HydrationDaily,
-  ProteinConfidenceDaily,
-  SideEffectSeverity,
-  MovementIntent,
+  NauseaLevel,
+  DigestionStatus,
   DailyStatusLabel,
   AdaptiveInsight,
 } from "@/types";
@@ -50,12 +48,10 @@ export function generateGreeting(profile: UserProfile): string {
 export function generateInputSummary(inputs: {
   energy: EnergyDaily;
   appetite: AppetiteLevel;
-  hydration: HydrationDaily;
-  proteinConfidence: ProteinConfidenceDaily;
-  sideEffects: SideEffectSeverity;
-  movementIntent: MovementIntent;
+  nausea: NauseaLevel;
+  digestion: DigestionStatus;
 }): InputSummaryOutput {
-  const filled = [inputs.energy, inputs.appetite, inputs.hydration, inputs.proteinConfidence, inputs.sideEffects, inputs.movementIntent].filter(Boolean).length;
+  const filled = [inputs.energy, inputs.appetite, inputs.nausea, inputs.digestion].filter(Boolean).length;
 
   if (filled === 0) {
     return {
@@ -71,14 +67,15 @@ export function generateInputSummary(inputs: {
   if (inputs.appetite === "very_low") parts.push("appetite is very low");
   else if (inputs.appetite === "low") parts.push("appetite is reduced");
 
-  if (inputs.sideEffects === "rough") parts.push("side effects are rough");
-  else if (inputs.sideEffects === "moderate") parts.push("some side effects");
+  if (inputs.nausea === "severe") parts.push("nausea is severe");
+  else if (inputs.nausea === "moderate") parts.push("nausea is noticeable");
 
-  if (inputs.hydration === "poor") parts.push("hydration needs attention");
-  if (inputs.proteinConfidence === "low") parts.push("protein intake is low");
+  if (inputs.digestion === "diarrhea") parts.push("digestion is unsettled");
+  else if (inputs.digestion === "constipated") parts.push("constipation is present");
+  else if (inputs.digestion === "bloated") parts.push("some bloating today");
 
   if (parts.length === 0) {
-    if (filled >= 4) return { text: "Your inputs look solid today. Your plan is set for a good day.", severity: "none" };
+    if (filled >= 3) return { text: "Your inputs look solid today. Your plan is set for a good day.", severity: "none" };
     return { text: "", severity: "none" };
   }
 
@@ -106,10 +103,8 @@ export function generateTodayView(
   glp1Inputs: {
     energy: EnergyDaily;
     appetite: AppetiteLevel;
-    hydration: HydrationDaily;
-    proteinConfidence: ProteinConfidenceDaily;
-    sideEffects: SideEffectSeverity;
-    movementIntent: MovementIntent;
+    nausea: NauseaLevel;
+    digestion: DigestionStatus;
   },
   adaptiveInsights: AdaptiveInsight[],
 ): TodayViewOutput {

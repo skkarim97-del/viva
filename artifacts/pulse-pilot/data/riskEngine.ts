@@ -81,13 +81,12 @@ function checkFuelingBreakdown(inputs: GLP1DailyInputs[]): RiskDriver | null {
 
   const recent = inputs.slice(-3);
   const lowAppetiteDays = recent.filter(i => i.appetite === "very_low").length;
-  const poorProtein = recent.some(i => i.proteinConfidence === "low");
-  const poorHydration = recent.some(i => i.hydration === "poor");
+  const digestiveIssues = recent.some(i => i.digestion === "constipated" || i.digestion === "diarrhea");
 
-  if (lowAppetiteDays >= 2 && (poorProtein || poorHydration)) {
+  if (lowAppetiteDays >= 2 && digestiveIssues) {
     return {
       category: "fueling",
-      label: "Appetite and fueling have been consistently low",
+      label: "Appetite and digestion have been consistently off",
       score: 25,
     };
   }
@@ -100,14 +99,6 @@ function checkFuelingBreakdown(inputs: GLP1DailyInputs[]): RiskDriver | null {
     };
   }
 
-  if (poorProtein && poorHydration) {
-    return {
-      category: "fueling",
-      label: "Protein and hydration need attention",
-      score: 15,
-    };
-  }
-
   return null;
 }
 
@@ -115,12 +106,13 @@ function checkSymptomLoad(inputs: GLP1DailyInputs[]): RiskDriver | null {
   if (inputs.length < 2) return null;
 
   const recent = inputs.slice(-3);
-  const heavyDays = recent.filter(i => i.sideEffects === "moderate" || i.sideEffects === "rough").length;
+  const nauseaDays = recent.filter(i => i.nausea === "moderate" || i.nausea === "severe").length;
+  const digestiveIssueDays = recent.filter(i => i.digestion === "constipated" || i.digestion === "diarrhea").length;
 
-  if (heavyDays >= 2) {
+  if (nauseaDays >= 2 || digestiveIssueDays >= 2) {
     return {
       category: "symptoms",
-      label: "Side effects have been heavier than usual recently",
+      label: "GI symptoms have been heavier than usual recently",
       score: 20,
     };
   }
@@ -135,16 +127,7 @@ function checkConsistencyBreakdown(completionHistory: CompletionRecord[], inputs
   const missedDays = 7 - recent7.length;
   const lowCompletion = avgCompletion < 40;
 
-  const recentInputs = inputs.slice(-7);
-  const intentVsActual = recentInputs.filter(i =>
-    i.movementIntent === "strength" || i.movementIntent === "walk"
-  ).length;
-  const actualMoveDays = recent7.filter(r =>
-    r.actions.some(a => a.category === "move" && a.completed)
-  ).length;
-  const divergence = intentVsActual > 0 && actualMoveDays < intentVsActual * 0.5;
-
-  if (missedDays >= 3 || lowCompletion || divergence) {
+  if (missedDays >= 3 || lowCompletion) {
     return {
       category: "consistency",
       label: "Check-in consistency has dropped recently",

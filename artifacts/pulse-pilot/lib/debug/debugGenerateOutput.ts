@@ -75,10 +75,8 @@ export function debugGenerateOutput(params: {
     todayView = generateTodayView(profile, dailyPlan, {
       energy: glp1Inputs.energy,
       appetite: glp1Inputs.appetite,
-      hydration: glp1Inputs.hydration,
-      proteinConfidence: glp1Inputs.proteinConfidence,
-      sideEffects: glp1Inputs.sideEffects,
-      movementIntent: glp1Inputs.movementIntent,
+      nausea: glp1Inputs.nausea,
+      digestion: glp1Inputs.digestion,
     }, adaptiveInsights);
   }
 
@@ -95,10 +93,8 @@ export function debugGenerateOutput(params: {
       {
         energy: glp1Inputs?.energy ?? null,
         appetite: glp1Inputs?.appetite ?? null,
-        hydration: glp1Inputs?.hydration ?? null,
-        proteinConfidence: glp1Inputs?.proteinConfidence ?? null,
-        sideEffects: glp1Inputs?.sideEffects ?? null,
-        movementIntent: glp1Inputs?.movementIntent ?? null,
+        nausea: glp1Inputs?.nausea ?? null,
+        digestion: glp1Inputs?.digestion ?? null,
       },
       wellnessInputs,
       streakDays, weeklyConsistency, todayCompletionRate,

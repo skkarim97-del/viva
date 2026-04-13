@@ -25,7 +25,7 @@ import { formatDoseDisplay } from "@/data/medicationData";
 import { generateGreeting, generateInputSummary, buildCoachContext } from "@/lib/engine";
 import { useColors } from "@/hooks/useColors";
 import { CATEGORY_OPTIONS } from "@/types";
-import type { MetricKey, FeelingType, ChatMessage, DailyStatusLabel, ActionCategory, AppetiteLevel, SideEffectSeverity, ProteinConfidenceDaily, MovementIntent, EnergyDaily, HydrationDaily, MedicationLogEntry } from "@/types";
+import type { MetricKey, FeelingType, ChatMessage, DailyStatusLabel, ActionCategory, AppetiteLevel, NauseaLevel, DigestionStatus, EnergyDaily, MedicationLogEntry } from "@/types";
 
 const TINT_GREEN = "#34C759";
 const TINT_BLUE = "#38B6FF";
@@ -47,32 +47,18 @@ const APPETITE_OPTIONS: { key: NonNullable<AppetiteLevel>; label: string; tint: 
   { key: "very_low", label: "Very Low", tint: TINT_RED },
 ];
 
-const HYDRATION_OPTIONS: { key: NonNullable<HydrationDaily>; label: string; tint: string }[] = [
-  { key: "high", label: "High", tint: TINT_GREEN },
-  { key: "good", label: "Good", tint: TINT_BLUE },
-  { key: "okay", label: "Okay", tint: TINT_PURPLE },
-  { key: "poor", label: "Poor", tint: TINT_RED },
-];
-
-const PROTEIN_OPTIONS: { key: NonNullable<ProteinConfidenceDaily>; label: string; tint: string }[] = [
-  { key: "high", label: "High", tint: TINT_GREEN },
-  { key: "good", label: "Good", tint: TINT_BLUE },
-  { key: "okay", label: "Okay", tint: TINT_PURPLE },
-  { key: "low", label: "Low", tint: TINT_RED },
-];
-
-const SIDE_EFFECT_OPTIONS: { key: NonNullable<SideEffectSeverity>; label: string; tint: string }[] = [
+const NAUSEA_OPTIONS: { key: NonNullable<NauseaLevel>; label: string; tint: string }[] = [
   { key: "none", label: "None", tint: TINT_GREEN },
   { key: "mild", label: "Mild", tint: TINT_BLUE },
   { key: "moderate", label: "Moderate", tint: TINT_PURPLE },
-  { key: "rough", label: "Rough", tint: TINT_RED },
+  { key: "severe", label: "Severe", tint: TINT_RED },
 ];
 
-const MOVEMENT_OPTIONS: { key: NonNullable<MovementIntent>; label: string; tint: string }[] = [
-  { key: "strength", label: "Strength", tint: TINT_GREEN },
-  { key: "walk", label: "Walk", tint: TINT_BLUE },
-  { key: "light_recovery", label: "Light", tint: TINT_PURPLE },
-  { key: "rest", label: "Rest", tint: TINT_MUTED },
+const DIGESTION_OPTIONS: { key: NonNullable<DigestionStatus>; label: string; tint: string }[] = [
+  { key: "fine", label: "Fine", tint: TINT_GREEN },
+  { key: "bloated", label: "Bloated", tint: TINT_BLUE },
+  { key: "constipated", label: "Constipated", tint: TINT_PURPLE },
+  { key: "diarrhea", label: "Diarrhea", tint: TINT_RED },
 ];
 
 const STATUS_COLOR_MAP: Record<DailyStatusLabel, (c: ReturnType<typeof useColors>) => string> = {
@@ -101,11 +87,9 @@ export default function DashboardScreen() {
     lastCompletionFeedback, clearCompletionFeedback,
     saveDailyCheckIn, todayCheckIn,
     appetite, setAppetite,
-    sideEffects, setSideEffects,
-    proteinConfidence, setProteinConfidence,
-    movementIntent, setMovementIntent,
+    nausea, setNausea,
+    digestion, setDigestion,
     glp1Energy, setGlp1Energy,
-    glp1Hydration, setGlp1Hydration,
     medicationLog, logMedicationDose, removeMedicationDose,
     adaptiveInsights,
   } = useApp();
@@ -120,8 +104,8 @@ export default function DashboardScreen() {
   const [showWhyPlan, setShowWhyPlan] = useState(false);
   const [showCheckIn, setShowCheckIn] = useState(false);
   const [checkInEnergy, setCheckInEnergy] = useState<EnergyDaily>(null);
-  const [checkInProtein, setCheckInProtein] = useState<ProteinConfidenceDaily>(null);
-  const [checkInSideEffects, setCheckInSideEffects] = useState<SideEffectSeverity>(null);
+  const [checkInNausea, setCheckInNausea] = useState<NauseaLevel>(null);
+  const [checkInDigestion, setCheckInDigestion] = useState<DigestionStatus>(null);
   const chatListRef = useRef<FlatList>(null);
   const feedbackOpacity = useRef(new Animated.Value(0)).current;
 
@@ -153,9 +137,8 @@ export default function DashboardScreen() {
   }, [todayMetrics, metrics, feeling, energy, stress, hydration, trainingIntent, completionHistory]);
 
   const inputSummaryResult = React.useMemo(() => generateInputSummary({
-    energy: glp1Energy, appetite, hydration: glp1Hydration,
-    proteinConfidence, sideEffects, movementIntent,
-  }), [glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent]);
+    energy: glp1Energy, appetite, nausea, digestion,
+  }), [glp1Energy, appetite, nausea, digestion]);
   const inputSummary = inputSummaryResult.text || null;
 
   const haptic = () => {
@@ -173,24 +156,16 @@ export default function DashboardScreen() {
     setAppetite(appetite === a ? null : a);
   };
 
-  const selectSideEffects = (s: NonNullable<SideEffectSeverity>) => {
-    setSideEffects(sideEffects === s ? null : s);
+  const selectNausea = (n: NonNullable<NauseaLevel>) => {
+    setNausea(nausea === n ? null : n);
   };
 
-  const selectProteinConfidence = (p: NonNullable<ProteinConfidenceDaily>) => {
-    setProteinConfidence(proteinConfidence === p ? null : p);
-  };
-
-  const selectMovementIntent = (m: NonNullable<MovementIntent>) => {
-    setMovementIntent(movementIntent === m ? null : m);
+  const selectDigestion = (d: NonNullable<DigestionStatus>) => {
+    setDigestion(digestion === d ? null : d);
   };
 
   const selectGlp1Energy = (e: NonNullable<EnergyDaily>) => {
     setGlp1Energy(glp1Energy === e ? null : e);
-  };
-
-  const selectGlp1Hydration = (h: NonNullable<HydrationDaily>) => {
-    setGlp1Hydration(glp1Hydration === h ? null : h);
   };
 
   const sendAskMessage = async (text: string) => {
@@ -225,7 +200,7 @@ export default function DashboardScreen() {
           healthContext: buildCoachContext(
             todayMetrics, metrics, profile, dailyPlan, insights,
             medicationLog,
-            { energy: glp1Energy, appetite, hydration: glp1Hydration, proteinConfidence, sideEffects, movementIntent },
+            { energy: glp1Energy, appetite, nausea, digestion },
             { feeling, energy, stress, hydration, trainingIntent },
             streakDays, weeklyConsistency, todayCompletionRate,
           ),
@@ -650,10 +625,8 @@ export default function DashboardScreen() {
           <View style={styles.inputRows}>
             <InputRow label="Energy" options={ENERGY_OPTIONS} selected={glp1Energy} onSelect={selectGlp1Energy} containerBg={c.background} />
             <InputRow label="Appetite" options={APPETITE_OPTIONS} selected={appetite} onSelect={selectAppetite} containerBg={c.background} />
-            <InputRow label="Hydration" options={HYDRATION_OPTIONS} selected={glp1Hydration} onSelect={selectGlp1Hydration} containerBg={c.background} />
-            <InputRow label="Protein" options={PROTEIN_OPTIONS} selected={proteinConfidence} onSelect={selectProteinConfidence} containerBg={c.background} />
-            <InputRow label="Side Effects" options={SIDE_EFFECT_OPTIONS} selected={sideEffects} onSelect={selectSideEffects} containerBg={c.background} />
-            <InputRow label="Movement" options={MOVEMENT_OPTIONS} selected={movementIntent} onSelect={selectMovementIntent} containerBg={c.background} />
+            <InputRow label="Nausea" options={NAUSEA_OPTIONS} selected={nausea} onSelect={selectNausea} containerBg={c.background} />
+            <InputRow label="Digestion" options={DIGESTION_OPTIONS} selected={digestion} onSelect={selectDigestion} containerBg={c.background} />
           </View>
         </View>
 
@@ -940,9 +913,9 @@ export default function DashboardScreen() {
         visible={showCheckIn}
         transparent
         animationType="slide"
-        onRequestClose={() => { setShowCheckIn(false); setCheckInEnergy(null); setCheckInProtein(null); setCheckInSideEffects(null); }}
+        onRequestClose={() => { setShowCheckIn(false); setCheckInEnergy(null); setCheckInNausea(null); setCheckInDigestion(null); }}
       >
-        <Pressable style={styles.modalOverlay} onPress={() => { setShowCheckIn(false); setCheckInEnergy(null); setCheckInProtein(null); setCheckInSideEffects(null); }}>
+        <Pressable style={styles.modalOverlay} onPress={() => { setShowCheckIn(false); setCheckInEnergy(null); setCheckInNausea(null); setCheckInDigestion(null); }}>
           <Pressable style={[styles.modalSheet, { backgroundColor: c.card, paddingBottom: Math.max(bottomPad, 24) }]} onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalHandle}>
               <View style={[styles.handleBar, { backgroundColor: c.border }]} />
@@ -964,16 +937,16 @@ export default function DashboardScreen() {
                 onSelect={(v) => setCheckInEnergy(checkInEnergy === v ? null : v)}
               />
               <InputRow
-                label="Side Effects"
-                options={SIDE_EFFECT_OPTIONS}
-                selected={checkInSideEffects}
-                onSelect={(v) => setCheckInSideEffects(checkInSideEffects === v ? null : v)}
+                label="Nausea"
+                options={NAUSEA_OPTIONS}
+                selected={checkInNausea}
+                onSelect={(v) => setCheckInNausea(checkInNausea === v ? null : v)}
               />
               <InputRow
-                label="Protein"
-                options={PROTEIN_OPTIONS}
-                selected={checkInProtein}
-                onSelect={(v) => setCheckInProtein(checkInProtein === v ? null : v)}
+                label="Digestion"
+                options={DIGESTION_OPTIONS}
+                selected={checkInDigestion}
+                onSelect={(v) => setCheckInDigestion(checkInDigestion === v ? null : v)}
               />
 
               <Pressable
@@ -984,15 +957,13 @@ export default function DashboardScreen() {
                       date: new Date().toISOString().split("T")[0],
                       energy: checkInEnergy,
                       appetite: null,
-                      hydration: null,
-                      proteinConfidence: checkInProtein ?? null,
-                      sideEffects: checkInSideEffects ?? null,
-                      movementIntent: null,
+                      nausea: checkInNausea ?? null,
+                      digestion: checkInDigestion ?? null,
                     });
                     setShowCheckIn(false);
                     setCheckInEnergy(null);
-                    setCheckInProtein(null);
-                    setCheckInSideEffects(null);
+                    setCheckInNausea(null);
+                    setCheckInDigestion(null);
                   }
                 }}
                 style={({ pressed }) => [

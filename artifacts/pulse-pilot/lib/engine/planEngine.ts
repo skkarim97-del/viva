@@ -137,11 +137,14 @@ function pickMedAwarePlanTier(
 
   if (glp1Inputs) {
     if (glp1Inputs.appetite === "very_low" && category === "fuel") drop(1);
-    if (glp1Inputs.sideEffects === "rough") {
+    if (glp1Inputs.nausea === "severe") {
       if (category === "move") idx = 0;
       if (category === "hydrate" || category === "recover") bump(1);
-    } else if (glp1Inputs.sideEffects === "moderate") {
+    } else if (glp1Inputs.nausea === "moderate") {
       if (category === "move") drop(1);
+    }
+    if (glp1Inputs.digestion === "diarrhea" || glp1Inputs.digestion === "constipated") {
+      if (category === "hydrate") bump(1);
     }
     if (glp1Inputs.energy === "great" && category === "move") bump(1);
     else if (glp1Inputs.energy === "depleted" && category === "move") idx = 0;
@@ -212,16 +215,17 @@ function generateFocusItems(
     items.push({ text: "Start your first meal with protein. Even 15-20g helps protect muscle.", category: "fuel" });
   }
 
-  if (glp1Inputs?.hydration === "poor" || glp1Inputs?.hydration === "okay") {
-    items.push({ text: "Front-load 2-3 cups of water before noon. Hydration is harder to catch up on later.", category: "hydrate" });
-  }
-
-  if (glp1Inputs?.sideEffects === "moderate" || glp1Inputs?.sideEffects === "rough") {
+  if (glp1Inputs?.nausea === "moderate" || glp1Inputs?.nausea === "severe") {
     items.push({ text: "Stick to light movement today. A short walk after meals can ease nausea.", category: "move" });
+    items.push({ text: "Sip water steadily rather than large amounts. Add electrolytes if nausea is strong.", category: "hydrate" });
   }
 
-  if (glp1Inputs?.proteinConfidence === "low") {
-    items.push({ text: "Add a protein-rich snack between meals. Greek yogurt, jerky, or a shake work well.", category: "fuel" });
+  if (glp1Inputs?.digestion === "constipated") {
+    items.push({ text: "Extra water and fiber-rich foods help. Aim for 8+ cups of water today.", category: "hydrate" });
+  } else if (glp1Inputs?.digestion === "diarrhea") {
+    items.push({ text: "Replace lost fluids with electrolytes. Stick to bland, easy-to-digest foods.", category: "hydrate" });
+  } else if (glp1Inputs?.digestion === "bloated") {
+    items.push({ text: "Smaller meals spaced out may help. Avoid carbonated drinks and high-fat foods.", category: "fuel" });
   }
 
   if (metrics.sleepDuration < 7) {
@@ -305,8 +309,11 @@ export function generateDailyPlan(
   if (rhrElevated && Math.abs(hrvDeviation) < 5) readinessScore = Math.min(readinessScore, 50);
   if (sleepDeclining3) readinessScore = Math.min(readinessScore, 55);
 
-  if (glp1Inputs?.sideEffects === "rough") readinessScore = Math.min(readinessScore, 35);
-  else if (glp1Inputs?.sideEffects === "moderate") readinessScore = Math.min(readinessScore, 50);
+  if (glp1Inputs?.nausea === "severe") readinessScore = Math.min(readinessScore, 35);
+  else if (glp1Inputs?.nausea === "moderate") readinessScore = Math.min(readinessScore, 50);
+
+  if (glp1Inputs?.digestion === "diarrhea") readinessScore = Math.min(readinessScore, 45);
+  else if (glp1Inputs?.digestion === "constipated") readinessScore = Math.min(readinessScore, 55);
 
   if (glp1Inputs?.appetite === "very_low") readinessScore = Math.min(readinessScore, 50);
 
@@ -316,7 +323,7 @@ export function generateDailyPlan(
   if (medicationProfile) {
     const tier = getDoseTier(medicationProfile.medicationBrand, medicationProfile.doseValue);
     if (medicationProfile.recentTitration) readinessScore = Math.max(readinessScore - 8, 0);
-    if (tier === "high" && (glp1Inputs?.sideEffects === "moderate" || glp1Inputs?.sideEffects === "rough")) {
+    if (tier === "high" && (glp1Inputs?.nausea === "moderate" || glp1Inputs?.nausea === "severe")) {
       readinessScore = Math.max(readinessScore - 5, 0);
     }
     if (medicationProfile.timeOnMedicationBucket === "less_1_month") readinessScore = Math.max(readinessScore - 5, 0);
@@ -329,7 +336,7 @@ export function generateDailyPlan(
       readinessScore = Math.max(readinessScore - penalty, 0);
     }
 
-    const seAdj = shouldApplyPostDoseAdjustment(patterns, medicationLog, "sideEffects");
+    const seAdj = shouldApplyPostDoseAdjustment(patterns, medicationLog, "nausea");
     if (seAdj.shouldAdjust && seAdj.confidence !== "low") {
       const penalty = seAdj.severity === "significant" ? 8 : seAdj.severity === "moderate" ? 4 : 2;
       readinessScore = Math.max(readinessScore - penalty, 0);
@@ -349,7 +356,8 @@ export function generateDailyPlan(
   const sleepLow = metrics.sleepDuration < 6.5;
   const sleepCritical = metrics.sleepDuration < 6 && hrvDeviation < -10;
   const sleepGoodHrvGood = metrics.sleepDuration > 7.5 && hrvDeviation >= 0;
-  const symptomsHeavy = glp1Inputs?.sideEffects === "rough" || glp1Inputs?.sideEffects === "moderate";
+  const symptomsHeavy = glp1Inputs?.nausea === "severe" || glp1Inputs?.nausea === "moderate";
+  const digestiveDistress = glp1Inputs?.digestion === "diarrhea" || glp1Inputs?.digestion === "constipated";
   const appetiteLow = glp1Inputs?.appetite === "very_low" || glp1Inputs?.appetite === "low";
 
   let headline = "";
@@ -367,18 +375,18 @@ export function generateDailyPlan(
   const isNewToMed = medicationProfile?.timeOnMedicationBucket === "less_1_month";
   const isHighDose = medicationProfile ? getDoseTier(medicationProfile.medicationBrand, medicationProfile.doseValue) === "high" : false;
 
-  if (sleepCritical || (glp1Inputs?.sideEffects === "rough" && glp1Inputs?.energy === "depleted")) {
+  if (sleepCritical || (glp1Inputs?.nausea === "severe" && glp1Inputs?.energy === "depleted")) {
     dailyState = "recover";
     headline = isTitrated
       ? "Your body is adjusting to the new dose. Keep today simple."
       : "Recovery is the priority today.";
     summary = symptomsHeavy
-      ? "Side effects are heavy and energy is very low. Rest, hydration, and small meals are enough for today."
+      ? "Nausea is heavy and energy is very low. Rest, hydration, and small meals are enough for today."
       : `Sleep was ${metrics.sleepDuration.toFixed(1)} hrs and your body is showing it. Rest and hydration come first.`;
     dailyFocus = "Rest and recover";
     whyThisPlan = [
       symptomsHeavy
-        ? isTitrated ? "Heavier side effects are expected in the 1-2 weeks after a dose change." : "Heavy side effects are common in the early weeks of treatment."
+        ? isTitrated ? "Heavier nausea is expected in the 1-2 weeks after a dose change." : "Nausea is common in the early weeks of treatment."
         : `${metrics.sleepDuration.toFixed(1)} hrs of sleep affects energy, appetite, and how your body handles treatment.`,
       "A gentle day now helps you stay consistent over the longer term.",
       "Focus on hydration, small protein-rich meals, and rest.",
@@ -391,14 +399,14 @@ export function generateDailyPlan(
   } else if (symptomsHeavy) {
     dailyState = "recover";
     headline = isTitrated
-      ? "Side effects from the dose change are showing. Simplify today."
-      : "Side effects are heavier today. Keep things light.";
+      ? "Nausea from the dose change is showing. Simplify today."
+      : "Nausea is heavier today. Keep things light.";
     summary = isHighDose
-      ? "Higher doses can bring stronger side effects. Hydration, small meals, and rest are enough today."
-      : "Side effects are making things harder. Hydration and small protein-rich meals will help most.";
+      ? "Higher doses can bring stronger nausea. Hydration, small meals, and rest are enough today."
+      : "Nausea is making things harder. Hydration and small protein-rich meals will help most.";
     dailyFocus = "Manage symptoms";
     whyThisPlan = [
-      isTitrated ? "Your body is still adjusting to the recent dose change. This typically improves within 1-2 weeks." : "When side effects are heavier, your body is using more energy to adjust.",
+      isTitrated ? "Your body is still adjusting to the recent dose change. This typically improves within 1-2 weeks." : "When nausea is heavier, your body is using more energy to adjust.",
       "Hydration and small meals help manage nausea and fatigue.",
       "Lighter days protect your consistency over the next week.",
     ];
@@ -407,12 +415,12 @@ export function generateDailyPlan(
     workoutDuration = 15;
     workoutDesc = "Short walk if you feel up to it. No pressure.";
     optional = "Ginger tea or small sips of electrolyte water can help with nausea.";
-  } else if (appetiteLow && (isDehydrated || glp1Inputs?.proteinConfidence === "low")) {
+  } else if (appetiteLow && digestiveDistress) {
     dailyState = "maintain";
-    headline = "Appetite is suppressed. Fueling takes priority today.";
+    headline = "Appetite is suppressed and digestion is off. Fueling takes priority today.";
     summary = isHighDose
       ? "At higher doses, appetite suppression is stronger. Protein-first small meals prevent muscle loss and keep energy steadier."
-      : "Appetite is low and hydration or protein may be falling short. Nutrient-dense small meals make the biggest difference today.";
+      : "Appetite is low and digestion is unsettled. Nutrient-dense small meals make the biggest difference today.";
     dailyFocus = "Focus on fueling";
     whyThisPlan = [
       "Low appetite is one of the most common effects of GLP-1 medications.",

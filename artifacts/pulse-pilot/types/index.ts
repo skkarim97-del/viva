@@ -153,30 +153,24 @@ export interface CompletionRecord {
 }
 
 export type AppetiteLevel = "strong" | "normal" | "low" | "very_low" | null;
-export type ProteinConfidenceDaily = "high" | "good" | "okay" | "low" | null;
-export type HydrationDaily = "high" | "good" | "okay" | "poor" | null;
-export type SideEffectSeverity = "none" | "mild" | "moderate" | "rough" | null;
-export type MovementIntent = "walk" | "strength" | "light_recovery" | "rest" | null;
+export type NauseaLevel = "none" | "mild" | "moderate" | "severe" | null;
+export type DigestionStatus = "fine" | "bloated" | "constipated" | "diarrhea" | null;
 export type EnergyDaily = "great" | "good" | "tired" | "depleted" | null;
 
 export interface GLP1DailyInputs {
   date: string;
   energy: EnergyDaily;
   appetite: AppetiteLevel;
-  hydration: HydrationDaily;
-  proteinConfidence: ProteinConfidenceDaily;
-  sideEffects: SideEffectSeverity;
-  movementIntent: MovementIntent;
+  nausea: NauseaLevel;
+  digestion: DigestionStatus;
 }
 
 export interface DailyCheckIn {
   date: string;
   energy: EnergyDaily;
   appetite: AppetiteLevel;
-  hydration: HydrationDaily;
-  proteinConfidence: ProteinConfidenceDaily;
-  sideEffects: SideEffectSeverity;
-  movementIntent: MovementIntent;
+  nausea: NauseaLevel;
+  digestion: DigestionStatus;
 }
 
 export interface DailyPlan {
@@ -370,10 +364,8 @@ export interface WellnessInputs {
 export interface GLP1WellnessInputs {
   energy: EnergyDaily;
   appetite: AppetiteLevel;
-  hydration: HydrationDaily;
-  proteinConfidence: ProteinConfidenceDaily;
-  sideEffects: SideEffectSeverity;
-  movementIntent: MovementIntent;
+  nausea: NauseaLevel;
+  digestion: DigestionStatus;
 }
 
 export type RiskLevel = "low" | "mild" | "elevated" | "high";
@@ -400,7 +392,7 @@ export const ACTION_OPTIONS: Record<ActionCategory, string[]> = Object.fromEntri
   ])
 ) as Record<ActionCategory, string[]>;
 
-export type InputCategory = "energy" | "appetite" | "hydration" | "protein" | "sideEffects" | "movement";
+export type InputCategory = "energy" | "appetite" | "nausea" | "digestion";
 
 export type TrendDirection = "up" | "flat" | "down";
 
@@ -469,10 +461,8 @@ export interface PatientSummary {
   trendSummary: {
     energy: { avg: number; trend: TrendDirection };
     appetite: { avg: number; trend: TrendDirection };
-    hydration: { avg: number; trend: TrendDirection };
-    protein: { avg: number; trend: TrendDirection };
-    sideEffects: { avg: number; trend: TrendDirection };
-    movement: { avg: number; trend: TrendDirection };
+    nausea: { avg: number; trend: TrendDirection };
+    digestion: { avg: number; trend: TrendDirection };
   };
   last7DayOverview: {
     avgCompletionRate: number;

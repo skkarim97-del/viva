@@ -45,10 +45,8 @@ import type {
   DailyCheckIn,
   GLP1DailyInputs,
   AppetiteLevel,
-  ProteinConfidenceDaily,
-  HydrationDaily,
-  SideEffectSeverity,
-  MovementIntent,
+  NauseaLevel,
+  DigestionStatus,
   EnergyDaily,
   DropoutRiskResult,
   MedicationLogEntry,
@@ -106,14 +104,10 @@ interface AppContextType {
   setGlp1Energy: (v: EnergyDaily) => void;
   appetite: AppetiteLevel;
   setAppetite: (v: AppetiteLevel) => void;
-  glp1Hydration: HydrationDaily;
-  setGlp1Hydration: (v: HydrationDaily) => void;
-  proteinConfidence: ProteinConfidenceDaily;
-  setProteinConfidence: (v: ProteinConfidenceDaily) => void;
-  sideEffects: SideEffectSeverity;
-  setSideEffects: (v: SideEffectSeverity) => void;
-  movementIntent: MovementIntent;
-  setMovementIntent: (v: MovementIntent) => void;
+  nausea: NauseaLevel;
+  setNausea: (v: NauseaLevel) => void;
+  digestion: DigestionStatus;
+  setDigestion: (v: DigestionStatus) => void;
   riskResult: DropoutRiskResult | null;
   glp1InputHistory: GLP1DailyInputs[];
   medicationLog: MedicationLogEntry[];
@@ -162,10 +156,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const [glp1Energy, setGlp1EnergyState] = useState<EnergyDaily>(null);
   const [appetite, setAppetiteState] = useState<AppetiteLevel>(null);
-  const [glp1Hydration, setGlp1HydrationState] = useState<HydrationDaily>(null);
-  const [proteinConfidence, setProteinConfidenceState] = useState<ProteinConfidenceDaily>(null);
-  const [sideEffects, setSideEffectsState] = useState<SideEffectSeverity>(null);
-  const [movementIntent, setMovementIntentState] = useState<MovementIntent>(null);
+  const [nausea, setNauseaState] = useState<NauseaLevel>(null);
+  const [digestion, setDigestionState] = useState<DigestionStatus>(null);
   const [riskResult, setRiskResult] = useState<DropoutRiskResult | null>(null);
   const [glp1InputHistory, setGlp1InputHistory] = useState<GLP1DailyInputs[]>([]);
   const [medicationLog, setMedicationLog] = useState<MedicationLogEntry[]>([]);
@@ -330,10 +322,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           currentGlp1Inputs = parsed;
           setGlp1EnergyState(parsed.energy ?? null);
           setAppetiteState(parsed.appetite ?? null);
-          setGlp1HydrationState(parsed.hydration ?? null);
-          setProteinConfidenceState(parsed.proteinConfidence ?? null);
-          setSideEffectsState(parsed.sideEffects ?? null);
-          setMovementIntentState(parsed.movementIntent ?? null);
+          setNauseaState(parsed.nausea ?? null);
+          setDigestionState(parsed.digestion ?? null);
         }
       }
 
@@ -472,13 +462,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const saveGlp1Inputs = useCallback((
-    en: EnergyDaily, ap: AppetiteLevel, hy: HydrationDaily,
-    pc: ProteinConfidenceDaily, se: SideEffectSeverity, mi: MovementIntent
+    en: EnergyDaily, ap: AppetiteLevel, na: NauseaLevel, di: DigestionStatus
   ) => {
     const todayDate = new Date().toISOString().split("T")[0];
     const inputs: GLP1DailyInputs = {
-      date: todayDate, energy: en, appetite: ap, hydration: hy,
-      proteinConfidence: pc, sideEffects: se, movementIntent: mi,
+      date: todayDate, energy: en, appetite: ap, nausea: na, digestion: di,
     };
     AsyncStorage.setItem(GLP1_INPUTS_KEY, JSON.stringify(inputs));
 
@@ -502,10 +490,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         date: todayDate,
         energy: glp1Energy,
         appetite,
-        hydration: glp1Hydration,
-        proteinConfidence,
-        sideEffects,
-        movementIntent,
+        nausea,
+        digestion,
       };
       computeRisk(metrics, glp1InputHistory, completionHistory, profile.medicationProfile);
       const freshPatterns = recomputeAnalytics(glp1InputHistory, profile.medicationProfile, medicationLog, completionHistory);
@@ -523,7 +509,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       setDailyPlan(newPlan);
     }
-  }, [metricsRef, completionHistory, metrics, glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent, glp1InputHistory, computeRisk, recomputeAnalytics, profile.medicationProfile, medicationLog]);
+  }, [metricsRef, completionHistory, metrics, glp1Energy, appetite, nausea, digestion, glp1InputHistory, computeRisk, recomputeAnalytics, profile.medicationProfile, medicationLog]);
 
   const regenerateFromGlp1 = useCallback(() => {
     if (metricsRef) {
@@ -532,10 +518,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         date: todayDate,
         energy: glp1Energy,
         appetite,
-        hydration: glp1Hydration,
-        proteinConfidence,
-        sideEffects,
-        movementIntent,
+        nausea,
+        digestion,
       };
       computeRisk(metrics, glp1InputHistory, completionHistory, profile.medicationProfile);
       const freshPatterns = recomputeAnalytics(glp1InputHistory, profile.medicationProfile, medicationLog, completionHistory);
@@ -553,7 +537,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       setDailyPlan(newPlan);
     }
-  }, [metricsRef, feeling, energy, stress, hydration, trainingIntent, completionHistory, metrics, glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent, glp1InputHistory, computeRisk, recomputeAnalytics, profile.medicationProfile, medicationLog]);
+  }, [metricsRef, feeling, energy, stress, hydration, trainingIntent, completionHistory, metrics, glp1Energy, appetite, nausea, digestion, glp1InputHistory, computeRisk, recomputeAnalytics, profile.medicationProfile, medicationLog]);
 
   const generateCompletionFeedback = (action: DailyAction, completed: boolean, completedCount: number, total: number): string | null => {
     if (!completed) return null;
@@ -786,39 +770,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const setGlp1Energy = useCallback((v: EnergyDaily) => {
     setGlp1EnergyState(v);
-    saveGlp1Inputs(v, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent);
+    saveGlp1Inputs(v, appetite, nausea, digestion);
     setTimeout(regenerateFromGlp1, 0);
-  }, [appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent, saveGlp1Inputs, regenerateFromGlp1]);
+  }, [appetite, nausea, digestion, saveGlp1Inputs, regenerateFromGlp1]);
 
   const setAppetite = useCallback((v: AppetiteLevel) => {
     setAppetiteState(v);
-    saveGlp1Inputs(glp1Energy, v, glp1Hydration, proteinConfidence, sideEffects, movementIntent);
+    saveGlp1Inputs(glp1Energy, v, nausea, digestion);
     setTimeout(regenerateFromGlp1, 0);
-  }, [glp1Energy, glp1Hydration, proteinConfidence, sideEffects, movementIntent, saveGlp1Inputs, regenerateFromGlp1]);
+  }, [glp1Energy, nausea, digestion, saveGlp1Inputs, regenerateFromGlp1]);
 
-  const setGlp1Hydration = useCallback((v: HydrationDaily) => {
-    setGlp1HydrationState(v);
-    saveGlp1Inputs(glp1Energy, appetite, v, proteinConfidence, sideEffects, movementIntent);
+  const setNausea = useCallback((v: NauseaLevel) => {
+    setNauseaState(v);
+    saveGlp1Inputs(glp1Energy, appetite, v, digestion);
     setTimeout(regenerateFromGlp1, 0);
-  }, [glp1Energy, appetite, proteinConfidence, sideEffects, movementIntent, saveGlp1Inputs, regenerateFromGlp1]);
+  }, [glp1Energy, appetite, digestion, saveGlp1Inputs, regenerateFromGlp1]);
 
-  const setProteinConfidence = useCallback((v: ProteinConfidenceDaily) => {
-    setProteinConfidenceState(v);
-    saveGlp1Inputs(glp1Energy, appetite, glp1Hydration, v, sideEffects, movementIntent);
+  const setDigestion = useCallback((v: DigestionStatus) => {
+    setDigestionState(v);
+    saveGlp1Inputs(glp1Energy, appetite, nausea, v);
     setTimeout(regenerateFromGlp1, 0);
-  }, [glp1Energy, appetite, glp1Hydration, sideEffects, movementIntent, saveGlp1Inputs, regenerateFromGlp1]);
-
-  const setSideEffects = useCallback((v: SideEffectSeverity) => {
-    setSideEffectsState(v);
-    saveGlp1Inputs(glp1Energy, appetite, glp1Hydration, proteinConfidence, v, movementIntent);
-    setTimeout(regenerateFromGlp1, 0);
-  }, [glp1Energy, appetite, glp1Hydration, proteinConfidence, movementIntent, saveGlp1Inputs, regenerateFromGlp1]);
-
-  const setMovementIntent = useCallback((v: MovementIntent) => {
-    setMovementIntentState(v);
-    saveGlp1Inputs(glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, v);
-    setTimeout(regenerateFromGlp1, 0);
-  }, [glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, saveGlp1Inputs, regenerateFromGlp1]);
+  }, [glp1Energy, appetite, nausea, saveGlp1Inputs, regenerateFromGlp1]);
 
   const updateProfile = useCallback((updates: Partial<UserProfile>) => {
     setProfile((prev) => {
@@ -1068,14 +1040,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setGlp1Energy,
         appetite,
         setAppetite,
-        glp1Hydration,
-        setGlp1Hydration,
-        proteinConfidence,
-        setProteinConfidence,
-        sideEffects,
-        setSideEffects,
-        movementIntent,
-        setMovementIntent,
+        nausea,
+        setNausea,
+        digestion,
+        setDigestion,
         riskResult,
         glp1InputHistory,
         medicationLog,
