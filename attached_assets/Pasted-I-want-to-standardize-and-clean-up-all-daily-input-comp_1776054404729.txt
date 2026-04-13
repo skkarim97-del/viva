@@ -1,0 +1,203 @@
+I want to standardize and clean up all daily input components in the Today tab so they feel highly organized, aligned, and premium.
+
+GOAL
+
+Every input category should:
+- have exactly 4 options
+- be visually aligned across all sections
+- use a consistent layout, spacing, and style
+- feel like part of one cohesive system
+- be easy and fast to tap
+- look clean and structured (not messy or uneven)
+
+=====================================
+PART 1: STANDARDIZE INPUT STRUCTURE
+=====================================
+
+Each input row should follow this exact structure:
+
+[ LABEL ]
+[ option 1 ] [ option 2 ] [ option 3 ] [ option 4 ]
+
+All rows should:
+- have identical spacing
+- align horizontally
+- use equal-width buttons
+- have consistent padding and margins
+- feel grid-like and clean
+
+=====================================
+PART 2: DEFINE 4 OPTIONS PER CATEGORY
+=====================================
+
+Update all inputs to have exactly 4 options each.
+
+Use these standardized options:
+
+-------------------------------------
+
+ENERGY
+- Great
+- Good
+- Tired
+- Depleted
+
+-------------------------------------
+
+APPETITE
+- Strong
+- Normal
+- Low
+- Very Low
+
+-------------------------------------
+
+HYDRATION
+- High
+- Good
+- Okay
+- Poor
+
+-------------------------------------
+
+PROTEIN
+- High
+- Good
+- Okay
+- Low
+
+-------------------------------------
+
+SIDE EFFECTS
+- None
+- Mild
+- Moderate
+- Rough
+
+-------------------------------------
+
+MOVEMENT
+- Strength
+- Walk
+- Light
+- Rest
+
+-------------------------------------
+
+Make sure these are consistent across the app.
+
+=====================================
+PART 3: ALIGNMENT + LAYOUT
+=====================================
+
+Fix all alignment issues:
+
+- Each row should use a flex row or grid layout
+- All buttons should be equal width
+- Text inside buttons should be centered
+- Labels should be left-aligned and consistent
+- Vertical spacing between sections should be consistent
+
+Spacing rules:
+- label to buttons: small gap
+- between buttons: consistent gap
+- between sections: consistent larger gap
+
+=====================================
+PART 4: BUTTON / CHIP DESIGN SYSTEM
+=====================================
+
+Create a reusable component for input options.
+
+Each option button should:
+
+Default state:
+- background: light gray or very subtle neutral
+- text: dark navy (#142240)
+- border: subtle or none
+
+Selected state:
+- background: #142240 (navy)
+- text: white
+- OR
+- background: very light blue tint + border #38B6FF + text #142240
+
+Pressed / active state:
+- slight opacity or scale feedback
+
+Do NOT:
+- use random colors per option (no orange, green, etc.)
+- make each category different colors
+- over-style
+
+Everything should feel consistent and calm.
+
+=====================================
+PART 5: REMOVE COLOR CHAOS
+=====================================
+
+Right now different inputs have different colors (orange, green, etc.).
+
+Remove that.
+
+All inputs should follow the SAME color logic:
+- neutral default
+- navy or blue for selected
+
+This is critical for a premium feel.
+
+=====================================
+PART 6: TYPOGRAPHY CONSISTENCY
+=====================================
+
+Ensure:
+- all labels use Montserrat SemiBold
+- all option text uses Montserrat Medium or Regular
+- font size is consistent across all input rows
+
+=====================================
+PART 7: TOUCH TARGETS + UX
+=====================================
+
+Make sure each option:
+- has sufficient padding
+- is easy to tap
+- has clear visual feedback when selected
+
+=====================================
+PART 8: COMPONENT REFACTOR
+=====================================
+
+If not already done, create a reusable component like:
+
+InputRow
+OptionButton
+
+So all inputs use the same structure and styling.
+
+Do NOT duplicate styles across files.
+
+=====================================
+PART 9: FINAL RESULT
+=====================================
+
+The Today tab should feel:
+- structured
+- aligned
+- clean
+- consistent
+- premium
+- easy to scan
+- easy to interact with
+
+The inputs should look like a unified system, not separate pieces.
+
+=====================================
+PART 10: AFTER IMPLEMENTATION
+=====================================
+
+After completing, summarize:
+1. what components were created or refactored
+2. how alignment was fixed
+3. how options were standardized
+4. how styling was unified

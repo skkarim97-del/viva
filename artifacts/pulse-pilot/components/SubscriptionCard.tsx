@@ -30,8 +30,8 @@ export function SubscriptionCard({
       style={({ pressed }) => [
         styles.card,
         {
-          backgroundColor: isActive ? c.primary + "10" : c.card,
-          borderColor: isActive ? c.primary : c.border,
+          backgroundColor: isActive ? c.accent + "10" : c.card,
+          borderColor: isActive ? c.accent : c.border,
           borderWidth: isActive ? 2 : 1,
           opacity: pressed ? 0.95 : 1,
         },
@@ -43,7 +43,7 @@ export function SubscriptionCard({
         </View>
       ) : null}
       <Text style={[styles.title, { color: c.foreground }]}>{title}</Text>
-      <Text style={[styles.price, { color: c.primary }]}>{price}</Text>
+      <Text style={[styles.price, { color: c.accent }]}>{price}</Text>
       <View style={styles.features}>
         {features.map((f) => (
           <View key={f} style={styles.featureRow}>
@@ -57,8 +57,8 @@ export function SubscriptionCard({
           <Text style={[styles.activeButtonText, { color: c.primaryForeground }]}>Current Plan</Text>
         </View>
       ) : (
-        <View style={[styles.selectButton, { borderColor: c.primary }]}>
-          <Text style={[styles.selectButtonText, { color: c.primary }]}>Select Plan</Text>
+        <View style={[styles.selectButton, { borderColor: c.accent }]}>
+          <Text style={[styles.selectButtonText, { color: c.accent }]}>Select Plan</Text>
         </View>
       )}
     </Pressable>

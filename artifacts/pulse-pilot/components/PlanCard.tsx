@@ -15,7 +15,7 @@ interface PlanCardProps {
 
 export function PlanCard({ title, description, icon, badges, accentColor }: PlanCardProps) {
   const c = useColors();
-  const accent = accentColor || c.primary;
+  const accent = accentColor || c.accent;
 
   return (
     <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>

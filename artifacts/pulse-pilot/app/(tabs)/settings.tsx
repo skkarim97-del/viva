@@ -38,8 +38,8 @@ export default function SettingsScreen() {
       <Text style={[styles.title, { color: c.foreground }]}>Settings</Text>
 
       <View style={[styles.profileCard, { backgroundColor: c.card }]}>
-        <View style={[styles.profileAvatar, { backgroundColor: c.primary + "12" }]}>
-          <Text style={[styles.profileInitial, { color: c.primary }]}>
+        <View style={[styles.profileAvatar, { backgroundColor: c.accent + "12" }]}>
+          <Text style={[styles.profileInitial, { color: c.accent }]}>
             {profile.name ? profile.name[0].toUpperCase() : "P"}
           </Text>
         </View>
@@ -47,13 +47,13 @@ export default function SettingsScreen() {
           <Text style={[styles.profileName, { color: c.foreground }]}>
             {profile.name || "Viva User"}
           </Text>
-          <View style={[styles.tierBadge, { backgroundColor: c.primary + "10" }]}>
-            <Text style={[styles.tierText, { color: c.primary }]}>{tierLabel}</Text>
+          <View style={[styles.tierBadge, { backgroundColor: c.accent + "10" }]}>
+            <Text style={[styles.tierText, { color: c.accent }]}>{tierLabel}</Text>
           </View>
         </View>
         {profile.tier === "free" ? (
           <Pressable onPress={handleUpgrade} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
-            <Feather name="arrow-up-circle" size={22} color={c.primary} />
+            <Feather name="arrow-up-circle" size={22} color={c.accent} />
           </Pressable>
         ) : null}
       </View>
@@ -70,8 +70,8 @@ export default function SettingsScreen() {
               { opacity: pressed ? 0.8 : 1 },
             ]}
           >
-            <View style={[styles.settingIcon, { backgroundColor: c.primary + "10" }]}>
-              <Feather name={integration.icon as keyof typeof Feather.glyphMap} size={16} color={c.primary} />
+            <View style={[styles.settingIcon, { backgroundColor: c.accent + "10" }]}>
+              <Feather name={integration.icon as keyof typeof Feather.glyphMap} size={16} color={c.accent} />
             </View>
             <Text style={[styles.settingLabel, { color: c.foreground }]}>{integration.name}</Text>
             <View
@@ -123,8 +123,8 @@ export default function SettingsScreen() {
               i < 3 && [styles.settingRowBorder, { borderBottomColor: c.background }],
             ]}
           >
-            <View style={[styles.settingIcon, { backgroundColor: c.primary + "10" }]}>
-              <Feather name={item.icon} size={16} color={c.primary} />
+            <View style={[styles.settingIcon, { backgroundColor: c.accent + "10" }]}>
+              <Feather name={item.icon} size={16} color={c.accent} />
             </View>
             <Text style={[styles.settingLabel, { color: c.foreground }]}>{item.label}</Text>
             <Text style={[styles.settingValue, { color: c.mutedForeground }]} numberOfLines={1}>
@@ -148,8 +148,8 @@ export default function SettingsScreen() {
               i < 2 && [styles.settingRowBorder, { borderBottomColor: c.background }],
             ]}
           >
-            <View style={[styles.settingIcon, { backgroundColor: c.primary + "10" }]}>
-              <Feather name={item.icon} size={16} color={c.primary} />
+            <View style={[styles.settingIcon, { backgroundColor: c.accent + "10" }]}>
+              <Feather name={item.icon} size={16} color={c.accent} />
             </View>
             <Text style={[styles.settingLabel, { color: c.foreground }]}>{item.label}</Text>
             <Text style={[styles.settingValue, { color: c.mutedForeground }]}>{item.value}</Text>

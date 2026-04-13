@@ -17,7 +17,7 @@ interface MiniChartProps {
 
 export function MiniChart({ data, label, currentValue, unit, trend, summary, color }: MiniChartProps) {
   const c = useColors();
-  const chartColor = color || c.primary;
+  const chartColor = color || c.accent;
   const width = 280;
   const height = 60;
 

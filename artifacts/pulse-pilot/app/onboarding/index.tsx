@@ -224,7 +224,7 @@ export default function OnboardingScreen() {
           )}
           <View style={styles.progressBar}>
             <View style={[styles.progressTrack, { backgroundColor: c.muted }]}>
-              <View style={[styles.progressFill, { backgroundColor: c.primary, width: `${((currentIndex) / (STEPS.length - 1)) * 100}%` }]} />
+              <View style={[styles.progressFill, { backgroundColor: c.accent, width: `${((currentIndex) / (STEPS.length - 1)) * 100}%` }]} />
             </View>
           </View>
           <View style={{ width: 32 }} />
@@ -253,7 +253,7 @@ export default function OnboardingScreen() {
               <Text style={[styles.stepTitle, { color: c.foreground }]}>What should we{"\n"}call you?</Text>
               <Text style={[styles.stepSub, { color: c.mutedForeground }]}>Your first name is fine</Text>
               <TextInput
-                style={[styles.nameInput, { color: c.foreground, backgroundColor: c.card, borderColor: userName.trim() ? c.primary : c.muted }]}
+                style={[styles.nameInput, { color: c.foreground, backgroundColor: c.card, borderColor: userName.trim() ? c.accent : c.muted }]}
                 placeholder="First name"
                 placeholderTextColor={c.mutedForeground}
                 value={userName}
@@ -280,21 +280,21 @@ export default function OnboardingScreen() {
                       style={({ pressed }) => [
                         styles.goalCard,
                         {
-                          backgroundColor: selected ? c.primary + "12" : c.card,
-                          borderColor: selected ? c.primary : "transparent",
+                          backgroundColor: selected ? c.accent + "12" : c.card,
+                          borderColor: selected ? c.accent : "transparent",
                           borderWidth: 1.5,
                           opacity: pressed ? 0.8 : 1,
                           transform: [{ scale: pressed ? 0.97 : 1 }],
                         },
                       ]}
                     >
-                      <View style={[styles.goalIconWrap, { backgroundColor: selected ? c.primary + "18" : c.muted }]}>
-                        <Feather name={goal.icon} size={18} color={selected ? c.primary : c.mutedForeground} />
+                      <View style={[styles.goalIconWrap, { backgroundColor: selected ? c.accent + "18" : c.muted }]}>
+                        <Feather name={goal.icon} size={18} color={selected ? c.accent : c.mutedForeground} />
                       </View>
-                      <Text style={[styles.goalLabel, { color: selected ? c.primary : c.foreground }]}>{goal.label}</Text>
+                      <Text style={[styles.goalLabel, { color: selected ? c.accent : c.foreground }]}>{goal.label}</Text>
                       {selected && (
-                        <View style={[styles.goalCheck, { backgroundColor: c.primary }]}>
-                          <Feather name="check" size={10} color={c.primaryForeground} />
+                        <View style={[styles.goalCheck, { backgroundColor: c.accent }]}>
+                          <Feather name="check" size={10} color={c.accentForeground} />
                         </View>
                       )}
                     </Pressable>
@@ -316,15 +316,15 @@ export default function OnboardingScreen() {
                     key={opt.key}
                     onPress={() => { haptic(); setMedication(opt.key); }}
                     style={[styles.optionCard, {
-                      backgroundColor: medication === opt.key ? c.primary + "10" : c.card,
-                      borderColor: medication === opt.key ? c.primary : "transparent",
+                      backgroundColor: medication === opt.key ? c.accent + "10" : c.card,
+                      borderColor: medication === opt.key ? c.accent : "transparent",
                       borderWidth: 1.5,
                     }]}
                   >
-                    <Text style={[styles.optionLabel, { color: medication === opt.key ? c.primary : c.foreground, flex: 1 }]}>{opt.label}</Text>
+                    <Text style={[styles.optionLabel, { color: medication === opt.key ? c.accent : c.foreground, flex: 1 }]}>{opt.label}</Text>
                     {medication === opt.key && (
-                      <View style={[styles.optionCheck, { backgroundColor: c.primary }]}>
-                        <Feather name="check" size={12} color={c.primaryForeground} />
+                      <View style={[styles.optionCheck, { backgroundColor: c.accent }]}>
+                        <Feather name="check" size={12} color={c.accentForeground} />
                       </View>
                     )}
                   </Pressable>
@@ -337,9 +337,9 @@ export default function OnboardingScreen() {
                   <Pressable
                     key={opt.key}
                     onPress={() => { haptic(); setReason(opt.key); }}
-                    style={[styles.chip, { backgroundColor: reason === opt.key ? c.primary : c.card }]}
+                    style={[styles.chip, { backgroundColor: reason === opt.key ? c.accent : c.card }]}
                   >
-                    <Text style={[styles.chipText, { color: reason === opt.key ? c.primaryForeground : c.foreground }]}>{opt.label}</Text>
+                    <Text style={[styles.chipText, { color: reason === opt.key ? c.accentForeground : c.foreground }]}>{opt.label}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -350,9 +350,9 @@ export default function OnboardingScreen() {
                   <Pressable
                     key={opt.key}
                     onPress={() => { haptic(); setDuration(opt.key); }}
-                    style={[styles.chip, { backgroundColor: duration === opt.key ? c.primary : c.card }]}
+                    style={[styles.chip, { backgroundColor: duration === opt.key ? c.accent : c.card }]}
                   >
-                    <Text style={[styles.chipText, { color: duration === opt.key ? c.primaryForeground : c.foreground }]}>{opt.label}</Text>
+                    <Text style={[styles.chipText, { color: duration === opt.key ? c.accentForeground : c.foreground }]}>{opt.label}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -375,9 +375,9 @@ export default function OnboardingScreen() {
                     <Pressable
                       key={d}
                       onPress={() => { haptic(); setInjectionDay(injectionDay === d ? null : d); }}
-                      style={[styles.dayChip, { backgroundColor: injectionDay === d ? c.primary : c.card }]}
+                      style={[styles.dayChip, { backgroundColor: injectionDay === d ? c.accent : c.card }]}
                     >
-                      <Text style={[styles.dayChipText, { color: injectionDay === d ? c.primaryForeground : c.foreground }]}>{d.slice(0, 3)}</Text>
+                      <Text style={[styles.dayChipText, { color: injectionDay === d ? c.accentForeground : c.foreground }]}>{d.slice(0, 3)}</Text>
                     </Pressable>
                   ))}
                 </View>
@@ -399,20 +399,20 @@ export default function OnboardingScreen() {
                       style={({ pressed }) => [
                         styles.goalCard,
                         {
-                          backgroundColor: selected ? c.primary + "12" : c.card,
-                          borderColor: selected ? c.primary : "transparent",
+                          backgroundColor: selected ? c.accent + "12" : c.card,
+                          borderColor: selected ? c.accent : "transparent",
                           borderWidth: 1.5,
                           opacity: pressed ? 0.8 : 1,
                         },
                       ]}
                     >
-                      <View style={[styles.goalIconWrap, { backgroundColor: selected ? c.primary + "18" : c.muted }]}>
-                        <Feather name={opt.icon} size={16} color={selected ? c.primary : c.mutedForeground} />
+                      <View style={[styles.goalIconWrap, { backgroundColor: selected ? c.accent + "18" : c.muted }]}>
+                        <Feather name={opt.icon} size={16} color={selected ? c.accent : c.mutedForeground} />
                       </View>
-                      <Text style={[styles.goalLabel, { color: selected ? c.primary : c.foreground }]}>{opt.label}</Text>
+                      <Text style={[styles.goalLabel, { color: selected ? c.accent : c.foreground }]}>{opt.label}</Text>
                       {selected && (
-                        <View style={[styles.goalCheck, { backgroundColor: c.primary }]}>
-                          <Feather name="check" size={10} color={c.primaryForeground} />
+                        <View style={[styles.goalCheck, { backgroundColor: c.accent }]}>
+                          <Feather name="check" size={10} color={c.accentForeground} />
                         </View>
                       )}
                     </Pressable>
@@ -433,9 +433,9 @@ export default function OnboardingScreen() {
                   <Pressable
                     key={opt.key}
                     onPress={() => { haptic(); setProteinConf(opt.key); }}
-                    style={[styles.segment, { backgroundColor: proteinConf === opt.key ? c.primary : c.card }]}
+                    style={[styles.segment, { backgroundColor: proteinConf === opt.key ? c.accent : c.card }]}
                   >
-                    <Text style={[styles.segmentText, { color: proteinConf === opt.key ? c.primaryForeground : c.foreground }]}>{opt.label}</Text>
+                    <Text style={[styles.segmentText, { color: proteinConf === opt.key ? c.accentForeground : c.foreground }]}>{opt.label}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -446,9 +446,9 @@ export default function OnboardingScreen() {
                   <Pressable
                     key={opt.key}
                     onPress={() => { haptic(); setHydrationConf(opt.key); }}
-                    style={[styles.segment, { backgroundColor: hydrationConf === opt.key ? c.primary : c.card }]}
+                    style={[styles.segment, { backgroundColor: hydrationConf === opt.key ? c.accent : c.card }]}
                   >
-                    <Text style={[styles.segmentText, { color: hydrationConf === opt.key ? c.primaryForeground : c.foreground }]}>{opt.label}</Text>
+                    <Text style={[styles.segmentText, { color: hydrationConf === opt.key ? c.accentForeground : c.foreground }]}>{opt.label}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -468,15 +468,15 @@ export default function OnboardingScreen() {
               <View style={styles.segmentRow}>
                 <Pressable
                   onPress={() => { haptic(); setUnderEating(true); }}
-                  style={[styles.segment, { backgroundColor: underEating === true ? c.primary : c.card }]}
+                  style={[styles.segment, { backgroundColor: underEating === true ? c.accent : c.card }]}
                 >
-                  <Text style={[styles.segmentText, { color: underEating === true ? c.primaryForeground : c.foreground }]}>Yes</Text>
+                  <Text style={[styles.segmentText, { color: underEating === true ? c.accentForeground : c.foreground }]}>Yes</Text>
                 </Pressable>
                 <Pressable
                   onPress={() => { haptic(); setUnderEating(false); }}
-                  style={[styles.segment, { backgroundColor: underEating === false ? c.primary : c.card }]}
+                  style={[styles.segment, { backgroundColor: underEating === false ? c.accent : c.card }]}
                 >
-                  <Text style={[styles.segmentText, { color: underEating === false ? c.primaryForeground : c.foreground }]}>No</Text>
+                  <Text style={[styles.segmentText, { color: underEating === false ? c.accentForeground : c.foreground }]}>No</Text>
                 </Pressable>
               </View>
 
@@ -486,9 +486,9 @@ export default function OnboardingScreen() {
                   <Pressable
                     key={opt.key}
                     onPress={() => { haptic(); setStrengthTraining(opt.key); }}
-                    style={[styles.segment, { backgroundColor: strengthTraining === opt.key ? c.primary : c.card }]}
+                    style={[styles.segment, { backgroundColor: strengthTraining === opt.key ? c.accent : c.card }]}
                   >
-                    <Text style={[styles.segmentText, { color: strengthTraining === opt.key ? c.primaryForeground : c.foreground }]}>{opt.label}</Text>
+                    <Text style={[styles.segmentText, { color: strengthTraining === opt.key ? c.accentForeground : c.foreground }]}>{opt.label}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -506,20 +506,20 @@ export default function OnboardingScreen() {
                     style={({ pressed }) => [
                       styles.optionCard,
                       {
-                        backgroundColor: activityLevel === opt.key ? c.primary + "10" : c.card,
-                        borderColor: activityLevel === opt.key ? c.primary : "transparent",
+                        backgroundColor: activityLevel === opt.key ? c.accent + "10" : c.card,
+                        borderColor: activityLevel === opt.key ? c.accent : "transparent",
                         borderWidth: 1.5,
                         opacity: pressed ? 0.8 : 1,
                       },
                     ]}
                   >
                     <View style={styles.optionContent}>
-                      <Text style={[styles.optionLabel, { color: activityLevel === opt.key ? c.primary : c.foreground }]}>{opt.label}</Text>
+                      <Text style={[styles.optionLabel, { color: activityLevel === opt.key ? c.accent : c.foreground }]}>{opt.label}</Text>
                       <Text style={[styles.optionSub, { color: c.mutedForeground }]}>{opt.sub}</Text>
                     </View>
                     {activityLevel === opt.key && (
-                      <View style={[styles.optionCheck, { backgroundColor: c.primary }]}>
-                        <Feather name="check" size={12} color={c.primaryForeground} />
+                      <View style={[styles.optionCheck, { backgroundColor: c.accent }]}>
+                        <Feather name="check" size={12} color={c.accentForeground} />
                       </View>
                     )}
                   </Pressable>
@@ -542,14 +542,14 @@ export default function OnboardingScreen() {
                     style={[
                       styles.integrationCard,
                       {
-                        backgroundColor: integration.connected ? c.primary + "10" : c.card,
-                        borderColor: integration.connected ? c.primary : "transparent",
+                        backgroundColor: integration.connected ? c.accent + "10" : c.card,
+                        borderColor: integration.connected ? c.accent : "transparent",
                         borderWidth: 1.5,
                       },
                     ]}
                   >
-                    <View style={[styles.integrationIcon, { backgroundColor: c.primary + "12" }]}>
-                      <Feather name={integration.icon as keyof typeof Feather.glyphMap} size={20} color={c.primary} />
+                    <View style={[styles.integrationIcon, { backgroundColor: c.accent + "12" }]}>
+                      <Feather name={integration.icon as keyof typeof Feather.glyphMap} size={20} color={c.accent} />
                     </View>
                     <Text style={[styles.optionLabel, { color: c.foreground, flex: 1 }]}>{integration.name}</Text>
                     <Feather

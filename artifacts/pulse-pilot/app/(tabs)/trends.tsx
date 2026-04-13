@@ -381,7 +381,7 @@ export default function TrendsScreen() {
           <Text style={[styles.sectionTitle, { color: c.foreground }]}>What We're Noticing</Text>
           {keyInsights.map((insight, i) => (
             <View key={i} style={[styles.insightCard, { backgroundColor: c.card }]}>
-              <Feather name="zap" size={13} color={c.primary} />
+              <Feather name="zap" size={13} color={c.accent} />
               <Text style={[styles.insightText, { color: c.foreground }]}>{insight}</Text>
             </View>
           ))}
@@ -427,7 +427,7 @@ export default function TrendsScreen() {
           <Text style={[styles.sectionTitle, { color: c.foreground }]}>Patterns During Treatment</Text>
           {patterns.map((p, i) => (
             <View key={i} style={[styles.patternCard, { backgroundColor: c.card }]}>
-              <Feather name="eye" size={14} color={c.primary} />
+              <Feather name="eye" size={14} color={c.accent} />
               <Text style={[styles.patternText, { color: c.foreground }]}>{p}</Text>
             </View>
           ))}

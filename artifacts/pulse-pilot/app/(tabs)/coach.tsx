@@ -266,8 +266,8 @@ export default function CoachScreen() {
                 { backgroundColor: c.card, opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
               ]}
             >
-              <View style={[styles.quickIconWrap, { backgroundColor: c.primary + "10" }]}>
-                <Feather name={icon} size={16} color={c.primary} />
+              <View style={[styles.quickIconWrap, { backgroundColor: c.accent + "10" }]}>
+                <Feather name={icon} size={16} color={c.accent} />
               </View>
               <Text style={[styles.quickLabel, { color: c.foreground }]}>{label}</Text>
               <Feather name="chevron-right" size={14} color={c.mutedForeground + "60"} />

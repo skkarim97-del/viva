@@ -96,15 +96,15 @@ export default function PlanScreen() {
               style={[
                 styles.dayCard,
                 { backgroundColor: c.card },
-                isToday && { borderWidth: 1.5, borderColor: c.primary + "45", backgroundColor: c.primary + "06" },
+                isToday && { borderWidth: 1.5, borderColor: c.accent + "45", backgroundColor: c.accent + "06" },
               ]}
             >
               <View style={styles.dayHeader}>
                 <View style={styles.dayNameRow}>
                   <Text style={[styles.dayName, { color: c.foreground }]}>{day.dayOfWeek}</Text>
                   {isToday && (
-                    <View style={[styles.todayBadge, { backgroundColor: c.primary + "20" }]}>
-                      <Text style={[styles.todayText, { color: c.primary }]}>Today</Text>
+                    <View style={[styles.todayBadge, { backgroundColor: c.accent + "20" }]}>
+                      <Text style={[styles.todayText, { color: c.accent }]}>Today</Text>
                     </View>
                   )}
                 </View>
@@ -115,7 +115,7 @@ export default function PlanScreen() {
                 )}
               </View>
 
-              <Text style={[styles.focusLabel, { color: c.primary }]}>{day.focusArea}</Text>
+              <Text style={[styles.focusLabel, { color: c.accent }]}>{day.focusArea}</Text>
 
               <View style={styles.actionsGrid}>
                 {day.actions.map((action) => {
@@ -157,7 +157,7 @@ export default function PlanScreen() {
                           styles.actionValue,
                           { color: c.foreground },
                           action.completed && { ...styles.actionCompleted, color: c.mutedForeground },
-                          isEdited && !action.completed && { color: c.primary },
+                          isEdited && !action.completed && { color: c.accent },
                         ]}
                         numberOfLines={1}
                       >
@@ -174,8 +174,8 @@ export default function PlanScreen() {
         })}
 
         {weeklyPlan.adjustmentNote && (
-          <View style={[styles.adjustNote, { backgroundColor: c.primary + "06" }]}>
-            <Feather name="info" size={14} color={c.primary} />
+          <View style={[styles.adjustNote, { backgroundColor: c.accent + "06" }]}>
+            <Feather name="info" size={14} color={c.accent} />
             <Text style={[styles.adjustText, { color: c.foreground }]}>{weeklyPlan.adjustmentNote}</Text>
           </View>
         )}

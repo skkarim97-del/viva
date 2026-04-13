@@ -15,7 +15,7 @@ interface MetricCardProps {
 
 export function MetricCard({ icon, label, value, subtitle, color }: MetricCardProps) {
   const c = useColors();
-  const iconColor = color || c.primary;
+  const iconColor = color || c.accent;
 
   return (
     <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>

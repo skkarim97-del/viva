@@ -59,7 +59,7 @@ const MOVEMENT_INTENTS: { key: NonNullable<MovementIntent>; label: string; color
 
 const STATUS_COLOR_MAP: Record<DailyStatusLabel, (c: ReturnType<typeof useColors>) => string> = {
   "You're in a good place today": (c) => c.success,
-  "A few small adjustments will help today": (c) => c.primary,
+  "A few small adjustments will help today": (c) => c.accent,
   "Let's make today a bit easier": (c) => c.warning,
   "Your body may need more support today": (c) => c.destructive,
 };
@@ -607,7 +607,7 @@ export default function DashboardScreen() {
                   {askMessages[askMessages.length - 1].content}
                 </Text>
               </View>
-              <Text style={[styles.chatViewAll, { color: c.primary }]}>View conversation</Text>
+              <Text style={[styles.chatViewAll, { color: c.accent }]}>View conversation</Text>
             </Pressable>
           )}
 
@@ -654,7 +654,7 @@ export default function DashboardScreen() {
           >
             <View style={styles.whyPlanHeader}>
               <View style={styles.whyPlanTitleRow}>
-                <Feather name="info" size={14} color={c.primary} />
+                <Feather name="info" size={14} color={c.accent} />
                 <Text style={[styles.whyPlanTitle, { color: c.foreground }]}>Why this plan</Text>
               </View>
               <Feather name={showWhyPlan ? "chevron-up" : "chevron-down"} size={16} color={c.mutedForeground} />
@@ -674,10 +674,10 @@ export default function DashboardScreen() {
             onPress={() => { haptic(); setShowCheckIn(true); }}
             style={({ pressed }) => [
               styles.checkInButton,
-              { backgroundColor: c.card, borderColor: c.primary + "30", opacity: pressed ? 0.85 : 1 },
+              { backgroundColor: c.card, borderColor: c.accent + "30", opacity: pressed ? 0.85 : 1 },
             ]}
           >
-            <Feather name="sunset" size={16} color={c.primary} />
+            <Feather name="sunset" size={16} color={c.accent} />
             <View style={{ flex: 1 }}>
               <Text style={[styles.checkInButtonTitle, { color: c.foreground }]}>Quick reflection</Text>
               <Text style={[styles.checkInButtonSub, { color: c.mutedForeground }]}>Takes 15 seconds</Text>
@@ -813,8 +813,8 @@ export default function DashboardScreen() {
               <View style={[styles.handleBar, { backgroundColor: c.border }]} />
             </View>
             <View style={[styles.modalHeader, { marginBottom: 8 }]}>
-              <View style={[styles.modalIconWrap, { backgroundColor: c.primary + "12" }]}>
-                <Feather name="sunset" size={18} color={c.primary} />
+              <View style={[styles.modalIconWrap, { backgroundColor: c.accent + "12" }]}>
+                <Feather name="sunset" size={18} color={c.accent} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.modalTitle, { color: c.foreground }]}>How was today?</Text>
@@ -827,8 +827,8 @@ export default function DashboardScreen() {
                 <View style={styles.checkInChipRow}>
                   {(["great", "good", "tired", "depleted"] as const).map(v => (
                     <Pressable key={v} onPress={() => { haptic(); setCheckInEnergy(checkInEnergy === v ? null : v); }}
-                      style={[styles.checkInChip, { flex: 1, backgroundColor: checkInEnergy === v ? c.primary + "18" : c.background, borderColor: checkInEnergy === v ? c.primary + "40" : c.border + "30" }]}>
-                      <Text style={[styles.checkInChipText, { color: checkInEnergy === v ? c.primary : c.foreground }]}>
+                      style={[styles.checkInChip, { flex: 1, backgroundColor: checkInEnergy === v ? c.accent + "18" : c.background, borderColor: checkInEnergy === v ? c.accent + "40" : c.border + "30" }]}>
+                      <Text style={[styles.checkInChipText, { color: checkInEnergy === v ? c.accent : c.foreground }]}>
                         {v === "great" ? "Great" : v === "good" ? "Good" : v === "tired" ? "Tired" : "Low"}
                       </Text>
                     </Pressable>
@@ -841,8 +841,8 @@ export default function DashboardScreen() {
                 <View style={styles.checkInChipRow}>
                   {(["none", "mild", "moderate", "rough"] as const).map(v => (
                     <Pressable key={v} onPress={() => { haptic(); setCheckInSideEffects(checkInSideEffects === v ? null : v); }}
-                      style={[styles.checkInChip, { flex: 1, backgroundColor: checkInSideEffects === v ? c.primary + "18" : c.background, borderColor: checkInSideEffects === v ? c.primary + "40" : c.border + "30" }]}>
-                      <Text style={[styles.checkInChipText, { color: checkInSideEffects === v ? c.primary : c.foreground }]}>
+                      style={[styles.checkInChip, { flex: 1, backgroundColor: checkInSideEffects === v ? c.accent + "18" : c.background, borderColor: checkInSideEffects === v ? c.accent + "40" : c.border + "30" }]}>
+                      <Text style={[styles.checkInChipText, { color: checkInSideEffects === v ? c.accent : c.foreground }]}>
                         {v === "none" ? "None" : v === "mild" ? "Mild" : v === "moderate" ? "Some" : "Rough"}
                       </Text>
                     </Pressable>
@@ -855,8 +855,8 @@ export default function DashboardScreen() {
                 <View style={styles.checkInChipRow}>
                   {(["good", "okay", "poor"] as const).map(v => (
                     <Pressable key={v} onPress={() => { haptic(); setCheckInProtein(checkInProtein === v ? null : v); }}
-                      style={[styles.checkInChip, { flex: 1, backgroundColor: checkInProtein === v ? c.primary + "18" : c.background, borderColor: checkInProtein === v ? c.primary + "40" : c.border + "30" }]}>
-                      <Text style={[styles.checkInChipText, { color: checkInProtein === v ? c.primary : c.foreground }]}>
+                      style={[styles.checkInChip, { flex: 1, backgroundColor: checkInProtein === v ? c.accent + "18" : c.background, borderColor: checkInProtein === v ? c.accent + "40" : c.border + "30" }]}>
+                      <Text style={[styles.checkInChipText, { color: checkInProtein === v ? c.accent : c.foreground }]}>
                         {v === "good" ? "Good" : v === "okay" ? "Okay" : "Low"}
                       </Text>
                     </Pressable>
