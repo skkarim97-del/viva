@@ -165,12 +165,11 @@ export interface GLP1DailyInputs {
   digestion: DigestionStatus;
 }
 
+export type MentalState = "focused" | "good" | "low" | "burnt_out" | null;
+
 export interface DailyCheckIn {
   date: string;
-  energy: EnergyDaily;
-  appetite: AppetiteLevel;
-  nausea: NauseaLevel;
-  digestion: DigestionStatus;
+  mentalState: MentalState;
 }
 
 export interface DailyPlan {

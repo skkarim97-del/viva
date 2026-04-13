@@ -367,6 +367,7 @@ export function generateDailyPlan(
   medicationProfile?: MedicationProfile,
   medicationLog?: MedicationLogEntry[],
   patterns?: UserPatterns,
+  mentalState?: import("@/types").MentalState,
 ): DailyPlan {
   const feeling = inputs?.feeling ?? null;
   const energy = inputs?.energy ?? null;
@@ -459,6 +460,14 @@ export function generateDailyPlan(
     if (restOverride && restOverride.confidence === "high" && readinessScore < 50) {
       readinessScore = Math.max(readinessScore - 5, 0);
     }
+  }
+
+  if (mentalState === "burnt_out") {
+    readinessScore = Math.min(readinessScore, 40);
+  } else if (mentalState === "low") {
+    readinessScore = Math.max(readinessScore - 10, 0);
+  } else if (mentalState === "focused") {
+    readinessScore = Math.min(readinessScore + 5, 100);
   }
 
   const readinessLabel = readinessScore >= 80 ? "Excellent" : readinessScore >= 65 ? "Good" : readinessScore >= 45 ? "Moderate" : "Low";
@@ -611,7 +620,34 @@ export function generateDailyPlan(
     workoutDesc = "Full rest day.";
   }
 
-  const recommendedTag = stateTagFromReadiness(readinessScore, feeling, stress, energy);
+  if (mentalState === "burnt_out" && dailyState !== "recover") {
+    dailyState = "recover";
+    headline = "You are mentally burnt out. Let today be simple.";
+    summary = "Mental fatigue matters as much as physical fatigue. A stripped-back day with small wins helps you reset without falling off track.";
+    dailyFocus = "Small wins only";
+    workoutType = "Rest or Gentle Walk";
+    workoutIntensity = "low";
+    workoutDuration = 10;
+    workoutDesc = "A short walk if you feel like it. Nothing more.";
+    optional = "Pick one small thing to complete. That is enough for today.";
+    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, trigger: "rest_day" });
+  } else if (mentalState === "low" && (dailyState === "push" || dailyState === "build")) {
+    dailyState = "maintain";
+    headline = "Energy is there but your mind needs a lighter day.";
+    summary = "When motivation is low, easy consistency matters most. Stay with the basics and protect your streak.";
+    dailyFocus = "Easy consistency";
+    workoutIntensity = "low";
+    workoutDuration = Math.min(workoutDuration, 20);
+    workoutDesc = "Gentle movement. Keep the bar low.";
+    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, trigger: "maintain_day" });
+  }
+
+  let recommendedTag = stateTagFromReadiness(readinessScore, feeling, stress, energy);
+  if (mentalState === "burnt_out") {
+    recommendedTag = "stressed";
+  } else if (mentalState === "low" && (recommendedTag === "great" || recommendedTag === "good")) {
+    recommendedTag = "tired";
+  }
 
   const moveOpt = pickMedAwareOption("move", recommendedTag, glp1Inputs, medCtx);
   const fuelOpt = pickMedAwareOption("fuel", recommendedTag, glp1Inputs, medCtx);

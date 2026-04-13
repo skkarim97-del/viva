@@ -25,7 +25,7 @@ import { formatDoseDisplay } from "@/data/medicationData";
 import { generateGreeting, generateInputSummary, buildCoachContext } from "@/lib/engine";
 import { useColors } from "@/hooks/useColors";
 import { CATEGORY_OPTIONS } from "@/types";
-import type { MetricKey, FeelingType, ChatMessage, DailyStatusLabel, ActionCategory, AppetiteLevel, NauseaLevel, DigestionStatus, EnergyDaily, MedicationLogEntry } from "@/types";
+import type { MetricKey, FeelingType, ChatMessage, DailyStatusLabel, ActionCategory, AppetiteLevel, NauseaLevel, DigestionStatus, EnergyDaily, MedicationLogEntry, MentalState } from "@/types";
 
 const TINT_GREEN = "#34C759";
 const TINT_BLUE = "#38B6FF";
@@ -103,9 +103,7 @@ export default function DashboardScreen() {
   const [showChat, setShowChat] = useState(false);
   const [showWhyPlan, setShowWhyPlan] = useState(false);
   const [showCheckIn, setShowCheckIn] = useState(false);
-  const [checkInEnergy, setCheckInEnergy] = useState<EnergyDaily>(null);
-  const [checkInNausea, setCheckInNausea] = useState<NauseaLevel>(null);
-  const [checkInDigestion, setCheckInDigestion] = useState<DigestionStatus>(null);
+  const [checkInMental, setCheckInMental] = useState<MentalState>(null);
   const chatListRef = useRef<FlatList>(null);
   const feedbackOpacity = useRef(new Animated.Value(0)).current;
 
@@ -783,8 +781,8 @@ export default function DashboardScreen() {
           >
             <Feather name="sunset" size={16} color={c.accent} />
             <View style={{ flex: 1 }}>
-              <Text style={[styles.checkInButtonTitle, { color: c.foreground }]}>Quick reflection</Text>
-              <Text style={[styles.checkInButtonSub, { color: c.mutedForeground }]}>Takes 15 seconds</Text>
+              <Text style={[styles.checkInButtonTitle, { color: c.foreground }]}>How are you feeling mentally?</Text>
+              <Text style={[styles.checkInButtonSub, { color: c.mutedForeground }]}>Takes 5 seconds</Text>
             </View>
             <Feather name="chevron-right" size={14} color={c.mutedForeground + "60"} />
           </Pressable>
@@ -913,9 +911,9 @@ export default function DashboardScreen() {
         visible={showCheckIn}
         transparent
         animationType="slide"
-        onRequestClose={() => { setShowCheckIn(false); setCheckInEnergy(null); setCheckInNausea(null); setCheckInDigestion(null); }}
+        onRequestClose={() => { setShowCheckIn(false); setCheckInMental(null); }}
       >
-        <Pressable style={styles.modalOverlay} onPress={() => { setShowCheckIn(false); setCheckInEnergy(null); setCheckInNausea(null); setCheckInDigestion(null); }}>
+        <Pressable style={styles.modalOverlay} onPress={() => { setShowCheckIn(false); setCheckInMental(null); }}>
           <Pressable style={[styles.modalSheet, { backgroundColor: c.card, paddingBottom: Math.max(bottomPad, 24) }]} onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalHandle}>
               <View style={[styles.handleBar, { backgroundColor: c.border }]} />
@@ -925,51 +923,39 @@ export default function DashboardScreen() {
                 <Feather name="sunset" size={18} color={c.accent} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.modalTitle, { color: c.foreground }]}>How was today?</Text>
+                <Text style={[styles.modalTitle, { color: c.foreground }]}>How are you feeling mentally?</Text>
               </View>
             </View>
 
             <View style={{ gap: 20, paddingHorizontal: 4 }}>
               <InputRow
-                label="Energy"
-                options={ENERGY_OPTIONS}
-                selected={checkInEnergy}
-                onSelect={(v) => setCheckInEnergy(checkInEnergy === v ? null : v)}
-              />
-              <InputRow
-                label="Nausea"
-                options={NAUSEA_OPTIONS}
-                selected={checkInNausea}
-                onSelect={(v) => setCheckInNausea(checkInNausea === v ? null : v)}
-              />
-              <InputRow
-                label="Digestion"
-                options={DIGESTION_OPTIONS}
-                selected={checkInDigestion}
-                onSelect={(v) => setCheckInDigestion(checkInDigestion === v ? null : v)}
+                label="MENTAL STATE"
+                options={[
+                  { key: "focused" as const, label: "Focused", tint: TINT_GREEN },
+                  { key: "good" as const, label: "Good", tint: TINT_BLUE },
+                  { key: "low" as const, label: "Low", tint: TINT_PURPLE },
+                  { key: "burnt_out" as const, label: "Burnt out", tint: TINT_RED },
+                ]}
+                selected={checkInMental}
+                onSelect={(v) => setCheckInMental(checkInMental === v ? null : v)}
               />
 
               <Pressable
                 onPress={() => {
-                  if (checkInEnergy) {
+                  if (checkInMental) {
                     haptic();
                     saveDailyCheckIn({
                       date: new Date().toISOString().split("T")[0],
-                      energy: checkInEnergy,
-                      appetite: null,
-                      nausea: checkInNausea ?? null,
-                      digestion: checkInDigestion ?? null,
+                      mentalState: checkInMental,
                     });
                     setShowCheckIn(false);
-                    setCheckInEnergy(null);
-                    setCheckInNausea(null);
-                    setCheckInDigestion(null);
+                    setCheckInMental(null);
                   }
                 }}
                 style={({ pressed }) => [
                   styles.checkInSubmit,
                   {
-                    backgroundColor: checkInEnergy ? c.primary : c.primary + "40",
+                    backgroundColor: checkInMental ? c.primary : c.primary + "40",
                     opacity: pressed ? 0.85 : 1,
                   },
                 ]}
