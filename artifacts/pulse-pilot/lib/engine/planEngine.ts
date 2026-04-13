@@ -31,6 +31,119 @@ export type MedContext = {
   isNewToMed: boolean;
 };
 
+interface WhyPlanContext {
+  dailyState: import("@/types").DailyState;
+  medicationProfile?: MedicationProfile;
+  medCtx: MedContext | null;
+  glp1Inputs?: GLP1DailyInputs;
+  metrics: HealthMetrics;
+  readinessScore: number;
+  trigger: string;
+}
+
+function buildWhyThisPlan(ctx: WhyPlanContext): string[] {
+  const { dailyState, medicationProfile, medCtx, glp1Inputs, metrics, trigger } = ctx;
+
+  const brandName = medicationProfile?.medicationBrand || "your medication";
+  const doseStr = medicationProfile ? `${medicationProfile.doseValue} ${medicationProfile.doseUnit}` : "";
+  const fullMedStr = doseStr ? `${brandName} ${doseStr}` : brandName;
+  const isTitrated = medCtx?.recentTitration === true;
+  const isNew = medCtx?.isNewToMed === true;
+  const isHigh = medCtx?.doseTier === "high";
+  const doseWindow = medCtx?.daysSinceDose != null && medCtx?.frequency === "weekly" && medCtx.daysSinceDose! <= 2;
+
+  const energyStr = glp1Inputs?.energy === "depleted" ? "very low" : glp1Inputs?.energy === "tired" ? "lower than usual" : glp1Inputs?.energy === "great" ? "strong" : null;
+  const appetiteStr = glp1Inputs?.appetite === "very_low" ? "very suppressed" : glp1Inputs?.appetite === "low" ? "reduced" : null;
+  const nauseaStr = glp1Inputs?.nausea === "severe" ? "significant" : glp1Inputs?.nausea === "moderate" ? "noticeable" : null;
+  const digestionStr = glp1Inputs?.digestion === "diarrhea" ? "unsettled" : glp1Inputs?.digestion === "constipated" ? "sluggish" : glp1Inputs?.digestion === "bloated" ? "uncomfortable" : null;
+
+  const inputParts: string[] = [];
+  if (energyStr) inputParts.push(`energy is ${energyStr}`);
+  if (appetiteStr) inputParts.push(`appetite is ${appetiteStr}`);
+  if (nauseaStr) inputParts.push(`nausea is ${nauseaStr}`);
+  if (digestionStr) inputParts.push(`digestion is ${digestionStr}`);
+
+  const inputClause = inputParts.length > 0
+    ? inputParts.join(", ").replace(/^./, c => c.toUpperCase()) + "."
+    : "";
+
+  let p1 = "";
+  let p2 = "";
+  let p3 = "";
+
+  if (trigger === "sleep_critical") {
+    p1 = `Sleep was ${metrics.sleepDuration.toFixed(1)} hours, which affects how your body processes ${fullMedStr}.`;
+    if (isTitrated) p1 += " Dose adjustments can also disrupt sleep temporarily.";
+    if (inputClause) p1 += " " + inputClause;
+  } else if (trigger === "symptoms_severe") {
+    p1 = isTitrated
+      ? `Your body is adjusting to the recent ${brandName} dose change.${doseWindow ? " You are still within the peak adjustment window." : ""} ${inputClause}`
+      : isNew
+        ? `GI symptoms like nausea are common in the first weeks on ${brandName}. ${inputClause}`
+        : isHigh
+          ? `At ${doseStr}, symptom flares can happen periodically. ${inputClause}`
+          : `${inputClause || "Symptoms are heavier today."} This can happen at various points during treatment with ${brandName}.`;
+  } else if (trigger === "symptoms_moderate") {
+    p1 = isTitrated
+      ? `Nausea often increases for 1-2 weeks after a dose change on ${brandName}. ${inputClause}`
+      : `${inputClause || "Nausea is noticeable today."} This is a common response to ${fullMedStr}${doseWindow ? ", especially close to dose day" : ""}.`;
+  } else if (trigger === "appetite_digestion") {
+    p1 = `Appetite suppression is one of the primary effects of ${brandName}${isHigh ? ` at ${doseStr}` : ""}. ${inputClause}`;
+  } else if (trigger === "stress") {
+    p1 = `Stress is elevated today. High cortisol can blunt how your body responds to ${brandName} and disrupt sleep and appetite.`;
+    if (inputClause) p1 += " " + inputClause;
+  } else if (trigger === "recovery_declining") {
+    p1 = isTitrated
+      ? `Recovery signals have been lower since the ${brandName} dose change. This is expected and usually resolves within 1-2 weeks. ${inputClause}`
+      : `Recovery has been strained for several days. On ${brandName}, this can correlate with disrupted sleep or under-fueling. ${inputClause}`;
+  } else if (trigger === "push_day") {
+    p1 = `Sleep was ${metrics.sleepDuration.toFixed(1)} hours, recovery is ${metrics.recoveryScore}%, and your body is responding well to ${fullMedStr}. ${inputClause || "Your inputs look solid today."}`;
+  } else if (trigger === "build_day") {
+    p1 = `Recovery is ${metrics.recoveryScore}% and supports steady effort today on ${fullMedStr}. ${inputClause || "No major flags in your inputs."}`;
+  } else if (trigger === "maintain_day") {
+    const sleepNote = metrics.sleepDuration < 7 ? `Sleep was ${metrics.sleepDuration.toFixed(1)} hours. ` : "";
+    p1 = `${sleepNote}Your body can handle the basics today but is not fully charged. On ${brandName}${isHigh ? ` at ${doseStr}` : ""}, days like this are normal. ${inputClause}`;
+  } else if (trigger === "rest_day") {
+    p1 = isTitrated
+      ? `Your body is working hard to adjust after the ${brandName} dose change. ${inputClause}`
+      : `Recovery is at ${metrics.recoveryScore}% and your body is signaling for rest. On ${fullMedStr}, rest days help your body recalibrate. ${inputClause}`;
+  } else {
+    p1 = `Your body could use some extra support today. On ${fullMedStr}, listening to these signals is part of the process. ${inputClause}`;
+  }
+
+  if (dailyState === "recover") {
+    p2 = "Today's plan scales back activity and focuses on hydration, easy-to-digest protein, and rest. "
+      + (nauseaStr ? "Smaller, more frequent meals and steady sipping help manage nausea better than skipping food entirely. " : "")
+      + (digestionStr ? "Gentle movement after meals and extra water support digestion. " : "")
+      + "This is not a step back. It is the right response to what your body is telling you.";
+  } else if (dailyState === "push") {
+    p2 = "Today's plan includes a strength session because this is your best window for muscle-preserving activity. "
+      + "On GLP-1 treatment, strength training is one of the most effective ways to protect lean mass during weight loss. "
+      + "Fuel well around your session with 25-30g protein within an hour.";
+  } else if (dailyState === "build") {
+    p2 = "Today's plan keeps effort moderate and consistent. "
+      + (appetiteStr ? "Even with reduced appetite, getting protein at every meal protects muscle. " : "")
+      + "Pairing movement with good fueling and hydration maximizes the benefit of each day on treatment.";
+  } else {
+    p2 = "Today's plan keeps things manageable so your body can stabilize. "
+      + (appetiteStr ? "Protein-first small meals prevent the muscle loss that under-eating can cause. " : "")
+      + (nauseaStr ? "Lighter food and steady hydration help manage how you are feeling. " : "")
+      + "The basics done consistently matter more than big efforts on scattered days.";
+  }
+
+  if (isTitrated) {
+    p3 = `Most people adjust to a new ${brandName} dose within 1-2 weeks. Staying consistent with your plan through this window sets a stronger baseline for the weeks ahead.`;
+  } else if (isNew) {
+    p3 = `The first month on ${brandName} is an adjustment period. Each day you stay consistent with your plan, your body adapts and the path gets smoother.`;
+  } else if (isHigh) {
+    p3 = `At ${doseStr}, maintaining fueling, hydration, and movement consistency is what separates great outcomes from average ones. You are building that foundation every day.`;
+  } else {
+    p3 = `Consistency is the most predictive factor in treatment success. Every day you follow through, even a lighter day like today, compounds over time.`;
+  }
+
+  return [p1.trim(), p2.trim(), p3.trim()].filter(s => s.length > 0);
+}
+
 function makeActions(
   yourDay: { move: string; fuel: string; hydrate: string; recover: string; consistent: string },
   reasons?: { move: string; fuel: string; hydrate: string; recover: string; consistent: string },
@@ -350,6 +463,8 @@ export function generateDailyPlan(
 
   const readinessLabel = readinessScore >= 80 ? "Excellent" : readinessScore >= 65 ? "Good" : readinessScore >= 45 ? "Moderate" : "Low";
 
+  const medCtx = buildMedContext(medicationProfile, medicationLog);
+
   const stressOverride = stress === "high" || stress === "very_high";
   const lowEnergy = energy === "low";
   const isDehydrated = hydration === "dehydrated" || hydration === "low";
@@ -384,13 +499,7 @@ export function generateDailyPlan(
       ? "Nausea is heavy and energy is very low. Rest, hydration, and small meals are enough for today."
       : `Sleep was ${metrics.sleepDuration.toFixed(1)} hrs and your body is showing it. Rest and hydration come first.`;
     dailyFocus = "Rest and recover";
-    whyThisPlan = [
-      symptomsHeavy
-        ? isTitrated ? "Heavier nausea is expected in the 1-2 weeks after a dose change." : "Nausea is common in the early weeks of treatment."
-        : `${metrics.sleepDuration.toFixed(1)} hrs of sleep affects energy, appetite, and how your body handles treatment.`,
-      "A gentle day now helps you stay consistent over the longer term.",
-      "Focus on hydration, small protein-rich meals, and rest.",
-    ];
+    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, trigger: sleepCritical ? "sleep_critical" : "symptoms_severe" });
     workoutType = "Rest";
     workoutIntensity = "low";
     workoutDuration = 0;
@@ -405,11 +514,7 @@ export function generateDailyPlan(
       ? "Higher doses can bring stronger nausea. Hydration, small meals, and rest are enough today."
       : "Nausea is making things harder. Hydration and small protein-rich meals will help most.";
     dailyFocus = "Manage symptoms";
-    whyThisPlan = [
-      isTitrated ? "Your body is still adjusting to the recent dose change. This typically improves within 1-2 weeks." : "When nausea is heavier, your body is using more energy to adjust.",
-      "Hydration and small meals help manage nausea and fatigue.",
-      "Lighter days protect your consistency over the next week.",
-    ];
+    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, trigger: "symptoms_moderate" });
     workoutType = "Gentle Walk";
     workoutIntensity = "low";
     workoutDuration = 15;
@@ -422,11 +527,7 @@ export function generateDailyPlan(
       ? "At higher doses, appetite suppression is stronger. Protein-first small meals prevent muscle loss and keep energy steadier."
       : "Appetite is low and digestion is unsettled. Nutrient-dense small meals make the biggest difference today.";
     dailyFocus = "Focus on fueling";
-    whyThisPlan = [
-      "Low appetite is one of the most common effects of GLP-1 medications.",
-      "Under-eating leads to muscle loss and lower energy, which compounds over time.",
-      isHighDose ? "At your current dose, aiming for 25-30g protein per meal is especially important." : "Even 15-20g of protein per meal helps preserve lean mass.",
-    ];
+    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, trigger: "appetite_digestion" });
     workoutType = "Light Movement";
     workoutIntensity = "low";
     workoutDuration = 20;
@@ -437,11 +538,7 @@ export function generateDailyPlan(
     headline = "Stress is elevated. A simpler day will help.";
     summary = "High stress raises cortisol, which can blunt treatment benefits and disrupt sleep and appetite. Keep today low-pressure.";
     dailyFocus = "Simplify and recover";
-    whyThisPlan = [
-      "Elevated cortisol can interfere with how your body responds to treatment.",
-      "A low-pressure day helps your nervous system settle, which improves sleep tonight.",
-      "Recovery is not just physical. Mental rest supports better decisions tomorrow.",
-    ];
+    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, trigger: "stress" });
     workoutType = "Rest or Gentle Walk";
     workoutIntensity = "low";
     workoutDuration = 15;
@@ -454,11 +551,7 @@ export function generateDailyPlan(
       : "Recovery has been strained. A lighter day will help reset.";
     summary = `Recovery signals have been below your baseline for ${consecutivePoorRecovery ? "3+ days" : "the past week"}. A lighter day and solid sleep tonight will help you reset.`;
     dailyFocus = "Recovery protocol";
-    whyThisPlan = [
-      isTitrated ? "Lower recovery is common after a dose increase. It usually improves within 1-2 weeks." : "Declining recovery signals often show up before you feel the fatigue.",
-      "Catching it early prevents bigger dips in energy and consistency.",
-      "Prioritize sleep and hydration over activity today.",
-    ];
+    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, trigger: "recovery_declining" });
     workoutType = "Light Walk";
     workoutIntensity = "low";
     workoutDuration = 20;
@@ -471,11 +564,7 @@ export function generateDailyPlan(
       : "Recovery is strong. Make the most of today.";
     summary = `Sleep was ${metrics.sleepDuration.toFixed(1)} hrs, HRV is above your baseline, and recovery is ${metrics.recoveryScore}%. A strong day for a strength session or longer walk.`;
     dailyFocus = "Make the most of today";
-    whyThisPlan = [
-      "Strong recovery and sleep create the best window for muscle-preserving activity.",
-      "Strength training on GLP-1 is one of the most effective ways to protect lean mass during weight loss.",
-      "Fuel well around your activity. Aim for 25-30g protein within an hour of your session.",
-    ];
+    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, trigger: "push_day" });
     workoutType = "Strength Session";
     workoutIntensity = "moderate";
     workoutDuration = 30;
@@ -486,11 +575,7 @@ export function generateDailyPlan(
     headline = "A good day for steady progress.";
     summary = `Recovery is ${metrics.recoveryScore}% and supports activity today. Stay consistent with movement, protein, and hydration.`;
     dailyFocus = "Steady progress";
-    whyThisPlan = [
-      "Consistent moderate effort builds more results than occasional intense days.",
-      "Your body can handle activity today without adding extra strain.",
-      "Pairing movement with protein-rich meals maximizes the benefit.",
-    ];
+    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, trigger: "build_day" });
     workoutType = "Walk or Light Activity";
     workoutIntensity = "moderate";
     workoutDuration = 30;
@@ -505,11 +590,7 @@ export function generateDailyPlan(
       ? `Sleep was ${metrics.sleepDuration.toFixed(1)} hrs. A lighter day with protein-rich meals and extra water will help you recover.`
       : `Recovery is at ${metrics.recoveryScore}%. Stay consistent with the basics and keep movement gentle.`;
     dailyFocus = "Basics first";
-    whyThisPlan = [
-      "On moderate days, the basics matter most: hydration, protein, rest.",
-      "Gentle movement keeps you in rhythm without adding strain.",
-      "Consistency on days like this is what builds long-term results.",
-    ];
+    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, trigger: "maintain_day" });
     workoutType = "Gentle Walk";
     workoutIntensity = "low";
     workoutDuration = 20;
@@ -522,11 +603,7 @@ export function generateDailyPlan(
       : "Your body needs a break today.";
     summary = `Recovery is at ${metrics.recoveryScore}%. Focus on rest, hydration, and nourishing food. Movement can wait.`;
     dailyFocus = "Rest and restore";
-    whyThisPlan = [
-      isTitrated ? "Your body needs time to adjust after a dose change. This usually stabilizes within 1-2 weeks." : "Rest days help your body adjust to treatment and recover.",
-      "Protein and hydration are your most important tools right now.",
-      "Pushing through fatigue creates more fatigue, not progress.",
-    ];
+    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, trigger: "rest_day" });
     optional = "A 10-minute easy walk is the most you should do today.";
     workoutType = "Rest";
     workoutIntensity = "low";
@@ -535,7 +612,6 @@ export function generateDailyPlan(
   }
 
   const recommendedTag = stateTagFromReadiness(readinessScore, feeling, stress, energy);
-  const medCtx = buildMedContext(medicationProfile, medicationLog);
 
   const moveOpt = pickMedAwareOption("move", recommendedTag, glp1Inputs, medCtx);
   const fuelOpt = pickMedAwareOption("fuel", recommendedTag, glp1Inputs, medCtx);
