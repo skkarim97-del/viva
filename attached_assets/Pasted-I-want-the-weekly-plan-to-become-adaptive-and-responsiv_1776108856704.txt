@@ -1,0 +1,299 @@
+I want the weekly plan to become adaptive and responsive to patient feedback from the Today screen.
+
+Right now, the weekly plan should not be static.
+It should update based on how the patient is feeling today and recently, so the app can prevent symptoms or poor recovery from snowballing through the week.
+
+Important context:
+The app can absolutely use internal severity logic to drive these changes, but patients should NOT see explicit severity states, color-coded risk levels, or anything alarming.
+
+Do NOT expose:
+- green / yellow / orange / red
+- risk levels
+- alert-style severity labels
+- “your plan was downgraded”
+- anything that could make the patient panic
+
+Instead:
+- use severity states internally only
+- translate them into calm, supportive, treatment-aware language
+- make the plan feel smart, responsive, and reassuring
+
+=====================================
+GOAL
+=====================================
+
+Refactor the weekly plan system so that:
+
+1. it generates a baseline weekly plan
+2. it applies adaptive overrides based on recent patient inputs
+3. it becomes more defensive when the patient is struggling
+4. it becomes more progressive when the patient is doing well
+
+The weekly plan should feel alive, intelligent, and treatment-aware.
+
+=====================================
+PART 1: BASELINE + ADAPTIVE MODEL
+=====================================
+
+Structure weekly plan logic into 2 layers:
+
+1. Baseline Plan
+Generated from:
+- onboarding/profile
+- medication + dose
+- dose frequency
+- recent titration
+- Apple Health trends
+- historical patterns
+
+2. Adaptive Override Layer
+Generated from:
+- today’s inputs
+- last 2–3 days of inputs
+- symptom severity
+- energy
+- appetite
+- digestion / nausea
+- mental state
+- treatment logging
+
+Final weekly plan should be:
+baseline plan + adaptive adjustments
+
+=====================================
+PART 2: INTERNAL SEVERITY STATES ONLY
+=====================================
+
+Create a simple internal severity framework that can influence the weekly plan.
+
+These states are INTERNAL ONLY and should NOT be shown directly to the patient.
+
+Examples:
+
+GREEN
+- good energy
+- normal appetite
+- mild or no symptoms
+
+YELLOW
+- tired or slightly low
+- appetite lower than normal
+- mild symptoms
+
+ORANGE
+- low energy
+- low appetite
+- moderate nausea / digestion issues
+- mentally low
+
+RED
+- depleted
+- very low appetite
+- severe nausea
+- diarrhea
+- burnt out mentally
+
+This internal state should influence not just today’s plan, but the next several days of the weekly plan.
+
+Again:
+Do NOT show these labels or colors in patient-facing UI.
+
+=====================================
+PART 3: WEEKLY PLAN ADJUSTMENT RULES
+=====================================
+
+Please create rules like:
+
+RED STATE (internal only):
+Example inputs:
+- depleted energy
+- very low appetite
+- severe nausea
+- diarrhea
+- burnt out mentally
+
+Then:
+- today = full recovery mode
+- next 2–3 days = simplified support plan
+- reduce movement intensity sharply
+- prioritize hydration + electrolytes
+- simplify meals / protein support
+- increase rest / sleep emphasis
+- reduce training progression this week
+- allow weekly plan to become more defensive overall
+
+ORANGE STATE (internal only):
+Example:
+- tired
+- low appetite
+- moderate nausea or digestion disruption
+- mentally low
+
+Then:
+- today = lighter support day
+- next 1–2 days = recovery-biased plan
+- shift movement toward walking / light activity
+- increase hydration / fuel emphasis
+- avoid overloading the rest of the week
+
+YELLOW STATE (internal only):
+Example:
+- slightly tired
+- appetite somewhat low
+- mild symptoms
+
+Then:
+- soften plan slightly
+- make next 1–2 days a little lighter
+- keep routines simple
+- do not fully pull back the week unless pattern persists
+
+GREEN STATE (internal only):
+Example:
+- good energy
+- normal appetite
+- mild/no symptoms
+
+Then:
+- allow plan to proceed
+- moderate / progressive movement is okay
+- maintain normal hydration, recovery, and fueling structure
+
+=====================================
+PART 4: PREVENT SNOWBALLING
+=====================================
+
+This is very important.
+
+The purpose of this logic is not just to react today.
+It is to prevent the patient from digging a deeper hole for the rest of the week.
+
+So if severe or moderate symptoms are logged, the weekly plan should actively reduce the chance of further snowballing by:
+- lowering intensity
+- simplifying recovery demands
+- prioritizing treatment tolerance
+- preventing overexertion
+
+=====================================
+PART 5: DURATION OF PLAN ADJUSTMENTS
+=====================================
+
+Adjustments should not always last the entire week.
+
+Use logic like:
+
+- severe state -> 2–3 day defensive adjustment
+- moderate state -> 1–2 day lighter adjustment
+- mild state -> small same-day or next-day modification
+- stable / improving state -> return toward baseline plan
+
+The weekly plan should be able to recover back toward baseline if the patient starts doing better.
+
+=====================================
+PART 6: PATIENT-FACING LANGUAGE
+=====================================
+
+This is critical.
+
+The patient should NOT see:
+- red / yellow / orange / green
+- high / medium / low risk
+- severe / moderate / mild state labels
+- anything alarming or clinical
+
+Instead, translate the internal logic into calm, supportive language.
+
+Examples of patient-facing language:
+
+Instead of showing RED:
+- “Let’s keep things simple for the next couple days”
+- “A lighter couple of days will likely help”
+- “This week may go better with more recovery and simpler routines”
+
+Instead of showing ORANGE:
+- “A bit more recovery will help here”
+- “Let’s ease up slightly for the next day or two”
+- “A lighter stretch will likely work better right now”
+
+Instead of showing YELLOW:
+- “Keep things steady today”
+- “Simple routines will go a long way here”
+- “A small adjustment should help”
+
+Instead of showing GREEN:
+- “You’re in a good spot to keep building”
+- “This looks like a good time to stay consistent”
+- “You can keep the week moving as planned”
+
+Tone should always be:
+- supportive
+- calm
+- non-alarming
+- non-judgmental
+- treatment-aware
+- human
+
+=====================================
+PART 7: UI / PRODUCT BEHAVIOR
+=====================================
+
+Make it visible that the weekly plan has adapted, but do it subtly.
+
+This can show up through:
+- updated task ranges
+- lighter movement recommendations
+- more hydration emphasis
+- different recovery targets
+- plan descriptions reflecting current state
+
+Do NOT make this look alarming.
+Do NOT use warning colors tied to severity states.
+Do NOT say “your plan was downgraded.”
+
+Just make it feel responsive and smart.
+
+=====================================
+PART 8: INTELLIGENCE LAYER
+=====================================
+
+This adaptation should live in the intelligence layer, not in UI code.
+
+Examples:
+- baselineWeeklyPlan()
+- applyWeeklyOverrides()
+- getCurrentSeverityState()
+- mergeBaselineAndAdaptivePlan()
+- translateSeverityToSupportLanguage()
+
+The UI should simply render the updated weekly plan and supportive messaging.
+
+=====================================
+PART 9: COACH + TRENDS INTEGRATION
+=====================================
+
+Make sure this logic also influences:
+- coach context
+- trends summaries
+- explanations for why the plan shifted
+
+Examples:
+- “Your plan is lighter for the next couple days because appetite and digestion have been tougher”
+- “Recovery is getting more emphasis after a rough stretch”
+- “This week is leaning a bit simpler while your body adjusts”
+
+Again:
+No patient-facing severity labels.
+No alarming language.
+
+=====================================
+PART 10: FINAL OUTPUT
+=====================================
+
+After implementing, summarize:
+1. how the baseline weekly plan works
+2. how adaptive overrides work
+3. what internal severity states were added
+4. how those states are hidden from the patient
+5. how patient-facing language is generated instead
+6. how long different adjustments last
+7. how the weekly plan now responds to Today inputs

@@ -118,6 +118,13 @@ export default function PlanScreen() {
 
               <Text style={[styles.focusLabel, { color: c.accent }]}>{day.focusArea}</Text>
 
+              {day.adaptiveNote && (
+                <View style={[styles.adaptiveNote, { backgroundColor: c.accent + "08" }]}>
+                  <Feather name="heart" size={12} color={c.accent} style={{ marginTop: 1 }} />
+                  <Text style={[styles.adaptiveNoteText, { color: c.mutedForeground }]}>{day.adaptiveNote}</Text>
+                </View>
+              )}
+
               <View style={styles.actionsGrid}>
                 {day.actions.filter(a => a.category !== "consistent").map((action) => {
                   const meta = CATEGORY_META[action.category];
@@ -339,6 +346,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Montserrat_500Medium",
     marginBottom: 2,
+  },
+  adaptiveNote: {
+    flexDirection: "row" as const,
+    alignItems: "flex-start" as const,
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
+    marginBottom: 2,
+  },
+  adaptiveNoteText: {
+    fontSize: 12,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 18,
+    flex: 1,
   },
   actionsGrid: {
     gap: 2,

@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
 
 import {
   defaultProfile,
@@ -17,6 +17,8 @@ import {
   buildPatientSummary,
   computeUserPatterns,
   generateAdaptiveInsights,
+  computeInternalSeverity,
+  applyAdaptiveOverrides,
 } from "@/lib/engine";
 import { computeInsights, type DailyInsights } from "@/data/insights";
 import type { UserPatterns, AdaptiveInsight } from "@/types";
@@ -165,6 +167,49 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [patientSummary, setPatientSummary] = useState<PatientSummary | null>(null);
   const [userPatterns, setUserPatterns] = useState<UserPatterns | null>(null);
   const [adaptiveInsights, setAdaptiveInsights] = useState<AdaptiveInsight[]>([]);
+  const baselineWeeklyPlanRef = useRef<WeeklyPlan | null>(null);
+
+  const setBaselineAndAdapt = useCallback((
+    basePlan: WeeklyPlan,
+    inputHistory: GLP1DailyInputs[],
+    checkIns: DailyCheckIn[],
+    allMetrics: HealthMetrics[],
+    medProfile?: MedicationProfile,
+    medLog?: MedicationLogEntry[],
+  ) => {
+    baselineWeeklyPlanRef.current = basePlan;
+    const severityResult = computeInternalSeverity({
+      recentInputs: inputHistory.slice(-7),
+      recentCheckIns: checkIns.slice(-7),
+      recentMetrics: allMetrics.slice(-7),
+      medicationProfile: medProfile,
+      medicationLog: medLog,
+      completionHistory: [],
+    });
+    const adapted = applyAdaptiveOverrides(basePlan, severityResult);
+    setWeeklyPlan(adapted);
+  }, []);
+
+  const recomputeAdaptation = useCallback((
+    inputHistory: GLP1DailyInputs[],
+    checkIns: DailyCheckIn[],
+    allMetrics: HealthMetrics[],
+    medProfile?: MedicationProfile,
+    medLog?: MedicationLogEntry[],
+  ) => {
+    const baseline = baselineWeeklyPlanRef.current;
+    if (!baseline) return;
+    const severityResult = computeInternalSeverity({
+      recentInputs: inputHistory.slice(-7),
+      recentCheckIns: checkIns.slice(-7),
+      recentMetrics: allMetrics.slice(-7),
+      medicationProfile: medProfile,
+      medicationLog: medLog,
+      completionHistory: [],
+    });
+    const adapted = applyAdaptiveOverrides(baseline, severityResult);
+    setWeeklyPlan(adapted);
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -227,24 +272,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         adjustmentNote: data.adjustmentNote,
       };
 
-      setWeeklyPlan((prev) => {
-        if (prev && prev.weekStartDate === weekStartDate) {
-          const merged: WeeklyPlan = {
-            ...aiPlan,
-            days: aiPlan.days.map((aiDay) => {
-              const existingDay = prev.days.find(d => d.date === aiDay.date);
-              if (!existingDay) return aiDay;
-              const hasEdits = existingDay.actions.some(a => a.chosen !== a.recommended || a.completed);
-              if (hasEdits) return existingDay;
-              return aiDay;
-            }),
-          };
-          AsyncStorage.setItem(WEEKLY_PLAN_KEY, JSON.stringify(merged));
-          return merged;
-        }
-        AsyncStorage.setItem(WEEKLY_PLAN_KEY, JSON.stringify(aiPlan));
-        return aiPlan;
+      const prevBaseline = baselineWeeklyPlanRef.current;
+      let newBaseline: WeeklyPlan;
+      if (prevBaseline && prevBaseline.weekStartDate === weekStartDate) {
+        newBaseline = {
+          ...aiPlan,
+          days: aiPlan.days.map((aiDay) => {
+            const existingDay = prevBaseline.days.find(d => d.date === aiDay.date);
+            if (!existingDay) return aiDay;
+            const hasEdits = existingDay.actions.some(a => a.chosen !== a.recommended || a.completed);
+            if (hasEdits) return existingDay;
+            return aiDay;
+          }),
+        };
+      } else {
+        newBaseline = aiPlan;
+      }
+      AsyncStorage.setItem(WEEKLY_PLAN_KEY, JSON.stringify(newBaseline));
+      baselineWeeklyPlanRef.current = newBaseline;
+      const severityResult = computeInternalSeverity({
+        recentInputs: [],
+        recentCheckIns: [],
+        recentMetrics: allMetrics.slice(-7),
+        completionHistory: [],
       });
+      setWeeklyPlan(applyAdaptiveOverrides(newBaseline, severityResult));
     } catch {}
   };
 
@@ -444,16 +496,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setDailyPlan(plan);
       const savedWeeklyPlan = await AsyncStorage.getItem(WEEKLY_PLAN_KEY);
       const generatedWeekly = generateWeeklyPlan();
+      let baseWeekly: WeeklyPlan;
       if (savedWeeklyPlan) {
         const parsed = JSON.parse(savedWeeklyPlan);
-        if (parsed.weekStartDate === generatedWeekly.weekStartDate) {
-          setWeeklyPlan(parsed);
-        } else {
-          setWeeklyPlan(generatedWeekly);
-        }
+        baseWeekly = parsed.weekStartDate === generatedWeekly.weekStartDate ? parsed : generatedWeekly;
       } else {
-        setWeeklyPlan(generatedWeekly);
+        baseWeekly = generatedWeekly;
       }
+      setBaselineAndAdapt(baseWeekly, loadedGlp1History, loadedCheckIns, allMetrics, savedProfileData.medicationProfile, loadedMedLog);
 
       fetchAIWeeklyPlan(allMetrics, savedProfileData, loadedHistory);
       setTrends(generateTrendDataFromMetrics(allMetrics));
@@ -547,8 +597,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
       }
       setDailyPlan(newPlan);
+
+      recomputeAdaptation(glp1InputHistory, checkInHistory, metrics, profile.medicationProfile, medicationLog);
     }
-  }, [metricsRef, feeling, energy, stress, hydration, trainingIntent, completionHistory, metrics, glp1Energy, appetite, nausea, digestion, glp1InputHistory, computeRisk, recomputeAnalytics, profile.medicationProfile, medicationLog, checkInHistory]);
+  }, [metricsRef, feeling, energy, stress, hydration, trainingIntent, completionHistory, metrics, glp1Energy, appetite, nausea, digestion, glp1InputHistory, computeRisk, recomputeAnalytics, profile.medicationProfile, medicationLog, checkInHistory, recomputeAdaptation]);
 
   const generateCompletionFeedback = (action: DailyAction, completed: boolean, completedCount: number, total: number): string | null => {
     if (!completed) return null;
@@ -596,22 +648,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (toggledAction) {
+        const updateDays = (days: WeeklyPlanDay[]) => days.map(d => {
+          if (d.date !== todayDate) return d;
+          return {
+            ...d,
+            actions: d.actions.map(a =>
+              a.category === toggledAction.category ? { ...a, completed: toggledAction.completed } : a
+            ),
+          };
+        });
+        if (baselineWeeklyPlanRef.current) {
+          baselineWeeklyPlanRef.current = {
+            ...baselineWeeklyPlanRef.current,
+            days: updateDays(baselineWeeklyPlanRef.current.days),
+          };
+          AsyncStorage.setItem(WEEKLY_PLAN_KEY, JSON.stringify(baselineWeeklyPlanRef.current));
+        }
         setWeeklyPlan(wp => {
           if (!wp) return wp;
-          const updatedWp = {
-            ...wp,
-            days: wp.days.map(d => {
-              if (d.date !== todayDate) return d;
-              return {
-                ...d,
-                actions: d.actions.map(a =>
-                  a.category === toggledAction.category ? { ...a, completed: toggledAction.completed } : a
-                ),
-              };
-            }),
-          };
-          AsyncStorage.setItem(WEEKLY_PLAN_KEY, JSON.stringify(updatedWp));
-          return updatedWp;
+          return { ...wp, days: updateDays(wp.days) };
         });
       }
 
@@ -643,22 +698,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       const editedAction = updatedActions.find(a => a.id === actionId);
       if (editedAction) {
+        const editActionDays = (days: WeeklyPlanDay[]) => days.map(d => {
+          if (d.date !== todayDate) return d;
+          return {
+            ...d,
+            actions: d.actions.map(a =>
+              a.category === editedAction.category ? { ...a, chosen: newText } : a
+            ),
+          };
+        });
+        if (baselineWeeklyPlanRef.current) {
+          baselineWeeklyPlanRef.current = { ...baselineWeeklyPlanRef.current, days: editActionDays(baselineWeeklyPlanRef.current.days) };
+          AsyncStorage.setItem(WEEKLY_PLAN_KEY, JSON.stringify(baselineWeeklyPlanRef.current));
+        }
         setWeeklyPlan(wp => {
           if (!wp) return wp;
-          const updatedWp = {
-            ...wp,
-            days: wp.days.map(d => {
-              if (d.date !== todayDate) return d;
-              return {
-                ...d,
-                actions: d.actions.map(a =>
-                  a.category === editedAction.category ? { ...a, chosen: newText } : a
-                ),
-              };
-            }),
-          };
-          AsyncStorage.setItem(WEEKLY_PLAN_KEY, JSON.stringify(updatedWp));
-          return updatedWp;
+          return { ...wp, days: editActionDays(wp.days) };
         });
       }
 
@@ -667,21 +722,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const editWeeklyAction = useCallback((date: string, category: ActionCategory, newText: string) => {
+    const editDays = (days: WeeklyPlanDay[]) => days.map(d => {
+      if (d.date !== date) return d;
+      return {
+        ...d,
+        actions: d.actions.map(a =>
+          a.category === category ? { ...a, chosen: newText } : a
+        ),
+      };
+    });
+    if (baselineWeeklyPlanRef.current) {
+      baselineWeeklyPlanRef.current = { ...baselineWeeklyPlanRef.current, days: editDays(baselineWeeklyPlanRef.current.days) };
+      AsyncStorage.setItem(WEEKLY_PLAN_KEY, JSON.stringify(baselineWeeklyPlanRef.current));
+    }
     setWeeklyPlan(prev => {
       if (!prev) return prev;
-      const updated = {
-        ...prev,
-        days: prev.days.map(d => {
-          if (d.date !== date) return d;
-          return {
-            ...d,
-            actions: d.actions.map(a =>
-              a.category === category ? { ...a, chosen: newText } : a
-            ),
-          };
-        }),
-      };
-      AsyncStorage.setItem(WEEKLY_PLAN_KEY, JSON.stringify(updated));
+      const updated = { ...prev, days: editDays(prev.days) };
 
       const todayDate = new Date().toISOString().split("T")[0];
       if (date === todayDate) {
@@ -706,19 +762,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const actionData = dayData?.actions.find(a => a.category === category);
       const newCompleted = actionData ? !actionData.completed : true;
 
-      const updated = {
-        ...prev,
-        days: prev.days.map(d => {
-          if (d.date !== date) return d;
-          return {
-            ...d,
-            actions: d.actions.map(a =>
-              a.category === category ? { ...a, completed: newCompleted } : a
-            ),
-          };
-        }),
-      };
-      AsyncStorage.setItem(WEEKLY_PLAN_KEY, JSON.stringify(updated));
+      const toggleDays = (days: WeeklyPlanDay[]) => days.map(d => {
+        if (d.date !== date) return d;
+        return {
+          ...d,
+          actions: d.actions.map(a =>
+            a.category === category ? { ...a, completed: newCompleted } : a
+          ),
+        };
+      });
+      if (baselineWeeklyPlanRef.current) {
+        baselineWeeklyPlanRef.current = { ...baselineWeeklyPlanRef.current, days: toggleDays(baselineWeeklyPlanRef.current.days) };
+        AsyncStorage.setItem(WEEKLY_PLAN_KEY, JSON.stringify(baselineWeeklyPlanRef.current));
+      }
+      const updated = { ...prev, days: toggleDays(prev.days) };
 
       const todayDate = new Date().toISOString().split("T")[0];
       if (date === todayDate) {
@@ -990,8 +1047,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
       }
       setDailyPlan(newPlan);
+
+      recomputeAdaptation(glp1InputHistory, updated, metrics, profile.medicationProfile, medicationLog);
     }
-  }, [checkInHistory, metricsRef, feeling, energy, stress, hydration, trainingIntent, completionHistory, metrics, glp1Energy, appetite, nausea, digestion, glp1InputHistory, recomputeAnalytics, profile.medicationProfile, medicationLog]);
+  }, [checkInHistory, metricsRef, feeling, energy, stress, hydration, trainingIntent, completionHistory, metrics, glp1Energy, appetite, nausea, digestion, glp1InputHistory, recomputeAnalytics, profile.medicationProfile, medicationLog, recomputeAdaptation]);
 
   const logMedicationDose = useCallback(async (entry: MedicationLogEntry) => {
     setMedicationLog(prev => {

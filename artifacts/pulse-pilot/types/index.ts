@@ -224,11 +224,15 @@ export interface NutritionTarget {
   note: string;
 }
 
+export type InternalSeverity = "green" | "yellow" | "orange" | "red";
+
 export interface WeeklyPlan {
   weekStartDate: string;
   weekSummary: string;
   days: WeeklyPlanDay[];
   adjustmentNote?: string;
+  adaptiveSummary?: string;
+  isAdapted?: boolean;
 }
 
 export interface WeeklyPlanDay {
@@ -236,6 +240,8 @@ export interface WeeklyPlanDay {
   date: string;
   focusArea: string;
   actions: WeeklyDayAction[];
+  adaptiveNote?: string;
+  isAdapted?: boolean;
 }
 
 export interface WeeklyDayAction {

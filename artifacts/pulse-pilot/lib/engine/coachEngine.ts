@@ -72,6 +72,11 @@ export interface CoachContext {
   weeklyCompletionRate: number;
   todayCompletionRate: number;
   patientSummary?: PatientSummary;
+  adaptiveState?: {
+    currentState: string;
+    recentPattern: string;
+    planAdjustment: string;
+  };
 }
 
 export function computeHrvBaseline(metrics: HealthMetrics[]): number | undefined {
@@ -117,6 +122,7 @@ export function buildCoachContext(
   weeklyConsistency: number,
   todayCompletionRate: number,
   patientSummary?: PatientSummary | null,
+  adaptiveState?: { currentState: string; recentPattern: string; planAdjustment: string } | null,
 ): CoachContext {
   return {
     todayMetrics: {
@@ -169,5 +175,6 @@ export function buildCoachContext(
     weeklyCompletionRate: weeklyConsistency,
     todayCompletionRate,
     patientSummary: patientSummary ?? undefined,
+    adaptiveState: adaptiveState ?? undefined,
   };
 }

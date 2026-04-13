@@ -27,6 +27,7 @@ export interface TrendsViewOutput {
     recoveryWeekly: number[];
     consistencyWeekly: number[];
   };
+  adaptiveWeekNote?: string | null;
 }
 
 export function computeCorrelation(a: number[], b: number[]): number {
@@ -407,6 +408,7 @@ export function generateTrendsView(
   medicationLog: MedicationLogEntry[],
   completionHistory: CompletionRecord[],
   habitStats: { weeklyPercent: number; streakDays: number; todayCompleted: number; todayTotal: number; topHabit: string | null; topHabitPercent: number },
+  adaptiveWeekNote?: string | null,
 ): TrendsViewOutput {
   return {
     correlations: buildCorrelations(metrics),
@@ -420,5 +422,6 @@ export function generateTrendsView(
       recoveryWeekly: weeklyAverages(metrics.map(m => m.recoveryScore)),
       consistencyWeekly: computeHabitWeeklyRates(completionHistory),
     },
+    adaptiveWeekNote: adaptiveWeekNote ?? null,
   };
 }

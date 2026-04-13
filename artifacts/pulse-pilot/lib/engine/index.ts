@@ -15,3 +15,5 @@ export { generateCompletionFeedback } from "./feedbackEngine";
 export { calculateDropoutRisk } from "@/data/riskEngine";
 export { computeInputAnalytics, buildPatientSummary } from "@/data/inputScoring";
 export { computeUserPatterns, generateAdaptiveInsights, shouldApplyPostDoseAdjustment } from "@/data/patternEngine";
+
+export { computeInternalSeverity, applyAdaptiveOverrides, buildSeverityForCoach, buildSeverityForTrends } from "./weeklyAdaptiveEngine";
