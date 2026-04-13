@@ -5,16 +5,20 @@ import {
   defaultProfile,
   generateMockMetrics,
   generateMockWorkouts,
-  generateDailyPlan,
-  generateWeeklyPlan,
   generateTrendData,
   generateTrendDataFromMetrics,
   integrations as defaultIntegrations,
 } from "@/data/mockData";
+import {
+  generateDailyPlan,
+  generateWeeklyPlan,
+  calculateDropoutRisk,
+  computeInputAnalytics,
+  buildPatientSummary,
+  computeUserPatterns,
+  generateAdaptiveInsights,
+} from "@/lib/engine";
 import { computeInsights, type DailyInsights } from "@/data/insights";
-import { calculateDropoutRisk } from "@/data/riskEngine";
-import { computeInputAnalytics, buildPatientSummary } from "@/data/inputScoring";
-import { computeUserPatterns, generateAdaptiveInsights } from "@/data/patternEngine";
 import type { UserPatterns, AdaptiveInsight } from "@/types";
 import { fetchHealthData, connectProvider } from "@/data/healthProviders";
 import { Platform, Alert } from "react-native";

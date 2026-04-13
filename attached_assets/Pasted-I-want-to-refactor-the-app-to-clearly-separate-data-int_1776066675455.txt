@@ -1,0 +1,266 @@
+I want to refactor the app to clearly separate data, intelligence, and UI layers.
+
+Important context:
+The UI should absolutely be dynamic, but it should not be responsible for product or business logic.
+
+That means:
+- the UI can dynamically change what it displays
+- but it should not decide what the recommendations are
+- it should not compute insights
+- it should not contain scattered conditional logic for the support experience
+
+Instead, the intelligence layer should generate structured outputs, and the UI should simply render those outputs in a polished way.
+
+The mental model should be:
+
+data in → intelligence layer decides → (optional AI layer refines language) → UI renders dynamically
+
+NOT:
+
+UI decides dynamically on its own
+OR
+GPT decides everything directly
+
+Also important:
+The intelligence layer is NOT just the ChatGPT API.
+It is a hybrid system:
+- deterministic logic (rules, thresholds, medication-aware logic)
+- structured outputs (plans, states, flags)
+- AI layer (GPT) for language generation, explanation, and nuanced reasoning
+
+=====================================
+GOAL
+=====================================
+
+Structure the app into 5 clean layers:
+
+1. Profile / Static Data
+2. Daily Inputs / Dynamic Data
+3. Biometrics (Apple Health)
+4. Intelligence Layer (rules + outputs + AI refinement)
+5. UI Layer (renders only)
+
+The app should feel dynamic to the user, but the underlying logic should be centralized and clean.
+
+=====================================
+PART 1: CREATE DATA STRUCTURE
+=====================================
+
+Ensure we have clear data objects such as:
+
+- userProfile
+- dailyLog
+- biometricData
+- medicationContext
+- treatmentLog (if needed)
+
+These should be plain data objects and should NOT contain business logic.
+
+Examples of what belongs here:
+- onboarding information
+- medication and dose
+- daily patient-reported inputs
+- Apple Health metrics
+- treatment logging status
+
+Examples of what does NOT belong here:
+- recommendations
+- summary text generation
+- risk / support logic
+- trend interpretation
+
+=====================================
+PART 2: CREATE INTELLIGENCE LAYER (CORE SYSTEM)
+=====================================
+
+Create a central intelligence / decision layer that generates structured outputs for each major screen.
+
+This is the MOST IMPORTANT layer.
+
+This layer should:
+- apply deterministic rules
+- interpret inputs
+- generate structured outputs
+- handle medication-aware logic
+- handle trend logic
+- define plan logic
+
+Examples of functions:
+
+- generateTodayView(userProfile, dailyLog, biometricData, medicationContext, treatmentLog)
+- generateDailyPlan(userProfile, dailyLog, biometricData, medicationContext, treatmentLog)
+- generateSummary(userProfile, dailyLog, biometricData, medicationContext, treatmentLog)
+- generateInsights(userProfile, dailyLog, biometricData, medicationContext, treatmentLog)
+- generateTrendsView(userProfile, dailyLogHistory, biometricDataHistory, medicationContext, treatmentLogHistory)
+
+These functions should return STRUCTURED OBJECTS.
+
+IMPORTANT:
+These functions should NOT rely on GPT to define logic.
+They should produce structured decisions first.
+
+=====================================
+PART 3: ADD AI LAYER (GPT USAGE)
+=====================================
+
+Introduce GPT ONLY as a secondary layer for language and reasoning.
+
+GPT should:
+- convert structured outputs into natural language
+- generate summaries and explanations
+- power the coach chat
+- add nuance to insights
+
+GPT should NOT:
+- generate the plan from scratch
+- define the structure of outputs
+- replace deterministic logic
+- be the single source of truth
+
+Correct flow:
+
+1. Data comes in
+2. Deterministic logic creates structured outputs
+3. GPT refines those outputs into human-readable language
+4. UI renders result
+
+Example:
+
+Logic layer output:
+{
+  "recovery_state": "low",
+  "appetite_state": "very_low",
+  "plan": {
+    "move": "light",
+    "hydrate": "10+ cups",
+    "fuel": "small meals + protein"
+  }
+}
+
+GPT turns into:
+“Your body may benefit from a lighter day. Focus on hydration and smaller protein-rich meals.”
+
+=====================================
+PART 4: REMOVE LOGIC FROM UI
+=====================================
+
+UI components should NOT:
+- compute plans
+- compute insights
+- compute summaries
+- decide treatment guidance
+- contain business logic with large if / else blocks
+- duplicate logic that exists elsewhere
+
+UI components SHOULD:
+- display outputs from the intelligence layer
+- collect user inputs
+- trigger actions like logging a dose or completing a plan item
+- render view-model style objects
+
+The UI should be dynamic in presentation only.
+
+=====================================
+PART 5: SCREEN-SPECIFIC VIEW MODELS
+=====================================
+
+Create view-model generators for each major screen.
+
+Examples:
+- buildTodayViewModel(...)
+- buildPlanViewModel(...)
+- buildTrendsViewModel(...)
+- buildCoachContext(...)
+
+These should:
+- combine structured logic outputs
+- include GPT-generated text where needed
+- return UI-ready objects
+
+=====================================
+PART 6: SINGLE SOURCE OF TRUTH
+=====================================
+
+Ensure:
+- plan is generated in one place
+- insights are generated in one place
+- summaries are generated in one place
+- medication-aware logic is centralized
+
+No duplication across:
+- Today
+- Plan
+- Trends
+- Coach
+
+=====================================
+PART 7: DEBUG FUNCTION
+=====================================
+
+Create:
+
+debugGenerateOutput()
+
+This should print:
+- inputs (profile + daily + biometrics + medication + treatment logging)
+- structured outputs (before GPT)
+- final outputs (after GPT)
+
+This is critical for validating logic vs AI behavior.
+
+=====================================
+PART 8: FILE STRUCTURE
+=====================================
+
+Refactor into something like:
+
+- lib/engine/todayEngine.ts
+- lib/engine/planEngine.ts
+- lib/engine/trendsEngine.ts
+- lib/engine/coachEngine.ts
+- lib/ai/gptFormatter.ts
+- lib/selectors/viewModels.ts
+- lib/debug/debugGenerateOutput.ts
+
+Separate:
+- logic (engine)
+- AI (formatter)
+- UI (screens)
+
+=====================================
+PART 9: WHAT TO MOVE OUT OF UI
+=====================================
+
+Move out any logic in screens that:
+- calculates recommendations
+- builds summaries
+- interprets trends
+- maps medication to behavior
+- contains large conditional blocks
+
+=====================================
+PART 10: FINAL QUALITY BAR
+=====================================
+
+After refactor:
+
+- Data is clean
+- Logic is centralized
+- GPT is used appropriately (language layer)
+- UI is dynamic but not decision-making
+- Product behaves like a decision engine
+
+This is important because the app is not just a UI.
+It is a treatment-aware decision engine with an AI-enhanced interface.
+
+=====================================
+PART 11: FINAL OUTPUT
+=====================================
+
+After refactor, summarize:
+1. how data is structured
+2. where deterministic logic lives
+3. how GPT is used and where
+4. how each screen consumes outputs
+5. what logic was removed from UI
+6. how I can validate logic vs GPT behavior

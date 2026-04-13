@@ -22,6 +22,7 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 import { useApp } from "@/context/AppContext";
 import { generateCoachInsight } from "@/data/insights";
 import { formatDoseDisplay } from "@/data/medicationData";
+import { generateGreeting, generateInputSummary, buildCoachContext } from "@/lib/engine";
 import { useColors } from "@/hooks/useColors";
 import { CATEGORY_OPTIONS } from "@/types";
 import type { MetricKey, FeelingType, ChatMessage, DailyStatusLabel, ActionCategory, AppetiteLevel, SideEffectSeverity, ProteinConfidenceDaily, MovementIntent, EnergyDaily, HydrationDaily, MedicationLogEntry } from "@/types";
@@ -142,12 +143,7 @@ export default function DashboardScreen() {
     );
   }
 
-  const greetingText = React.useMemo(() => {
-    const hour = new Date().getHours();
-    const timeGreeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-    const firstName = profile?.name?.trim();
-    return firstName ? `${timeGreeting}, ${firstName}` : timeGreeting;
-  }, [profile?.name]);
+  const greetingText = React.useMemo(() => generateGreeting(profile), [profile?.name]);
 
   const coachInsight = React.useMemo(() => {
     if (!todayMetrics || metrics.length === 0) return "";
@@ -156,32 +152,11 @@ export default function DashboardScreen() {
     });
   }, [todayMetrics, metrics, feeling, energy, stress, hydration, trainingIntent, completionHistory]);
 
-  const inputSummary = React.useMemo(() => {
-    const filled = [glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent].filter(Boolean).length;
-    if (filled === 0) return "Tap each row to log how you are doing. Your plan and coach will adjust.";
-
-    const parts: string[] = [];
-    if (glp1Energy === "depleted" || glp1Energy === "tired") parts.push("energy is low");
-    else if (glp1Energy === "great") parts.push("energy is strong");
-
-    if (appetite === "very_low") parts.push("appetite is very low");
-    else if (appetite === "low") parts.push("appetite is reduced");
-
-    if (sideEffects === "rough") parts.push("side effects are rough");
-    else if (sideEffects === "moderate") parts.push("some side effects");
-
-    if (glp1Hydration === "poor") parts.push("hydration needs attention");
-    if (proteinConfidence === "low") parts.push("protein intake is low");
-
-    if (parts.length === 0) {
-      if (filled >= 4) return "Things are looking good today. Your plan reflects that.";
-      return null;
-    }
-
-    const concern = parts.length >= 3 ? "Your body may need more support today" :
-      parts.length >= 2 ? "A few things to watch today" : "Something to keep in mind today";
-    return `${concern}. ${parts.join(", ").replace(/^./, (c: string) => c.toUpperCase())}.`;
-  }, [glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent]);
+  const inputSummaryResult = React.useMemo(() => generateInputSummary({
+    energy: glp1Energy, appetite, hydration: glp1Hydration,
+    proteinConfidence, sideEffects, movementIntent,
+  }), [glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent]);
+  const inputSummary = inputSummaryResult.text || null;
 
   const haptic = () => {
     if (Platform.OS !== "web") {
@@ -247,68 +222,13 @@ export default function DashboardScreen() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: text.trim(),
-          healthContext: {
-            todayMetrics: {
-              hrv: todayMetrics.hrv,
-              restingHeartRate: todayMetrics.restingHeartRate,
-              sleepDuration: todayMetrics.sleepDuration,
-              sleepQuality: todayMetrics.sleepQuality,
-              steps: todayMetrics.steps,
-              recoveryScore: todayMetrics.recoveryScore,
-              weight: todayMetrics.weight,
-              strain: todayMetrics.strain,
-              caloriesBurned: todayMetrics.caloriesBurned,
-              activeCalories: todayMetrics.activeCalories,
-            },
-            profile: {
-              name: profile.name || undefined,
-              age: profile.age,
-              sex: profile.sex,
-              weight: profile.weight,
-              goalWeight: profile.goalWeight,
-              goals: profile.goals,
-              glp1Medication: profile.glp1Medication,
-              glp1Duration: profile.glp1Duration,
-              proteinConfidence: profile.proteinConfidence,
-              strengthTrainingBaseline: profile.strengthTrainingBaseline,
-            },
-            medicationProfile: profile.medicationProfile || undefined,
-            recentDoseLog: medicationLog.slice(-5).map(e => ({ date: e.date, status: e.status, doseValue: e.doseValue, doseUnit: e.doseUnit })),
-            readinessScore: dailyPlan?.readinessScore,
-            dailyState: dailyPlan?.dailyState,
-            userFeeling: feeling,
-            userEnergy: energy,
-            userStress: stress,
-            userHydration: hydration,
-            userTrainingIntent: trainingIntent,
-            glp1DailyInputs: {
-              energy: glp1Energy,
-              appetite,
-              hydration: glp1Hydration,
-              proteinConfidence,
-              sideEffects,
-              movementIntent,
-            },
-            sleepInsight: insights?.sleepIntelligence?.insight,
-            hrvBaseline: metrics.length >= 7
-              ? Math.round(metrics.slice(-7).reduce((s, m) => s + m.hrv, 0) / Math.min(metrics.length, 7))
-              : undefined,
-            sleepDebt: metrics.length >= 3
-              ? +(metrics.slice(-3).reduce((s, m) => s + Math.max(0, 7.5 - m.sleepDuration), 0)).toFixed(1)
-              : undefined,
-            recoveryTrend: metrics.length >= 3
-              ? (() => {
-                  const scores = metrics.slice(-3).map(m => m.recoveryScore);
-                  const diff = scores[scores.length - 1] - scores[0];
-                  if (diff > 5) return "improving";
-                  if (diff < -5) return "declining";
-                  return "stable";
-                })()
-              : undefined,
-            streakDays,
-            weeklyCompletionRate: weeklyConsistency,
-            todayCompletionRate,
-          },
+          healthContext: buildCoachContext(
+            todayMetrics, metrics, profile, dailyPlan, insights,
+            medicationLog,
+            { energy: glp1Energy, appetite, hydration: glp1Hydration, proteinConfidence, sideEffects, movementIntent },
+            { feeling, energy, stress, hydration, trainingIntent },
+            streakDays, weeklyConsistency, todayCompletionRate,
+          ),
           conversationHistory,
         }),
       });

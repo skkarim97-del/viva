@@ -71,7 +71,15 @@ The system is a pnpm workspace monorepo using Node.js 24 and TypeScript 5.9. The
 - `artifacts/pulse-pilot/data/riskTranslation.ts` - Risk score to user message translation
 - `artifacts/pulse-pilot/data/inputScoring.ts` - Numeric input scoring, 7-day analytics, correlations, patient summary
 - `artifacts/pulse-pilot/data/patternEngine.ts` - Adaptive pattern detection engine (rolling averages, post-dose effects, behavioral patterns, overrides)
-- `artifacts/pulse-pilot/data/mockData.ts` - Mock data generation and daily plan logic
+- `artifacts/pulse-pilot/lib/engine/todayEngine.ts` - Greeting, input summary, daily status, today view generation
+- `artifacts/pulse-pilot/lib/engine/trendsEngine.ts` - Correlations, patterns, GLP-1 insights, key insights, weekly averages
+- `artifacts/pulse-pilot/lib/engine/coachEngine.ts` - Coach context builder (HRV baseline, sleep debt, recovery trend)
+- `artifacts/pulse-pilot/lib/engine/planEngine.ts` - Daily plan generation, weekly plan generation, readiness scoring, medication-aware plan tiers
+- `artifacts/pulse-pilot/lib/engine/feedbackEngine.ts` - Completion feedback
+- `artifacts/pulse-pilot/lib/engine/index.ts` - Engine barrel exports (also re-exports riskEngine, inputScoring, patternEngine, and viewModels)
+- `artifacts/pulse-pilot/lib/selectors/viewModels.ts` - View model builders (buildTodayViewModel, buildPlanViewModel, buildTrendsViewModel, buildCoachViewModel)
+- `artifacts/pulse-pilot/lib/debug/debugGenerateOutput.ts` - Debug utility for engine outputs
+- `artifacts/pulse-pilot/data/mockData.ts` - Mock data generation, trend data, metric details (plan logic moved to planEngine)
 - `artifacts/pulse-pilot/data/medicationData.ts` - Brand DB, dose options, telehealth platforms, helpers
 - `artifacts/pulse-pilot/app/onboarding/index.tsx` - 13-step GLP-1 onboarding flow
 - `artifacts/pulse-pilot/app/(tabs)/index.tsx` - Today tab with GLP-1 daily inputs
