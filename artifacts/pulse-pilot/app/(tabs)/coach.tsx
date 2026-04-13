@@ -33,7 +33,7 @@ const API_BASE = Platform.OS === "web"
 export default function CoachScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
-  const { chatMessages, addChatMessage, todayMetrics, profile, trends, dailyPlan, insights, feeling, energy, stress, hydration, trainingIntent, completionHistory, weeklyConsistency, streakDays, glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent } = useApp();
+  const { chatMessages, addChatMessage, todayMetrics, profile, trends, dailyPlan, insights, feeling, energy, stress, hydration, trainingIntent, completionHistory, weeklyConsistency, streakDays, glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent, medicationLog } = useApp();
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [streamingText, setStreamingText] = useState("");
@@ -112,8 +112,10 @@ export default function CoachScreen() {
       weeklyCompletionRate: todayCompletionRate,
       streakDays,
       weeklyConsistency,
+      medicationProfile: profile.medicationProfile || undefined,
+      recentDoseLog: medicationLog.slice(-5).map(e => ({ date: e.date, status: e.status, doseValue: e.doseValue, doseUnit: e.doseUnit })),
     };
-  }, [todayMetrics, profile, trends, dailyPlan, insights, feeling, energy, stress, hydration, trainingIntent, completionHistory, streakDays, weeklyConsistency, glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent]);
+  }, [todayMetrics, profile, trends, dailyPlan, insights, feeling, energy, stress, hydration, trainingIntent, completionHistory, streakDays, weeklyConsistency, glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent, medicationLog, profile.medicationProfile]);
 
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || isTyping) return;

@@ -38,6 +38,40 @@ export interface UserProfile {
   underEatingConcern?: boolean;
   strengthTrainingBaseline?: "yes" | "sometimes" | "no";
   walkingFrequency?: "daily" | "few_times" | "rarely" | "never";
+  medicationProfile?: MedicationProfile;
+}
+
+export interface MedicationProfile {
+  medicationBrand: string;
+  genericName: string;
+  indication: string;
+  doseValue: number;
+  doseUnit: string;
+  frequency: "weekly" | "daily";
+  weekOnCurrentDose?: number;
+  startDate?: string | null;
+  lastInjectionDate?: string | null;
+  recentTitration: boolean;
+  previousDoseValue?: number | null;
+  previousDoseUnit?: string | null;
+  previousFrequency?: "weekly" | "daily" | null;
+  doseChangeDate?: string | null;
+  timeOnMedicationBucket: "less_1_month" | "1_3_months" | "3_6_months" | "6_plus_months";
+  telehealthPlatform?: string | null;
+  plannedDoseDay?: string | null;
+}
+
+export type MedicationLogStatus = "taken" | "skipped" | "missed" | "delayed";
+
+export interface MedicationLogEntry {
+  id: string;
+  date: string;
+  medicationBrand: string;
+  status: MedicationLogStatus;
+  doseValue: number;
+  doseUnit: string;
+  notes?: string;
+  timestamp: number;
 }
 
 export type SideEffectType =

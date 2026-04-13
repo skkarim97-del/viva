@@ -15,6 +15,7 @@ import Svg, { Polyline } from "react-native-svg";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { useApp } from "@/context/AppContext";
 import { computeHabitStats } from "@/data/insights";
+import { formatDoseDisplay, getDoseTier } from "@/data/medicationData";
 import { useColors } from "@/hooks/useColors";
 import type { MetricKey, HealthMetrics } from "@/types";
 
@@ -296,7 +297,7 @@ function computeHabitWeeklyRates(history: { date: string; completionRate: number
 
 export default function TrendsScreen() {
   const c = useColors();
-  const { insights, metrics, completionHistory, weeklyConsistency, streakDays, todayCompletionRate, dailyPlan } = useApp();
+  const { insights, metrics, completionHistory, weeklyConsistency, streakDays, todayCompletionRate, dailyPlan, profile, medicationLog } = useApp();
 
   const correlations = useMemo(() => buildCorrelations(metrics), [metrics]);
   const patterns = useMemo(() => detectPatterns(metrics), [metrics]);
@@ -373,6 +374,64 @@ export default function TrendsScreen() {
           {insights.weekSummary.split("\n\n").map((line, i) => (
             <Text key={i} style={[styles.summaryText, { color: c.foreground }]}>{line}</Text>
           ))}
+        </View>
+      )}
+
+      {profile.medicationProfile && (
+        <View style={[styles.medSection, { backgroundColor: c.card }]}>
+          <View style={styles.medSectionHeader}>
+            <Feather name="package" size={16} color={c.accent} />
+            <Text style={[styles.medSectionTitle, { color: c.foreground }]}>Medication</Text>
+          </View>
+          <Text style={[styles.medDoseText, { color: c.foreground }]}>
+            {formatDoseDisplay(
+              profile.medicationProfile.medicationBrand,
+              profile.medicationProfile.doseValue,
+              profile.medicationProfile.doseUnit,
+              profile.medicationProfile.frequency as "weekly" | "daily"
+            )}
+          </Text>
+          <View style={styles.medStatsRow}>
+            {(() => {
+              const last7 = medicationLog.filter(e => {
+                const d = new Date(e.date);
+                const now = new Date();
+                return (now.getTime() - d.getTime()) < 7 * 86400000;
+              });
+              const taken = last7.filter(e => e.status === "taken").length;
+              const total = profile.medicationProfile?.frequency === "daily" ? 7 : 1;
+              return (
+                <View style={[styles.medStatItem, { backgroundColor: c.background }]}>
+                  <Text style={[styles.medStatValue, { color: c.foreground }]}>{taken}/{total}</Text>
+                  <Text style={[styles.medStatLabel, { color: c.mutedForeground }]}>doses this week</Text>
+                </View>
+              );
+            })()}
+            <View style={[styles.medStatItem, { backgroundColor: c.background }]}>
+              <Text style={[styles.medStatValue, { color: c.foreground }]}>
+                {getDoseTier(profile.medicationProfile.medicationBrand, profile.medicationProfile.doseValue)}
+              </Text>
+              <Text style={[styles.medStatLabel, { color: c.mutedForeground }]}>dose tier</Text>
+            </View>
+            {profile.medicationProfile.recentTitration && (
+              <View style={[styles.medStatItem, { backgroundColor: "#FF950010" }]}>
+                <Text style={[styles.medStatValue, { color: "#FF9500" }]}>Yes</Text>
+                <Text style={[styles.medStatLabel, { color: "#FF9500" }]}>titrated</Text>
+              </View>
+            )}
+          </View>
+          {medicationLog.length > 0 && (
+            <View style={styles.medLogPreview}>
+              <Text style={[styles.medLogTitle, { color: c.mutedForeground }]}>Recent doses</Text>
+              {medicationLog.slice(-5).reverse().map((entry) => (
+                <View key={entry.id} style={styles.medLogRow}>
+                  <Feather name={entry.status === "taken" ? "check-circle" : entry.status === "skipped" ? "x-circle" : "clock"} size={13} color={entry.status === "taken" ? "#34C759" : entry.status === "skipped" ? "#FF6B6B" : c.mutedForeground} />
+                  <Text style={[styles.medLogDate, { color: c.mutedForeground }]}>{entry.date}</Text>
+                  <Text style={[styles.medLogStatus, { color: entry.status === "taken" ? "#34C759" : entry.status === "skipped" ? "#FF6B6B" : c.mutedForeground }]}>{entry.status}</Text>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
       )}
 
@@ -683,5 +742,69 @@ const styles = StyleSheet.create({
   },
   spark: {
     marginTop: 2,
+  },
+  medSection: {
+    padding: 20,
+    borderRadius: 20,
+    gap: 12,
+  },
+  medSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  medSectionTitle: {
+    fontSize: 16,
+    fontFamily: "Montserrat_600SemiBold",
+    letterSpacing: -0.2,
+  },
+  medDoseText: {
+    fontSize: 15,
+    fontFamily: "Montserrat_600SemiBold",
+  },
+  medStatsRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  medStatItem: {
+    flex: 1,
+    padding: 10,
+    borderRadius: 12,
+    alignItems: "center",
+    gap: 2,
+  },
+  medStatValue: {
+    fontSize: 16,
+    fontFamily: "Montserrat_700Bold",
+    textTransform: "capitalize",
+  },
+  medStatLabel: {
+    fontSize: 10,
+    fontFamily: "Montserrat_400Regular",
+  },
+  medLogPreview: {
+    gap: 6,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(128,128,128,0.15)",
+  },
+  medLogTitle: {
+    fontSize: 12,
+    fontFamily: "Montserrat_500Medium",
+  },
+  medLogRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  medLogDate: {
+    fontSize: 12,
+    fontFamily: "Montserrat_400Regular",
+    flex: 1,
+  },
+  medLogStatus: {
+    fontSize: 12,
+    fontFamily: "Montserrat_500Medium",
+    textTransform: "capitalize",
   },
 });

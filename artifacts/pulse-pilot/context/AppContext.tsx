@@ -44,6 +44,8 @@ import type {
   MovementIntent,
   EnergyDaily,
   DropoutRiskResult,
+  MedicationLogEntry,
+  MedicationProfile,
 } from "@/types";
 
 const EXPO_PUBLIC_DOMAIN = process.env.EXPO_PUBLIC_DOMAIN || "";
@@ -105,6 +107,8 @@ interface AppContextType {
   setMovementIntent: (v: MovementIntent) => void;
   riskResult: DropoutRiskResult | null;
   glp1InputHistory: GLP1DailyInputs[];
+  medicationLog: MedicationLogEntry[];
+  logMedicationDose: (entry: MedicationLogEntry) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -118,6 +122,7 @@ const WEEKLY_PLAN_KEY = "@viva_weekly_plan";
 const CHECKIN_KEY = "@viva_checkins";
 const GLP1_INPUTS_KEY = "@viva_glp1_inputs";
 const GLP1_HISTORY_KEY = "@viva_glp1_history";
+const MED_LOG_KEY = "@viva_med_log";
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<UserProfile>(defaultProfile);
@@ -149,6 +154,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [movementIntent, setMovementIntentState] = useState<MovementIntent>(null);
   const [riskResult, setRiskResult] = useState<DropoutRiskResult | null>(null);
   const [glp1InputHistory, setGlp1InputHistory] = useState<GLP1DailyInputs[]>([]);
+  const [medicationLog, setMedicationLog] = useState<MedicationLogEntry[]>([]);
 
   useEffect(() => {
     loadData();
@@ -232,12 +238,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   };
 
-  const computeRisk = useCallback((allMetrics: HealthMetrics[], inputHistory: GLP1DailyInputs[], history: CompletionRecord[]) => {
+  const computeRisk = useCallback((allMetrics: HealthMetrics[], inputHistory: GLP1DailyInputs[], history: CompletionRecord[], medProfile?: MedicationProfile) => {
     try {
       const result = calculateDropoutRisk({
         recentMetrics: allMetrics,
         dailyInputs: inputHistory,
         completionHistory: history,
+        medicationProfile: medProfile,
       });
       setRiskResult(result);
     } catch {}
@@ -312,6 +319,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setCheckInHistory(JSON.parse(savedCheckIns));
       }
 
+      const savedMedLog = await AsyncStorage.getItem(MED_LOG_KEY);
+      if (savedMedLog) {
+        setMedicationLog(JSON.parse(savedMedLog));
+      }
+
       const savedIntegrations = await AsyncStorage.getItem(INTEGRATIONS_KEY);
       let currentIntegrations = integrationsState;
       if (savedIntegrations) {
@@ -354,6 +366,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         );
       }
 
+      const savedProfileData = savedProfile ? JSON.parse(savedProfile) : defaultProfile;
+
       const today = allMetrics[allMetrics.length - 1];
       setTodayMetrics(today);
       setMetricsRef(today);
@@ -362,7 +376,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         { feeling: currentFeeling, energy: currentEnergy, stress: currentStress, hydration: currentHydration, trainingIntent: currentTrainingIntent },
         loadedHistory,
         allMetrics,
-        currentGlp1Inputs ?? undefined
+        currentGlp1Inputs ?? undefined,
+        savedProfileData.medicationProfile
       );
       const todayCompletion = loadedHistory.find(r => r.date === todayDate);
       if (todayCompletion) {
@@ -388,15 +403,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setWeeklyPlan(generatedWeekly);
       }
 
-      fetchAIWeeklyPlan(allMetrics, savedProfile ? JSON.parse(savedProfile) : defaultProfile, loadedHistory);
+      fetchAIWeeklyPlan(allMetrics, savedProfileData, loadedHistory);
       setTrends(generateTrendDataFromMetrics(allMetrics));
       const allWorkouts = generateMockWorkouts();
       setWorkouts(allWorkouts);
 
-      const savedProfileData = savedProfile ? JSON.parse(savedProfile) : defaultProfile;
       setInsights(computeInsights(allMetrics, today, allWorkouts, savedProfileData, loadedHistory));
 
-      computeRisk(allMetrics, loadedGlp1History, loadedHistory);
+      computeRisk(allMetrics, loadedGlp1History, loadedHistory, savedProfileData.medicationProfile);
     } catch {
     } finally {
       setIsLoading(false);
@@ -439,7 +453,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         sideEffects,
         movementIntent,
       };
-      const newPlan = generateDailyPlan(metricsRef, { feeling: f, energy: e, stress: s, hydration: h, trainingIntent: ti }, completionHistory, metrics, currentGlp1);
+      const newPlan = generateDailyPlan(metricsRef, { feeling: f, energy: e, stress: s, hydration: h, trainingIntent: ti }, completionHistory, metrics, currentGlp1, profile.medicationProfile);
       const todayCompletion = completionHistory.find(r => r.date === todayDate);
       if (todayCompletion) {
         for (const a of newPlan.actions) {
@@ -452,9 +466,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       setDailyPlan(newPlan);
 
-      computeRisk(metrics, glp1InputHistory, completionHistory);
+      computeRisk(metrics, glp1InputHistory, completionHistory, profile.medicationProfile);
     }
-  }, [metricsRef, completionHistory, metrics, glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent, glp1InputHistory, computeRisk]);
+  }, [metricsRef, completionHistory, metrics, glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent, glp1InputHistory, computeRisk, profile.medicationProfile]);
 
   const regenerateFromGlp1 = useCallback(() => {
     if (metricsRef) {
@@ -468,7 +482,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         sideEffects,
         movementIntent,
       };
-      const newPlan = generateDailyPlan(metricsRef, { feeling, energy, stress, hydration, trainingIntent }, completionHistory, metrics, currentGlp1);
+      const newPlan = generateDailyPlan(metricsRef, { feeling, energy, stress, hydration, trainingIntent }, completionHistory, metrics, currentGlp1, profile.medicationProfile);
       const todayCompletion = completionHistory.find(r => r.date === todayDate);
       if (todayCompletion) {
         for (const a of newPlan.actions) {
@@ -481,9 +495,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       setDailyPlan(newPlan);
 
-      computeRisk(metrics, glp1InputHistory, completionHistory);
+      computeRisk(metrics, glp1InputHistory, completionHistory, profile.medicationProfile);
     }
-  }, [metricsRef, feeling, energy, stress, hydration, trainingIntent, completionHistory, metrics, glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent, glp1InputHistory, computeRisk]);
+  }, [metricsRef, feeling, energy, stress, hydration, trainingIntent, completionHistory, metrics, glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent, glp1InputHistory, computeRisk, profile.medicationProfile]);
 
   const generateCompletionFeedback = (action: DailyAction, completed: boolean, completedCount: number, total: number): string | null => {
     if (!completed) return null;
@@ -916,6 +930,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await AsyncStorage.setItem(CHECKIN_KEY, JSON.stringify(updated));
   }, [checkInHistory]);
 
+  const logMedicationDose = useCallback(async (entry: MedicationLogEntry) => {
+    setMedicationLog(prev => {
+      const filtered = prev.filter(e => e.date !== entry.date);
+      const updated = [...filtered, entry].sort((a, b) => a.date.localeCompare(b.date)).slice(-90);
+      AsyncStorage.setItem(MED_LOG_KEY, JSON.stringify(updated));
+      return updated;
+    });
+    if (profile.medicationProfile) {
+      updateProfile({
+        medicationProfile: {
+          ...profile.medicationProfile,
+          lastInjectionDate: entry.status === "taken" ? entry.date : profile.medicationProfile.lastInjectionDate,
+        },
+      });
+    }
+  }, [profile, updateProfile]);
+
   const todayCheckIn = (() => {
     const todayDate = new Date().toISOString().split("T")[0];
     return checkInHistory.find(c => c.date === todayDate) ?? null;
@@ -977,6 +1008,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setMovementIntent,
         riskResult,
         glp1InputHistory,
+        medicationLog,
+        logMedicationDose,
       }}
     >
       {children}

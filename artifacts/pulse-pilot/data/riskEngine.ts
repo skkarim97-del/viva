@@ -5,13 +5,16 @@ import type {
   RiskDriver,
   RiskLevel,
   DropoutRiskResult,
+  MedicationProfile,
 } from "@/types";
 import { translateRiskToUserMessage } from "./riskTranslation";
+import { getDoseTier } from "./medicationData";
 
 interface RiskEngineInput {
   recentMetrics: HealthMetrics[];
   dailyInputs: GLP1DailyInputs[];
   completionHistory: CompletionRecord[];
+  medicationProfile?: MedicationProfile;
 }
 
 function computeBaseline(values: number[]): number {
@@ -151,8 +154,19 @@ function checkConsistencyBreakdown(completionHistory: CompletionRecord[], inputs
   return null;
 }
 
+function getMedicationWeightMultiplier(medProfile?: MedicationProfile): number {
+  if (!medProfile) return 1.0;
+  let multiplier = 1.0;
+  const doseTier = getDoseTier(medProfile.medicationBrand, medProfile.doseValue);
+  if (doseTier === "high") multiplier += 0.15;
+  if (medProfile.recentTitration) multiplier += 0.2;
+  if (medProfile.timeOnMedicationBucket === "less_1_month") multiplier += 0.15;
+  return multiplier;
+}
+
 export function calculateDropoutRisk(input: RiskEngineInput): DropoutRiskResult {
   const drivers: RiskDriver[] = [];
+  const medMultiplier = getMedicationWeightMultiplier(input.medicationProfile);
 
   const recoveryDriver = checkRecoveryBreakdown(input.recentMetrics);
   if (recoveryDriver) drivers.push(recoveryDriver);
@@ -161,10 +175,16 @@ export function calculateDropoutRisk(input: RiskEngineInput): DropoutRiskResult 
   if (activityDriver) drivers.push(activityDriver);
 
   const fuelingDriver = checkFuelingBreakdown(input.dailyInputs);
-  if (fuelingDriver) drivers.push(fuelingDriver);
+  if (fuelingDriver) {
+    fuelingDriver.score = Math.round(fuelingDriver.score * medMultiplier);
+    drivers.push(fuelingDriver);
+  }
 
   const symptomDriver = checkSymptomLoad(input.dailyInputs);
-  if (symptomDriver) drivers.push(symptomDriver);
+  if (symptomDriver) {
+    symptomDriver.score = Math.round(symptomDriver.score * medMultiplier);
+    drivers.push(symptomDriver);
+  }
 
   const consistencyDriver = checkConsistencyBreakdown(input.completionHistory, input.dailyInputs);
   if (consistencyDriver) drivers.push(consistencyDriver);

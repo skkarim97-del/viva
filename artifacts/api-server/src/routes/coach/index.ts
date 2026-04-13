@@ -140,6 +140,7 @@ interface ChatRequestBody {
       activeCalories: number;
     };
     profile?: {
+      name?: string;
       age: number;
       sex: string;
       weight: number;
@@ -149,8 +150,8 @@ interface ChatRequestBody {
       glp1Duration?: string;
       proteinConfidence?: string;
       strengthTrainingBaseline?: string;
-      availableWorkoutTime: number;
-      daysAvailableToTrain: number;
+      availableWorkoutTime?: number;
+      daysAvailableToTrain?: number;
     };
     recentTrends?: {
       weightTrend: string;
@@ -182,6 +183,19 @@ interface ChatRequestBody {
     weeklyCompletionRate?: number;
     streakDays?: number;
     weeklyConsistency?: number;
+    medicationProfile?: {
+      medicationBrand: string;
+      genericName: string;
+      doseValue: number;
+      doseUnit: string;
+      frequency: string;
+      recentTitration: boolean;
+      previousDoseValue?: number;
+      timeOnMedicationBucket?: string;
+      telehealthPlatform?: string;
+      plannedDoseDay?: string;
+    };
+    recentDoseLog?: { date: string; status: string; doseValue: number; doseUnit: string }[];
   };
   conversationHistory?: { role: "user" | "assistant"; content: string }[];
 }
@@ -289,6 +303,35 @@ router.post("/chat", async (req: Request, res: Response) => {
       }
       if (behavioral.length > 0) {
         parts.push(`\nBEHAVIORAL PATTERNS: ${behavioral.join(", ")}`);
+      }
+
+      if (healthContext.medicationProfile) {
+        const med = healthContext.medicationProfile;
+        const medParts: string[] = [
+          `\nMEDICATION PROFILE:`,
+          `- Brand: ${med.medicationBrand} (${med.genericName})`,
+          `- Current Dose: ${med.doseValue} ${med.doseUnit} ${med.frequency}`,
+        ];
+        if (med.recentTitration) {
+          medParts.push(`- Recent Titration: Yes${med.previousDoseValue ? ` (from ${med.previousDoseValue} ${med.doseUnit})` : ""}`);
+        }
+        if (med.timeOnMedicationBucket) {
+          const bucketLabels: Record<string, string> = {
+            less_1_month: "Less than 1 month",
+            "1_3_months": "1-3 months",
+            "3_6_months": "3-6 months",
+            "6_plus_months": "6+ months",
+          };
+          medParts.push(`- Time on Medication: ${bucketLabels[med.timeOnMedicationBucket] || med.timeOnMedicationBucket}`);
+        }
+        if (med.telehealthPlatform) medParts.push(`- Telehealth: ${med.telehealthPlatform}`);
+        if (med.plannedDoseDay) medParts.push(`- Planned Dose Day: ${med.plannedDoseDay}`);
+        parts.push(...medParts);
+      }
+
+      if (healthContext.recentDoseLog && healthContext.recentDoseLog.length > 0) {
+        const logLines = healthContext.recentDoseLog.map(e => `${e.date}: ${e.status} (${e.doseValue} ${e.doseUnit})`);
+        parts.push(`\nRECENT DOSE LOG:\n${logLines.join("\n")}`);
       }
 
       contextBlock = parts.filter(Boolean).join("\n");

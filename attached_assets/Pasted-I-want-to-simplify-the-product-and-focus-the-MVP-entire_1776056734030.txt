@@ -1,0 +1,130 @@
+I want to simplify the product and focus the MVP entirely on Apple Health / Apple Watch.
+
+Please remove or de-emphasize all non-Apple wearable and health platform references across the app.
+
+This includes:
+- Garmin
+- Oura
+- Whoop
+- Samsung Health
+- any generic multi-device wearable language
+
+GOAL
+
+Make the product feel intentionally built around Apple Health and Apple Watch data for the MVP.
+
+The app should now tell a clean story:
+Viva combines Apple Health / Apple Watch data with simple daily check-ins to support GLP-1 patients between visits.
+
+This should reduce complexity across:
+- onboarding
+- UI copy
+- data connection flows
+- product positioning
+- trends logic
+- coach context
+
+=====================================
+PART 1: ONBOARDING
+=====================================
+
+Update onboarding so the wearable / data connection step is focused only on Apple Health.
+
+Remove mention of:
+- Garmin
+- Oura
+- Whoop
+- Samsung Health
+- multiple wearable options
+
+Instead, make the data connection step say something like:
+- Connect Apple Health
+- Use Apple Watch + Apple Health data for more personalized support
+- Viva uses your sleep, activity, heart rate, and recovery-related data from Apple Health
+
+Keep this step simple, premium, and clean.
+
+If there are placeholder cards or UI options for other devices, remove them.
+
+=====================================
+PART 2: PRODUCT COPY
+=====================================
+
+Audit all app copy and remove references to other devices or platforms.
+
+Replace broad phrases like:
+- wearable data
+- data from your devices
+- Garmin / Oura / Whoop / Apple Watch
+
+with cleaner Apple-specific phrasing where appropriate:
+- Apple Health data
+- Apple Watch + Apple Health
+- data from Apple Health
+
+Keep copy concise.
+
+=====================================
+PART 3: APP POSITIONING
+=====================================
+
+Update positioning throughout the app so it is clearly Apple-first.
+
+Examples:
+- “Viva uses Apple Health data and daily check-ins...”
+- “Connect Apple Health for more personalized support”
+- “Your recent Apple Health trends suggest...”
+
+Make the product story feel tighter and more believable.
+
+=====================================
+PART 4: TRENDS / INSIGHTS / COACH
+=====================================
+
+Update trends, insights, and coach logic so they reference Apple Health rather than generic wearable language.
+
+Examples:
+- “Your recent Apple Health data suggests...”
+- “Based on your Apple Health sleep and activity trends...”
+- “Your Apple Watch activity has dipped over the last few days...”
+
+Do this only where it improves clarity.
+Do not overstuff the app with “Apple” everywhere.
+Just remove generic multi-device wording.
+
+=====================================
+PART 5: CLEAN UP UNUSED UI AND LOGIC
+=====================================
+
+If there are unused components, text, mock data, or placeholder connection states for:
+- Garmin
+- Oura
+- Whoop
+- Samsung Health
+remove or simplify them.
+
+I want the MVP to feel focused, not broad.
+
+=====================================
+PART 6: MVP PRODUCT STRATEGY
+=====================================
+
+This is a strategic simplification.
+Do not add replacement complexity.
+
+The app should now feel:
+- more focused
+- more realistic
+- easier to understand
+- easier to build
+- more premium
+
+=====================================
+PART 7: FINAL OUTPUT
+=====================================
+
+After implementing, summarize:
+1. what non-Apple references were removed
+2. how onboarding was simplified
+3. how copy was tightened around Apple Health / Apple Watch
+4. any remaining placeholders that should eventually be removed

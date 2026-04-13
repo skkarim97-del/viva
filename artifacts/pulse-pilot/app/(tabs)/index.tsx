@@ -21,9 +21,10 @@ import { InputRow } from "@/components/InputRow";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { useApp } from "@/context/AppContext";
 import { generateCoachInsight } from "@/data/insights";
+import { formatDoseDisplay } from "@/data/medicationData";
 import { useColors } from "@/hooks/useColors";
 import { CATEGORY_OPTIONS } from "@/types";
-import type { MetricKey, FeelingType, ChatMessage, DailyStatusLabel, ActionCategory, AppetiteLevel, SideEffectSeverity, ProteinConfidenceDaily, MovementIntent, EnergyDaily, HydrationDaily } from "@/types";
+import type { MetricKey, FeelingType, ChatMessage, DailyStatusLabel, ActionCategory, AppetiteLevel, SideEffectSeverity, ProteinConfidenceDaily, MovementIntent, EnergyDaily, HydrationDaily, MedicationLogEntry } from "@/types";
 
 const TINT_GREEN = "#34C759";
 const TINT_BLUE = "#38B6FF";
@@ -104,6 +105,7 @@ export default function DashboardScreen() {
     movementIntent, setMovementIntent,
     glp1Energy, setGlp1Energy,
     glp1Hydration, setGlp1Hydration,
+    medicationLog, logMedicationDose,
   } = useApp();
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -269,6 +271,8 @@ export default function DashboardScreen() {
               proteinConfidence: profile.proteinConfidence,
               strengthTrainingBaseline: profile.strengthTrainingBaseline,
             },
+            medicationProfile: profile.medicationProfile || undefined,
+            recentDoseLog: medicationLog.slice(-5).map(e => ({ date: e.date, status: e.status, doseValue: e.doseValue, doseUnit: e.doseUnit })),
             readinessScore: dailyPlan?.readinessScore,
             dailyState: dailyPlan?.dailyState,
             userFeeling: feeling,
@@ -402,6 +406,63 @@ export default function DashboardScreen() {
         <ScreenHeader />
 
         <Text style={[styles.tagline, { color: c.mutedForeground }]}>{greetingText}</Text>
+
+        {profile.medicationProfile && (
+          <View style={[styles.medPillRow, { backgroundColor: c.card }]}>
+            <View style={styles.medPillLeft}>
+              <Feather name="package" size={14} color={c.accent} />
+              <Text style={[styles.medPillText, { color: c.foreground }]}>
+                {formatDoseDisplay(
+                  profile.medicationProfile.medicationBrand,
+                  profile.medicationProfile.doseValue,
+                  profile.medicationProfile.doseUnit,
+                  profile.medicationProfile.frequency as "weekly" | "daily"
+                )}
+              </Text>
+              {profile.medicationProfile.recentTitration && (
+                <View style={[styles.titrationBadge, { backgroundColor: "#FF950018" }]}>
+                  <Text style={[styles.titrationText, { color: "#FF9500" }]}>Titrated</Text>
+                </View>
+              )}
+            </View>
+            {(() => {
+              const todayDate = new Date().toISOString().split("T")[0];
+              const todayLog = medicationLog.find(e => e.date === todayDate);
+              const isDaily = profile.medicationProfile?.frequency === "daily";
+              const showLogBtn = isDaily || (profile.medicationProfile?.plannedDoseDay && new Date().toLocaleDateString("en-US", { weekday: "long" }).toLowerCase() === profile.medicationProfile.plannedDoseDay.toLowerCase());
+              if (todayLog) {
+                return (
+                  <View style={[styles.doseLoggedBadge, { backgroundColor: "#34C75914" }]}>
+                    <Feather name="check" size={12} color="#34C759" />
+                    <Text style={[styles.doseLoggedText, { color: "#34C759" }]}>Logged</Text>
+                  </View>
+                );
+              }
+              if (showLogBtn) {
+                return (
+                  <Pressable
+                    onPress={() => {
+                      haptic();
+                      logMedicationDose({
+                        id: Date.now().toString(),
+                        date: todayDate,
+                        medicationBrand: profile.medicationProfile!.medicationBrand,
+                        doseValue: profile.medicationProfile!.doseValue,
+                        doseUnit: profile.medicationProfile!.doseUnit,
+                        status: "taken",
+                        timestamp: Date.now(),
+                      });
+                    }}
+                    style={({ pressed }) => [styles.logDoseBtn, { backgroundColor: c.accent, opacity: pressed ? 0.8 : 1 }]}
+                  >
+                    <Text style={styles.logDoseBtnText}>Log Dose</Text>
+                  </Pressable>
+                );
+              }
+              return null;
+            })()}
+          </View>
+        )}
 
         <View style={[styles.statusCard, { backgroundColor: c.card }]}>
           <View style={styles.statusTopRow}>
@@ -1411,5 +1472,54 @@ const styles = StyleSheet.create({
   supportText: {
     fontSize: 13,
     fontFamily: "Montserrat_400Regular",
+  },
+  medPillRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 16,
+  },
+  medPillLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+  },
+  medPillText: {
+    fontSize: 14,
+    fontFamily: "Montserrat_600SemiBold",
+  },
+  titrationBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  titrationText: {
+    fontSize: 11,
+    fontFamily: "Montserrat_500Medium",
+  },
+  doseLoggedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+  },
+  doseLoggedText: {
+    fontSize: 12,
+    fontFamily: "Montserrat_500Medium",
+  },
+  logDoseBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 10,
+  },
+  logDoseBtnText: {
+    fontSize: 12,
+    fontFamily: "Montserrat_600SemiBold",
+    color: "#FFFFFF",
   },
 });

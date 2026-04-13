@@ -1,0 +1,286 @@
+I want to extend the product so medication usage, dose, and titration history are also integrated into the Trends tab and overall insight system.
+
+This is important.
+
+Medication should not only exist in onboarding and Today screen context.
+It should also influence:
+- trends
+- insight summaries
+- correlations
+- support logic
+- med adherence tracking
+
+GOAL
+
+Make medication part of the core product intelligence layer.
+
+The app should be able to help users see patterns like:
+- symptoms got worse after a recent dose increase
+- appetite dropped after moving to a higher dose
+- hydration mattered more during the first 2 weeks of a new dose
+- activity declined when side effects increased
+- recovery changed after titration
+
+The tone must remain supportive and clear.
+Do NOT make this feel overly clinical or scary.
+
+=====================================
+PART 1: MEDICATION USAGE TRACKING FEATURE
+=====================================
+
+Add a simple feature that allows the user to track medication usage.
+
+This should support both:
+- weekly medications
+- daily medications
+
+Based on medication frequency, the UI should adapt appropriately.
+
+For weekly meds like:
+- Wegovy
+- Ozempic
+- Zepbound
+- Mounjaro
+
+Allow the user to log:
+- dose taken this week
+- planned dose day
+- actual dose date
+- whether they missed or delayed a dose
+
+For daily meds like:
+- Saxenda
+
+Allow the user to log:
+- dose taken today
+- missed dose
+- streak / recent consistency
+
+Keep this feature simple and premium.
+
+Possible UX:
+- compact med tracker card
+- “Dose logged” / “Log dose” action
+- “Taken today” or “Taken this week”
+- subtle missed / delayed state
+
+Do NOT overcomplicate this.
+
+=====================================
+PART 2: STORE MEDICATION ADHERENCE DATA
+=====================================
+
+Extend the backend / app state / types to store medication usage history.
+
+Use structured fields, such as:
+- medication_frequency
+- planned_dose_day
+- last_dose_date
+- dose_taken_today (for daily meds)
+- dose_taken_this_week (for weekly meds)
+- missed_dose_count
+- delayed_dose_count
+- medication_adherence_streak
+- medication_log_history[]
+
+If helpful, store log entries like:
+{
+  "date": "2026-04-12",
+  "status": "taken",
+  "dose_value": 5,
+  "dose_unit": "mg",
+  "frequency": "weekly"
+}
+
+Keep this lightweight but extensible.
+
+=====================================
+PART 3: TRENDS TAB - ADD MEDICATION SECTION
+=====================================
+
+Add a medication-related section to the Trends tab.
+
+Potential section title:
+- Medication
+- Medication & Dose Trends
+- Treatment Trends
+
+This section should show things like:
+- current medication and dose
+- recent dose change / titration status
+- med adherence streak
+- weekly or daily logging consistency
+- last dose taken
+- any recent missed or delayed doses
+
+For weekly meds, show:
+- current dose
+- injection day
+- last logged dose
+- weekly adherence trend
+
+For daily meds, show:
+- current dose
+- recent daily adherence
+- streak
+- missed days
+
+Keep the design clean, not overloaded.
+
+=====================================
+PART 4: TRENDS TAB - CORRELATIONS / INSIGHTS
+=====================================
+
+Add medication-aware insights into the Trends tab.
+
+Create a text-based insights / correlations section that ties medication context to the user’s recent data.
+
+Examples:
+- Your appetite has been lower since your recent dose increase
+- Recovery has been steadier since your last dose stabilized
+- Hydration appears to matter more on or after dose days
+- Activity tends to drop in the 1–2 days after your weekly dose
+- Side effects have been lighter over the past 2 weeks despite staying on the same dose
+- Your consistency improves when protein and hydration stay on track after dose days
+
+Important:
+These should be framed as observations or possible patterns, not hard medical claims.
+
+Use language like:
+- may be linked
+- appears to line up with
+- seems to be associated with
+- often shows up around
+- may be worth watching
+
+Avoid making it sound like the app is diagnosing anything.
+
+=====================================
+PART 5: DOSE / TITRATION AWARE TREND LOGIC
+=====================================
+
+Update trend logic so medication context influences summaries.
+
+Examples of logic to incorporate:
+- recent titration within last 14 days
+- higher dose tiers
+- time since last dose
+- weekly dose day proximity
+- missed / delayed medication usage
+
+This should affect:
+- text summaries
+- pattern detection
+- correlation statements
+- recommendation emphasis
+
+Examples:
+1. If recently titrated:
+Increase probability of surfacing insights related to:
+- side effects
+- appetite drop
+- hydration
+- lighter recovery needs
+
+2. If on higher dose:
+Increase emphasis on:
+- fuel consistency
+- hydration
+- lower appetite patterns
+- symptom management
+
+3. If dose was missed or delayed:
+Mention it in adherence or consistency patterns where appropriate
+
+4. If user repeatedly logs worse symptoms around dose day:
+Surface a supportive pattern insight
+
+=====================================
+PART 6: MEDICATION TRACKING IN TODAY / PLAN
+=====================================
+
+Integrate medication logging subtly into the broader product.
+
+Today tab:
+- show a compact medication status element if relevant
+Examples:
+- Dose due tomorrow
+- Dose logged yesterday
+- Weekly dose completed
+- You haven’t logged this week’s dose yet
+
+Plan tab:
+- include medication awareness if relevant
+Examples:
+- prep for dose day
+- simplify meals after dose day
+- prioritize hydration around injection day
+
+Keep this subtle and premium, not cluttered.
+
+=====================================
+PART 7: COACH CONTEXT
+=====================================
+
+Ensure the coach can reference:
+- medication brand
+- dose
+- frequency
+- recent titration
+- last dose logged
+- adherence / usage patterns
+- dose day timing
+
+Examples:
+- If user asks why they feel worse this week, the coach can mention that symptoms may be lining up with a recent dose increase
+- If user is missing doses, the coach can gently support consistency
+- If user tends to have low appetite after dose day, the coach can recommend protein / hydration strategies
+
+Again:
+no score language
+no scary language
+no diagnosis language
+
+=====================================
+PART 8: TRENDS UI / DESIGN
+=====================================
+
+Keep the Trends tab premium and easy to scan.
+
+Do NOT turn this into a dense dashboard.
+
+Medication-related trend blocks should be:
+- compact
+- clear
+- visually integrated with the rest of the Trends tab
+- supportive and insight-driven
+
+Good section ideas:
+- Medication
+- What we’re noticing
+- Patterns around dose days
+- Treatment consistency
+
+=====================================
+PART 9: QUICK UX / ONBOARDING FOLLOW-THROUGH
+=====================================
+
+Because medication is now a bigger part of the app, make sure the onboarding fields feed cleanly into:
+- Today
+- Plan
+- Trends
+- Coach
+
+The app should feel like one connected system.
+
+=====================================
+PART 10: FINAL OUTPUT
+=====================================
+
+After implementing, summarize:
+1. how medication usage tracking was added
+2. how weekly vs daily medication logging works
+3. how medication now appears in the Trends tab
+4. how correlations / insights use medication and dose context
+5. how coach and recommendation logic were updated
+6. any placeholder logic still remaining

@@ -38,22 +38,25 @@ The system is a pnpm workspace monorepo using Node.js 24 and TypeScript 5.9. The
 ### GLP-1 Data Model
 
 - **UserProfile fields**: glp1Medication, glp1Reason, glp1Duration, glp1DoseOptional, glp1InjectionDayOptional, baselineSideEffects, proteinConfidence, hydrationConfidence, mealsPerDay, underEatingConcern, strengthTrainingBaseline
+- **MedicationProfile** (normalized): medicationBrand, genericName, doseValue, doseUnit, frequency (weekly/daily), recentTitration, previousDoseValue, timeOnMedicationBucket, telehealthPlatform, plannedDoseDay
+- **MedicationLogEntry**: id, date, medicationBrand, doseValue, doseUnit, status (taken/skipped/delayed), notes, timestamp
+- **Medication Data** (`data/medicationData.ts`): Brand DB (Wegovy/Ozempic/Zepbound/Mounjaro/Saxenda), dynamic dose options per brand, telehealth platforms list, helpers (getDoseTier, getBrandGeneric, formatDoseDisplay, etc.)
 - **GLP-1 Daily Inputs**: appetite (strong/normal/low/very_low), sideEffects (none/mild/moderate/rough), proteinConfidence (high/good/okay/low), movementIntent (walk/strength/light_recovery/rest), energy (great/good/tired/depleted), hydration (high/good/okay/poor)
-- **AsyncStorage keys**: @viva_glp1_inputs, @viva_glp1_history, @viva_profile, @viva_chat, @viva_wellness, @viva_completions, @viva_integrations, @viva_weekly_plan, @viva_checkins
+- **AsyncStorage keys**: @viva_glp1_inputs, @viva_glp1_history, @viva_profile, @viva_chat, @viva_wellness, @viva_completions, @viva_integrations, @viva_weekly_plan, @viva_checkins, @viva_med_log
 
 ### Technical Implementations & Features
 
-- **Onboarding**: 8-step GLP-1 flow: welcome, goals, glp1_context (medication/reason/duration/dose/injection day), side_effects, nutrition (protein/hydration confidence, meals, under-eating, strength training), activity, integrations, summary.
-- **Dashboard (Today tab)**: Status card (greeting + status pill + headline + drivers, no feeling chips), "Today" actions card (Move/Fuel/Hydrate/Recover/Stay Consistent), input section wrapped in card container with "How are things today?" header and dynamic summary memo, standardized InputRow refine section with semantic tint colors (position 1=green, 2=blue, 3=purple, 4=red), coach insight with "Ask your coach anything..." input, end-of-day check-in (3 questions using InputRow), and metric tiles. GLP-1 daily inputs sent to coach API from both Today tab and Coach tab. Layout order: status card → feedback toast → actions → inputs → coach → why plan → check-in → metrics.
+- **Onboarding**: 13-step GLP-1 flow: welcome, name, goals, medication (brand picker), dose (dynamic per brand), titration (yes/no + previous dose), time_on_med, telehealth (searchable grid), side_effects, nutrition, activity, integrations, summary.
+- **Dashboard (Today tab)**: Status card (greeting + status pill + headline + drivers, no feeling chips), "Today" actions card (Move/Fuel/Hydrate/Recover/Stay Consistent), input section wrapped in card container with "How are things today?" header and dynamic summary memo, standardized InputRow refine section with semantic tint colors (position 1=green, 2=blue, 3=purple, 4=red), coach insight with "Ask your coach anything..." input, end-of-day check-in (3 questions using InputRow), and metric tiles. GLP-1 daily inputs sent to coach API from both Today tab and Coach tab. Layout order: greeting -> medication pill -> status card -> feedback toast -> actions -> inputs -> coach -> why plan -> check-in -> metrics. Medication profile + dose log sent to coach API from both Today tab and Coach tab.
 - **Adaptive Coaching**: Risk engine (calculateDropoutRisk) with rules-based scoring. GLP-1 coach system prompt covers side effect management, protein coaching, muscle preservation, hydration, and treatment consistency. Recovery > performance. Side effect management > training goals. Protein > calories. Consistency > intensity.
 - **Daily Actions**: 5 checkable actions per day (Move/Fuel/Hydrate/Recover/Stay Consistent), with GLP-1-informed recommendations.
 - **Weekly Plan**: AI-powered weekly coaching with Move/Fuel/Hydrate/Recover/Consistent categories. GLP-1 specific rules (strength training for muscle preservation, gentler plans on symptom days, protein-forward fueling).
-- **Trends Tab**: Recovery/Body, Movement, and Consistency sections. "What We're Noticing" insights, correlations during treatment, and pattern detection.
+- **Trends Tab**: Recovery/Body, Movement, and Consistency sections. Medication section (brand/dose display, dose tier, titration badge, recent dose log). "What We're Noticing" insights, correlations during treatment, and pattern detection.
 - **AI Coach**: Full-screen chat modal with streaming SSE responses. GLP-1 focused quick actions: side effects, protein intake, exercise, hydration, weekly focus. System prompt fully rewritten for GLP-1 context.
-- **Risk Engine**: calculateDropoutRisk() with rolling baselines for recovery, activity, fueling, symptoms, and consistency. translateRiskToUserMessage() maps scores to empathetic, treatment-aware support headlines and messages.
+- **Risk Engine**: calculateDropoutRisk() with rolling baselines for recovery, activity, fueling, symptoms, and consistency. Medication-aware weight multiplier (dose tier, recent titration, time on med). translateRiskToUserMessage() maps scores to empathetic, treatment-aware support headlines and messages.
 - **Insights Engine**: `data/insights.ts` provides week summaries, coach insights, sleep intelligence, and daily analytics. All language rewritten for GLP-1 context (no generic fitness/wellness language). Uses "active days" not "workouts", "treatment" not "training", protein/muscle preservation framing throughout.
 - **Health Data Providers**: `data/healthProviders.ts` handles integration with Apple HealthKit, Health Connect (Android), Garmin, and Samsung Health.
-- **State Management**: Context-based state management (AppContext) with GLP-1 state fields (glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent, riskResult, glp1InputHistory).
+- **State Management**: Context-based state management (AppContext) with GLP-1 state fields (glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent, riskResult, glp1InputHistory, medicationLog, logMedicationDose).
 - **Navigation**: Tab bar for Today, Plan, Trends, Settings. Modals for subscription. Stack for onboarding and metric drill-down.
 
 ## Important Files
@@ -63,7 +66,8 @@ The system is a pnpm workspace monorepo using Node.js 24 and TypeScript 5.9. The
 - `artifacts/pulse-pilot/data/riskEngine.ts` - Dropout risk calculation engine
 - `artifacts/pulse-pilot/data/riskTranslation.ts` - Risk score to user message translation
 - `artifacts/pulse-pilot/data/mockData.ts` - Mock data generation and daily plan logic
-- `artifacts/pulse-pilot/app/onboarding/index.tsx` - 8-step GLP-1 onboarding flow
+- `artifacts/pulse-pilot/data/medicationData.ts` - Brand DB, dose options, telehealth platforms, helpers
+- `artifacts/pulse-pilot/app/onboarding/index.tsx` - 13-step GLP-1 onboarding flow
 - `artifacts/pulse-pilot/app/(tabs)/index.tsx` - Today tab with GLP-1 daily inputs
 - `artifacts/pulse-pilot/app/(tabs)/plan.tsx` - Weekly plan with GLP-1 categories
 - `artifacts/pulse-pilot/app/(tabs)/trends.tsx` - Trends with treatment-aware insights

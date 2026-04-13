@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -17,13 +17,29 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp } from "@/context/AppContext";
 import { Logo } from "@/components/Logo";
 import { useColors } from "@/hooks/useColors";
-import type { HealthGoal, SideEffectType } from "@/types";
+import type { HealthGoal, SideEffectType, MedicationProfile } from "@/types";
+import {
+  BRAND_OPTIONS,
+  MEDICATION_DATABASE,
+  TELEHEALTH_PLATFORMS,
+  TIME_ON_MED_OPTIONS,
+  getBrandGeneric,
+  getBrandDisplayName,
+  getDoseOptions,
+  getMedicationFrequency,
+  type MedicationBrand,
+  type DoseOption,
+} from "@/data/medicationData";
 
 const STEPS = [
   "welcome",
   "name",
   "goals",
-  "glp1_context",
+  "medication",
+  "dose",
+  "titration",
+  "time_on_med",
+  "telehealth",
   "side_effects",
   "nutrition",
   "activity",
@@ -39,27 +55,6 @@ const GOAL_OPTIONS: { id: HealthGoal; label: string; icon: keyof typeof Feather.
   { id: "improved_energy", label: "Maintain energy", icon: "sun" },
   { id: "stay_consistent", label: "Stay consistent on treatment", icon: "check-circle" },
   { id: "general_wellness", label: "General health", icon: "heart" },
-];
-
-const MEDICATION_OPTIONS = [
-  { key: "semaglutide" as const, label: "Semaglutide (Ozempic, Wegovy)" },
-  { key: "tirzepatide" as const, label: "Tirzepatide (Mounjaro, Zepbound)" },
-  { key: "liraglutide" as const, label: "Liraglutide (Saxenda, Victoza)" },
-  { key: "other" as const, label: "Other" },
-];
-
-const REASON_OPTIONS = [
-  { key: "weight_loss" as const, label: "Weight loss" },
-  { key: "metabolic_health" as const, label: "Metabolic health" },
-  { key: "diabetes" as const, label: "Diabetes management" },
-  { key: "other" as const, label: "Other" },
-];
-
-const DURATION_OPTIONS = [
-  { key: "less_1_month" as const, label: "Less than 1 month" },
-  { key: "1_3_months" as const, label: "1-3 months" },
-  { key: "3_6_months" as const, label: "3-6 months" },
-  { key: "6_plus_months" as const, label: "6+ months" },
 ];
 
 const SIDE_EFFECT_OPTIONS: { key: SideEffectType; label: string; icon: keyof typeof Feather.glyphMap }[] = [
@@ -101,11 +96,22 @@ export default function OnboardingScreen() {
   const [userName, setUserName] = useState("");
   const [selectedGoals, setSelectedGoals] = useState<HealthGoal[]>([]);
 
-  const [medication, setMedication] = useState<"semaglutide" | "tirzepatide" | "liraglutide" | "other" | null>(null);
-  const [reason, setReason] = useState<"weight_loss" | "metabolic_health" | "diabetes" | "other" | null>(null);
-  const [duration, setDuration] = useState<"less_1_month" | "1_3_months" | "3_6_months" | "6_plus_months" | null>(null);
-  const [dose, setDose] = useState("");
+  const [medBrand, setMedBrand] = useState<MedicationBrand | null>(null);
+  const [selectedDose, setSelectedDose] = useState<DoseOption | null>(null);
+  const [customMedName, setCustomMedName] = useState("");
+  const [customDose, setCustomDose] = useState("");
+  const [customFrequency, setCustomFrequency] = useState<"weekly" | "daily">("weekly");
   const [injectionDay, setInjectionDay] = useState<string | null>(null);
+
+  const [recentTitration, setRecentTitration] = useState<boolean | null>(null);
+  const [previousDose, setPreviousDose] = useState<DoseOption | null>(null);
+  const [customPreviousDose, setCustomPreviousDose] = useState("");
+
+  const [timeOnMed, setTimeOnMed] = useState<"less_1_month" | "1_3_months" | "3_6_months" | "6_plus_months" | null>(null);
+
+  const [telehealthPlatform, setTelehealthPlatform] = useState<string | null>(null);
+  const [customPlatform, setCustomPlatform] = useState("");
+  const [platformSearch, setPlatformSearch] = useState("");
 
   const [selectedSideEffects, setSelectedSideEffects] = useState<SideEffectType[]>([]);
 
@@ -123,6 +129,27 @@ export default function OnboardingScreen() {
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   const currentIndex = STEPS.indexOf(step);
+
+  const doseOptions = useMemo(() => {
+    if (!medBrand || medBrand === "other") return [];
+    return getDoseOptions(medBrand);
+  }, [medBrand]);
+
+  const previousDoseOptions = useMemo(() => {
+    if (!medBrand || medBrand === "other") return [];
+    return getDoseOptions(medBrand).filter(d => selectedDose ? d.value !== selectedDose.value : true);
+  }, [medBrand, selectedDose]);
+
+  const filteredPlatforms = useMemo(() => {
+    if (!platformSearch.trim()) return TELEHEALTH_PLATFORMS;
+    const q = platformSearch.toLowerCase();
+    return TELEHEALTH_PLATFORMS.filter(p => p.toLowerCase().includes(q));
+  }, [platformSearch]);
+
+  const medFrequency = useMemo(() => {
+    if (!medBrand) return "weekly";
+    return getMedicationFrequency(medBrand);
+  }, [medBrand]);
 
   const haptic = () => {
     if (Platform.OS !== "web") {
@@ -153,14 +180,59 @@ export default function OnboardingScreen() {
     }
   };
 
+  const buildMedicationProfile = (): MedicationProfile | undefined => {
+    if (!medBrand) return undefined;
+
+    if (medBrand === "other") {
+      const doseVal = parseFloat(customDose) || 0;
+      return {
+        medicationBrand: customMedName.trim() || "Other",
+        genericName: "unknown",
+        indication: "weight loss",
+        doseValue: doseVal,
+        doseUnit: "mg",
+        frequency: customFrequency,
+        recentTitration: recentTitration === true,
+        previousDoseValue: customPreviousDose ? parseFloat(customPreviousDose) || null : null,
+        previousDoseUnit: customPreviousDose ? "mg" : null,
+        previousFrequency: customPreviousDose ? customFrequency : null,
+        doseChangeDate: null,
+        timeOnMedicationBucket: timeOnMed || "1_3_months",
+        telehealthPlatform: telehealthPlatform === "Other" ? customPlatform.trim() || "Other" : telehealthPlatform,
+        plannedDoseDay: injectionDay,
+      };
+    }
+
+    return {
+      medicationBrand: getBrandDisplayName(medBrand),
+      genericName: getBrandGeneric(medBrand),
+      indication: "weight loss",
+      doseValue: selectedDose?.value || 0,
+      doseUnit: selectedDose?.unit || "mg",
+      frequency: medFrequency,
+      recentTitration: recentTitration === true,
+      previousDoseValue: previousDose?.value || null,
+      previousDoseUnit: previousDose?.unit || null,
+      previousFrequency: previousDose ? medFrequency : null,
+      doseChangeDate: null,
+      timeOnMedicationBucket: timeOnMed || "1_3_months",
+      telehealthPlatform: telehealthPlatform === "Other" ? customPlatform.trim() || "Other" : telehealthPlatform,
+      plannedDoseDay: injectionDay,
+    };
+  };
+
   const finishOnboarding = () => {
+    const medProfile = buildMedicationProfile();
+    const legacyMed = medBrand === "other" ? "other" as const
+      : medBrand ? (getBrandGeneric(medBrand) as "semaglutide" | "tirzepatide" | "liraglutide")
+      : undefined;
+
     updateProfile({
       name: userName.trim(),
       goals: selectedGoals.length > 0 ? selectedGoals : ["stay_consistent"],
-      glp1Medication: medication || undefined,
-      glp1Reason: reason || undefined,
-      glp1Duration: duration || undefined,
-      glp1DoseOptional: dose.trim() || undefined,
+      glp1Medication: legacyMed,
+      glp1Duration: timeOnMed || undefined,
+      glp1DoseOptional: selectedDose?.label || customDose || undefined,
       glp1InjectionDayOptional: injectionDay || undefined,
       baselineSideEffects: selectedSideEffects.length > 0 ? selectedSideEffects : undefined,
       proteinConfidence: proteinConf || undefined,
@@ -172,6 +244,7 @@ export default function OnboardingScreen() {
       daysAvailableToTrain: activityLevel === "very_active" ? 5 : activityLevel === "moderate" ? 3 : 2,
       availableWorkoutTime: 30,
       onboardingComplete: true,
+      medicationProfile: medProfile,
     });
     completeOnboarding();
     router.replace("/(tabs)");
@@ -200,7 +273,13 @@ export default function OnboardingScreen() {
     switch (step) {
       case "name": return userName.trim().length > 0;
       case "goals": return selectedGoals.length > 0;
-      case "glp1_context": return medication !== null;
+      case "medication": return medBrand !== null;
+      case "dose":
+        if (medBrand === "other") return customDose.trim().length > 0;
+        return selectedDose !== null;
+      case "titration": return recentTitration !== null;
+      case "time_on_med": return timeOnMed !== null;
+      case "telehealth": return true;
       case "side_effects": return selectedSideEffects.length > 0;
       case "nutrition": return proteinConf !== null && hydrationConf !== null;
       case "activity": return activityLevel !== null;
@@ -211,7 +290,19 @@ export default function OnboardingScreen() {
   const ctaText = step === "welcome" ? "Get Started"
     : step === "summary" ? "Start Your Plan"
     : step === "integrations" ? "Continue"
+    : step === "telehealth" ? (telehealthPlatform ? "Continue" : "Skip")
     : "Continue";
+
+  const medDisplayLabel = useMemo(() => {
+    if (!medBrand) return "Not specified";
+    if (medBrand === "other") return customMedName.trim() || "Other GLP-1 med";
+    return getBrandDisplayName(medBrand);
+  }, [medBrand, customMedName]);
+
+  const doseDisplayLabel = useMemo(() => {
+    if (medBrand === "other") return customDose ? `${customDose} mg ${customFrequency}` : "";
+    return selectedDose?.label || "";
+  }, [medBrand, selectedDose, customDose, customFrequency]);
 
   return (
     <View style={[styles.container, { backgroundColor: c.background, paddingTop: topPad, paddingBottom: bottomPad }]}>
@@ -304,25 +395,34 @@ export default function OnboardingScreen() {
             </View>
           )}
 
-          {step === "glp1_context" && (
+          {step === "medication" && (
             <View style={styles.section}>
-              <Text style={[styles.stepTitle, { color: c.foreground }]}>Your GLP-1{"\n"}treatment</Text>
+              <Text style={[styles.stepTitle, { color: c.foreground }]}>Which medication are{"\n"}you taking?</Text>
               <Text style={[styles.stepSub, { color: c.mutedForeground }]}>This helps us personalize your support</Text>
-
-              <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>Medication</Text>
               <View style={styles.optionList}>
-                {MEDICATION_OPTIONS.map((opt) => (
+                {BRAND_OPTIONS.map((opt) => (
                   <Pressable
                     key={opt.key}
-                    onPress={() => { haptic(); setMedication(opt.key); }}
-                    style={[styles.optionCard, {
-                      backgroundColor: medication === opt.key ? c.accent + "10" : c.card,
-                      borderColor: medication === opt.key ? c.accent : "transparent",
-                      borderWidth: 1.5,
-                    }]}
+                    onPress={() => {
+                      haptic();
+                      setMedBrand(opt.key);
+                      if (opt.key !== medBrand) {
+                        setSelectedDose(null);
+                        setPreviousDose(null);
+                      }
+                    }}
+                    style={({ pressed }) => [
+                      styles.optionCard,
+                      {
+                        backgroundColor: medBrand === opt.key ? c.accent + "10" : c.card,
+                        borderColor: medBrand === opt.key ? c.accent : "transparent",
+                        borderWidth: 1.5,
+                        opacity: pressed ? 0.8 : 1,
+                      },
+                    ]}
                   >
-                    <Text style={[styles.optionLabel, { color: medication === opt.key ? c.accent : c.foreground, flex: 1 }]}>{opt.label}</Text>
-                    {medication === opt.key && (
+                    <Text style={[styles.optionLabel, { color: medBrand === opt.key ? c.accent : c.foreground, flex: 1 }]}>{opt.label}</Text>
+                    {medBrand === opt.key && (
                       <View style={[styles.optionCheck, { backgroundColor: c.accent }]}>
                         <Feather name="check" size={12} color={c.accentForeground} />
                       </View>
@@ -330,58 +430,238 @@ export default function OnboardingScreen() {
                   </Pressable>
                 ))}
               </View>
+            </View>
+          )}
 
-              <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>Reason for taking it</Text>
-              <View style={styles.chipRow}>
-                {REASON_OPTIONS.map((opt) => (
-                  <Pressable
-                    key={opt.key}
-                    onPress={() => { haptic(); setReason(opt.key); }}
-                    style={[styles.chip, { backgroundColor: reason === opt.key ? c.accent : c.card }]}
-                  >
-                    <Text style={[styles.chipText, { color: reason === opt.key ? c.accentForeground : c.foreground }]}>{opt.label}</Text>
-                  </Pressable>
-                ))}
-              </View>
+          {step === "dose" && (
+            <View style={styles.section}>
+              <Text style={[styles.stepTitle, { color: c.foreground }]}>What dose are{"\n"}you on?</Text>
+              <Text style={[styles.stepSub, { color: c.mutedForeground }]}>Your dose helps us calibrate support</Text>
 
-              <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>How long on treatment</Text>
-              <View style={styles.chipRow}>
-                {DURATION_OPTIONS.map((opt) => (
-                  <Pressable
-                    key={opt.key}
-                    onPress={() => { haptic(); setDuration(opt.key); }}
-                    style={[styles.chip, { backgroundColor: duration === opt.key ? c.accent : c.card }]}
-                  >
-                    <Text style={[styles.chipText, { color: duration === opt.key ? c.accentForeground : c.foreground }]}>{opt.label}</Text>
-                  </Pressable>
-                ))}
-              </View>
+              {medBrand !== "other" ? (
+                <>
+                  <View style={styles.optionList}>
+                    {doseOptions.map((dose) => (
+                      <Pressable
+                        key={dose.label}
+                        onPress={() => { haptic(); setSelectedDose(dose); }}
+                        style={({ pressed }) => [
+                          styles.optionCard,
+                          {
+                            backgroundColor: selectedDose?.value === dose.value ? c.accent + "10" : c.card,
+                            borderColor: selectedDose?.value === dose.value ? c.accent : "transparent",
+                            borderWidth: 1.5,
+                            opacity: pressed ? 0.8 : 1,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.optionLabel, { color: selectedDose?.value === dose.value ? c.accent : c.foreground, flex: 1 }]}>{dose.label}</Text>
+                        {selectedDose?.value === dose.value && (
+                          <View style={[styles.optionCheck, { backgroundColor: c.accent }]}>
+                            <Feather name="check" size={12} color={c.accentForeground} />
+                          </View>
+                        )}
+                      </Pressable>
+                    ))}
+                  </View>
 
-              <View style={[styles.inlineField, { backgroundColor: c.card, borderRadius: 14 }]}>
-                <Text style={[styles.inlineLabel, { color: c.mutedForeground }]}>Current dose (optional)</Text>
-                <TextInput
-                  value={dose}
-                  onChangeText={setDose}
-                  placeholder="e.g. 0.5mg"
-                  placeholderTextColor={c.mutedForeground + "60"}
-                  style={[styles.inlineInput, { color: c.foreground }]}
-                />
-              </View>
-
-              <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>Injection day (optional)</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dayScroll}>
-                <View style={styles.dayRow}>
-                  {INJECTION_DAY_OPTIONS.map((d) => (
+                  {medFrequency === "weekly" && (
+                    <>
+                      <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>Injection day (optional)</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dayScroll}>
+                        <View style={styles.dayRow}>
+                          {INJECTION_DAY_OPTIONS.map((d) => (
+                            <Pressable
+                              key={d}
+                              onPress={() => { haptic(); setInjectionDay(injectionDay === d ? null : d); }}
+                              style={[styles.dayChip, { backgroundColor: injectionDay === d ? c.accent : c.card }]}
+                            >
+                              <Text style={[styles.dayChipText, { color: injectionDay === d ? c.accentForeground : c.foreground }]}>{d.slice(0, 3)}</Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                      </ScrollView>
+                    </>
+                  )}
+                </>
+              ) : (
+                <View style={styles.customFields}>
+                  <View style={[styles.inlineField, { backgroundColor: c.card, borderRadius: 14 }]}>
+                    <Text style={[styles.inlineLabel, { color: c.mutedForeground }]}>Medication name</Text>
+                    <TextInput
+                      value={customMedName}
+                      onChangeText={setCustomMedName}
+                      placeholder="e.g. Compounded semaglutide"
+                      placeholderTextColor={c.mutedForeground + "60"}
+                      style={[styles.inlineInput, { color: c.foreground, flex: 1, textAlign: "left", marginLeft: 12 }]}
+                    />
+                  </View>
+                  <View style={[styles.inlineField, { backgroundColor: c.card, borderRadius: 14 }]}>
+                    <Text style={[styles.inlineLabel, { color: c.mutedForeground }]}>Dose (mg)</Text>
+                    <TextInput
+                      value={customDose}
+                      onChangeText={setCustomDose}
+                      placeholder="e.g. 0.5"
+                      placeholderTextColor={c.mutedForeground + "60"}
+                      keyboardType="decimal-pad"
+                      style={[styles.inlineInput, { color: c.foreground }]}
+                    />
+                  </View>
+                  <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>Frequency</Text>
+                  <View style={styles.segmentRow}>
                     <Pressable
-                      key={d}
-                      onPress={() => { haptic(); setInjectionDay(injectionDay === d ? null : d); }}
-                      style={[styles.dayChip, { backgroundColor: injectionDay === d ? c.accent : c.card }]}
+                      onPress={() => { haptic(); setCustomFrequency("weekly"); }}
+                      style={[styles.segment, { backgroundColor: customFrequency === "weekly" ? c.accent : c.card }]}
                     >
-                      <Text style={[styles.dayChipText, { color: injectionDay === d ? c.accentForeground : c.foreground }]}>{d.slice(0, 3)}</Text>
+                      <Text style={[styles.segmentText, { color: customFrequency === "weekly" ? c.accentForeground : c.foreground }]}>Weekly</Text>
                     </Pressable>
-                  ))}
+                    <Pressable
+                      onPress={() => { haptic(); setCustomFrequency("daily"); }}
+                      style={[styles.segment, { backgroundColor: customFrequency === "daily" ? c.accent : c.card }]}
+                    >
+                      <Text style={[styles.segmentText, { color: customFrequency === "daily" ? c.accentForeground : c.foreground }]}>Daily</Text>
+                    </Pressable>
+                  </View>
                 </View>
-              </ScrollView>
+              )}
+            </View>
+          )}
+
+          {step === "titration" && (
+            <View style={styles.section}>
+              <Text style={[styles.stepTitle, { color: c.foreground }]}>Did your dose change{"\n"}in the last 14 days?</Text>
+              <Text style={[styles.stepSub, { color: c.mutedForeground }]}>Recent changes affect how we support you</Text>
+              <View style={styles.segmentRow}>
+                <Pressable
+                  onPress={() => { haptic(); setRecentTitration(true); }}
+                  style={[styles.titrationOption, {
+                    backgroundColor: recentTitration === true ? c.accent + "10" : c.card,
+                    borderColor: recentTitration === true ? c.accent : "transparent",
+                  }]}
+                >
+                  <Text style={[styles.titrationLabel, { color: recentTitration === true ? c.accent : c.foreground }]}>Yes</Text>
+                  <Text style={[styles.titrationSub, { color: c.mutedForeground }]}>Recently changed</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => { haptic(); setRecentTitration(false); }}
+                  style={[styles.titrationOption, {
+                    backgroundColor: recentTitration === false ? c.accent + "10" : c.card,
+                    borderColor: recentTitration === false ? c.accent : "transparent",
+                  }]}
+                >
+                  <Text style={[styles.titrationLabel, { color: recentTitration === false ? c.accent : c.foreground }]}>No</Text>
+                  <Text style={[styles.titrationSub, { color: c.mutedForeground }]}>Same dose</Text>
+                </Pressable>
+              </View>
+
+              {recentTitration === true && medBrand !== "other" && previousDoseOptions.length > 0 && (
+                <>
+                  <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>Previous dose</Text>
+                  <View style={styles.chipRow}>
+                    {previousDoseOptions.map((dose) => (
+                      <Pressable
+                        key={dose.label}
+                        onPress={() => { haptic(); setPreviousDose(dose); }}
+                        style={[styles.chip, { backgroundColor: previousDose?.value === dose.value ? c.accent : c.card }]}
+                      >
+                        <Text style={[styles.chipText, { color: previousDose?.value === dose.value ? c.accentForeground : c.foreground }]}>{dose.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </>
+              )}
+
+              {recentTitration === true && medBrand === "other" && (
+                <View style={[styles.inlineField, { backgroundColor: c.card, borderRadius: 14 }]}>
+                  <Text style={[styles.inlineLabel, { color: c.mutedForeground }]}>Previous dose (mg)</Text>
+                  <TextInput
+                    value={customPreviousDose}
+                    onChangeText={setCustomPreviousDose}
+                    placeholder="e.g. 0.25"
+                    placeholderTextColor={c.mutedForeground + "60"}
+                    keyboardType="decimal-pad"
+                    style={[styles.inlineInput, { color: c.foreground }]}
+                  />
+                </View>
+              )}
+            </View>
+          )}
+
+          {step === "time_on_med" && (
+            <View style={styles.section}>
+              <Text style={[styles.stepTitle, { color: c.foreground }]}>How long have you{"\n"}been on this medication?</Text>
+              <View style={styles.optionList}>
+                {TIME_ON_MED_OPTIONS.map((opt) => (
+                  <Pressable
+                    key={opt.key}
+                    onPress={() => { haptic(); setTimeOnMed(opt.key); }}
+                    style={({ pressed }) => [
+                      styles.optionCard,
+                      {
+                        backgroundColor: timeOnMed === opt.key ? c.accent + "10" : c.card,
+                        borderColor: timeOnMed === opt.key ? c.accent : "transparent",
+                        borderWidth: 1.5,
+                        opacity: pressed ? 0.8 : 1,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.optionLabel, { color: timeOnMed === opt.key ? c.accent : c.foreground, flex: 1 }]}>{opt.label}</Text>
+                    {timeOnMed === opt.key && (
+                      <View style={[styles.optionCheck, { backgroundColor: c.accent }]}>
+                        <Feather name="check" size={12} color={c.accentForeground} />
+                      </View>
+                    )}
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {step === "telehealth" && (
+            <View style={styles.section}>
+              <Text style={[styles.stepTitle, { color: c.foreground }]}>Where are you{"\n"}getting treatment?</Text>
+              <Text style={[styles.stepSub, { color: c.mutedForeground }]}>Optional. Helps us understand your setup.</Text>
+
+              <TextInput
+                style={[styles.searchInput, { color: c.foreground, backgroundColor: c.card, borderColor: c.muted }]}
+                placeholder="Search platforms..."
+                placeholderTextColor={c.mutedForeground + "80"}
+                value={platformSearch}
+                onChangeText={setPlatformSearch}
+              />
+
+              <View style={styles.platformGrid}>
+                {filteredPlatforms.map((platform) => (
+                  <Pressable
+                    key={platform}
+                    onPress={() => {
+                      haptic();
+                      setTelehealthPlatform(telehealthPlatform === platform ? null : platform);
+                    }}
+                    style={[styles.platformChip, {
+                      backgroundColor: telehealthPlatform === platform ? c.accent + "10" : c.card,
+                      borderColor: telehealthPlatform === platform ? c.accent : "transparent",
+                    }]}
+                  >
+                    <Text style={[styles.platformText, {
+                      color: telehealthPlatform === platform ? c.accent : c.foreground,
+                    }]}>{platform}</Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              {telehealthPlatform === "Other" && (
+                <View style={[styles.inlineField, { backgroundColor: c.card, borderRadius: 14 }]}>
+                  <Text style={[styles.inlineLabel, { color: c.mutedForeground }]}>Platform name</Text>
+                  <TextInput
+                    value={customPlatform}
+                    onChangeText={setCustomPlatform}
+                    placeholder="Enter name"
+                    placeholderTextColor={c.mutedForeground + "60"}
+                    style={[styles.inlineInput, { color: c.foreground, flex: 1, textAlign: "left", marginLeft: 12 }]}
+                  />
+                </View>
+              )}
             </View>
           )}
 
@@ -575,8 +855,14 @@ export default function OnboardingScreen() {
               <Text style={[styles.summarySub, { color: c.mutedForeground }]}>Here's what Viva will help you with</Text>
 
               <View style={[styles.summaryCard, { backgroundColor: c.card }]}>
-                <SummaryRow label="Treatment" value={medication ? MEDICATION_OPTIONS.find(m => m.key === medication)?.label || medication : "Not specified"} colors={c} />
+                <SummaryRow label="Medication" value={`${medDisplayLabel}${doseDisplayLabel ? ` \u00B7 ${doseDisplayLabel}` : ""}`} colors={c} />
                 <View style={[styles.summaryDivider, { backgroundColor: c.border }]} />
+                {telehealthPlatform && (
+                  <>
+                    <SummaryRow label="Platform" value={telehealthPlatform === "Other" ? customPlatform.trim() || "Other" : telehealthPlatform} colors={c} />
+                    <View style={[styles.summaryDivider, { backgroundColor: c.border }]} />
+                  </>
+                )}
                 <SummaryRow label="Your focus" value={selectedGoals.map(g => GOAL_OPTIONS.find(o => o.id === g)?.label || g).slice(0, 3).join(", ")} colors={c} />
                 <View style={[styles.summaryDivider, { backgroundColor: c.border }]} />
                 <SummaryRow label="Daily support" value="Recovery, movement, appetite, symptoms, protein, hydration, and consistency" colors={c} />
@@ -687,4 +973,12 @@ const styles = StyleSheet.create({
   summaryNote: { fontSize: 13, fontFamily: "Montserrat_400Regular", textAlign: "center", lineHeight: 20, paddingHorizontal: 20, marginTop: 8 },
   ctaButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginHorizontal: 24, marginBottom: 16, paddingVertical: 16, borderRadius: 16 },
   ctaText: { fontSize: 17, fontFamily: "Montserrat_600SemiBold" },
+  customFields: { gap: 12 },
+  searchInput: { fontSize: 15, fontFamily: "Montserrat_400Regular", paddingVertical: 12, paddingHorizontal: 16, borderRadius: 14, borderWidth: 1 },
+  platformGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  platformChip: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14, borderWidth: 1.5 },
+  platformText: { fontSize: 14, fontFamily: "Montserrat_500Medium" },
+  titrationOption: { flex: 1, alignItems: "center", paddingVertical: 20, borderRadius: 16, borderWidth: 1.5, gap: 4 },
+  titrationLabel: { fontSize: 18, fontFamily: "Montserrat_700Bold" },
+  titrationSub: { fontSize: 13, fontFamily: "Montserrat_400Regular" },
 });

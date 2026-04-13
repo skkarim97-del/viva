@@ -22,7 +22,9 @@ import {
   type CategoryOption,
   type FocusItem,
   type GLP1DailyInputs,
+  type MedicationProfile,
 } from "@/types";
+import { getDoseTier } from "./medicationData";
 
 export const defaultProfile: UserProfile = {
   id: "user_1",
@@ -184,7 +186,7 @@ function generateFocusItems(
   return items.slice(0, 5);
 }
 
-export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInputs, history?: CompletionRecord[], recentMetrics?: HealthMetrics[], glp1Inputs?: GLP1DailyInputs): DailyPlan {
+export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInputs, history?: CompletionRecord[], recentMetrics?: HealthMetrics[], glp1Inputs?: GLP1DailyInputs, medicationProfile?: MedicationProfile): DailyPlan {
   const feeling = inputs?.feeling ?? null;
   const energy = inputs?.energy ?? null;
   const stress = inputs?.stress ?? null;
@@ -246,6 +248,15 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
 
   if (glp1Inputs?.energy === "depleted") readinessScore = Math.min(readinessScore, 35);
   else if (glp1Inputs?.energy === "tired") readinessScore = Math.min(readinessScore, 50);
+
+  if (medicationProfile) {
+    const tier = getDoseTier(medicationProfile.medicationBrand, medicationProfile.doseValue);
+    if (medicationProfile.recentTitration) readinessScore = Math.max(readinessScore - 8, 0);
+    if (tier === "high" && (glp1Inputs?.sideEffects === "moderate" || glp1Inputs?.sideEffects === "rough")) {
+      readinessScore = Math.max(readinessScore - 5, 0);
+    }
+    if (medicationProfile.timeOnMedicationBucket === "less_1_month") readinessScore = Math.max(readinessScore - 5, 0);
+  }
 
   const readinessLabel = readinessScore >= 80 ? "Excellent" : readinessScore >= 65 ? "Good" : readinessScore >= 45 ? "Moderate" : "Low";
 
