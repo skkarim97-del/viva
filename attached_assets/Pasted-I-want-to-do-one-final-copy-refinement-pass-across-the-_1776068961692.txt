@@ -1,0 +1,286 @@
+I want to do one final copy refinement pass across the app, but with an important nuance:
+
+I do NOT want the copy to become sterile, overly clinical, or stripped of warmth.
+
+I want the product to still feel:
+- encouraging
+- human
+- wellness-oriented
+- supportive
+- calm
+- premium
+
+However, I want to reduce phrases that feel too generic, templated, or fluffy when they are not tied to the user’s actual data.
+
+Important distinction:
+The problem is NOT warmth.
+The problem is generic encouragement that could apply to any user in any wellness app.
+
+So the goal is:
+
+Keep warmth and humanity
+BUT
+Make the language more specific, useful, and personalized
+
+=====================================
+OVERALL COPY DIRECTION
+=====================================
+
+Please refine copy so it feels:
+
+- human
+- warm
+- premium
+- supportive
+- wellness-oriented
+- intelligent
+- more specific
+- more grounded in the user’s actual data
+- less templated
+- less vague
+- less filler-heavy
+
+Avoid making the app sound:
+- robotic
+- generic
+- like a meditation app template
+- like a hospital app
+- like obvious AI-generated copy
+
+The ideal tone is:
+“encouraging and human, but also specific and credible”
+
+=====================================
+KEY COPY PRINCIPLE
+=====================================
+
+Keep emotional warmth, but replace generic encouragement with specific encouragement.
+
+Examples of what I mean:
+
+Instead of vague lines like:
+- “supports your journey”
+- “helps your body respond”
+- “build momentum”
+- “check in with yourself”
+- “your body is in decent shape”
+- “this is exactly the foundation that supports your treatment”
+
+I want language that is still warm, but more specific and data-aware.
+
+Examples of better direction:
+- “This helps keep your energy steadier through the week”
+- “Hydration matters more on dose days”
+- “A lighter day will likely work better today”
+- “Recovery looks solid today”
+- “Quick check-ins help catch patterns early”
+- “This can make treatment easier to tolerate”
+
+Important:
+Do NOT remove all warmth.
+Do NOT make the app blunt or cold.
+Just make the copy more useful and more grounded.
+
+=====================================
+PART 1: TODAY TAB COPY REFINEMENT
+=====================================
+
+Please refine copy in the Today screen, especially:
+
+- top support summary
+- support explanation under the summary
+- “How are things today?” section intro
+- “Your Treatment” section status text
+- “Your Plan” descriptions
+- “Why this matters”
+- coach prompt and quick prompts
+- helper text under plan items or in modals
+
+Goals:
+- preserve warmth
+- make headlines feel smarter and more precise
+- make the support explanation feel more tailored
+- make action descriptions feel practical
+- reduce vague filler language
+- make the product feel like it understands this specific user
+
+Examples of the direction:
+Instead of:
+“Your body may need more support today”
+Use more precise but still supportive phrasing like:
+- “Let’s keep today gentle”
+- “Recovery needs a bit more attention today”
+- “A lighter day looks right”
+- “Today may work better with simpler routines”
+
+Instead of long abstract explanations:
+Use tighter, more specific lines like:
+- “Recovery is a bit lower than usual. Keep things simple and prioritize hydration.”
+- “Appetite and side effects suggest a lighter day will work better.”
+
+=====================================
+PART 2: PLAN TAB COPY REFINEMENT
+=====================================
+
+Refine all copy in the Plan tab.
+
+Focus on:
+- weekly overview paragraph
+- day-level summary text
+- task descriptions
+- modal option descriptions
+- “Best match today” labels if present
+
+Goals:
+- keep it supportive
+- make it less templated
+- reduce fluff
+- make each action feel more believable and useful
+- tie guidance more closely to treatment context when appropriate
+
+Examples:
+Instead of:
+“Consistent gentle movement supports your treatment journey”
+Use:
+“Light movement helps without adding strain”
+
+Instead of:
+“Hydration supports your body’s response”
+Use:
+“Hydration matters more on harder days”
+
+Instead of:
+“Build momentum”
+Use:
+“Keep things consistent”
+or
+“Stack a few simple wins today”
+
+=====================================
+PART 3: TRENDS TAB COPY REFINEMENT
+=====================================
+
+Refine copy in the Trends tab, especially:
+
+- How You’re Doing
+- What We’re Noticing
+- Correlations
+- Patterns During Treatment
+- medication-related insight lines
+- metric explanations
+
+Goals:
+- make insights feel sharper
+- preserve an encouraging tone
+- reduce generic wellness language
+- keep patterns easy to understand
+- make the app feel more observant and more useful
+
+Examples:
+Instead of:
+“Your hydration has been consistently low this week”
+Use:
+“Hydration has been lagging this week”
+
+Instead of:
+“Your body signals connect”
+Use:
+“Patterns in your data”
+
+Instead of:
+“This is one of your strongest levers for feeling good the next day”
+Use:
+“Sleep is one of your clearest recovery levers”
+
+Important:
+Trend insights should still feel human and supportive, not dry.
+
+=====================================
+PART 4: COACH COPY REFINEMENT
+=====================================
+
+Refine the coach so it still feels human and supportive, but less verbose and less generic.
+
+I do NOT want the coach to sound cold.
+I do want it to sound:
+- concise
+- useful
+- grounded
+- premium
+- more specific to the user’s medication, trends, and current state
+
+Use a response style like:
+1. one short framing line
+2. 2–3 practical actions max
+3. optional one-line reason if helpful
+
+Avoid:
+- long explanations
+- generic encouragement that could apply to anyone
+- filler phrases
+- obvious LLM tone
+
+Quick prompts should also feel:
+- more useful
+- more natural
+- less generic
+
+=====================================
+PART 5: SETTINGS / PROFILE COPY
+=====================================
+
+Refine settings and profile labels so they feel shorter, cleaner, and more premium.
+
+Keep things minimal and polished.
+
+=====================================
+PART 6: KEEP WARMTH, REMOVE GENERICNESS
+=====================================
+
+This is the core principle of this pass:
+
+Do NOT strip out all encouraging language.
+Do NOT make the app feel cold or clinical.
+
+Instead:
+- keep the human tone
+- keep the wellness feel
+- keep the supportiveness
+
+BUT:
+- make it more specific
+- make it more grounded in actual user context
+- make it feel less like generic wellness filler
+
+A good test:
+If a line could appear in any random wellness app, tighten it.
+
+The copy should feel like:
+“supportive guidance for this user”
+not
+“generic encouragement for anyone”
+
+=====================================
+PART 7: DO NOT CHANGE LOGIC
+=====================================
+
+This pass is wording only.
+
+Do NOT change:
+- app structure
+- product logic
+- recommendations
+- state management
+- architecture
+
+Only refine wording and microcopy.
+
+=====================================
+PART 8: FINAL OUTPUT
+=====================================
+
+After the pass, summarize:
+1. which screens got the biggest copy improvements
+2. examples of before vs after wording improvements
+3. how warmth was preserved while reducing generic phrasing
+4. any areas that may still need manual founder-level copy polish

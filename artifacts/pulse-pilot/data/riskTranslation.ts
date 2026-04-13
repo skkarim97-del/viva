@@ -36,37 +36,37 @@ function buildMessage(riskLevel: RiskLevel, drivers: RiskDriver[]): string {
   const categories = drivers.map(d => d.category);
 
   if (riskLevel === "low" || drivers.length === 0) {
-    return "Your recent patterns look steady. Keep doing what you are doing. Consistency with the basics is what supports your treatment best.";
+    return "Your recent patterns look steady. Sleep, hydration, and movement are in a good range. Keep this rhythm going.";
   }
 
   const parts: string[] = [];
 
   if (categories.includes("recovery") && categories.includes("fueling")) {
-    parts.push("Your body may be running a bit low on fuel and recovery right now. On treatment, both matter more than usual. Let's keep today simple. focus on hydration, small protein-rich meals, and rest.");
+    parts.push("Recovery and fueling are both running lower than your recent averages. On treatment, under-eating and poor sleep compound each other. Focus on hydration, small protein-rich meals, and an earlier bedtime tonight.");
   } else if (categories.includes("activity") && categories.includes("symptoms")) {
-    parts.push("Movement has been quieter recently and side effects may be making it harder. That is completely normal. A light day with simple habits can help you keep moving forward.");
+    parts.push("Side effects have been heavier and movement has dropped off. That is a normal response. A short walk and steady hydration today can help without adding strain.");
   } else if (categories.includes("recovery")) {
-    parts.push("Recovery has been a bit lower than usual. Your body may need more rest to adjust. This is a good time to lighten the load and prioritize sleep.");
+    parts.push("Recovery has been below your baseline for several days. Your body may need more rest to adjust. Lighten the load and prioritize sleep tonight.");
   } else if (categories.includes("fueling")) {
-    parts.push("Appetite and fueling have been a bit low lately. Even when you do not feel hungry, small protein-rich meals make a big difference in how you feel and how well your body responds to treatment.");
+    parts.push("Protein and overall intake have been falling short. Even when appetite is suppressed, small protein-first meals help preserve muscle and stabilize energy.");
   } else if (categories.includes("symptoms")) {
-    parts.push("Side effects have been a bit heavier recently. This is part of how your body adjusts to treatment. Keeping things simple today and focusing on hydration can help.");
+    parts.push("Side effects have been heavier recently. This is part of how your body adjusts to treatment. Extra hydration and bland, easy-to-digest foods can help.");
   } else if (categories.includes("activity")) {
-    parts.push("Movement has dipped a bit recently. Even a short walk today can help you keep momentum. Gentle activity also helps with digestion and energy on treatment.");
+    parts.push("Daily movement has dropped below your recent average. Even a 10-minute walk after a meal supports digestion and energy on treatment.");
   } else if (categories.includes("consistency")) {
-    parts.push("Getting back into a daily rhythm with check-ins and small actions can help you feel more on track. Every day you show up counts.");
+    parts.push("Logging and plan completion have been inconsistent. Getting back to a daily rhythm with even two or three actions helps rebuild momentum.");
   }
 
   if (parts.length === 0) {
     if (riskLevel === "elevated" || riskLevel === "high") {
-      parts.push("A few things need attention today. Focusing on hydration, protein, and rest will help you feel better and stay consistent with your treatment.");
+      parts.push("A few areas need attention today. Prioritize hydration, protein, and rest. These three basics do the most to support your body during treatment.");
     } else {
-      parts.push("A couple of small adjustments today can help you build momentum on your treatment journey.");
+      parts.push("A couple of small adjustments today can help you build on what is already working.");
     }
   }
 
   if (riskLevel === "high" && drivers.length >= 3) {
-    parts.push("Days like this happen, especially on treatment. Focus on the basics and be kind to yourself. You do not need to do everything perfectly today.");
+    parts.push("Days like this happen on treatment. Focus on the basics and do not try to catch up on everything at once. One good meal and an early bedtime go a long way.");
   }
 
   return parts.join(" ");

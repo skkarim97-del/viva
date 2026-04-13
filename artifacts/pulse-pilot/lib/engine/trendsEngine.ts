@@ -76,8 +76,8 @@ export function buildCorrelations(metrics: HealthMetrics[]): TrendCorrelation[] 
       strength: sleepHrvStrength,
       direction: sleepHrv > 0 ? "positive" : "negative",
       insight: sleepHrv > 0
-        ? `More sleep is linked to higher HRV in your data. Your average ${avgSleep} hrs of sleep correlates with an HRV of ${avgHrv} ms.`
-        : `Your HRV tends to drop when you sleep more, which may indicate restless or low-quality sleep despite longer duration.`,
+        ? `More sleep drives higher HRV in your data. At ${avgSleep} hrs average, your HRV averages ${avgHrv} ms. Aiming for 7.5+ hrs could push it higher.`
+        : `Your HRV tends to drop on longer-sleep nights, which may indicate restless or fragmented sleep despite more time in bed.`,
     });
   }
 
@@ -91,8 +91,8 @@ export function buildCorrelations(metrics: HealthMetrics[]): TrendCorrelation[] 
       strength: sleepRecStrength,
       direction: sleepRecovery > 0 ? "positive" : "negative",
       insight: sleepRecovery > 0
-        ? `Better sleep consistently drives higher recovery. This is one of your strongest levers for feeling good the next day.`
-        : `Recovery tends to drop when you sleep longer, possibly due to oversleeping on lower-quality nights.`,
+        ? `Better sleep consistently drives higher recovery in your data. Sleep is one of your strongest levers for next-day energy and treatment response.`
+        : `Recovery tends to drop on longer-sleep nights. This may reflect lower-quality sleep on nights when your body needs more rest.`,
     });
   }
 
@@ -107,8 +107,8 @@ export function buildCorrelations(metrics: HealthMetrics[]): TrendCorrelation[] 
       strength: stepsRecStrength,
       direction: stepsRecovery > 0 ? "positive" : "negative",
       insight: stepsRecovery > 0
-        ? `Higher activity days lead to better recovery the next day. Your average ${avgSteps.toLocaleString()} steps supports this pattern.`
-        : `High-activity days (${avgSteps.toLocaleString()}+ steps) are followed by lower recovery. Consider spacing intense days with rest.`,
+        ? `Higher activity days correlate with better recovery the next day. At ${avgSteps.toLocaleString()} average steps, your body responds well to movement.`
+        : `Days above ${avgSteps.toLocaleString()} steps correlate with lower next-day recovery. Spacing intense days with rest may help.`,
     });
   }
 
@@ -122,8 +122,8 @@ export function buildCorrelations(metrics: HealthMetrics[]): TrendCorrelation[] 
       strength: rhrRecStrength,
       direction: rhrRecovery > 0 ? "positive" : "negative",
       insight: rhrRecovery < 0
-        ? `Lower resting heart rate correlates with better recovery. This is a sign your body is adapting well to treatment.`
-        : `Your resting heart rate rises with recovery, which may reflect your body working harder to bounce back on certain days.`,
+        ? `Lower resting heart rate correlates with better recovery in your data. A declining RHR over time is a positive sign of cardiovascular adaptation on treatment.`
+        : `Your resting heart rate rises on higher-recovery days. This may reflect your body working harder to bounce back after intense days.`,
     });
   }
 
@@ -134,7 +134,7 @@ export function buildCorrelations(metrics: HealthMetrics[]): TrendCorrelation[] 
       color: "#34C759",
       strength: "moderate",
       direction: "positive",
-      insight: "More data is needed to detect strong patterns. Keep logging for clearer insights.",
+      insight: "Not enough data to detect strong patterns yet. Keep logging daily and correlations will appear within 1-2 weeks.",
     });
   }
 
@@ -159,19 +159,19 @@ export function detectPatterns(metrics: HealthMetrics[]): string[] {
   const avgHrv = recent.reduce((s, m) => s + m.hrv, 0) / recent.length;
   const hrvStdDev = Math.sqrt(recent.reduce((s, m) => s + Math.pow(m.hrv - avgHrv, 2), 0) / recent.length);
   if (hrvStdDev > 12) {
-    patterns.push(`HRV is highly variable (std dev ${hrvStdDev.toFixed(0)} ms). Inconsistent sleep or stress may be driving this.`);
+    patterns.push(`HRV variability is high (${hrvStdDev.toFixed(0)} ms std dev). Inconsistent sleep timing or elevated stress may be the driver.`);
   } else if (hrvStdDev < 5) {
-    patterns.push(`HRV is remarkably stable at ${Math.round(avgHrv)} ms. Your recovery rhythm looks consistent.`);
+    patterns.push(`HRV is very stable at ${Math.round(avgHrv)} ms. Your recovery rhythm is consistent, which supports treatment response.`);
   }
 
   const lowRecoveryDays = recent.filter(m => m.recoveryScore < 60).length;
   if (lowRecoveryDays >= 3) {
-    patterns.push(`${lowRecoveryDays} of the last 7 days had recovery below 60%. Rest and hydration are extra important on treatment.`);
+    patterns.push(`${lowRecoveryDays} of the last 7 days had recovery below 60%. Prioritize sleep and hydration. On treatment, low recovery compounds faster.`);
   }
 
   const highStepDays = recent.filter(m => m.steps > 10000).length;
   if (highStepDays >= 5) {
-    patterns.push(`You hit 10,000+ steps on ${highStepDays} of 7 days. Great for preserving muscle during treatment.`);
+    patterns.push(`You hit 10,000+ steps on ${highStepDays} of 7 days. This level of daily movement is one of the best ways to preserve muscle on treatment.`);
   }
 
   return patterns;
@@ -206,7 +206,7 @@ export function buildGLP1Insights(
       const avgFar = farDoseRecovery.reduce((s, v) => s + v, 0) / farDoseRecovery.length;
       if (avgFar - avgNear > 5) {
         insights.push({
-          text: `Recovery tends to dip in the 1-2 days after dose day, then improves. This is a common pattern on ${medicationProfile.medicationBrand}.`,
+          text: `Recovery dips by ${Math.round(avgFar - avgNear)}% in the 1-2 days after your dose, then rebounds. This is a common pattern on ${medicationProfile.medicationBrand}. Plan lighter days around dose day.`,
           icon: "trending-down",
           color: "#AF52DE",
         });
@@ -228,7 +228,7 @@ export function buildGLP1Insights(
       const avgFar = farDoseSteps.reduce((s, v) => s + v, 0) / farDoseSteps.length;
       if (avgFar - avgNear > 1500) {
         insights.push({
-          text: `Activity tends to dip on dose day and the day after. Lighter movement around dose day may help you feel better.`,
+          text: `Activity drops by about ${Math.round(avgFar - avgNear).toLocaleString()} steps around dose day. Planning lighter movement on dose day and the day after can help.`,
           icon: "activity",
           color: "#FF9500",
         });
@@ -243,13 +243,13 @@ export function buildGLP1Insights(
     const avgRecSecond = secondHalf.reduce((s, m) => s + m.recoveryScore, 0) / secondHalf.length;
     if (avgRecFirst - avgRecSecond > 5) {
       insights.push({
-        text: `Recovery has been lower since your recent dose increase. This usually stabilizes within 1-2 weeks as your body adjusts.`,
+        text: `Recovery dropped by ${Math.round(avgRecFirst - avgRecSecond)}% since your recent dose increase. This usually stabilizes within 1-2 weeks as your body adjusts.`,
         icon: "battery-charging",
         color: "#FF6B6B",
       });
     } else if (avgRecSecond >= avgRecFirst) {
       insights.push({
-        text: `Recovery has stayed steady since your dose change. Your body appears to be adjusting well.`,
+        text: `Recovery has held steady since your dose change. Your body appears to be adjusting well to the new level.`,
         icon: "battery-charging",
         color: "#34C759",
       });
@@ -263,7 +263,7 @@ export function buildGLP1Insights(
   const goodSleepRecovery = goodSleepDays.length > 0 ? goodSleepDays.reduce((s, m) => s + m.recoveryScore, 0) / goodSleepDays.length : 0;
   if (lowSleepDays.length >= 2 && goodSleepDays.length >= 2 && goodSleepRecovery - lowSleepRecovery > 8) {
     insights.push({
-      text: `Short sleep nights lead to noticeably lower recovery. On treatment, sleep is one of your strongest levers.`,
+      text: `Nights under 6.5 hrs drop your recovery by ${Math.round(goodSleepRecovery - lowSleepRecovery)}% compared to 7+ hr nights. On treatment, sleep is one of your strongest levers.`,
       icon: "moon",
       color: "#AF52DE",
     });
@@ -288,7 +288,7 @@ export function buildGLP1Insights(
       const avgLow = lowCompNextDayRecovery.reduce((s, v) => s + v, 0) / lowCompNextDayRecovery.length;
       if (avgHigh - avgLow > 5) {
         insights.push({
-          text: `Days when you complete more of your plan tend to be followed by better recovery. Consistency supports your body during treatment.`,
+          text: `Days when you complete 80%+ of your plan correlate with ${Math.round(avgHigh - avgLow)}% higher next-day recovery. Consistency directly supports your body during treatment.`,
           icon: "check-circle",
           color: "#34C759",
         });
@@ -304,7 +304,7 @@ export function buildGLP1Insights(
       const lowStepSleep = lowStepDays.reduce((s, m) => s + m.sleepDuration, 0) / lowStepDays.length;
       if (highStepSleep - lowStepSleep > 0.3) {
         insights.push({
-          text: `More active days are followed by better sleep. Gentle movement helps your body settle into better rest patterns on treatment.`,
+          text: `Days with 7,000+ steps correlate with ${(highStepSleep - lowStepSleep).toFixed(1)} hrs more sleep. Gentle daily movement helps your body settle into better rest patterns on treatment.`,
           icon: "sunrise",
           color: "#5AC8FA",
         });
@@ -325,37 +325,37 @@ export function buildKeyInsights(metrics: HealthMetrics[], habitStats: { weeklyP
   const avgSteps = Math.round(recent.reduce((s, m) => s + m.steps, 0) / recent.length);
 
   if (habitStats.todayCompleted > 0) {
-    insights.push(`You completed ${habitStats.todayCompleted} of ${habitStats.todayTotal} actions today.`);
+    insights.push(`${habitStats.todayCompleted} of ${habitStats.todayTotal} actions done today.`);
   }
 
   if (habitStats.weeklyPercent > 0 && habitStats.weeklyPercent < 50) {
-    insights.push(`Consistency is at ${habitStats.weeklyPercent}% this week. Every small step matters on treatment.`);
+    insights.push(`Plan completion is at ${habitStats.weeklyPercent}% this week. Even completing 2-3 actions daily builds momentum on treatment.`);
   } else if (habitStats.weeklyPercent >= 80) {
-    insights.push(`Consistency is excellent at ${habitStats.weeklyPercent}% this week. This supports your treatment.`);
+    insights.push(`Plan completion is strong at ${habitStats.weeklyPercent}% this week. This level of consistency supports treatment results.`);
   }
 
   if (habitStats.streakDays >= 3) {
-    insights.push(`You are on a ${habitStats.streakDays}-day streak. Consistency is key during treatment.`);
+    insights.push(`${habitStats.streakDays}-day streak. Consistency compounds. Each day builds on the last.`);
   } else if (habitStats.streakDays === 0 && habitStats.weeklyPercent > 0) {
-    insights.push(`Your streak was broken. Today is a fresh start.`);
+    insights.push(`Streak was broken. Today is a fresh start. One completed action gets you back on track.`);
   }
 
   if (avgSleep < 6.5) {
-    insights.push(`Sleep averaged ${avgSleep.toFixed(1)} hrs this week. Better sleep helps manage side effects.`);
+    insights.push(`Sleep averaged ${avgSleep.toFixed(1)} hrs this week. Under 7 hrs makes side effects feel heavier and recovery slower.`);
   } else if (avgSleep >= 7.5) {
-    insights.push(`Sleep averaged ${avgSleep.toFixed(1)} hrs. Strong foundation for recovery on treatment.`);
+    insights.push(`Sleep averaged ${avgSleep.toFixed(1)} hrs this week. This is a strong foundation for recovery and treatment response.`);
   }
 
   if (avgRecovery < 55) {
-    insights.push(`Recovery has been low at ${avgRecovery}%. Prioritize rest and hydration.`);
+    insights.push(`Recovery averaged ${avgRecovery}% this week. Prioritize sleep, hydration, and lighter activity days.`);
   } else if (avgRecovery >= 75) {
-    insights.push(`Recovery is solid at ${avgRecovery}%. Your body is handling treatment well.`);
+    insights.push(`Recovery averaged ${avgRecovery}% this week. Your body is handling treatment well.`);
   }
 
   if (avgSteps >= 10000) {
-    insights.push(`Averaging ${avgSteps.toLocaleString()} steps. Great for muscle preservation.`);
+    insights.push(`Averaging ${avgSteps.toLocaleString()} daily steps. This level of movement is excellent for muscle preservation on treatment.`);
   } else if (avgSteps < 5000) {
-    insights.push(`Steps averaged ${avgSteps.toLocaleString()} this week. Gentle walks after meals can help.`);
+    insights.push(`Steps averaged ${avgSteps.toLocaleString()} this week. A 10-minute walk after meals can boost digestion and energy.`);
   }
 
   return insights.slice(0, 5);

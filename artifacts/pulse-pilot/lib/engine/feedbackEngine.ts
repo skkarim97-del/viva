@@ -2,24 +2,24 @@ import type { DailyAction, ActionCategory } from "@/types";
 
 const CATEGORY_FEEDBACK: Record<string, string[]> = {
   move: [
-    "Nice work getting active today.",
-    "Movement done. Your body appreciates it.",
-    "Active minutes logged. Keep it up.",
+    "Movement logged. Activity helps preserve muscle on treatment.",
+    "Done. Even moderate movement supports digestion and energy.",
+    "Active minutes in the bank. Consistency here adds up fast.",
   ],
   fuel: [
-    "Great job fueling well today.",
-    "Nutrition on track. Your body needs this.",
-    "Good fueling. Protein helps preserve muscle.",
+    "Fueling checked off. Protein at every meal protects lean mass.",
+    "Nutrition logged. Your body uses this to recover and rebuild.",
+    "Solid fueling today. This helps offset appetite suppression.",
   ],
   hydrate: [
-    "Hydration goal hit. Well done.",
-    "Staying hydrated supports everything else.",
-    "Water intake is solid today.",
+    "Hydration on track. This helps manage nausea and fatigue.",
+    "Water intake logged. Staying hydrated supports energy and digestion.",
+    "Hydration done. Electrolytes help your body absorb more of it.",
   ],
   recover: [
-    "Recovery prioritized. Smart move.",
-    "Rest is productive. Your body is rebuilding.",
-    "Recovery checked off. Sleep well tonight.",
+    "Recovery prioritized. Sleep is your strongest lever on treatment.",
+    "Rest logged. Your body does its best repair work overnight.",
+    "Recovery checked off. Aim for a consistent wind-down tonight.",
   ],
 };
 
@@ -35,7 +35,7 @@ export function generateCompletionFeedback(
   if (!pool) return null;
 
   if (completedCount === total) {
-    return "All actions complete. Excellent day.";
+    return "All actions complete. Days like this build real momentum on treatment.";
   }
 
   return pool[Math.floor(Math.random() * pool.length)];

@@ -137,36 +137,36 @@ function trendSummary(label: string, values: number[], trend: "up" | "down" | "s
 
   switch (label) {
     case "Weight": {
-      if (Math.abs(change) < 0.5) return "Weight has been steady over the last 4 weeks.";
+      if (Math.abs(change) < 0.5) return `Weight has held steady around ${Math.round(avg)} lbs over the last 4 weeks.`;
       return trend === "down"
-        ? `Down ${Math.abs(change).toFixed(1)} lbs over the past 4 weeks. Steady progress on treatment.`
-        : `Up ${Math.abs(change).toFixed(1)} lbs over the past 4 weeks. This is normal early in treatment and may stabilize.`;
+        ? `Down ${Math.abs(change).toFixed(1)} lbs over the past 4 weeks. A healthy pace that helps preserve muscle on treatment.`
+        : `Up ${Math.abs(change).toFixed(1)} lbs over the past 4 weeks. This can happen early in treatment and often stabilizes as your body adjusts.`;
     }
     case "HRV": {
-      if (trend === "up") return "Trending up. Your body is adapting well and recovery is improving.";
-      if (trend === "down") return "Trending down. This may reflect accumulated fatigue or treatment adjustment.";
-      return `Holding steady around ${Math.round(avg)} ms. Consistent recovery patterns.`;
+      if (trend === "up") return `Trending up from ${first} to ${latest} ms. Your body is adapting well and recovery capacity is improving.`;
+      if (trend === "down") return `Trending down from ${first} to ${latest} ms. This may reflect accumulated fatigue, stress, or treatment adjustment.`;
+      return `Holding steady around ${Math.round(avg)} ms. Consistent recovery patterns support treatment response.`;
     }
     case "Resting HR": {
-      if (trend === "down") return "Gradually decreasing. A positive sign for cardiovascular health.";
-      if (trend === "up") return "Trending higher. Consider whether stress, poor sleep, or dehydration may be a factor.";
-      return `Stable around ${Math.round(avg)} bpm.`;
+      if (trend === "down") return `Gradually decreasing to ${latest} bpm. A positive sign for cardiovascular adaptation on treatment.`;
+      if (trend === "up") return `Trending higher to ${latest} bpm. Stress, poor sleep, or dehydration may be contributing.`;
+      return `Stable around ${Math.round(avg)} bpm. Consistent resting heart rate reflects steady recovery.`;
     }
     case "Sleep": {
-      if (avg >= 7.5) return `Averaging ${avg.toFixed(1)} hours. Solid sleep supports your treatment.`;
-      if (avg < 6.5) return `Averaging ${avg.toFixed(1)} hours. More sleep would help with energy and side effects.`;
-      return `Averaging ${avg.toFixed(1)} hours. A bit more sleep would support better recovery.`;
+      if (avg >= 7.5) return `Averaging ${avg.toFixed(1)} hours. This is in the range that best supports recovery and treatment response.`;
+      if (avg < 6.5) return `Averaging ${avg.toFixed(1)} hours. Under 7 hrs makes side effects feel heavier and slows recovery.`;
+      return `Averaging ${avg.toFixed(1)} hours. Pushing toward 7.5+ hrs would strengthen recovery and energy.`;
     }
     case "Steps": {
       const avgK = Math.round(avg).toLocaleString();
-      if (avg >= 7000) return `Averaging ${avgK} daily. Good daily movement.`;
-      if (avg >= 4000) return `Averaging ${avgK} daily. A short daily walk could help.`;
-      return `Averaging ${avgK} daily. Adding more gentle movement would support your journey.`;
+      if (avg >= 7000) return `Averaging ${avgK} daily. This level of movement supports muscle preservation and digestion on treatment.`;
+      if (avg >= 4000) return `Averaging ${avgK} daily. A 10-minute walk after meals could help boost energy and digestion.`;
+      return `Averaging ${avgK} daily. Even small increases in daily walking support energy, sleep, and treatment response.`;
     }
     case "Recovery": {
-      if (avg >= 70) return "Recovery has been strong. Your body is responding well.";
-      if (avg < 50) return "Recovery has been lower. Better sleep and hydration would help.";
-      return "Recovery is moderate. Consistent sleep and rest days will help it improve.";
+      if (avg >= 70) return `Recovery averaged ${Math.round(avg)}%. Your body is responding well to your current routine and treatment.`;
+      if (avg < 50) return `Recovery averaged ${Math.round(avg)}%. Better sleep and hydration are the highest-impact changes right now.`;
+      return `Recovery averaged ${Math.round(avg)}%. Consistent sleep and occasional rest days will help push it higher.`;
     }
     default:
       return "";

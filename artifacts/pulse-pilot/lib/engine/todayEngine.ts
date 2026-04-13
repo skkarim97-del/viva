@@ -59,7 +59,7 @@ export function generateInputSummary(inputs: {
 
   if (filled === 0) {
     return {
-      text: "Tap each row to log how you are doing. Your plan and coach will adjust.",
+      text: "Log how you are feeling today. Your plan adjusts based on what you share.",
       severity: "none",
     };
   }
@@ -78,13 +78,13 @@ export function generateInputSummary(inputs: {
   if (inputs.proteinConfidence === "low") parts.push("protein intake is low");
 
   if (parts.length === 0) {
-    if (filled >= 4) return { text: "Things are looking good today. Your plan reflects that.", severity: "none" };
+    if (filled >= 4) return { text: "Your inputs look solid today. Your plan is set for a good day.", severity: "none" };
     return { text: "", severity: "none" };
   }
 
   const severity: InputSummaryOutput["severity"] = parts.length >= 3 ? "high" : parts.length >= 2 ? "moderate" : "low";
   const concern = parts.length >= 3 ? "Your body may need more support today" :
-    parts.length >= 2 ? "A few things to watch today" : "Something to keep in mind today";
+    parts.length >= 2 ? "A couple of areas to watch today" : "One thing to keep in mind today";
   const text = `${concern}. ${parts.join(", ").replace(/^./, (c: string) => c.toUpperCase())}.`;
 
   return { text, severity };

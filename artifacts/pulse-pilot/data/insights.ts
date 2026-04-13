@@ -75,13 +75,13 @@ function computeSleepDebt(last7: HealthMetrics[], today: HealthMetrics) {
 
   if (totalDeficit > 7) {
     label = "High debt";
-    detail = `You are ${totalDeficit.toFixed(1)} hours short of ideal sleep over the past week. This affects recovery, decision-making, and appetite regulation. Prioritize an extra 30 minutes tonight.`;
+    detail = `You are ${totalDeficit.toFixed(1)} hours short of ideal sleep over the past week. This affects recovery, appetite regulation, and how well your body responds to treatment. Prioritize an extra 30-60 min tonight.`;
   } else if (totalDeficit > 3) {
     label = "Moderate debt";
-    detail = `You have accumulated ${totalDeficit.toFixed(1)} hours of sleep debt this week. Try to go to bed 20 minutes earlier for the next few nights.`;
+    detail = `You have accumulated ${totalDeficit.toFixed(1)} hours of sleep debt this week. Going to bed 20 minutes earlier for the next few nights can help close this gap.`;
   } else if (totalDeficit > 0) {
     label = "Minor debt";
-    detail = `Slight deficit of ${totalDeficit.toFixed(1)} hours. Nothing to worry about if you sleep well tonight.`;
+    detail = `Slight deficit of ${totalDeficit.toFixed(1)} hours. A solid night tonight will clear this. No action needed.`;
   }
 
   return { hours: Math.round(totalDeficit * 10) / 10, label, detail };
@@ -114,10 +114,10 @@ function computeTrainingLoad(last14: HealthMetrics[], workouts: WorkoutEntry[]) 
   const trendWord = trend === "rising" ? "increasing" : trend === "falling" ? "decreasing" : "steady";
   const detail = `${recentWorkouts.length} active days in the past 2 weeks. Average exertion is ${avgStrain.toFixed(1)}. Activity level is ${trendWord}. ${
     trend === "rising"
-      ? "Make sure recovery keeps pace. A lighter day may help if fatigue builds."
+      ? "Make sure recovery keeps pace. If recovery dips below 50%, a lighter day will help."
       : trend === "falling"
-      ? "A bit more movement could support your treatment if recovery allows."
-      : "Good balance between activity and recovery."
+      ? "A bit more movement could support your treatment. Even a daily walk helps preserve muscle."
+      : "Good balance between activity and recovery. This supports treatment response."
   }`;
 
   return { score: loadScore, label, detail, trend };
@@ -269,14 +269,14 @@ function computeRiskFlags(
 ) {
   const flags: string[] = [];
 
-  if (sleepDebt.hours > 7) flags.push("High sleep debt. Recovery and energy are affected.");
-  if (hrv.deviation < -8) flags.push("HRV is significantly below baseline. Signs of accumulated stress.");
-  if (today.restingHeartRate > 70) flags.push("Elevated resting heart rate. Possible stress or incomplete recovery.");
-  if (load.trend === "rising" && hrv.deviation < -3) flags.push("Activity is increasing while recovery is dropping. Your body may need a lighter day.");
-  if (today.sleepDuration < 6) flags.push("Slept under 6 hours. Energy, appetite, and recovery will be affected.");
+  if (sleepDebt.hours > 7) flags.push(`High sleep debt (${sleepDebt.hours.toFixed(1)} hrs). Recovery, appetite, and energy are all affected.`);
+  if (hrv.deviation < -8) flags.push(`HRV is ${Math.abs(hrv.deviation)} ms below your baseline. This suggests accumulated stress or incomplete recovery.`);
+  if (today.restingHeartRate > 70) flags.push(`Resting heart rate is elevated at ${today.restingHeartRate} bpm. Stress, dehydration, or poor sleep may be a factor.`);
+  if (load.trend === "rising" && hrv.deviation < -3) flags.push("Activity is increasing while recovery is dropping. A lighter day would help your body catch up.");
+  if (today.sleepDuration < 6) flags.push(`Slept ${today.sleepDuration.toFixed(1)} hours. Energy, appetite, and recovery will all be affected today.`);
 
   const consecutivePoorRecovery = last7.slice(-3).every((m) => m.recoveryScore < 50);
-  if (consecutivePoorRecovery) flags.push("Three consecutive days of low recovery. take a rest day");
+  if (consecutivePoorRecovery) flags.push("Three consecutive days of recovery below 50%. A rest day is strongly recommended.");
 
   let severity: "none" | "low" | "medium" | "high" = "none";
   if (flags.length >= 3) severity = "high";
@@ -297,7 +297,7 @@ function computeTDEE(today: HealthMetrics, profile: UserProfile) {
   const activityMultiplier = today.steps > 10000 ? 1.55 : today.steps > 7500 ? 1.45 : today.steps > 5000 ? 1.35 : 1.25;
   const tdee = Math.round(bmr * activityMultiplier);
 
-  const detail = `Estimated daily energy needs: ${tdee.toLocaleString()} calories based on today's activity. On GLP-1 treatment, eating enough is just as important as what you eat. Prioritize protein (aim for 100-120g daily) and make sure you are not under-eating, even when appetite is low.`;
+  const detail = `Estimated daily energy needs: ${tdee.toLocaleString()} calories based on today's activity level. On GLP-1 treatment, eating enough is just as important as what you eat. Aim for 100-120g protein daily and do not skip meals, even when appetite is suppressed.`;
 
   return { estimatedTDEE: tdee, detail };
 }
@@ -309,12 +309,12 @@ function determineTopPriority(
   load: { trend: string },
   weight: { onTrack: boolean }
 ) {
-  if (risks.severity === "high") return "Your body is showing multiple stress signals. Take it easy today. Prioritize sleep, hydration, and light movement only.";
-  if (sleep.hours > 7) return "Sleep debt is your biggest limiter right now. Going to bed 30 minutes earlier tonight is the single most impactful thing you can do.";
-  if (recovery.direction === "declining") return "Recovery is trending down. A lighter day with good sleep tonight will help your body adjust.";
-  if (load.trend === "rising") return "Activity has been increasing. Watch for fatigue over the next 2-3 days and take a lighter day if recovery dips.";
-  if (!weight.onTrack) return "Weight trend is not matching your goal. Review your protein intake and meal timing. Even small adjustments can help.";
-  return "You are on track. Keep doing what you are doing. Consistency is your biggest advantage right now.";
+  if (risks.severity === "high") return "Multiple stress signals today. Prioritize sleep, hydration, and rest. Skip intense activity.";
+  if (sleep.hours > 7) return "Sleep debt is your biggest limiter. Going to bed 30 minutes earlier tonight is the single highest-impact change.";
+  if (recovery.direction === "declining") return "Recovery is trending down. A lighter day with good sleep tonight will help your body reset.";
+  if (load.trend === "rising") return "Activity has been increasing. Watch for fatigue over the next 2-3 days. If recovery drops below 50%, take a rest day.";
+  if (!weight.onTrack) return "Weight trend is not matching your goal. Review protein intake and meal timing. Consistent fueling matters more than restriction.";
+  return "You are on track. Consistency is your biggest advantage right now. Keep this rhythm going.";
 }
 
 export interface HabitStats {
