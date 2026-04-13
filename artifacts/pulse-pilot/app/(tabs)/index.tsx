@@ -125,7 +125,7 @@ export default function DashboardScreen() {
     const hour = new Date().getHours();
     const timeGreeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
     const firstName = profile?.name?.trim();
-    return firstName ? `${timeGreeting}, ${firstName}` : "Your AI Health Coach";
+    return firstName ? `${timeGreeting}, ${firstName}` : timeGreeting;
   }, [profile?.name]);
 
   const coachInsight = React.useMemo(() => {
