@@ -58,7 +58,7 @@ export default function SettingsScreen() {
         ) : null}
       </View>
 
-      <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>Connected Devices</Text>
+      <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>Apple Health</Text>
       <View style={[styles.section, { backgroundColor: c.card }]}>
         {integrations.map((integration, i) => (
           <Pressable

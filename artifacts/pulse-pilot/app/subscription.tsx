@@ -34,7 +34,7 @@ const plans = [
     title: "Premium",
     price: "$9.99/mo",
     features: [
-      "Full wearable integrations",
+      "Apple Health integration",
       "Full AI daily coaching",
       "Weekly movement & recovery plan",
       "Protein & nutrition coaching",

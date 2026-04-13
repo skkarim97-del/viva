@@ -176,178 +176,6 @@ function hkQuery(kit: any, method: string, options: any): Promise<any[]> {
   });
 }
 
-const garminProvider: HealthDataProvider = {
-  id: "garmin",
-  name: "Garmin",
-
-  async isAvailable() {
-    return true;
-  },
-
-  async requestPermissions() {
-    return true;
-  },
-
-  async fetchMetrics(days: number) {
-    try {
-      const API_BASE = Platform.OS === "web"
-        ? "/api"
-        : `https://${process.env.EXPO_PUBLIC_DOMAIN}/api`;
-
-      const res = await fetch(`${API_BASE}/health/garmin?days=${days}`, {
-        headers: { "Content-Type": "application/json" },
-      });
-      if (!res.ok) return [];
-      const data = await res.json();
-      return fillDefaults(data.metrics || [], days);
-    } catch {
-      return [];
-    }
-  },
-};
-
-const healthConnectProvider: HealthDataProvider = {
-  id: "health_connect",
-  name: "Health Connect",
-
-  async isAvailable() {
-    if (Platform.OS !== "android") return false;
-    try {
-      const { getSdkStatus, SdkAvailabilityStatus } = await import("react-native-health-connect");
-      const status = await getSdkStatus();
-      return status === SdkAvailabilityStatus.SDK_AVAILABLE;
-    } catch {
-      return false;
-    }
-  },
-
-  async requestPermissions() {
-    try {
-      const { initialize, requestPermission } = await import("react-native-health-connect");
-      await initialize();
-      const granted = await requestPermission([
-        { accessType: "read", recordType: "Steps" },
-        { accessType: "read", recordType: "HeartRate" },
-        { accessType: "read", recordType: "RestingHeartRate" },
-        { accessType: "read", recordType: "HeartRateVariabilityRmssd" },
-        { accessType: "read", recordType: "SleepSession" },
-        { accessType: "read", recordType: "ActiveCaloriesBurned" },
-        { accessType: "read", recordType: "TotalCaloriesBurned" },
-        { accessType: "read", recordType: "Weight" },
-        { accessType: "read", recordType: "ExerciseSession" },
-      ]);
-      return granted.length > 0;
-    } catch {
-      return false;
-    }
-  },
-
-  async fetchMetrics(days: number) {
-    try {
-      const { initialize, readRecords } = await import("react-native-health-connect");
-      await initialize();
-      const startTime = daysAgoDate(days).toISOString();
-      const endTime = new Date().toISOString();
-      const timeRange = { operator: "between" as const, startTime, endTime };
-
-      const [stepsData, hrData, rhrData, hrvData, sleepData, activeCalData, totalCalData, weightData] =
-        await Promise.all([
-          readRecords("Steps", { timeRangeFilter: timeRange }).catch(() => ({ records: [] })),
-          readRecords("HeartRate", { timeRangeFilter: timeRange }).catch(() => ({ records: [] })),
-          readRecords("RestingHeartRate", { timeRangeFilter: timeRange }).catch(() => ({ records: [] })),
-          readRecords("HeartRateVariabilityRmssd", { timeRangeFilter: timeRange }).catch(() => ({ records: [] })),
-          readRecords("SleepSession", { timeRangeFilter: timeRange }).catch(() => ({ records: [] })),
-          readRecords("ActiveCaloriesBurned", { timeRangeFilter: timeRange }).catch(() => ({ records: [] })),
-          readRecords("TotalCaloriesBurned", { timeRangeFilter: timeRange }).catch(() => ({ records: [] })),
-          readRecords("Weight", { timeRangeFilter: timeRange }).catch(() => ({ records: [] })),
-        ]);
-
-      const metricsMap = new Map<string, Partial<HealthMetrics>>();
-      for (let i = 0; i < days; i++) {
-        const d = dateStr(daysAgoDate(days - 1 - i));
-        metricsMap.set(d, { date: d });
-      }
-
-      for (const r of stepsData.records as any[]) {
-        const d = dateStr(new Date(r.startTime));
-        const entry = metricsMap.get(d);
-        if (entry) entry.steps = (entry.steps || 0) + Math.round(r.count || 0);
-      }
-
-      for (const r of hrData.records as any[]) {
-        const d = dateStr(new Date(r.startTime));
-        const entry = metricsMap.get(d);
-        if (entry && r.samples?.length > 0) {
-          const avg = r.samples.reduce((s: number, sample: any) => s + (sample.beatsPerMinute || 0), 0) / r.samples.length;
-          if (!entry.restingHeartRate) entry.restingHeartRate = Math.round(avg);
-        }
-      }
-
-      for (const r of rhrData.records as any[]) {
-        const d = dateStr(new Date(r.time));
-        const entry = metricsMap.get(d);
-        if (entry) entry.restingHeartRate = Math.round(r.beatsPerMinute || 0);
-      }
-
-      for (const r of hrvData.records as any[]) {
-        const d = dateStr(new Date(r.time));
-        const entry = metricsMap.get(d);
-        if (entry) entry.hrv = Math.round(r.heartRateVariabilityMillis || 0);
-      }
-
-      for (const r of sleepData.records as any[]) {
-        const d = dateStr(new Date(r.startTime));
-        const entry = metricsMap.get(d);
-        if (entry) {
-          const hours = (new Date(r.endTime).getTime() - new Date(r.startTime).getTime()) / 3600000;
-          entry.sleepDuration = Math.round(hours * 10) / 10;
-          entry.sleepQuality = hours >= 7 ? 85 : hours >= 6 ? 70 : 55;
-        }
-      }
-
-      for (const r of activeCalData.records as any[]) {
-        const d = dateStr(new Date(r.startTime));
-        const entry = metricsMap.get(d);
-        if (entry) entry.activeCalories = (entry.activeCalories || 0) + Math.round(r.energy?.inKilocalories || 0);
-      }
-
-      for (const r of totalCalData.records as any[]) {
-        const d = dateStr(new Date(r.startTime));
-        const entry = metricsMap.get(d);
-        if (entry) entry.caloriesBurned = Math.round(r.energy?.inKilocalories || 0);
-      }
-
-      for (const r of weightData.records as any[]) {
-        const d = dateStr(new Date(r.time));
-        const entry = metricsMap.get(d);
-        if (entry) entry.weight = Math.round((r.weight?.inPounds || r.weight?.inKilograms * 2.205 || 0) * 10) / 10;
-      }
-
-      return fillDefaults(Array.from(metricsMap.values()), days);
-    } catch {
-      return [];
-    }
-  },
-};
-
-const samsungHealthProvider: HealthDataProvider = {
-  id: "samsung_health",
-  name: "Samsung Health",
-
-  async isAvailable() {
-    if (Platform.OS !== "android") return false;
-    return healthConnectProvider.isAvailable();
-  },
-
-  async requestPermissions() {
-    return healthConnectProvider.requestPermissions();
-  },
-
-  async fetchMetrics(days: number) {
-    return healthConnectProvider.fetchMetrics(days);
-  },
-};
-
 function fillDefaults(partial: Partial<HealthMetrics>[], days: number): HealthMetrics[] {
   const result: HealthMetrics[] = [];
 
@@ -378,9 +206,6 @@ function fillDefaults(partial: Partial<HealthMetrics>[], days: number): HealthMe
 
 export const healthProviders: Record<string, HealthDataProvider> = {
   apple_health: appleHealthProvider,
-  health_connect: healthConnectProvider,
-  garmin: garminProvider,
-  samsung_health: samsungHealthProvider,
 };
 
 export async function connectProvider(
@@ -394,9 +219,6 @@ export async function connectProvider(
     if (!available) {
       if (id === "apple_health" && Platform.OS !== "ios") {
         return { success: false, error: "Apple Health requires an iOS device with a native build." };
-      }
-      if (id === "health_connect" && Platform.OS !== "android") {
-        return { success: false, error: "Health Connect requires an Android device." };
       }
       return { success: false, error: `${provider.name} is not available on this device.` };
     }

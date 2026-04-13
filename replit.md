@@ -55,7 +55,7 @@ The system is a pnpm workspace monorepo using Node.js 24 and TypeScript 5.9. The
 - **AI Coach**: Full-screen chat modal with streaming SSE responses. GLP-1 focused quick actions: side effects, protein intake, exercise, hydration, weekly focus. System prompt fully rewritten for GLP-1 context.
 - **Risk Engine**: calculateDropoutRisk() with rolling baselines for recovery, activity, fueling, symptoms, and consistency. Medication-aware weight multiplier (dose tier, recent titration, time on med). translateRiskToUserMessage() maps scores to empathetic, treatment-aware support headlines and messages.
 - **Insights Engine**: `data/insights.ts` provides week summaries, coach insights, sleep intelligence, and daily analytics. All language rewritten for GLP-1 context (no generic fitness/wellness language). Uses "active days" not "workouts", "treatment" not "training", protein/muscle preservation framing throughout.
-- **Health Data Providers**: `data/healthProviders.ts` handles integration with Apple HealthKit, Health Connect (Android), Garmin, and Samsung Health.
+- **Health Data Providers**: `data/healthProviders.ts` handles integration with Apple Health (HealthKit) on iOS. The MVP is focused exclusively on Apple Health and Apple Watch data.
 - **State Management**: Context-based state management (AppContext) with GLP-1 state fields (glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent, riskResult, glp1InputHistory, medicationLog, logMedicationDose).
 - **Navigation**: Tab bar for Today, Plan, Trends, Settings. Modals for subscription. Stack for onboarding and metric drill-down.
 
@@ -84,10 +84,7 @@ The system is a pnpm workspace monorepo using Node.js 24 and TypeScript 5.9. The
 - **Mobile Development**: Expo (React Native)
 - **AI Integration**: OpenAI (via Replit AI Integrations using `gpt-4o-mini` for coaching chat)
 - **Health Data**:
-    - Apple HealthKit (iOS native)
-    - Health Connect (Android native via `react-native-health-connect`)
-    - Garmin (via backend API)
-    - Samsung Health (delegates to Health Connect on Android)
+    - Apple Health / HealthKit (iOS native via `react-native-health`)
 - **Persistence**: AsyncStorage (for Expo/React Native)
 - **Charting**: `react-native-svg` (for sparkline charts)
 

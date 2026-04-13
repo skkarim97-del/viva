@@ -334,7 +334,7 @@ export default function OnboardingScreen() {
               <Logo size="large" />
               <Text style={[styles.welcomeTagline, { color: c.foreground }]}>Your AI Health Coach</Text>
               <Text style={[styles.welcomeSub, { color: c.mutedForeground + "CC" }]}>
-                Stay on track between visits. Viva combines wearable data with simple daily check-ins to help you feel your best on GLP-1.
+                Stay on track between visits. Viva combines Apple Health data with simple daily check-ins to help you feel your best on GLP-1.
               </Text>
             </View>
           )}
@@ -810,9 +810,9 @@ export default function OnboardingScreen() {
 
           {step === "integrations" && (
             <View style={styles.section}>
-              <Text style={[styles.stepTitle, { color: c.foreground }]}>Connect your{"\n"}wearable data</Text>
+              <Text style={[styles.stepTitle, { color: c.foreground }]}>Connect{"\n"}Apple Health</Text>
               <Text style={[styles.stepSub, { color: c.mutedForeground }]}>
-                More data means more personalized support. Sleep, heart rate, and activity all help Viva give you better daily guidance.
+                Viva uses your sleep, activity, heart rate, and recovery data from Apple Health for more personalized daily support.
               </Text>
               <View style={styles.optionList}>
                 {integrations.map((integration) => (

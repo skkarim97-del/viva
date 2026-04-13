@@ -818,20 +818,6 @@ export function getMetricDetail(
   };
 }
 
-const platformIntegrations: IntegrationStatus[] = Platform.OS === "ios"
-  ? [
-      { id: "apple_health", name: "Apple Health", icon: "heart", connected: false },
-      { id: "garmin", name: "Garmin", icon: "watch", connected: false },
-    ]
-  : Platform.OS === "android"
-  ? [
-      { id: "health_connect", name: "Health Connect", icon: "activity", connected: false },
-      { id: "garmin", name: "Garmin", icon: "watch", connected: false },
-    ]
-  : [
-      { id: "apple_health", name: "Apple Health", icon: "heart", connected: false },
-      { id: "health_connect", name: "Health Connect", icon: "activity", connected: false },
-      { id: "garmin", name: "Garmin", icon: "watch", connected: false },
-    ];
-
-export const integrations: IntegrationStatus[] = platformIntegrations;
+export const integrations: IntegrationStatus[] = [
+  { id: "apple_health", name: "Apple Health", icon: "heart", connected: false },
+];
