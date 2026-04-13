@@ -481,4 +481,57 @@ export interface PatientSummary {
   };
   weeklySummaryLines: string[];
   generatedAt: string;
+  detectedPatterns?: UserPatterns;
+}
+
+export type PatternConfidence = "low" | "medium" | "high";
+
+export interface DetectedPattern {
+  id: string;
+  description: string;
+  confidence: PatternConfidence;
+  dataPoints: number;
+  lastSeen: string;
+}
+
+export interface RollingAverage {
+  category: InputCategory;
+  avg7d: number;
+  avg14d: number;
+  trend7d: TrendDirection;
+  trend14d: TrendDirection;
+  volatility: number;
+}
+
+export interface PostDosePattern {
+  dayOffset: number;
+  category: InputCategory;
+  avgScore: number;
+  sampleSize: number;
+}
+
+export interface UserPatterns {
+  rollingAverages: RollingAverage[];
+  postDoseEffects: PostDosePattern[];
+  behavioralPatterns: DetectedPattern[];
+  adaptiveOverrides: AdaptiveOverride[];
+  overallConfidence: PatternConfidence;
+  dataPointCount: number;
+  lastComputed: string;
+}
+
+export interface AdaptiveOverride {
+  ruleId: string;
+  baseRecommendation: string;
+  adaptedRecommendation: string;
+  reason: string;
+  confidence: PatternConfidence;
+}
+
+export interface AdaptiveInsight {
+  id: string;
+  text: string;
+  category: InputCategory | "general";
+  confidence: PatternConfidence;
+  type: "pattern" | "trend" | "correlation" | "post_dose";
 }

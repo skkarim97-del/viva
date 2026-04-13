@@ -18,6 +18,7 @@ import type {
   MedicationProfile,
   MedicationLogEntry,
   CompletionRecord,
+  UserPatterns,
 } from "@/types";
 
 const ENERGY_SCORES: Record<string, number> = {
@@ -332,6 +333,7 @@ export function buildPatientSummary(
   medicationProfile: MedicationProfile | undefined,
   medicationLog: MedicationLogEntry[],
   completionHistory: CompletionRecord[],
+  patterns?: UserPatterns | null,
 ): PatientSummary {
   const analytics = computeCategoryAnalytics(history);
   const frequency = medicationProfile?.frequency ?? "weekly";
@@ -417,5 +419,6 @@ export function buildPatientSummary(
     },
     weeklySummaryLines,
     generatedAt: new Date().toISOString(),
+    detectedPatterns: patterns ?? undefined,
   };
 }

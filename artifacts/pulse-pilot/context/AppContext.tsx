@@ -14,6 +14,8 @@ import {
 import { computeInsights, type DailyInsights } from "@/data/insights";
 import { calculateDropoutRisk } from "@/data/riskEngine";
 import { computeInputAnalytics, buildPatientSummary } from "@/data/inputScoring";
+import { computeUserPatterns, generateAdaptiveInsights } from "@/data/patternEngine";
+import type { UserPatterns, AdaptiveInsight } from "@/types";
 import { fetchHealthData, connectProvider } from "@/data/healthProviders";
 import { Platform, Alert } from "react-native";
 import type {
@@ -115,6 +117,8 @@ interface AppContextType {
   removeMedicationDose: (entryId: string) => void;
   inputAnalytics: InputAnalytics | null;
   patientSummary: PatientSummary | null;
+  userPatterns: UserPatterns | null;
+  adaptiveInsights: AdaptiveInsight[];
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -163,6 +167,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [medicationLog, setMedicationLog] = useState<MedicationLogEntry[]>([]);
   const [inputAnalytics, setInputAnalytics] = useState<InputAnalytics | null>(null);
   const [patientSummary, setPatientSummary] = useState<PatientSummary | null>(null);
+  const [userPatterns, setUserPatterns] = useState<UserPatterns | null>(null);
+  const [adaptiveInsights, setAdaptiveInsights] = useState<AdaptiveInsight[]>([]);
 
   useEffect(() => {
     loadData();
@@ -258,13 +264,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   }, []);
 
-  const recomputeAnalytics = useCallback((inputHistory: GLP1DailyInputs[], medProfile?: MedicationProfile, medLog?: MedicationLogEntry[], completions?: CompletionRecord[]) => {
+  const recomputeAnalytics = useCallback((inputHistory: GLP1DailyInputs[], medProfile?: MedicationProfile, medLog?: MedicationLogEntry[], completions?: CompletionRecord[]): UserPatterns | null => {
     try {
       const analytics = computeInputAnalytics(inputHistory);
       setInputAnalytics(analytics);
-      const summary = buildPatientSummary(inputHistory, medProfile, medLog ?? [], completions ?? []);
+      const patterns = computeUserPatterns(inputHistory, medLog ?? [], completions ?? []);
+      setUserPatterns(patterns);
+      const insights = generateAdaptiveInsights(patterns);
+      setAdaptiveInsights(insights);
+      const summary = buildPatientSummary(inputHistory, medProfile, medLog ?? [], completions ?? [], patterns);
       setPatientSummary(summary);
+      return patterns;
     } catch {}
+    return null;
   }, []);
 
   const loadData = async () => {
@@ -397,6 +409,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const today = allMetrics[allMetrics.length - 1];
       setTodayMetrics(today);
       setMetricsRef(today);
+
+      let loadedPatterns: UserPatterns | undefined;
+      try {
+        loadedPatterns = computeUserPatterns(loadedGlp1History, loadedMedLog, loadedHistory);
+        setUserPatterns(loadedPatterns);
+        const patternInsights = generateAdaptiveInsights(loadedPatterns);
+        setAdaptiveInsights(patternInsights);
+      } catch {}
+
       const plan = generateDailyPlan(
         today,
         { feeling: currentFeeling, energy: currentEnergy, stress: currentStress, hydration: currentHydration, trainingIntent: currentTrainingIntent },
@@ -404,7 +425,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         allMetrics,
         currentGlp1Inputs ?? undefined,
         savedProfileData.medicationProfile,
-        loadedMedLog
+        loadedMedLog,
+        loadedPatterns
       );
       const todayCompletion = loadedHistory.find(r => r.date === todayDate);
       if (todayCompletion) {
@@ -481,7 +503,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         sideEffects,
         movementIntent,
       };
-      const newPlan = generateDailyPlan(metricsRef, { feeling: f, energy: e, stress: s, hydration: h, trainingIntent: ti }, completionHistory, metrics, currentGlp1, profile.medicationProfile, medicationLog);
+      computeRisk(metrics, glp1InputHistory, completionHistory, profile.medicationProfile);
+      const freshPatterns = recomputeAnalytics(glp1InputHistory, profile.medicationProfile, medicationLog, completionHistory);
+
+      const newPlan = generateDailyPlan(metricsRef, { feeling: f, energy: e, stress: s, hydration: h, trainingIntent: ti }, completionHistory, metrics, currentGlp1, profile.medicationProfile, medicationLog, freshPatterns ?? undefined);
       const todayCompletion = completionHistory.find(r => r.date === todayDate);
       if (todayCompletion) {
         for (const a of newPlan.actions) {
@@ -493,9 +518,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
       }
       setDailyPlan(newPlan);
-
-      computeRisk(metrics, glp1InputHistory, completionHistory, profile.medicationProfile);
-      recomputeAnalytics(glp1InputHistory, profile.medicationProfile, medicationLog, completionHistory);
     }
   }, [metricsRef, completionHistory, metrics, glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent, glp1InputHistory, computeRisk, recomputeAnalytics, profile.medicationProfile, medicationLog]);
 
@@ -511,7 +533,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         sideEffects,
         movementIntent,
       };
-      const newPlan = generateDailyPlan(metricsRef, { feeling, energy, stress, hydration, trainingIntent }, completionHistory, metrics, currentGlp1, profile.medicationProfile, medicationLog);
+      computeRisk(metrics, glp1InputHistory, completionHistory, profile.medicationProfile);
+      const freshPatterns = recomputeAnalytics(glp1InputHistory, profile.medicationProfile, medicationLog, completionHistory);
+
+      const newPlan = generateDailyPlan(metricsRef, { feeling, energy, stress, hydration, trainingIntent }, completionHistory, metrics, currentGlp1, profile.medicationProfile, medicationLog, freshPatterns ?? undefined);
       const todayCompletion = completionHistory.find(r => r.date === todayDate);
       if (todayCompletion) {
         for (const a of newPlan.actions) {
@@ -523,9 +548,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
       }
       setDailyPlan(newPlan);
-
-      computeRisk(metrics, glp1InputHistory, completionHistory, profile.medicationProfile);
-      recomputeAnalytics(glp1InputHistory, profile.medicationProfile, medicationLog, completionHistory);
     }
   }, [metricsRef, feeling, energy, stress, hydration, trainingIntent, completionHistory, metrics, glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent, glp1InputHistory, computeRisk, recomputeAnalytics, profile.medicationProfile, medicationLog]);
 
@@ -1057,6 +1079,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         removeMedicationDose,
         inputAnalytics,
         patientSummary,
+        userPatterns,
+        adaptiveInsights,
       }}
     >
       {children}

@@ -106,6 +106,7 @@ export default function DashboardScreen() {
     glp1Energy, setGlp1Energy,
     glp1Hydration, setGlp1Hydration,
     medicationLog, logMedicationDose, removeMedicationDose,
+    adaptiveInsights,
   } = useApp();
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -602,6 +603,26 @@ export default function DashboardScreen() {
             </View>
           );
         })()}
+
+        {adaptiveInsights.length > 0 && (
+          <View style={[styles.insightsCard, { backgroundColor: c.card }]}>
+            <View style={styles.insightsHeader}>
+              <Feather name="trending-up" size={14} color={c.accent} />
+              <Text style={[styles.insightsTitle, { color: c.foreground }]}>Based on Your Data</Text>
+            </View>
+            {adaptiveInsights.slice(0, 3).map((insight) => (
+              <View key={insight.id} style={styles.insightRow}>
+                <Feather
+                  name={insight.type === "post_dose" ? "clock" : insight.type === "correlation" ? "link" : insight.type === "trend" ? "trending-up" : "zap"}
+                  size={12}
+                  color={c.accent}
+                  style={{ marginTop: 2 }}
+                />
+                <Text style={[styles.insightText, { color: c.mutedForeground }]}>{insight.text}</Text>
+              </View>
+            ))}
+          </View>
+        )}
 
         {lastCompletionFeedback && (
           <Animated.View style={[styles.feedbackToast, { backgroundColor: c.success + "14", opacity: feedbackOpacity }]}>
@@ -1603,6 +1624,33 @@ const styles = StyleSheet.create({
   supportText: {
     fontSize: 13,
     fontFamily: "Montserrat_400Regular",
+  },
+  insightsCard: {
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 12,
+    gap: 10,
+  },
+  insightsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  insightsTitle: {
+    fontSize: 15,
+    fontFamily: "Montserrat_600SemiBold",
+    letterSpacing: -0.2,
+  },
+  insightRow: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "flex-start",
+  },
+  insightText: {
+    fontSize: 13,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 19,
+    flex: 1,
   },
   treatmentCard: {
     borderRadius: 20,

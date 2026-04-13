@@ -25,8 +25,10 @@ import {
   type GLP1DailyInputs,
   type MedicationProfile,
   type MedicationLogEntry,
+  type UserPatterns,
 } from "@/types";
 import { getDoseTier, getMedicationFrequency, type MedicationBrand } from "./medicationData";
+import { shouldApplyPostDoseAdjustment } from "./patternEngine";
 
 export const defaultProfile: UserProfile = {
   id: "user_1",
@@ -347,7 +349,7 @@ function generateFocusItems(
   return items.slice(0, 5);
 }
 
-export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInputs, history?: CompletionRecord[], recentMetrics?: HealthMetrics[], glp1Inputs?: GLP1DailyInputs, medicationProfile?: MedicationProfile, medicationLog?: MedicationLogEntry[]): DailyPlan {
+export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInputs, history?: CompletionRecord[], recentMetrics?: HealthMetrics[], glp1Inputs?: GLP1DailyInputs, medicationProfile?: MedicationProfile, medicationLog?: MedicationLogEntry[], patterns?: UserPatterns): DailyPlan {
   const feeling = inputs?.feeling ?? null;
   const energy = inputs?.energy ?? null;
   const stress = inputs?.stress ?? null;
@@ -417,6 +419,25 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
       readinessScore = Math.max(readinessScore - 5, 0);
     }
     if (medicationProfile.timeOnMedicationBucket === "less_1_month") readinessScore = Math.max(readinessScore - 5, 0);
+  }
+
+  if (patterns && patterns.overallConfidence !== "low" && medicationLog) {
+    const energyAdj = shouldApplyPostDoseAdjustment(patterns, medicationLog, "energy");
+    if (energyAdj.shouldAdjust && energyAdj.confidence !== "low") {
+      const penalty = energyAdj.severity === "significant" ? 8 : energyAdj.severity === "moderate" ? 5 : 3;
+      readinessScore = Math.max(readinessScore - penalty, 0);
+    }
+
+    const seAdj = shouldApplyPostDoseAdjustment(patterns, medicationLog, "sideEffects");
+    if (seAdj.shouldAdjust && seAdj.confidence !== "low") {
+      const penalty = seAdj.severity === "significant" ? 8 : seAdj.severity === "moderate" ? 4 : 2;
+      readinessScore = Math.max(readinessScore - penalty, 0);
+    }
+
+    const restOverride = patterns.adaptiveOverrides.find(o => o.ruleId === "move_low_energy" && o.adaptedRecommendation.includes("Rest"));
+    if (restOverride && restOverride.confidence === "high" && readinessScore < 50) {
+      readinessScore = Math.max(readinessScore - 5, 0);
+    }
   }
 
   const readinessLabel = readinessScore >= 80 ? "Excellent" : readinessScore >= 65 ? "Good" : readinessScore >= 45 ? "Moderate" : "Low";
@@ -659,7 +680,25 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
 
   const consistentReason = consistentData.reason;
 
-  const actionReasons = { move: moveReason, fuel: fuelReason, hydrate: hydrateReason, recover: recoverReason, consistent: consistentReason };
+  const actionReasons: Record<string, string> = { move: moveReason, fuel: fuelReason, hydrate: hydrateReason, recover: recoverReason, consistent: consistentReason };
+
+  if (patterns && patterns.overallConfidence !== "low") {
+    for (const override of patterns.adaptiveOverrides) {
+      if (override.confidence === "low") continue;
+
+      if (override.ruleId === "fuel_low_appetite" && appetiteLow) {
+        actionReasons.fuel = override.reason + ". " + override.adaptedRecommendation;
+      }
+      if (override.ruleId === "move_low_energy" && (dailyState === "recover" || dailyState === "maintain")) {
+        actionReasons.move = override.reason + ". " + override.adaptedRecommendation;
+      }
+      if (override.ruleId === "hydrate_side_effects" && symptomsHeavy) {
+        actionReasons.hydrate = override.reason + ". " + override.adaptedRecommendation;
+      } else if (override.ruleId === "hydrate_energy" && !symptomsHeavy) {
+        actionReasons.hydrate = override.reason + ". " + override.adaptedRecommendation;
+      }
+    }
+  }
 
   const sleepHours = metrics.sleepDuration;
   let sleepSummary = "";
