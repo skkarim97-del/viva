@@ -650,8 +650,89 @@ export default function DashboardScreen() {
           </View>
           {dailyPlan.actions.map((action) => {
             const meta = ACTION_META[action.category];
-            const isConsistentDose = action.category === "consistent" && hasMedProfile;
+            const isMedAction = action.category === "consistent" && hasMedProfile;
             const doseAlreadyLogged = action.text.includes("\u2713");
+            const medLogged = isMedAction && (action.completed || doseAlreadyLogged);
+
+            if (isMedAction) {
+              const mp = profile.medicationProfile!;
+              const lastDoseEntry = medicationLog.filter(e => e.status === "taken").sort((a, b) => b.date.localeCompare(a.date))[0];
+              const lastDoseDaysAgo = lastDoseEntry ? Math.floor((Date.now() - new Date(lastDoseEntry.date).getTime()) / (1000 * 60 * 60 * 24)) : null;
+              const medLine = `${mp.medicationBrand} · ${mp.doseValue} ${mp.doseUnit} ${mp.frequency}`;
+              const handleLogDose = () => {
+                if (medLogged) return;
+                haptic();
+                const todayStr = new Date().toISOString().split("T")[0];
+                logMedicationDose({
+                  id: `dose_${Date.now()}`,
+                  date: todayStr,
+                  medicationBrand: mp.medicationBrand,
+                  status: "taken",
+                  doseValue: mp.doseValue,
+                  doseUnit: mp.doseUnit,
+                  timestamp: Date.now(),
+                });
+                toggleAction(action.id);
+              };
+
+              return (
+                <View key={action.id} style={[
+                  styles.actionRow,
+                  { backgroundColor: medLogged ? c.success + "0A" : "transparent" },
+                ]}>
+                  <Pressable
+                    onPress={handleLogDose}
+                    style={({ pressed }) => [
+                      styles.actionCheck,
+                      {
+                        backgroundColor: medLogged ? c.success : "transparent",
+                        borderColor: medLogged ? c.success : c.border,
+                        opacity: pressed ? 0.7 : 1,
+                      },
+                    ]}
+                  >
+                    {medLogged && <Feather name="check" size={11} color="#fff" />}
+                  </Pressable>
+                  <Pressable
+                    onPress={handleLogDose}
+                    style={({ pressed }) => [
+                      styles.actionBody,
+                      { opacity: pressed ? 0.7 : 1 },
+                    ]}
+                  >
+                    <View style={[styles.dayIconWrap, { backgroundColor: meta.color + "12" }]}>
+                      <Feather name={meta.icon as any} size={15} color={meta.color} />
+                    </View>
+                    <View style={styles.actionContent}>
+                      <Text style={[styles.actionLabel, { color: c.mutedForeground }]}>{meta.label}</Text>
+                      <Text style={[
+                        styles.actionText,
+                        {
+                          color: medLogged ? c.success : c.foreground,
+                          textDecorationLine: "none",
+                        },
+                      ]}>
+                        {medLogged
+                          ? (mp.frequency === "daily" ? "Taken today" : "Dose logged")
+                          : (mp.frequency === "daily" ? "Log today's dose" : "Log your dose this week")}
+                        {medLogged && " \u2713"}
+                      </Text>
+                      <Text style={[styles.medContext, { color: c.mutedForeground }]}>{medLine}</Text>
+                      {medLogged && lastDoseDaysAgo !== null && lastDoseDaysAgo === 0 && (
+                        <Text style={[styles.medContext, { color: c.success }]}>Logged today</Text>
+                      )}
+                      {medLogged && lastDoseDaysAgo !== null && lastDoseDaysAgo > 0 && (
+                        <Text style={[styles.medContext, { color: c.mutedForeground }]}>Last dose: {lastDoseDaysAgo} day{lastDoseDaysAgo !== 1 ? "s" : ""} ago</Text>
+                      )}
+                      {!medLogged && lastDoseDaysAgo !== null && lastDoseDaysAgo > 0 && (
+                        <Text style={[styles.medContext, { color: c.mutedForeground }]}>Last dose: {lastDoseDaysAgo} day{lastDoseDaysAgo !== 1 ? "s" : ""} ago</Text>
+                      )}
+                    </View>
+                  </Pressable>
+                </View>
+              );
+            }
+
             return (
               <View key={action.id} style={[
                 styles.actionRow,
@@ -660,18 +741,6 @@ export default function DashboardScreen() {
                 <Pressable
                   onPress={() => {
                     haptic();
-                    if (isConsistentDose && !action.completed && !doseAlreadyLogged && profile.medicationProfile) {
-                      const todayStr = new Date().toISOString().split("T")[0];
-                      logMedicationDose({
-                        id: `dose_${Date.now()}`,
-                        date: todayStr,
-                        medicationBrand: profile.medicationProfile.medicationBrand,
-                        status: "taken",
-                        doseValue: profile.medicationProfile.doseValue,
-                        doseUnit: profile.medicationProfile.doseUnit,
-                        timestamp: Date.now(),
-                      });
-                    }
                     toggleAction(action.id);
                   }}
                   style={({ pressed }) => [
@@ -688,22 +757,6 @@ export default function DashboardScreen() {
                 <Pressable
                   onPress={() => {
                     haptic();
-                    if (isConsistentDose) {
-                      if (!action.completed && !doseAlreadyLogged && profile.medicationProfile) {
-                        const todayStr = new Date().toISOString().split("T")[0];
-                        logMedicationDose({
-                          id: `dose_${Date.now()}`,
-                          date: todayStr,
-                          medicationBrand: profile.medicationProfile.medicationBrand,
-                          status: "taken",
-                          doseValue: profile.medicationProfile.doseValue,
-                          doseUnit: profile.medicationProfile.doseUnit,
-                          timestamp: Date.now(),
-                        });
-                        toggleAction(action.id);
-                      }
-                      return;
-                    }
                     setEditingAction(action.category);
                   }}
                   style={({ pressed }) => [
@@ -719,18 +772,18 @@ export default function DashboardScreen() {
                     <Text style={[
                       styles.actionText,
                       {
-                        color: action.completed || doseAlreadyLogged ? c.mutedForeground : c.foreground,
+                        color: action.completed ? c.mutedForeground : c.foreground,
                         textDecorationLine: action.completed ? "line-through" : "none",
                         opacity: action.completed ? 0.6 : 1,
                       },
                     ]}>
                       {action.text}
                     </Text>
-                    {action.reason && !action.completed && !doseAlreadyLogged && (
+                    {action.reason && !action.completed && (
                       <Text style={[styles.actionReason, { color: c.mutedForeground }]}>{action.reason}</Text>
                     )}
                   </View>
-                  {!isConsistentDose && <Feather name="chevron-right" size={14} color={c.mutedForeground + "40"} />}
+                  <Feather name="chevron-right" size={14} color={c.mutedForeground + "40"} />
                 </Pressable>
               </View>
             );
@@ -858,7 +911,7 @@ export default function DashboardScreen() {
       </ScrollView>
 
       <Modal
-        visible={editingAction !== null}
+        visible={editingAction !== null && !(editingAction === "consistent" && hasMedProfile)}
         transparent
         animationType="slide"
         onRequestClose={() => setEditingAction(null)}
@@ -1232,6 +1285,12 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     marginTop: 2,
     opacity: 0.7,
+  },
+  medContext: {
+    fontSize: 11,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 15,
+    marginTop: 2,
   },
 
   checkInButton: {

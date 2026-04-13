@@ -1,0 +1,125 @@
+The Medication module is still incorrect.
+
+It is currently showing generic habit-style actions, which does not make sense.
+
+Medication should NOT behave like Move / Hydrate / Recover.
+
+It should be a simple logging system with clear states.
+
+=====================================
+PART 1: REMOVE GENERIC OPTIONS
+=====================================
+
+Remove ALL options like:
+- Complete your daily check-in
+- Log your meals and water
+- Just check in today
+- Keep routines simple today
+
+These do not belong in Medication.
+
+=====================================
+PART 2: REBUILD MEDICATION MODULE AS STATE-BASED
+=====================================
+
+Medication should NOT have 4 selectable options.
+
+It should have a single action with state.
+
+-------------------------------------
+
+For WEEKLY medications:
+
+STATE 1: Not logged
+- Show:
+  “Log your dose this week”
+- CTA:
+  [Log dose]
+
+STATE 2: Logged
+- Show:
+  “Dose logged ✓”
+  “Last dose: X days ago”
+- No CTA or disabled state
+
+-------------------------------------
+
+For DAILY medications:
+
+STATE 1: Not logged
+- Show:
+  “Log today’s dose”
+- CTA:
+  [Mark as taken]
+
+STATE 2: Logged
+- Show:
+  “Taken today ✓”
+
+Optional:
+STATE 3: Missed
+- “Missed today”
+
+=====================================
+PART 3: REMOVE MODAL WITH MULTIPLE OPTIONS
+=====================================
+
+Medication should NOT open a modal with multiple selectable options.
+
+Instead:
+- single tap action
+- immediate state change
+
+Optional:
+- lightweight confirmation animation
+
+=====================================
+PART 4: KEEP IT CONSISTENT WITH PLAN
+=====================================
+
+Medication should still:
+- appear as one of the daily plan items
+- count toward completion (1 of 5)
+
+But interaction should be:
+- tap to log
+- not choose between options
+
+=====================================
+PART 5: ADD CONTEXT
+=====================================
+
+Within the card, show:
+
+- medication name
+- dose
+- frequency
+
+Example:
+“Mounjaro · 5 mg weekly”
+
+Optional:
+“Next dose due in 3 days”
+
+=====================================
+PART 6: TONE
+=====================================
+
+Keep tone:
+- simple
+- supportive
+- non-clinical
+- not verbose
+
+Avoid:
+- habit language
+- coaching language inside this module
+
+=====================================
+PART 7: FINAL OUTPUT
+=====================================
+
+After fixing, summarize:
+1. how medication module was simplified
+2. how weekly vs daily logic works
+3. what UI changes were made
