@@ -399,3 +399,86 @@ export const ACTION_OPTIONS: Record<ActionCategory, string[]> = Object.fromEntri
     CATEGORY_OPTIONS[cat].map(o => o.title),
   ])
 ) as Record<ActionCategory, string[]>;
+
+export type InputCategory = "energy" | "appetite" | "hydration" | "protein" | "sideEffects" | "movement";
+
+export type TrendDirection = "up" | "flat" | "down";
+
+export interface ScoredInput {
+  label: string;
+  score: number;
+}
+
+export interface CategoryAnalytics {
+  category: InputCategory;
+  avg7d: number;
+  trend: TrendDirection;
+  values: number[];
+}
+
+export interface InputCorrelation {
+  pair: [InputCategory, InputCategory];
+  direction: "positive" | "negative";
+  strength: "strong" | "moderate" | "weak";
+  insight: string;
+}
+
+export type PatientStatus = "stable" | "needs_attention" | "improving" | "new_patient";
+
+export type PatientFlag =
+  | "low_appetite"
+  | "declining_recovery"
+  | "missed_dose"
+  | "high_side_effects"
+  | "low_hydration"
+  | "low_protein"
+  | "declining_activity"
+  | "poor_energy"
+  | "improving_appetite"
+  | "improving_hydration"
+  | "consistent_logging";
+
+export interface AdherenceSummary {
+  dosesTaken: number;
+  dosesExpected: number;
+  dosesMissed: number;
+  dosesDelayed: number;
+  adherenceRate: number;
+  currentStreak: number;
+  longestStreak: number;
+}
+
+export interface InputAnalytics {
+  categories: CategoryAnalytics[];
+  correlations: InputCorrelation[];
+  insights: string[];
+  lastUpdated: string;
+}
+
+export interface PatientSummary {
+  patientStatus: PatientStatus;
+  keyFlags: PatientFlag[];
+  medicationContext: {
+    brand: string;
+    dose: string;
+    frequency: "weekly" | "daily";
+    titrationStatus: "recent" | "stable";
+    timeOnMedication: string;
+  } | null;
+  adherenceSummary: AdherenceSummary;
+  trendSummary: {
+    energy: { avg: number; trend: TrendDirection };
+    appetite: { avg: number; trend: TrendDirection };
+    hydration: { avg: number; trend: TrendDirection };
+    protein: { avg: number; trend: TrendDirection };
+    sideEffects: { avg: number; trend: TrendDirection };
+    movement: { avg: number; trend: TrendDirection };
+  };
+  last7DayOverview: {
+    avgCompletionRate: number;
+    daysLogged: number;
+    consistencyScore: number;
+  };
+  weeklySummaryLines: string[];
+  generatedAt: string;
+}

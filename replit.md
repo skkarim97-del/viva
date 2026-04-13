@@ -54,6 +54,7 @@ The system is a pnpm workspace monorepo using Node.js 24 and TypeScript 5.9. The
 - **Weekly Plan**: AI-powered weekly coaching with Move/Fuel/Hydrate/Recover/Consistent categories. GLP-1 specific rules (strength training for muscle preservation, gentler plans on symptom days, protein-forward fueling).
 - **Trends Tab**: Recovery/Body, Movement, and Consistency sections. Medication section (brand/dose display, dose tier, titration badge, recent dose log). "Treatment Patterns" section with GLP-1-specific intelligence insights (dose-day recovery dips, activity patterns around dose day, titration recovery impact, sleep-recovery correlation on treatment, consistency-recovery link). "What We're Noticing" insights, correlations during treatment, and pattern detection.
 - **AI Coach**: Full-screen chat modal with streaming SSE responses. GLP-1 focused quick actions: side effects, protein intake, exercise, hydration, weekly focus. System prompt fully rewritten for GLP-1 context.
+- **Input Intelligence Layer**: Behind-the-scenes numeric scoring for all 6 input categories (energy/appetite/hydration/protein/sideEffects/movement mapped to 1-4). 7-day rolling analytics with averages and trend direction (up/flat/down). Pearson correlations between input pairs (appetite-protein, hydration-energy, sideEffects-movement, etc.). Insights generated in natural language, never exposing numbers. Patient summary object (PatientSummary) tracks status, flags, adherence, and trends for future clinician layer. No UI changes for scoring.
 - **Risk Engine**: calculateDropoutRisk() with rolling baselines for recovery, activity, fueling, symptoms, and consistency. Medication-aware weight multiplier (dose tier, recent titration, time on med). translateRiskToUserMessage() maps scores to empathetic, treatment-aware support headlines and messages.
 - **Insights Engine**: `data/insights.ts` provides week summaries, coach insights, sleep intelligence, and daily analytics. All language rewritten for GLP-1 context (no generic fitness/wellness language). Uses "active days" not "workouts", "treatment" not "training", protein/muscle preservation framing throughout.
 - **Health Data Providers**: `data/healthProviders.ts` handles integration with Apple Health (HealthKit) on iOS. The MVP is focused exclusively on Apple Health and Apple Watch data.
@@ -66,6 +67,7 @@ The system is a pnpm workspace monorepo using Node.js 24 and TypeScript 5.9. The
 - `artifacts/pulse-pilot/context/AppContext.tsx` - State management with GLP-1 fields
 - `artifacts/pulse-pilot/data/riskEngine.ts` - Dropout risk calculation engine
 - `artifacts/pulse-pilot/data/riskTranslation.ts` - Risk score to user message translation
+- `artifacts/pulse-pilot/data/inputScoring.ts` - Numeric input scoring, 7-day analytics, correlations, patient summary
 - `artifacts/pulse-pilot/data/mockData.ts` - Mock data generation and daily plan logic
 - `artifacts/pulse-pilot/data/medicationData.ts` - Brand DB, dose options, telehealth platforms, helpers
 - `artifacts/pulse-pilot/app/onboarding/index.tsx` - 13-step GLP-1 onboarding flow

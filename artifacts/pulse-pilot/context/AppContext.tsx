@@ -13,6 +13,7 @@ import {
 } from "@/data/mockData";
 import { computeInsights, type DailyInsights } from "@/data/insights";
 import { calculateDropoutRisk } from "@/data/riskEngine";
+import { computeInputAnalytics, buildPatientSummary } from "@/data/inputScoring";
 import { fetchHealthData, connectProvider } from "@/data/healthProviders";
 import { Platform, Alert } from "react-native";
 import type {
@@ -46,6 +47,8 @@ import type {
   DropoutRiskResult,
   MedicationLogEntry,
   MedicationProfile,
+  InputAnalytics,
+  PatientSummary,
 } from "@/types";
 
 const EXPO_PUBLIC_DOMAIN = process.env.EXPO_PUBLIC_DOMAIN || "";
@@ -109,6 +112,8 @@ interface AppContextType {
   glp1InputHistory: GLP1DailyInputs[];
   medicationLog: MedicationLogEntry[];
   logMedicationDose: (entry: MedicationLogEntry) => void;
+  inputAnalytics: InputAnalytics | null;
+  patientSummary: PatientSummary | null;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -155,6 +160,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [riskResult, setRiskResult] = useState<DropoutRiskResult | null>(null);
   const [glp1InputHistory, setGlp1InputHistory] = useState<GLP1DailyInputs[]>([]);
   const [medicationLog, setMedicationLog] = useState<MedicationLogEntry[]>([]);
+  const [inputAnalytics, setInputAnalytics] = useState<InputAnalytics | null>(null);
+  const [patientSummary, setPatientSummary] = useState<PatientSummary | null>(null);
 
   useEffect(() => {
     loadData();
@@ -247,6 +254,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         medicationProfile: medProfile,
       });
       setRiskResult(result);
+    } catch {}
+  }, []);
+
+  const recomputeAnalytics = useCallback((inputHistory: GLP1DailyInputs[], medProfile?: MedicationProfile, medLog?: MedicationLogEntry[], completions?: CompletionRecord[]) => {
+    try {
+      const analytics = computeInputAnalytics(inputHistory);
+      setInputAnalytics(analytics);
+      const summary = buildPatientSummary(inputHistory, medProfile, medLog ?? [], completions ?? []);
+      setPatientSummary(summary);
     } catch {}
   }, []);
 
@@ -414,6 +430,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setInsights(computeInsights(allMetrics, today, allWorkouts, savedProfileData, loadedHistory));
 
       computeRisk(allMetrics, loadedGlp1History, loadedHistory, savedProfileData.medicationProfile);
+      recomputeAnalytics(loadedGlp1History, savedProfileData.medicationProfile, loadedMedLog, loadedHistory);
     } catch {
     } finally {
       setIsLoading(false);
@@ -470,8 +487,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setDailyPlan(newPlan);
 
       computeRisk(metrics, glp1InputHistory, completionHistory, profile.medicationProfile);
+      recomputeAnalytics(glp1InputHistory, profile.medicationProfile, medicationLog, completionHistory);
     }
-  }, [metricsRef, completionHistory, metrics, glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent, glp1InputHistory, computeRisk, profile.medicationProfile, medicationLog]);
+  }, [metricsRef, completionHistory, metrics, glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent, glp1InputHistory, computeRisk, recomputeAnalytics, profile.medicationProfile, medicationLog]);
 
   const regenerateFromGlp1 = useCallback(() => {
     if (metricsRef) {
@@ -499,8 +517,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setDailyPlan(newPlan);
 
       computeRisk(metrics, glp1InputHistory, completionHistory, profile.medicationProfile);
+      recomputeAnalytics(glp1InputHistory, profile.medicationProfile, medicationLog, completionHistory);
     }
-  }, [metricsRef, feeling, energy, stress, hydration, trainingIntent, completionHistory, metrics, glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent, glp1InputHistory, computeRisk, profile.medicationProfile, medicationLog]);
+  }, [metricsRef, feeling, energy, stress, hydration, trainingIntent, completionHistory, metrics, glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent, glp1InputHistory, computeRisk, recomputeAnalytics, profile.medicationProfile, medicationLog]);
 
   const generateCompletionFeedback = (action: DailyAction, completed: boolean, completedCount: number, total: number): string | null => {
     if (!completed) return null;
@@ -543,6 +562,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const filtered = prevHistory.filter(r => r.date !== todayDate);
         const updated = [...filtered, todayRecord];
         AsyncStorage.setItem(COMPLETION_KEY, JSON.stringify(updated));
+        recomputeAnalytics(glp1InputHistory, profile.medicationProfile, medicationLog, updated);
         return updated;
       });
 
@@ -568,7 +588,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       return { ...prev, actions: updatedActions };
     });
-  }, []);
+  }, [glp1InputHistory, profile.medicationProfile, medicationLog, recomputeAnalytics]);
 
   const editAction = useCallback((actionId: string, newText: string) => {
     setDailyPlan(prev => {
@@ -938,6 +958,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const filtered = prev.filter(e => e.date !== entry.date);
       const updated = [...filtered, entry].sort((a, b) => a.date.localeCompare(b.date)).slice(-90);
       AsyncStorage.setItem(MED_LOG_KEY, JSON.stringify(updated));
+      recomputeAnalytics(glp1InputHistory, profile.medicationProfile, updated, completionHistory);
       return updated;
     });
     if (profile.medicationProfile) {
@@ -948,7 +969,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         },
       });
     }
-  }, [profile, updateProfile]);
+  }, [profile, updateProfile, glp1InputHistory, completionHistory, recomputeAnalytics]);
 
   const todayCheckIn = (() => {
     const todayDate = new Date().toISOString().split("T")[0];
@@ -1013,6 +1034,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         glp1InputHistory,
         medicationLog,
         logMedicationDose,
+        inputAnalytics,
+        patientSummary,
       }}
     >
       {children}

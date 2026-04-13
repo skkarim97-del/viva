@@ -442,12 +442,20 @@ function computeHabitWeeklyRates(history: { date: string; completionRate: number
 
 export default function TrendsScreen() {
   const c = useColors();
-  const { insights, metrics, completionHistory, weeklyConsistency, streakDays, todayCompletionRate, dailyPlan, profile, medicationLog } = useApp();
+  const { insights, metrics, completionHistory, weeklyConsistency, streakDays, todayCompletionRate, dailyPlan, profile, medicationLog, inputAnalytics } = useApp();
 
   const correlations = useMemo(() => buildCorrelations(metrics), [metrics]);
   const patterns = useMemo(() => detectPatterns(metrics), [metrics]);
   const habitStats = useMemo(() => computeHabitStats(completionHistory), [completionHistory]);
-  const keyInsights = useMemo(() => buildKeyInsights(metrics, habitStats), [metrics, habitStats]);
+  const baseInsights = useMemo(() => buildKeyInsights(metrics, habitStats), [metrics, habitStats]);
+  const keyInsights = useMemo(() => {
+    const analyticsInsights = inputAnalytics?.insights ?? [];
+    const combined = [...baseInsights];
+    for (const ai of analyticsInsights) {
+      if (!combined.includes(ai)) combined.push(ai);
+    }
+    return combined.slice(0, 6);
+  }, [baseInsights, inputAnalytics]);
   const glp1Insights = useMemo(() => buildGLP1Insights(metrics, profile, medicationLog, completionHistory), [metrics, profile, medicationLog, completionHistory]);
 
   const openDetail = (label: string) => {
