@@ -425,14 +425,14 @@ export default function DashboardScreen() {
                       return (
                         <Pressable
                           key={day.dateStr}
-                          onPress={() => !day.isFuture ? handleLogDay(day.dateStr) : null}
+                          onPress={() => handleLogDay(day.dateStr)}
                           style={({ pressed }) => [
                             styles.weekDayBtn,
                             {
                               backgroundColor: isSelected ? c.accent : day.isToday ? c.accent + "12" : "transparent",
                               borderColor: day.isToday && !isSelected ? c.accent + "40" : "transparent",
                               borderWidth: day.isToday && !isSelected ? 1 : 0,
-                              opacity: day.isFuture ? 0.3 : pressed ? 0.7 : 1,
+                              opacity: pressed ? 0.7 : 1,
                             },
                           ]}
                         >
