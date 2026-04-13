@@ -44,11 +44,11 @@ export function InputRow<T extends string>({ label, options, selected, onSelect,
               style={({ pressed }) => [
                 styles.option,
                 {
-                  backgroundColor: isSelected ? color + "16" : unselectedBg,
-                  borderWidth: 1.5,
-                  borderColor: isSelected ? color + "30" : "transparent",
+                  backgroundColor: isSelected ? color + "12" : unselectedBg,
+                  borderWidth: 1,
+                  borderColor: isSelected ? color + "28" : c.border + "20",
                   opacity: pressed ? 0.8 : 1,
-                  transform: [{ scale: pressed ? 0.96 : 1 }],
+                  transform: [{ scale: pressed ? 0.97 : 1 }],
                 },
               ]}
             >
@@ -56,7 +56,7 @@ export function InputRow<T extends string>({ label, options, selected, onSelect,
                 style={[
                   styles.optionText,
                   {
-                    color: isSelected ? color : c.mutedForeground,
+                    color: isSelected ? color : c.mutedForeground + "90",
                     fontFamily: isSelected ? "Montserrat_600SemiBold" : "Montserrat_500Medium",
                   },
                 ]}
@@ -74,22 +74,22 @@ export function InputRow<T extends string>({ label, options, selected, onSelect,
 
 const styles = StyleSheet.create({
   row: {
-    gap: 8,
+    gap: 6,
   },
   label: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: "Montserrat_600SemiBold",
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
   },
   optionsRow: {
     flexDirection: "row",
-    gap: 8,
+    gap: 6,
   },
   option: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 14,
+    paddingVertical: 9,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },

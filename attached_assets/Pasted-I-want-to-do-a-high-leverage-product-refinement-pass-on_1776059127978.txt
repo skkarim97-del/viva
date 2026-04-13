@@ -1,0 +1,221 @@
+I want to do a high-leverage product refinement pass on the current MVP.
+
+Overall, the app is in a strong place visually, but I want to tighten the experience so it feels less like a polished wellness app and more like a truly differentiated GLP-1 support product.
+
+Focus on the following improvements:
+
+=====================================
+PART 1: ADD CLEAR MEDICATION CONTEXT TO TODAY
+=====================================
+
+Surface the user’s medication context clearly near the top of the Today screen in a clean, premium way.
+
+Examples:
+- Mounjaro · 5 mg weekly
+- Last dose: 2 days ago
+- Via Ro
+
+or
+
+- Wegovy · 1.0 mg weekly
+- Dose due tomorrow
+
+This should feel subtle and elegant, not cluttered.
+
+Why:
+Medication context is core to the product and should be visible so the app feels truly GLP-1-aware.
+
+=====================================
+PART 2: MAKE THE TOP SUMMARY SMARTER AND LESS GENERIC
+=====================================
+
+The top summary card on Today needs to feel more intelligent, specific, and premium.
+
+Right now it is directionally good but still a little generic / alarming.
+
+Improve it so the headline and support text adapt more specifically to:
+- recent Apple Health trends
+- today’s selected inputs
+- medication dose / recent titration / dose day timing
+
+Examples of better tone:
+- Recovery looks a bit strained today
+- Your body may benefit from a lighter day
+- Appetite and hydration need more support today
+- This looks like a good day to keep momentum simple
+
+Avoid:
+- dramatic red-alert language
+- vague generic lines
+- anything that sounds robotic
+
+Make it feel more precise and calm.
+
+=====================================
+PART 3: MAKE TODAY FEEL MORE LIKE ONE CONNECTED STORY
+=====================================
+
+The Today screen still feels slightly too modular and blocky.
+
+Please make the page flow more like one connected support experience:
+1. summary / what the app is noticing
+2. medication context
+3. daily inputs
+4. today’s actions
+5. why this matters
+6. coach follow-up
+
+The transitions and logic between sections should feel tighter.
+Recommendations and explanation should clearly reflect the user’s current selected inputs and medication context.
+
+The goal:
+The page should feel like one system, not stacked cards.
+
+=====================================
+PART 4: UPGRADE TRENDS INTO A GLP-1 INTELLIGENCE SCREEN
+=====================================
+
+This is the biggest opportunity.
+
+The Trends tab currently looks solid, but it still feels too much like a generic health dashboard.
+
+I want it to feel like a true GLP-1 intelligence layer.
+
+Add more GLP-1-specific pattern detection and insights, especially around:
+- medication dose
+- recent titration
+- dose day timing
+- appetite changes
+- hydration consistency
+- protein / fueling patterns
+- symptom load
+- activity around dose days
+- recovery changes around dose changes
+
+Examples of the kind of insights I want:
+- Appetite dropped after your recent dose increase
+- Your activity tends to dip in the 1–2 days after dose day
+- Hydration appears more important on dose days
+- Recovery has been steadier since your dose stabilized
+- Lower protein + lower appetite tends to line up with rougher next-day recovery
+
+These should be framed as:
+- observations
+- possible patterns
+- supportive correlations
+
+Not:
+- diagnoses
+- hard medical claims
+
+This screen should make the app feel uniquely GLP-1-specific.
+
+=====================================
+PART 5: ADD 3–5 “WOW” INSIGHTS
+=====================================
+
+I want the app to surface a few standout insights that make users feel:
+“this app actually understands what is happening to me”
+
+Please implement a first pass of 3–5 high-signal, medication-aware insights using current mock / app logic.
+
+Examples:
+- appetite tends to be lowest within 48 hours of dose day
+- hydration consistency appears to support better recovery during higher doses
+- rougher symptom days tend to line up with reduced activity the next day
+- lower sleep + low appetite creates harder recovery days
+- when protein stays on track, activity and recovery look more stable
+
+Make them concise, human, and clearly valuable.
+
+=====================================
+PART 6: TIGHTEN COACH RESPONSES
+=====================================
+
+The coach is better than before, but it still sometimes feels too verbose and slightly too ChatGPT-like.
+
+Please tighten it so responses:
+- are shorter
+- more decisive
+- more practical
+- more grounded in the current day’s data
+- more GLP-1-aware
+- less explanatory for the sake of explanation
+
+The coach should sound like:
+a premium support layer that knows the user’s med, dose, recent trends, and daily state.
+
+Good response style:
+- 1 short framing sentence
+- 2–3 practical actions max
+- one optional reason if helpful
+
+Avoid:
+- long explanations
+- generic health filler
+- score language
+- robotic phrasing
+
+=====================================
+PART 7: INPUTS / CHIP POLISH
+=====================================
+
+The input section is much better, but I want one more polish pass.
+
+Please:
+- improve selected chip hierarchy slightly
+- make selected states feel a touch more premium
+- keep the green / blue / purple / red logic but soften it
+- ensure the chips are easy to scan instantly
+- tighten vertical spacing so the full section feels more intentional
+
+Do NOT overhaul the design.
+This is a subtle premium polish pass only.
+
+=====================================
+PART 8: MEDICATION-AWARE LOGIC ACROSS THE APP
+=====================================
+
+Make sure medication context affects all major surfaces:
+- Today summary
+- Today recommendations
+- Why this matters block
+- Weekly plan
+- Trends insights
+- Coach responses
+
+Examples:
+- higher dose / recent titration -> more hydration / fueling / simpler routine emphasis
+- stable lower dose -> more consistency / movement emphasis
+- post-dose day windows -> more side effect / appetite-sensitive guidance
+
+The app should feel like one coherent GLP-1-aware system.
+
+=====================================
+PART 9: KEEP IT CLEAN
+=====================================
+
+Important:
+Do not add clutter.
+Do not over-design.
+Do not turn the app into a dense medical dashboard.
+
+Keep the result:
+- premium
+- calm
+- simple
+- health-tech credible
+- Apple-first
+- GLP-1-specific
+
+=====================================
+PART 10: FINAL OUTPUT
+=====================================
+
+After implementing, summarize:
+1. how medication context was surfaced on Today
+2. how the top summary got smarter
+3. how Today became more interconnected
+4. what new GLP-1-specific trends / insights were added
+5. what coach improvements were made
+6. what subtle UI polish was applied

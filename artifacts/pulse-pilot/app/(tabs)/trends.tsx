@@ -185,6 +185,151 @@ function detectPatterns(metrics: HealthMetrics[]): string[] {
   return patterns;
 }
 
+interface GLP1Insight {
+  text: string;
+  icon: keyof typeof Feather.glyphMap;
+  color: string;
+}
+
+function buildGLP1Insights(
+  metrics: HealthMetrics[],
+  profile: { medicationProfile?: { medicationBrand: string; doseValue: number; doseUnit: string; frequency: string; recentTitration: boolean; previousDoseValue?: number | null; timeOnMedicationBucket?: string; plannedDoseDay?: string } | null },
+  medicationLog: { id: string; date: string; status: string; doseValue: number; doseUnit: string; timestamp: number }[],
+  completionHistory: { date: string; completionRate: number }[],
+): GLP1Insight[] {
+  const insights: GLP1Insight[] = [];
+  const medProfile = profile.medicationProfile;
+  if (!medProfile) return insights;
+
+  const recent14 = metrics.slice(-14);
+  const recent7 = metrics.slice(-7);
+  if (recent7.length < 5) return insights;
+
+  const takenDoses = medicationLog.filter(e => e.status === "taken").sort((a, b) => a.date.localeCompare(b.date));
+
+  if (takenDoses.length >= 2 && medProfile.frequency === "weekly") {
+    const doseDates = takenDoses.map(d => d.date);
+    let nearDoseRecovery: number[] = [];
+    let farDoseRecovery: number[] = [];
+    for (const m of recent14) {
+      const closestDoseDist = Math.min(...doseDates.map(dd => Math.abs(Math.floor((new Date(m.date).getTime() - new Date(dd).getTime()) / 86400000))));
+      if (closestDoseDist <= 2) nearDoseRecovery.push(m.recoveryScore);
+      else farDoseRecovery.push(m.recoveryScore);
+    }
+    if (nearDoseRecovery.length >= 2 && farDoseRecovery.length >= 2) {
+      const avgNear = nearDoseRecovery.reduce((s, v) => s + v, 0) / nearDoseRecovery.length;
+      const avgFar = farDoseRecovery.reduce((s, v) => s + v, 0) / farDoseRecovery.length;
+      if (avgFar - avgNear > 5) {
+        insights.push({
+          text: `Recovery tends to dip in the 1-2 days after dose day, then improves. This is a common pattern on ${medProfile.medicationBrand}.`,
+          icon: "trending-down",
+          color: "#AF52DE",
+        });
+      }
+    }
+  }
+
+  if (takenDoses.length >= 2 && medProfile.frequency === "weekly") {
+    const doseDates = takenDoses.map(d => d.date);
+    let nearDoseSteps: number[] = [];
+    let farDoseSteps: number[] = [];
+    for (const m of recent14) {
+      const closestDist = Math.min(...doseDates.map(dd => Math.abs(Math.floor((new Date(m.date).getTime() - new Date(dd).getTime()) / 86400000))));
+      if (closestDist <= 1) nearDoseSteps.push(m.steps);
+      else farDoseSteps.push(m.steps);
+    }
+    if (nearDoseSteps.length >= 2 && farDoseSteps.length >= 2) {
+      const avgNear = nearDoseSteps.reduce((s, v) => s + v, 0) / nearDoseSteps.length;
+      const avgFar = farDoseSteps.reduce((s, v) => s + v, 0) / farDoseSteps.length;
+      if (avgFar - avgNear > 1500) {
+        insights.push({
+          text: `Activity tends to dip on dose day and the day after. Lighter movement around dose day may help you feel better.`,
+          icon: "activity",
+          color: "#FF9500",
+        });
+      }
+    }
+  }
+
+  if (medProfile.recentTitration && recent14.length >= 10) {
+    const firstHalf = recent14.slice(0, 7);
+    const secondHalf = recent14.slice(7);
+    const avgRecFirst = firstHalf.reduce((s, m) => s + m.recoveryScore, 0) / firstHalf.length;
+    const avgRecSecond = secondHalf.reduce((s, m) => s + m.recoveryScore, 0) / secondHalf.length;
+    if (avgRecFirst - avgRecSecond > 5) {
+      insights.push({
+        text: `Recovery has been lower since your recent dose increase. This usually stabilizes within 1-2 weeks as your body adjusts.`,
+        icon: "battery-charging",
+        color: "#FF6B6B",
+      });
+    } else if (avgRecSecond >= avgRecFirst) {
+      insights.push({
+        text: `Recovery has stayed steady since your dose change. Your body appears to be adjusting well.`,
+        icon: "battery-charging",
+        color: "#34C759",
+      });
+    }
+  }
+
+  const avgSleep7 = recent7.reduce((s, m) => s + m.sleepDuration, 0) / recent7.length;
+  const lowSleepDays = recent7.filter(m => m.sleepDuration < 6.5);
+  const lowSleepRecovery = lowSleepDays.length > 0 ? lowSleepDays.reduce((s, m) => s + m.recoveryScore, 0) / lowSleepDays.length : 0;
+  const goodSleepDays = recent7.filter(m => m.sleepDuration >= 7);
+  const goodSleepRecovery = goodSleepDays.length > 0 ? goodSleepDays.reduce((s, m) => s + m.recoveryScore, 0) / goodSleepDays.length : 0;
+  if (lowSleepDays.length >= 2 && goodSleepDays.length >= 2 && goodSleepRecovery - lowSleepRecovery > 8) {
+    insights.push({
+      text: `Short sleep nights lead to noticeably lower recovery. On treatment, sleep is one of your strongest levers.`,
+      icon: "moon",
+      color: "#AF52DE",
+    });
+  }
+
+  const completionMap = new Map<string, number>();
+  for (const cr of completionHistory) {
+    completionMap.set(cr.date.slice(0, 10), cr.completionRate);
+  }
+  if (completionHistory.length >= 5 && recent7.length >= 5) {
+    const highCompNextDayRecovery: number[] = [];
+    const lowCompNextDayRecovery: number[] = [];
+    for (let i = 0; i < recent7.length - 1; i++) {
+      const todayRate = completionMap.get(recent7[i].date.slice(0, 10));
+      if (todayRate === undefined) continue;
+      const nextDayRecovery = recent7[i + 1].recoveryScore;
+      if (todayRate >= 80) highCompNextDayRecovery.push(nextDayRecovery);
+      else if (todayRate < 50) lowCompNextDayRecovery.push(nextDayRecovery);
+    }
+    if (highCompNextDayRecovery.length >= 2 && lowCompNextDayRecovery.length >= 1) {
+      const avgHigh = highCompNextDayRecovery.reduce((s, v) => s + v, 0) / highCompNextDayRecovery.length;
+      const avgLow = lowCompNextDayRecovery.reduce((s, v) => s + v, 0) / lowCompNextDayRecovery.length;
+      if (avgHigh - avgLow > 5) {
+        insights.push({
+          text: `Days when you complete more of your plan tend to be followed by better recovery. Consistency supports your body during treatment.`,
+          icon: "check-circle",
+          color: "#34C759",
+        });
+      }
+    }
+  }
+
+  if (recent7.length >= 5) {
+    const highStepDays = recent7.filter(m => m.steps >= 7000);
+    const lowStepDays = recent7.filter(m => m.steps < 5000);
+    if (highStepDays.length >= 2 && lowStepDays.length >= 2) {
+      const highStepSleep = highStepDays.reduce((s, m) => s + m.sleepDuration, 0) / highStepDays.length;
+      const lowStepSleep = lowStepDays.reduce((s, m) => s + m.sleepDuration, 0) / lowStepDays.length;
+      if (highStepSleep - lowStepSleep > 0.3) {
+        insights.push({
+          text: `More active days are followed by better sleep. Gentle movement helps your body settle into better rest patterns on treatment.`,
+          icon: "sunrise",
+          color: "#5AC8FA",
+        });
+      }
+    }
+  }
+
+  return insights.slice(0, 5);
+}
+
 function buildKeyInsights(metrics: HealthMetrics[], habitStats: { weeklyPercent: number; streakDays: number; todayCompleted: number; todayTotal: number; topHabit: string | null; topHabitPercent: number }): string[] {
   const insights: string[] = [];
   if (metrics.length < 3) return insights;
@@ -303,6 +448,7 @@ export default function TrendsScreen() {
   const patterns = useMemo(() => detectPatterns(metrics), [metrics]);
   const habitStats = useMemo(() => computeHabitStats(completionHistory), [completionHistory]);
   const keyInsights = useMemo(() => buildKeyInsights(metrics, habitStats), [metrics, habitStats]);
+  const glp1Insights = useMemo(() => buildGLP1Insights(metrics, profile, medicationLog, completionHistory), [metrics, profile, medicationLog, completionHistory]);
 
   const openDetail = (label: string) => {
     const key = metricKeyMap[label];
@@ -442,6 +588,21 @@ export default function TrendsScreen() {
             <View key={i} style={[styles.insightCard, { backgroundColor: c.card }]}>
               <Feather name="zap" size={13} color={c.accent} />
               <Text style={[styles.insightText, { color: c.foreground }]}>{insight}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {glp1Insights.length > 0 && (
+        <View style={styles.sectionWrap}>
+          <Text style={[styles.sectionTitle, { color: c.foreground }]}>Treatment Patterns</Text>
+          <Text style={[styles.sectionSub, { color: c.mutedForeground }]}>What we are noticing about your medication journey</Text>
+          {glp1Insights.map((insight, i) => (
+            <View key={i} style={[styles.glp1InsightCard, { backgroundColor: c.card }]}>
+              <View style={[styles.glp1InsightIcon, { backgroundColor: insight.color + "14" }]}>
+                <Feather name={insight.icon} size={14} color={insight.color} />
+              </View>
+              <Text style={[styles.glp1InsightText, { color: c.foreground }]}>{insight.text}</Text>
             </View>
           ))}
         </View>
@@ -806,5 +967,26 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Montserrat_500Medium",
     textTransform: "capitalize",
+  },
+  glp1InsightCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    padding: 16,
+    borderRadius: 16,
+  },
+  glp1InsightIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
+  },
+  glp1InsightText: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 21,
   },
 });

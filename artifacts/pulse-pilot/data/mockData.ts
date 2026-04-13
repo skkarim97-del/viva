@@ -280,15 +280,23 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
   let workoutDuration = 30;
   let workoutDesc = "";
 
+  const isTitrated = medicationProfile?.recentTitration === true;
+  const isNewToMed = medicationProfile?.timeOnMedicationBucket === "less_1_month";
+  const isHighDose = medicationProfile ? getDoseTier(medicationProfile.medicationBrand, medicationProfile.doseValue) === "high" : false;
+
   if (sleepCritical || (glp1Inputs?.sideEffects === "rough" && glp1Inputs?.energy === "depleted")) {
     dailyState = "recover";
-    headline = "Let's keep today gentle.";
+    headline = isTitrated
+      ? "Your body is adjusting to the new dose. Keep today simple."
+      : "Let's keep today gentle.";
     summary = symptomsHeavy
       ? "Side effects are heavy and energy is very low. Your body needs a simple, supportive day."
-      : "Sleep was very short and your body is showing it. Rest and hydration are the priority.";
+      : "Sleep was very short and your body is showing it. Rest and hydration come first.";
     dailyFocus = "Rest and recover";
     whyThisPlan = [
-      symptomsHeavy ? "Heavy side effects on GLP-1 are common in the early weeks and after dose changes." : "Short sleep affects energy, appetite, and how your body handles treatment.",
+      symptomsHeavy
+        ? isTitrated ? "Heavier side effects are expected in the 1-2 weeks after a dose change." : "Heavy side effects are common in the early weeks of treatment."
+        : "Short sleep affects energy, appetite, and how your body handles treatment.",
       "A gentle day now helps you stay consistent over the longer term.",
       "Focus on hydration, small protein-rich meals, and rest.",
     ];
@@ -299,11 +307,15 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     optional = "A short walk after a meal can help with nausea and digestion.";
   } else if (symptomsHeavy) {
     dailyState = "recover";
-    headline = "Symptoms are heavier today. Let's simplify.";
-    summary = "Side effects can make everything harder. Today is about doing what feels manageable and not pushing.";
+    headline = isTitrated
+      ? "Side effects from the dose change are showing. Let's simplify."
+      : "Symptoms are heavier today. Let's simplify.";
+    summary = isHighDose
+      ? "Higher doses can bring stronger side effects. Today is about doing what feels manageable."
+      : "Side effects can make everything harder. Today is about doing what feels manageable.";
     dailyFocus = "Manage symptoms";
     whyThisPlan = [
-      "When side effects are heavier, your body is working harder to adjust.",
+      isTitrated ? "Your body is still adjusting to the recent dose change. This is expected." : "When side effects are heavier, your body is working harder to adjust.",
       "Hydration and small meals help manage nausea and fatigue.",
       "Lighter days are part of staying on track long-term.",
     ];
@@ -314,13 +326,15 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     optional = "Ginger tea or small sips of electrolyte water can help with nausea.";
   } else if (appetiteLow && (isDehydrated || glp1Inputs?.proteinConfidence === "low")) {
     dailyState = "maintain";
-    headline = "Fueling needs attention today.";
-    summary = "Appetite is low and hydration or protein may be falling short. Small, nutrient-dense meals will help you feel better.";
+    headline = "Appetite and fueling need more support today.";
+    summary = isHighDose
+      ? "Appetite suppression is stronger at higher doses. Small, nutrient-dense meals will help you feel better."
+      : "Appetite is low and hydration or protein may be falling short. Small, nutrient-dense meals will help.";
     dailyFocus = "Focus on fueling";
     whyThisPlan = [
       "Low appetite is one of the most common effects of GLP-1 medications.",
       "Under-eating can lead to muscle loss and lower energy over time.",
-      "Even small amounts of protein-rich food make a real difference.",
+      isHighDose ? "At your current dose, getting enough protein is especially important." : "Even small amounts of protein-rich food make a real difference.",
     ];
     workoutType = "Light Movement";
     workoutIntensity = "low";
@@ -329,13 +343,13 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     optional = "Protein shakes or smoothies are a good option when appetite is low.";
   } else if (stressOverride || stress === "very_high") {
     dailyState = "recover";
-    headline = "Take it slow today.";
-    summary = "Stress affects how your body handles treatment, sleep, and appetite. Simplify today.";
+    headline = "Stress is elevated. Let's simplify today.";
+    summary = "Stress affects how your body handles treatment, sleep, and appetite. A simpler day helps.";
     dailyFocus = "Simplify and recover";
     whyThisPlan = [
       "Stress raises cortisol, which can interfere with treatment benefits.",
       "A simple, low-pressure day helps your body stay in a better place.",
-      "Recovery is not just physical. your mind needs rest too.",
+      "Recovery is not just physical. Your mind needs rest too.",
     ];
     workoutType = "Rest or Gentle Walk";
     workoutIntensity = "low";
@@ -344,11 +358,13 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     optional = "A short walk in fresh air can help reset your system.";
   } else if (consecutivePoorRecovery || hrvDeclining5) {
     dailyState = "recover";
-    headline = "Your body is asking for more recovery.";
-    summary = "Recovery signals have been lower than usual. A lighter day with good sleep tonight will help you get back on track.";
+    headline = isTitrated
+      ? "Recovery has been lower since the dose change. Let's be patient."
+      : "Recovery looks a bit strained. A lighter day will help.";
+    summary = "Recovery signals have been lower than usual. A lighter day with good sleep tonight will help you reset.";
     dailyFocus = "Recovery protocol";
     whyThisPlan = [
-      "Lower recovery signals often show up before you feel tired.",
+      isTitrated ? "Lower recovery is common after a dose increase. It usually improves within 1-2 weeks." : "Lower recovery signals often show up before you feel tired.",
       "Catching it early prevents bigger dips in energy and consistency.",
       "Prioritize sleep and hydration over activity today.",
     ];
@@ -359,7 +375,9 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     optional = "Start winding down 30 minutes earlier tonight.";
   } else if (sleepGoodHrvGood && readinessScore >= 75 && !appetiteLow) {
     dailyState = "push";
-    headline = "You're in a good place today.";
+    headline = isNewToMed
+      ? "Your body is responding well to treatment. A good day to build."
+      : "Recovery is strong. Make the most of today.";
     summary = "Sleep was solid, recovery is strong, and your body is ready. A good day for a strength session or a longer walk.";
     dailyFocus = "Make the most of today";
     whyThisPlan = [
@@ -374,7 +392,7 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     optional = "Include a protein-rich meal within an hour after your session.";
   } else if (readinessScore >= 65) {
     dailyState = "build";
-    headline = "A solid day to build momentum.";
+    headline = "This looks like a good day to keep momentum simple.";
     summary = "Recovery supports activity today. Stay consistent with movement, protein, and hydration.";
     dailyFocus = "Steady progress";
     whyThisPlan = [
@@ -389,13 +407,15 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     optional = "If energy drops, a walk is always a great fallback.";
   } else if (readinessScore >= 45) {
     dailyState = "maintain";
-    headline = "Keep it steady today.";
+    headline = sleepLow
+      ? "Short sleep tonight. Keep today simple."
+      : "Your body may benefit from a lighter day.";
     summary = sleepLow
       ? "Sleep was short. A lighter day with good nutrition will help you recover."
       : "Recovery is moderate. Stay consistent with the basics and keep movement gentle.";
     dailyFocus = "Basics first";
     whyThisPlan = [
-      "On moderate days, the basics matter most. hydration, protein, rest.",
+      "On moderate days, the basics matter most. Hydration, protein, rest.",
       "Gentle movement helps you stay in rhythm without overdoing it.",
       "Consistency on days like this is what builds long-term results.",
     ];
@@ -406,11 +426,13 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     optional = "If you feel good, you can extend to 30 minutes.";
   } else {
     dailyState = "recover";
-    headline = "Your body needs a break today.";
+    headline = isTitrated
+      ? "Your body is working hard to adjust. Rest is the right call today."
+      : "Your body needs a break today.";
     summary = "Recovery is low. Focus on rest, hydration, and nourishing food. Movement can wait.";
     dailyFocus = "Rest and restore";
     whyThisPlan = [
-      "Rest days help your body adjust to treatment and recover.",
+      isTitrated ? "Your body needs time to adjust after a dose change." : "Rest days help your body adjust to treatment and recover.",
       "Good nutrition and hydration are your best tools right now.",
       "Pushing through fatigue creates more fatigue, not progress.",
     ];
@@ -489,14 +511,15 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
 
   if (metrics.recoveryScore >= 70) statusDrivers.push("Recovery is solid");
   else if (metrics.recoveryScore >= 50) statusDrivers.push("Recovery is moderate");
-  else statusDrivers.push("Recovery is low");
+  else statusDrivers.push("Recovery needs attention");
 
   if (sleepHours >= 7.5) statusDrivers.push("Slept well");
   else if (sleepHours >= 6.5) statusDrivers.push("Sleep was adequate");
   else statusDrivers.push("Sleep was short");
 
-  if (symptomsHeavy) statusDrivers.push("Symptoms are heavier today");
-  else if (appetiteLow) statusDrivers.push("Appetite is low");
+  if (medicationProfile?.recentTitration) statusDrivers.push("Recent dose change");
+  else if (symptomsHeavy) statusDrivers.push("Side effects are heavier");
+  else if (appetiteLow) statusDrivers.push("Appetite is reduced");
   else if (feeling === "great" || energy === "excellent" || energy === "high") statusDrivers.push("Feeling good");
   else if (feeling === "stressed" || stressOverride) statusDrivers.push("Stress is elevated");
   else if (feeling === "tired") statusDrivers.push("Feeling tired");

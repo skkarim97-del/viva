@@ -411,14 +411,51 @@ export default function DashboardScreen() {
           <View style={[styles.medPillRow, { backgroundColor: c.card }]}>
             <View style={styles.medPillLeft}>
               <Feather name="package" size={14} color={c.accent} />
-              <Text style={[styles.medPillText, { color: c.foreground }]}>
-                {formatDoseDisplay(
-                  profile.medicationProfile.medicationBrand,
-                  profile.medicationProfile.doseValue,
-                  profile.medicationProfile.doseUnit,
-                  profile.medicationProfile.frequency as "weekly" | "daily"
-                )}
-              </Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.medPillText, { color: c.foreground }]}>
+                  {formatDoseDisplay(
+                    profile.medicationProfile.medicationBrand,
+                    profile.medicationProfile.doseValue,
+                    profile.medicationProfile.doseUnit,
+                    profile.medicationProfile.frequency as "weekly" | "daily"
+                  )}
+                </Text>
+                <View style={styles.medPillSubRow}>
+                  {(() => {
+                    const parts: string[] = [];
+                    const lastDose = medicationLog.filter(e => e.status === "taken").sort((a, b) => b.date.localeCompare(a.date))[0];
+                    if (lastDose) {
+                      const todayStr = new Date().toISOString().split("T")[0];
+                      const doseParts = lastDose.date.split("-").map(Number);
+                      const todayParts = todayStr.split("-").map(Number);
+                      const doseDate = new Date(doseParts[0], doseParts[1] - 1, doseParts[2]);
+                      const todayDate = new Date(todayParts[0], todayParts[1] - 1, todayParts[2]);
+                      const daysAgo = Math.round((todayDate.getTime() - doseDate.getTime()) / 86400000);
+                      if (daysAgo <= 0) parts.push("Dosed today");
+                      else if (daysAgo === 1) parts.push("Last dose: yesterday");
+                      else parts.push(`Last dose: ${daysAgo} days ago`);
+                    }
+                    if (profile.medicationProfile?.telehealthPlatform) {
+                      parts.push(`Via ${profile.medicationProfile.telehealthPlatform}`);
+                    }
+                    if (!lastDose && profile.medicationProfile?.plannedDoseDay) {
+                      const today = new Date().toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
+                      const doseDay = profile.medicationProfile.plannedDoseDay.toLowerCase();
+                      if (today === doseDay) parts.push("Dose day");
+                      else {
+                        const days = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
+                        const todayIdx = days.indexOf(today);
+                        const doseIdx = days.indexOf(doseDay);
+                        const diff = (doseIdx - todayIdx + 7) % 7;
+                        if (diff === 1) parts.push("Dose due tomorrow");
+                        else if (diff > 0) parts.push(`Dose in ${diff} days`);
+                      }
+                    }
+                    if (parts.length === 0) return null;
+                    return <Text style={[styles.medPillSubText, { color: c.mutedForeground }]}>{parts.join(" · ")}</Text>;
+                  })()}
+                </View>
+              </View>
               {profile.medicationProfile.recentTitration && (
                 <View style={[styles.titrationBadge, { backgroundColor: "#FF950018" }]}>
                   <Text style={[styles.titrationText, { color: "#FF9500" }]}>Titrated</Text>
@@ -585,9 +622,27 @@ export default function DashboardScreen() {
           </View>
         </Modal>
 
+        <View style={[styles.inputContainer, { backgroundColor: c.card }]}>
+          <View style={styles.inputHeader}>
+            <Feather name="edit-3" size={14} color={c.accent} />
+            <Text style={[styles.inputTitle, { color: c.foreground }]}>How are things today?</Text>
+          </View>
+          {inputSummary ? (
+            <Text style={[styles.inputSummaryText, { color: c.mutedForeground }]}>{inputSummary}</Text>
+          ) : null}
+          <View style={styles.inputRows}>
+            <InputRow label="Energy" options={ENERGY_OPTIONS} selected={glp1Energy} onSelect={selectGlp1Energy} containerBg={c.background} />
+            <InputRow label="Appetite" options={APPETITE_OPTIONS} selected={appetite} onSelect={selectAppetite} containerBg={c.background} />
+            <InputRow label="Hydration" options={HYDRATION_OPTIONS} selected={glp1Hydration} onSelect={selectGlp1Hydration} containerBg={c.background} />
+            <InputRow label="Protein" options={PROTEIN_OPTIONS} selected={proteinConfidence} onSelect={selectProteinConfidence} containerBg={c.background} />
+            <InputRow label="Side Effects" options={SIDE_EFFECT_OPTIONS} selected={sideEffects} onSelect={selectSideEffects} containerBg={c.background} />
+            <InputRow label="Movement" options={MOVEMENT_OPTIONS} selected={movementIntent} onSelect={selectMovementIntent} containerBg={c.background} />
+          </View>
+        </View>
+
         <View style={[styles.dayCard, { backgroundColor: c.card }]}>
           <View style={styles.dayHeader}>
-            <Text style={[styles.dayTitle, { color: c.foreground }]}>Today</Text>
+            <Text style={[styles.dayTitle, { color: c.foreground }]}>Your Plan</Text>
             <Text style={[styles.dayProgress, { color: c.mutedForeground }]}>
               {completedCount}/{totalActions}
             </Text>
@@ -643,24 +698,6 @@ export default function DashboardScreen() {
               </View>
             );
           })}
-        </View>
-
-        <View style={[styles.inputContainer, { backgroundColor: c.card }]}>
-          <View style={styles.inputHeader}>
-            <Feather name="edit-3" size={14} color={c.accent} />
-            <Text style={[styles.inputTitle, { color: c.foreground }]}>How are things today?</Text>
-          </View>
-          {inputSummary ? (
-            <Text style={[styles.inputSummaryText, { color: c.mutedForeground }]}>{inputSummary}</Text>
-          ) : null}
-          <View style={styles.inputRows}>
-            <InputRow label="Energy" options={ENERGY_OPTIONS} selected={glp1Energy} onSelect={selectGlp1Energy} containerBg={c.background} />
-            <InputRow label="Appetite" options={APPETITE_OPTIONS} selected={appetite} onSelect={selectAppetite} containerBg={c.background} />
-            <InputRow label="Hydration" options={HYDRATION_OPTIONS} selected={glp1Hydration} onSelect={selectGlp1Hydration} containerBg={c.background} />
-            <InputRow label="Protein" options={PROTEIN_OPTIONS} selected={proteinConfidence} onSelect={selectProteinConfidence} containerBg={c.background} />
-            <InputRow label="Side Effects" options={SIDE_EFFECT_OPTIONS} selected={sideEffects} onSelect={selectSideEffects} containerBg={c.background} />
-            <InputRow label="Movement" options={MOVEMENT_OPTIONS} selected={movementIntent} onSelect={selectMovementIntent} containerBg={c.background} />
-          </View>
         </View>
 
         <View style={[styles.askCard, { backgroundColor: c.card }]}>
@@ -1079,7 +1116,7 @@ const styles = StyleSheet.create({
     marginTop: -4,
   },
   inputRows: {
-    gap: 18,
+    gap: 14,
   },
 
   dayCard: {
@@ -1490,6 +1527,13 @@ const styles = StyleSheet.create({
   medPillText: {
     fontSize: 14,
     fontFamily: "Montserrat_600SemiBold",
+  },
+  medPillSubRow: {
+    marginTop: 2,
+  },
+  medPillSubText: {
+    fontSize: 12,
+    fontFamily: "Montserrat_400Regular",
   },
   titrationBadge: {
     paddingHorizontal: 8,
