@@ -23,7 +23,7 @@ const CATEGORY_META: Record<ActionCategory, { label: string; icon: keyof typeof 
   fuel: { label: "Fuel", icon: "coffee", color: "#F0A500" },
   hydrate: { label: "Hydrate", icon: "droplet", color: "#5AC8FA" },
   recover: { label: "Recover", icon: "battery-charging", color: "#8B5CF6" },
-  mind: { label: "Mind", icon: "sun", color: "#34D399" },
+  consistent: { label: "Stay Consistent", icon: "check-circle", color: "#34D399" },
 };
 
 export default function PlanScreen() {

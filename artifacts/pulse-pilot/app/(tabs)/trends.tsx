@@ -173,12 +173,12 @@ function detectPatterns(metrics: HealthMetrics[]): string[] {
 
   const lowRecoveryDays = recent.filter(m => m.recoveryScore < 60).length;
   if (lowRecoveryDays >= 3) {
-    patterns.push(`${lowRecoveryDays} of the last 7 days had recovery below 60%. Consider prioritizing rest and hydration.`);
+    patterns.push(`${lowRecoveryDays} of the last 7 days had recovery below 60%. Rest and hydration are extra important on treatment.`);
   }
 
   const highStepDays = recent.filter(m => m.steps > 10000).length;
   if (highStepDays >= 5) {
-    patterns.push(`You hit 10,000+ steps on ${highStepDays} of 7 days. Activity consistency is strong.`);
+    patterns.push(`You hit 10,000+ steps on ${highStepDays} of 7 days. Great for preserving muscle during treatment.`);
   }
 
   return patterns;
@@ -192,40 +192,39 @@ function buildKeyInsights(metrics: HealthMetrics[], habitStats: { weeklyPercent:
   const avgSleep = recent.reduce((s, m) => s + m.sleepDuration, 0) / recent.length;
   const avgRecovery = Math.round(recent.reduce((s, m) => s + m.recoveryScore, 0) / recent.length);
   const avgSteps = Math.round(recent.reduce((s, m) => s + m.steps, 0) / recent.length);
-  const avgRHR = Math.round(recent.reduce((s, m) => s + m.restingHeartRate, 0) / recent.length);
 
   if (habitStats.todayCompleted > 0) {
-    insights.push(`You completed ${habitStats.todayCompleted} of ${habitStats.todayTotal} habits today.`);
+    insights.push(`You completed ${habitStats.todayCompleted} of ${habitStats.todayTotal} actions today.`);
   }
 
   if (habitStats.weeklyPercent > 0 && habitStats.weeklyPercent < 50) {
-    insights.push(`Habit consistency is at ${habitStats.weeklyPercent}% this week. Small wins add up.`);
+    insights.push(`Consistency is at ${habitStats.weeklyPercent}% this week. Every small step matters on treatment.`);
   } else if (habitStats.weeklyPercent >= 80) {
-    insights.push(`Habit consistency is excellent at ${habitStats.weeklyPercent}% this week.`);
+    insights.push(`Consistency is excellent at ${habitStats.weeklyPercent}% this week. This supports your treatment.`);
   }
 
   if (habitStats.streakDays >= 3) {
-    insights.push(`You are on a ${habitStats.streakDays}-day habit streak. Keep it going.`);
+    insights.push(`You are on a ${habitStats.streakDays}-day streak. Consistency is key during treatment.`);
   } else if (habitStats.streakDays === 0 && habitStats.weeklyPercent > 0) {
-    insights.push(`Your habit streak was broken. Today is a fresh start.`);
+    insights.push(`Your streak was broken. Today is a fresh start.`);
   }
 
   if (avgSleep < 6.5) {
-    insights.push(`Sleep averaged ${avgSleep.toFixed(1)} hrs this week. That is below the recommended 7+ hours.`);
+    insights.push(`Sleep averaged ${avgSleep.toFixed(1)} hrs this week. Better sleep helps manage side effects.`);
   } else if (avgSleep >= 7.5) {
-    insights.push(`Sleep averaged ${avgSleep.toFixed(1)} hrs. Strong foundation for recovery.`);
+    insights.push(`Sleep averaged ${avgSleep.toFixed(1)} hrs. Strong foundation for recovery on treatment.`);
   }
 
   if (avgRecovery < 55) {
-    insights.push(`Recovery has been low at ${avgRecovery}%. Consider dialing back intensity.`);
+    insights.push(`Recovery has been low at ${avgRecovery}%. Prioritize rest and hydration.`);
   } else if (avgRecovery >= 75) {
-    insights.push(`Recovery is solid at ${avgRecovery}%. Your body is handling the load well.`);
+    insights.push(`Recovery is solid at ${avgRecovery}%. Your body is handling treatment well.`);
   }
 
   if (avgSteps >= 10000) {
-    insights.push(`Averaging ${avgSteps.toLocaleString()} steps. Activity level is strong.`);
+    insights.push(`Averaging ${avgSteps.toLocaleString()} steps. Great for muscle preservation.`);
   } else if (avgSteps < 5000) {
-    insights.push(`Steps averaged ${avgSteps.toLocaleString()} this week. More daily movement would help.`);
+    insights.push(`Steps averaged ${avgSteps.toLocaleString()} this week. Gentle walks after meals can help.`);
   }
 
   return insights.slice(0, 5);
@@ -379,7 +378,7 @@ export default function TrendsScreen() {
 
       {keyInsights.length > 0 && (
         <View style={styles.sectionWrap}>
-          <Text style={[styles.sectionTitle, { color: c.foreground }]}>Key Insights</Text>
+          <Text style={[styles.sectionTitle, { color: c.foreground }]}>What We're Noticing</Text>
           {keyInsights.map((insight, i) => (
             <View key={i} style={[styles.insightCard, { backgroundColor: c.card }]}>
               <Feather name="zap" size={13} color={c.primary} />
@@ -392,7 +391,7 @@ export default function TrendsScreen() {
       {correlations.length > 0 && (
         <View style={styles.sectionWrap}>
           <Text style={[styles.sectionTitle, { color: c.foreground }]}>Correlations</Text>
-          <Text style={[styles.sectionSub, { color: c.mutedForeground }]}>How your metrics connect to each other</Text>
+          <Text style={[styles.sectionSub, { color: c.mutedForeground }]}>How your body signals connect during treatment</Text>
           {correlations.map((corr, i) => (
             <View key={i} style={[styles.corrCard, { backgroundColor: c.card }]}>
               <View style={styles.corrHeader}>
@@ -425,7 +424,7 @@ export default function TrendsScreen() {
 
       {patterns.length > 0 && (
         <View style={styles.sectionWrap}>
-          <Text style={[styles.sectionTitle, { color: c.foreground }]}>Patterns Detected</Text>
+          <Text style={[styles.sectionTitle, { color: c.foreground }]}>Patterns During Treatment</Text>
           {patterns.map((p, i) => (
             <View key={i} style={[styles.patternCard, { backgroundColor: c.card }]}>
               <Feather name="eye" size={14} color={c.primary} />
@@ -468,7 +467,7 @@ export default function TrendsScreen() {
           ))}
         </View>
 
-        <Text style={[styles.categoryLabel, { color: c.mutedForeground }]}>Activity</Text>
+        <Text style={[styles.categoryLabel, { color: c.mutedForeground }]}>Movement</Text>
         <View style={styles.metricsRow}>
           {activityMetrics.map((m) => (
             <Pressable
@@ -497,7 +496,7 @@ export default function TrendsScreen() {
           ))}
         </View>
 
-        <Text style={[styles.categoryLabel, { color: c.mutedForeground }]}>Habits</Text>
+        <Text style={[styles.categoryLabel, { color: c.mutedForeground }]}>Consistency</Text>
         <View style={styles.metricsRow}>
           {habitsMetrics.map((m) => (
             <View key={m.label} style={[styles.metricTile, { backgroundColor: c.card }]}>

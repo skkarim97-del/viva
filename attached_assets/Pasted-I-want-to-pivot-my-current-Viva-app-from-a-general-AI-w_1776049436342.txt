@@ -1,0 +1,674 @@
+I want to pivot my current Viva app from a general AI wellness coach into a premium GLP-1 support app for patients, with the long-term goal of helping telehealth clinics reduce churn and improve patient retention.
+
+Do NOT rebuild the app from scratch.
+Refactor the existing app structure, state, copy, and logic so the entire experience feels purpose-built for GLP-1 patients.
+
+CORE PRODUCT REFRAME
+
+This is no longer a broad health, recovery, or fitness app.
+
+Viva should now feel like a focused digital health product that helps patients on GLP-1 medications stay on track between visits through simple daily support around:
+- appetite
+- nutrition and protein
+- hydration
+- activity
+- recovery
+- side effects
+- consistency
+
+The internal company thesis is:
+specific combinations of wearable data plus simple patient-reported inputs may help identify early signs of disengagement or future dropout from GLP-1 therapy.
+
+However, this should NOT be framed that way to the patient.
+
+PATIENT EXPERIENCE PRINCIPLE
+
+The patient should never feel judged, scored, or told they are at risk of dropping out.
+
+The patient-facing experience should feel:
+- supportive
+- premium
+- clear
+- calm
+- easy to use
+- highly personalized
+- human
+- science-aware without sounding technical
+- encouraging but not cheesy
+
+The app should feel like:
+“this app helps me feel better, stay consistent, and get more out of my GLP-1 journey”
+
+NOT:
+“this app is monitoring whether I’m about to fail treatment”
+
+CLINIC / INTERNAL LOGIC PRINCIPLE
+
+Internally, structure the app and state so that it can support a future clinician layer that tracks:
+- adherence risk
+- disengagement patterns
+- likely dropout signals
+- risk drivers
+- intervention opportunities
+
+This internal risk logic should exist in the code now, but should NOT be exposed directly in the patient-facing UI.
+
+The patient should only see translated, supportive guidance.
+
+OVERALL PRODUCT GOAL
+
+Refactor the app so the product experience centers around:
+1. helping GLP-1 patients stay engaged and feel better on therapy
+2. using wearable + structured input data to detect early support needs
+3. giving patients a simple daily plan to stay on track
+4. creating a structured logic layer that could later support clinics and telehealth programs
+
+DESIGN GOAL
+
+Make the app feel like a premium digital health product.
+Keep the current polished look and feel where possible.
+Do not redesign from zero.
+Retain the modern mobile-first experience, rounded cards, clean spacing, and premium feel.
+
+The result should feel:
+- simpler
+- more focused
+- more premium
+- easier to understand
+- more useful
+- more clinically relevant
+than the current general wellness version
+
+IMPORTANT IMPLEMENTATION RULE
+
+Keep most of the current customer inputs and overall structure similar, but make everything more clearly geared toward a GLP-1 patient.
+
+That means:
+- preserve simplicity
+- do not overwhelm the user with too many new inputs
+- reuse the app’s current flow and components where sensible
+- tighten the logic and copy around GLP-1 adherence, recovery, symptoms, and consistency
+
+=====================================
+PART 1: APP POSITIONING AND COPY
+=====================================
+
+Rewrite the app so all product language reflects the new GLP-1 positioning.
+
+Use language like:
+- stay on track
+- consistency
+- support between visits
+- appetite
+- fueling
+- recovery
+- movement
+- hydration
+- symptoms
+- momentum
+- feeling your best on treatment
+
+Avoid generic wellness language like:
+- optimize your strain
+- maximize performance
+- biohacking
+- mindfulness resets unless relevant
+- peak performance
+- recovery score obsession
+
+Avoid language that sounds robotic or like ChatGPT.
+
+Do not make the app feel like:
+- a hardcore athlete tracker
+- a generic meditation app
+- a general fitness dashboard
+- a consumer gadget data app
+
+The app should feel more like a focused GLP-1 companion.
+
+Top-level positioning to reflect throughout the app:
+Viva helps GLP-1 patients stay consistent, feel supported, and build better day-to-day habits between clinical visits.
+
+=====================================
+PART 2: ONBOARDING REFACTOR
+=====================================
+
+Refactor onboarding so it is clearly for GLP-1 users.
+
+Keep it simple and polished.
+
+The onboarding should collect the following:
+
+1. Welcome screen
+Explain that Viva helps patients stay on track on GLP-1 between visits by combining wearable data with simple daily check-ins.
+
+2. Goal selection
+Options like:
+- lose weight
+- improve metabolic health
+- preserve muscle while losing weight
+- maintain energy
+- stay more consistent on treatment
+
+3. GLP-1 context
+Add fields:
+- medication type: semaglutide, tirzepatide, liraglutide, other
+- reason for taking it: weight loss, metabolic health, diabetes, other
+- how long on medication: less than 1 month, 1-3 months, 3-6 months, 6+ months
+- current dose optional
+- dosing day optional
+
+4. Side effect baseline
+Let users select typical issues:
+- nausea
+- fatigue
+- constipation
+- poor appetite
+- dizziness or weakness
+- sleep disruption
+- none or minimal
+
+5. Nutrition and recovery baseline
+Collect:
+- protein confidence: low, medium, high
+- hydration confidence: low, medium, high
+- meals per day
+- concern about under-eating: yes or no
+- are you strength training currently: yes, sometimes, no
+
+6. Activity baseline
+Collect:
+- inactive
+- lightly active
+- moderately active
+- very active
+and frequency of walking and strength training
+
+7. Wearable connection
+Prioritize Apple Health first.
+Keep placeholders or connection cards for Garmin, Oura, and Whoop if supported by the current app.
+Make it clear that more data leads to more personalized guidance.
+
+8. Onboarding summary
+Explain that Viva will help monitor recovery, movement, symptoms, appetite, and consistency to support the patient between visits.
+
+Data model updates needed:
+Add onboarding fields such as:
+- glp1Medication
+- glp1Reason
+- glp1Duration
+- glp1DoseOptional
+- glp1InjectionDayOptional
+- baselineSideEffects
+- proteinConfidence
+- hydrationConfidence
+- mealsPerDay
+- underEatingConcern
+- strengthTrainingBaseline
+- activityBaseline
+
+Keep persistence clean and compatible with existing state if possible.
+
+=====================================
+PART 3: TODAY TAB REFACTOR
+=====================================
+
+The Today tab should become the main home screen and daily support screen.
+
+This is the most important screen in the app.
+
+The patient should open it and immediately understand:
+- how they’re doing today
+- what needs attention
+- what to do next
+
+The Today tab should NOT display “dropout risk” to the patient.
+
+Instead, it should present a simple supportive state at the top, such as:
+- You’re in a good place today
+- A few small adjustments will help today
+- Let’s make today a bit easier
+- Your body may need more support today
+
+Top section should summarize:
+- recovery
+- movement
+- appetite and fuel
+- symptoms
+- consistency
+
+Add a compact daily support summary that feels human and easy to scan.
+
+Daily check-in inputs should stay simple and low-friction.
+Use quick taps or segmented controls for:
+- energy: great, good, tired, depleted
+- appetite: normal, low, very low
+- hydration: good, okay, poor
+- protein confidence today: good, okay, poor
+- side effects today: none, mild, moderate, rough
+- movement intent: walk, strength, light recovery, rest
+
+Then show a “Today’s focus” section with 3-5 concrete recommendations.
+Examples:
+- prioritize protein early today
+- front-load hydration this morning
+- keep movement light and easy
+- eat one extra small meal if appetite stays low
+- go for a short walk after meals
+- skip intense training and recover
+
+Then show a short “Why this matters” explanation block using the patient’s actual data.
+
+Examples of patient-facing explanations:
+- Your recovery looks okay, but your appetite and hydration suggest you may be under-fueling today
+- Symptoms look a bit heavier than usual, so a lighter day may help you stay consistent
+- Your recent movement has dipped, and a short walk today can help you keep momentum without overdoing it
+
+This screen should feel premium, simple, and useful.
+It should not overwhelm the user with charts.
+
+=====================================
+PART 4: WEEKLY PLAN TAB REFACTOR
+=====================================
+
+Refactor the current plan tab into a weekly GLP-1 adherence plan.
+
+Potential title:
+- Your Weekly Plan
+or
+- Your GLP-1 Plan
+
+The plan should no longer feel like a generic workout or wellness plan.
+
+Instead it should organize each day around the following categories:
+- Move
+- Fuel
+- Hydrate
+- Recover
+- Stay Consistent
+
+For each day, provide one clear action per category.
+
+Examples:
+Move
+- 30 minute walk
+- light strength training
+- gentle movement only
+- full rest
+
+Fuel
+- prioritize 3 protein hits
+- add one extra snack
+- eat smaller balanced meals
+- focus on not under-eating
+
+Hydrate
+- 80 oz water and electrolytes
+- front-load fluids before noon
+- hydration focus today
+
+Recover
+- aim for 8+ hours
+- lighter evening
+- reduce training load
+- early wind-down
+
+Stay Consistent
+- complete your check-in
+- log symptoms
+- prep for injection day
+- keep routines simple today
+
+Important:
+The Today tab and the current day shown in the weekly plan should stay synchronized where relevant.
+If the user updates today’s intent or selections in one place, the current day should reflect that in the other.
+
+Include a weekly summary at the top in a concise, premium, clinically aware tone.
+It should synthesize trends like:
+- lower energy this week
+- stable recovery
+- inconsistent fueling
+- improving consistency
+- rising symptom load
+- good momentum
+
+=====================================
+PART 5: TRENDS TAB REFACTOR
+=====================================
+
+Refactor the trends tab so it no longer feels like a generic wearable dashboard.
+
+It should become a “support and consistency trends” tab.
+
+Keep it visually clean and avoid clutter.
+
+Organize it into four simple sections:
+
+1. Recovery / Body
+Show only the most relevant metrics:
+- sleep 7-day average
+- HRV trend if available
+- resting heart rate trend if available
+
+2. Movement
+Show:
+- steps 7-day average
+- active days this week
+- strength sessions this week
+
+3. Fuel / Symptoms
+Use patient inputs to create simple trend cards:
+- appetite trend
+- hydration trend
+- protein consistency trend
+- side effect trend
+
+4. Consistency
+Show:
+- weekly completion percentage
+- current streak
+- check-in completion rate
+- plan adherence percentage
+
+Add a new section called something like:
+- What we’re noticing
+or
+- Recent patterns
+
+This section should explain trends in plain, supportive English.
+Examples:
+- Your appetite has been lower than usual this week
+- Movement has dipped over the last few days
+- Recovery is stable, but fueling may need more attention
+- Symptom load appears a bit higher than last week
+- You’ve been more consistent this week than the week before
+
+Do not expose internal dropout language here.
+
+=====================================
+PART 6: COACH TAB REFACTOR
+=====================================
+
+Refactor the Coach tab into a focused GLP-1 support coach.
+
+It should answer questions related to:
+- GLP-1 routines
+- appetite
+- protein and nutrition
+- hydration
+- activity
+- recovery
+- sleep
+- side effects
+- consistency
+- how the patient is feeling
+- why their recent trends may be changing
+
+If the user asks irrelevant questions, do not reply with a robotic refusal.
+Instead, gently redirect them back to the product’s purpose.
+
+Example:
+I’m here to help with your GLP-1 routine, recovery, nutrition, symptoms, and staying on track. Based on your recent data, fueling and consistency look like the biggest opportunities right now.
+
+Update quick actions to things like:
+- What should I focus on today?
+- Why do I feel worse this week?
+- What should I eat if my appetite is low?
+- How can I stay more consistent on GLP-1?
+- Should I work out today or recover?
+- What matters most for me right now?
+
+Update the AI prompt or backend logic so coach responses:
+- sound human
+- are concise
+- reference the user’s actual data when possible
+- prioritize 1-3 actions max
+- avoid giant lists
+- avoid generic wellness filler
+- avoid sounding like a search engine
+- feel like a premium coach inside a digital health product
+
+The coach should prioritize behavior change and patient support.
+
+=====================================
+PART 7: INTERNAL RISK ENGINE
+=====================================
+
+Implement a structured internal risk model in the shared app logic.
+
+Important:
+This internal model exists for future clinic monitoring and smarter interventions.
+It should NOT be directly exposed to the patient.
+
+Create a function such as:
+calculateDropoutRisk(userData)
+
+It should output:
+- dropoutRiskLevel
+- riskScore
+- riskDrivers
+- interventionFocus
+
+These should live in state or derived logic but not be shown directly in the patient UI.
+
+This should be a hypothesis-driven, rules-based model, not a fake black-box AI score.
+
+MVP signal hypothesis:
+early GLP-1 disengagement may be associated with a combination of:
+- recovery decline
+- activity decline
+- poor fueling
+- rising symptom load
+- falling consistency
+
+Use rolling baselines where possible:
+- sleep baseline = last 7 to 14 days
+- HRV baseline = last 7 to 14 days
+- steps baseline = last 7 days
+
+Initial rules can include:
+
+Recovery Breakdown
+Trigger if:
+- HRV drops 15 to 25 percent vs baseline if available
+OR
+- resting heart rate rises 5 to 10 percent vs baseline
+AND
+- sleep drops more than 45 to 60 minutes vs baseline
+
+Activity Decline
+Trigger if:
+- steps drop 25 to 40 percent vs 7-day average
+OR
+- 3 consecutive low-activity days
+
+Fueling Breakdown
+Trigger if:
+- appetite = very low for 2 to 3 days
+- protein confidence = poor
+- hydration = poor
+
+Symptom Load
+Trigger if:
+- side effects = moderate or rough for 2+ days
+
+Consistency Breakdown
+Trigger if:
+- missed check-ins rise
+- plan completion falls materially
+- movement intent and actual pattern diverge repeatedly
+
+Scoring suggestion:
+- Recovery Breakdown = +25
+- Activity Decline = +20
+- Fueling Breakdown = +25
+- Symptom Load = +20
+- Consistency Breakdown = +10
+
+Total score ranges:
+0-20 = low
+21-40 = mild
+41-70 = elevated
+71+ = high
+
+Structure this logic cleanly so it can be iterated later.
+
+=====================================
+PART 8: TRANSLATION LAYER FOR PATIENT MESSAGING
+=====================================
+
+Create a translation layer that converts internal risk logic into patient-friendly support messaging.
+
+Create something like:
+translateRiskToUserMessage(riskData)
+
+This should transform internal outputs into supportive, non-judgmental copy.
+
+Examples:
+
+Internal:
+elevated dropout risk
+drivers: low HRV, poor hydration, low appetite
+
+Patient-facing:
+Your body may be a bit under-fueled right now. Let’s keep today simple and focus on hydration and protein.
+
+Internal:
+activity decline and rising symptoms
+
+Patient-facing:
+You’ve had a quieter stretch recently and symptoms may be making it harder to keep momentum. A light day with simple habits may help.
+
+Internal:
+recovery decline
+
+Patient-facing:
+Recovery looks a bit lower than usual. This may be a good time to lighten the load and prioritize rest.
+
+Important rules:
+Do not use words like:
+- dropout risk
+- churn
+- adherence risk
+- compliance risk
+- failing treatment
+
+Use supportive language like:
+- stay on track
+- keep momentum
+- your body may need more support today
+- a lighter day may help
+- this is a good moment to reset
+
+The patient should feel:
+- understood
+- supported
+- guided
+
+NOT:
+- judged
+- scored
+- monitored
+
+=====================================
+PART 9: DATA MODEL AND STATE UPDATES
+=====================================
+
+Extend the current shared state and types to support:
+- new GLP-1 onboarding fields
+- daily appetite input
+- daily protein confidence input
+- daily side effects input
+- daily hydration input
+- movement intent
+- trend summaries for fuel and symptoms
+- weekly adherence or consistency score
+- internal risk score
+- internal risk drivers
+- internal intervention focus
+- translated user-facing support state
+
+Preserve AsyncStorage or existing persistence patterns.
+Keep the app stable and backwards compatible where possible.
+
+Update any mock data or seed data so the demo experience feels coherent and polished.
+
+=====================================
+PART 10: COMPONENT AND SCREEN POLISH
+=====================================
+
+Keep the app premium and simple.
+
+Make sure:
+- fonts are consistent across tabs
+- card styles are consistent
+- spacing is clean
+- summaries are chunked and readable
+- no screen feels overloaded
+- hierarchy is clear
+- primary actions are obvious
+
+The app should feel like something a patient could actually use every day.
+
+Avoid long dense paragraphs.
+Break explanations into short, polished blocks.
+
+Keep charts and metrics minimal and only where helpful.
+
+=====================================
+PART 11: FILES TO UPDATE
+=====================================
+
+Refactor the existing implementation instead of starting over.
+
+Likely files to update include things like:
+- context/AppContext.tsx
+- types/index.ts
+- data/mockData.ts
+- data/insights.ts
+- app/onboarding/index.tsx
+- app/(tabs)/index.tsx
+- app/(tabs)/plan.tsx
+- app/(tabs)/trends.tsx
+- app/(tabs)/coach.tsx
+
+If helper functions or utilities need to be added for:
+- risk calculation
+- supportive message translation
+- weekly plan generation
+- trends summaries
+please create them cleanly.
+
+=====================================
+PART 12: IMPLEMENTATION QUALITY BAR
+=====================================
+
+This should not be a superficial copy rewrite.
+It should be a true product pivot.
+
+Make the app feel:
+- purpose-built for GLP-1 patients
+- premium
+- easy to use
+- easy to understand
+- more clinically relevant
+- more actionable
+- more cohesive end-to-end
+
+Do not leave behind generic wellness language.
+Do not expose internal risk framing to the user.
+Do not make the product feel like a data science experiment.
+
+The patient experience should feel supportive and polished.
+The underlying logic should feel structured enough to support a future clinic-facing layer.
+
+=====================================
+PART 13: FINAL DELIVERABLE
+=====================================
+
+After implementing the pivot, provide a summary of:
+1. what changed
+2. what was reused from the old app
+3. what new fields and logic were added
+4. what is still placeholder or mocked
+5. what should be built next for a real pilot with GLP-1 users

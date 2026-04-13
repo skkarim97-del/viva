@@ -19,11 +19,11 @@ import { useColors } from "@/hooks/useColors";
 import type { ChatMessage } from "@/types";
 
 const quickActions = [
-  { label: "Should I work out today?", icon: "target" as const },
-  { label: "Why is my recovery low?", icon: "heart" as const },
-  { label: "What should I eat today?", icon: "coffee" as const },
-  { label: "Am I overtraining?", icon: "alert-circle" as const },
-  { label: "How should I train this week?", icon: "calendar" as const },
+  { label: "How should I handle side effects?", icon: "heart" as const },
+  { label: "Am I eating enough protein?", icon: "coffee" as const },
+  { label: "Should I exercise today?", icon: "target" as const },
+  { label: "How can I stay hydrated?", icon: "droplet" as const },
+  { label: "What should I focus on this week?", icon: "calendar" as const },
 ];
 
 const API_BASE = Platform.OS === "web"
@@ -69,10 +69,10 @@ export default function CoachScreen() {
         weight: profile.weight,
         goalWeight: profile.goalWeight,
         goals: profile.goals,
-        workoutPreference: profile.workoutPreference,
-        dietaryPreference: profile.dietaryPreference,
-        fastingEnabled: profile.fastingEnabled,
-        injuries: profile.injuries,
+        glp1Medication: profile.glp1Medication,
+        glp1Duration: profile.glp1Duration,
+        proteinConfidence: profile.proteinConfidence,
+        strengthTrainingBaseline: profile.strengthTrainingBaseline,
         availableWorkoutTime: profile.availableWorkoutTime,
         daysAvailableToTrain: profile.daysAvailableToTrain,
       },

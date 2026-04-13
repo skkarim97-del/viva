@@ -12,6 +12,7 @@ import {
   integrations as defaultIntegrations,
 } from "@/data/mockData";
 import { computeInsights, type DailyInsights } from "@/data/insights";
+import { calculateDropoutRisk } from "@/data/riskEngine";
 import { fetchHealthData, connectProvider } from "@/data/healthProviders";
 import { Platform, Alert } from "react-native";
 import type {
@@ -35,6 +36,14 @@ import type {
   CompletionRecord,
   ActionCategory,
   DailyCheckIn,
+  GLP1DailyInputs,
+  AppetiteLevel,
+  ProteinConfidenceDaily,
+  HydrationDaily,
+  SideEffectSeverity,
+  MovementIntent,
+  EnergyDaily,
+  DropoutRiskResult,
 } from "@/types";
 
 const EXPO_PUBLIC_DOMAIN = process.env.EXPO_PUBLIC_DOMAIN || "";
@@ -82,6 +91,20 @@ interface AppContextType {
   checkInHistory: DailyCheckIn[];
   saveDailyCheckIn: (checkIn: DailyCheckIn) => void;
   todayCheckIn: DailyCheckIn | null;
+  glp1Energy: EnergyDaily;
+  setGlp1Energy: (v: EnergyDaily) => void;
+  appetite: AppetiteLevel;
+  setAppetite: (v: AppetiteLevel) => void;
+  glp1Hydration: HydrationDaily;
+  setGlp1Hydration: (v: HydrationDaily) => void;
+  proteinConfidence: ProteinConfidenceDaily;
+  setProteinConfidence: (v: ProteinConfidenceDaily) => void;
+  sideEffects: SideEffectSeverity;
+  setSideEffects: (v: SideEffectSeverity) => void;
+  movementIntent: MovementIntent;
+  setMovementIntent: (v: MovementIntent) => void;
+  riskResult: DropoutRiskResult | null;
+  glp1InputHistory: GLP1DailyInputs[];
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -93,6 +116,8 @@ const COMPLETION_KEY = "@viva_completions";
 const INTEGRATIONS_KEY = "@viva_integrations";
 const WEEKLY_PLAN_KEY = "@viva_weekly_plan";
 const CHECKIN_KEY = "@viva_checkins";
+const GLP1_INPUTS_KEY = "@viva_glp1_inputs";
+const GLP1_HISTORY_KEY = "@viva_glp1_history";
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<UserProfile>(defaultProfile);
@@ -116,6 +141,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [lastCompletionFeedback, setLastCompletionFeedback] = useState<string | null>(null);
   const [checkInHistory, setCheckInHistory] = useState<DailyCheckIn[]>([]);
 
+  const [glp1Energy, setGlp1EnergyState] = useState<EnergyDaily>(null);
+  const [appetite, setAppetiteState] = useState<AppetiteLevel>(null);
+  const [glp1Hydration, setGlp1HydrationState] = useState<HydrationDaily>(null);
+  const [proteinConfidence, setProteinConfidenceState] = useState<ProteinConfidenceDaily>(null);
+  const [sideEffects, setSideEffectsState] = useState<SideEffectSeverity>(null);
+  const [movementIntent, setMovementIntentState] = useState<MovementIntent>(null);
+  const [riskResult, setRiskResult] = useState<DropoutRiskResult | null>(null);
+  const [glp1InputHistory, setGlp1InputHistory] = useState<GLP1DailyInputs[]>([]);
+
   useEffect(() => {
     loadData();
   }, []);
@@ -134,6 +168,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               goals: userProfile.goals,
               daysAvailableToTrain: userProfile.daysAvailableToTrain,
               availableWorkoutTime: userProfile.availableWorkoutTime,
+              glp1Medication: userProfile.glp1Medication,
+              glp1Duration: userProfile.glp1Duration,
+              proteinConfidence: userProfile.proteinConfidence,
+              strengthTrainingBaseline: userProfile.strengthTrainingBaseline,
             },
             completionHistory: history.slice(-7),
           },
@@ -148,7 +186,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const monday = new Date(today);
       monday.setDate(today.getDate() - ((dayOfWeek + 6) % 7));
       const weekStartDate = monday.toISOString().split("T")[0];
-      const categories: ActionCategory[] = ["move", "fuel", "hydrate", "recover", "mind"];
+      const categories: ActionCategory[] = ["move", "fuel", "hydrate", "recover", "consistent"];
 
       const aiDays: WeeklyPlanDay[] = data.days.map((d: any, i: number) => {
         const date = new Date(monday);
@@ -194,6 +232,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   };
 
+  const computeRisk = useCallback((allMetrics: HealthMetrics[], inputHistory: GLP1DailyInputs[], history: CompletionRecord[]) => {
+    try {
+      const result = calculateDropoutRisk({
+        recentMetrics: allMetrics,
+        dailyInputs: inputHistory,
+        completionHistory: history,
+      });
+      setRiskResult(result);
+    } catch {}
+  }, []);
+
   const loadData = async () => {
     try {
       const savedProfile = await AsyncStorage.getItem(PROFILE_KEY);
@@ -227,6 +276,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setHydrationState(currentHydration);
           setTrainingIntentState(currentTrainingIntent);
         }
+      }
+
+      let currentGlp1Inputs: GLP1DailyInputs | null = null;
+      const savedGlp1 = await AsyncStorage.getItem(GLP1_INPUTS_KEY);
+      if (savedGlp1) {
+        const parsed = JSON.parse(savedGlp1);
+        if (parsed.date === todayDate) {
+          currentGlp1Inputs = parsed;
+          setGlp1EnergyState(parsed.energy ?? null);
+          setAppetiteState(parsed.appetite ?? null);
+          setGlp1HydrationState(parsed.hydration ?? null);
+          setProteinConfidenceState(parsed.proteinConfidence ?? null);
+          setSideEffectsState(parsed.sideEffects ?? null);
+          setMovementIntentState(parsed.movementIntent ?? null);
+        }
+      }
+
+      let loadedGlp1History: GLP1DailyInputs[] = [];
+      const savedGlp1History = await AsyncStorage.getItem(GLP1_HISTORY_KEY);
+      if (savedGlp1History) {
+        loadedGlp1History = JSON.parse(savedGlp1History);
+        setGlp1InputHistory(loadedGlp1History);
       }
 
       let loadedHistory: CompletionRecord[] = [];
@@ -286,7 +357,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const today = allMetrics[allMetrics.length - 1];
       setTodayMetrics(today);
       setMetricsRef(today);
-      const plan = generateDailyPlan(today, { feeling: currentFeeling, energy: currentEnergy, stress: currentStress, hydration: currentHydration, trainingIntent: currentTrainingIntent }, loadedHistory, allMetrics);
+      const plan = generateDailyPlan(
+        today,
+        { feeling: currentFeeling, energy: currentEnergy, stress: currentStress, hydration: currentHydration, trainingIntent: currentTrainingIntent },
+        loadedHistory,
+        allMetrics,
+        currentGlp1Inputs ?? undefined
+      );
       const todayCompletion = loadedHistory.find(r => r.date === todayDate);
       if (todayCompletion) {
         for (const a of plan.actions) {
@@ -318,11 +395,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       const savedProfileData = savedProfile ? JSON.parse(savedProfile) : defaultProfile;
       setInsights(computeInsights(allMetrics, today, allWorkouts, savedProfileData, loadedHistory));
+
+      computeRisk(allMetrics, loadedGlp1History, loadedHistory);
     } catch {
     } finally {
       setIsLoading(false);
     }
   };
+
+  const saveGlp1Inputs = useCallback((
+    en: EnergyDaily, ap: AppetiteLevel, hy: HydrationDaily,
+    pc: ProteinConfidenceDaily, se: SideEffectSeverity, mi: MovementIntent
+  ) => {
+    const todayDate = new Date().toISOString().split("T")[0];
+    const inputs: GLP1DailyInputs = {
+      date: todayDate, energy: en, appetite: ap, hydration: hy,
+      proteinConfidence: pc, sideEffects: se, movementIntent: mi,
+    };
+    AsyncStorage.setItem(GLP1_INPUTS_KEY, JSON.stringify(inputs));
+
+    setGlp1InputHistory(prev => {
+      const filtered = prev.filter(i => i.date !== todayDate);
+      const updated = [...filtered, inputs].slice(-30);
+      AsyncStorage.setItem(GLP1_HISTORY_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
 
   const saveWellness = useCallback((f: FeelingType, e: EnergyLevel, s: StressLevel, h: HydrationLevel, ti: TrainingIntent) => {
     const todayDate = new Date().toISOString().split("T")[0];
@@ -331,8 +429,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const regeneratePlan = useCallback((f: FeelingType, e: EnergyLevel, s: StressLevel, h: HydrationLevel, ti: TrainingIntent) => {
     if (metricsRef) {
-      const newPlan = generateDailyPlan(metricsRef, { feeling: f, energy: e, stress: s, hydration: h, trainingIntent: ti }, completionHistory, metrics);
       const todayDate = new Date().toISOString().split("T")[0];
+      const currentGlp1: GLP1DailyInputs = {
+        date: todayDate,
+        energy: glp1Energy,
+        appetite,
+        hydration: glp1Hydration,
+        proteinConfidence,
+        sideEffects,
+        movementIntent,
+      };
+      const newPlan = generateDailyPlan(metricsRef, { feeling: f, energy: e, stress: s, hydration: h, trainingIntent: ti }, completionHistory, metrics, currentGlp1);
       const todayCompletion = completionHistory.find(r => r.date === todayDate);
       if (todayCompletion) {
         for (const a of newPlan.actions) {
@@ -344,17 +451,48 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
       }
       setDailyPlan(newPlan);
+
+      computeRisk(metrics, glp1InputHistory, completionHistory);
     }
-  }, [metricsRef, completionHistory, metrics]);
+  }, [metricsRef, completionHistory, metrics, glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent, glp1InputHistory, computeRisk]);
+
+  const regenerateFromGlp1 = useCallback(() => {
+    if (metricsRef) {
+      const todayDate = new Date().toISOString().split("T")[0];
+      const currentGlp1: GLP1DailyInputs = {
+        date: todayDate,
+        energy: glp1Energy,
+        appetite,
+        hydration: glp1Hydration,
+        proteinConfidence,
+        sideEffects,
+        movementIntent,
+      };
+      const newPlan = generateDailyPlan(metricsRef, { feeling, energy, stress, hydration, trainingIntent }, completionHistory, metrics, currentGlp1);
+      const todayCompletion = completionHistory.find(r => r.date === todayDate);
+      if (todayCompletion) {
+        for (const a of newPlan.actions) {
+          const saved = todayCompletion.actions.find(sa => sa.id === a.id);
+          if (saved) {
+            a.completed = saved.completed;
+            if (saved.chosen) a.text = saved.chosen;
+          }
+        }
+      }
+      setDailyPlan(newPlan);
+
+      computeRisk(metrics, glp1InputHistory, completionHistory);
+    }
+  }, [metricsRef, feeling, energy, stress, hydration, trainingIntent, completionHistory, metrics, glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent, glp1InputHistory, computeRisk]);
 
   const generateCompletionFeedback = (action: DailyAction, completed: boolean, completedCount: number, total: number): string | null => {
     if (!completed) return null;
     const categoryFeedback: Record<string, string[]> = {
-      move: ["Movement done for the day", "Activity goal checked off", "Your body will feel this tomorrow"],
-      fuel: ["Nutrition on track today", "Good fuel supports everything else", "Nutrition goal complete"],
-      hydrate: ["Hydration is on track for the day", "Water intake looking good", "Staying hydrated helps everything else"],
-      recover: ["Recovery action logged", "Rest and recovery noted", "Your body will thank you tonight"],
-      mind: ["Mental wellness checked off", "That small investment in your mind matters", "Mindfulness goal complete"],
+      move: ["Movement done for the day", "Activity checked off", "Every step supports your journey"],
+      fuel: ["Fueling on track today", "Good nutrition supports your treatment", "Protein goal noted"],
+      hydrate: ["Hydration is on track", "Water intake looking good", "Staying hydrated helps with side effects"],
+      recover: ["Recovery action logged", "Rest noted", "Your body will thank you"],
+      consistent: ["Check-in complete", "Consistency builds momentum", "Showing up is what matters"],
     };
     const options = categoryFeedback[action.category] || ["Done"];
     const msg = options[Math.floor(Math.random() * options.length)];
@@ -573,6 +711,42 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     regeneratePlan(feeling, energy, stress, hydration, newTrainingIntent);
   }, [feeling, energy, stress, hydration, saveWellness, regeneratePlan]);
 
+  const setGlp1Energy = useCallback((v: EnergyDaily) => {
+    setGlp1EnergyState(v);
+    saveGlp1Inputs(v, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent);
+    setTimeout(regenerateFromGlp1, 0);
+  }, [appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent, saveGlp1Inputs, regenerateFromGlp1]);
+
+  const setAppetite = useCallback((v: AppetiteLevel) => {
+    setAppetiteState(v);
+    saveGlp1Inputs(glp1Energy, v, glp1Hydration, proteinConfidence, sideEffects, movementIntent);
+    setTimeout(regenerateFromGlp1, 0);
+  }, [glp1Energy, glp1Hydration, proteinConfidence, sideEffects, movementIntent, saveGlp1Inputs, regenerateFromGlp1]);
+
+  const setGlp1Hydration = useCallback((v: HydrationDaily) => {
+    setGlp1HydrationState(v);
+    saveGlp1Inputs(glp1Energy, appetite, v, proteinConfidence, sideEffects, movementIntent);
+    setTimeout(regenerateFromGlp1, 0);
+  }, [glp1Energy, appetite, proteinConfidence, sideEffects, movementIntent, saveGlp1Inputs, regenerateFromGlp1]);
+
+  const setProteinConfidence = useCallback((v: ProteinConfidenceDaily) => {
+    setProteinConfidenceState(v);
+    saveGlp1Inputs(glp1Energy, appetite, glp1Hydration, v, sideEffects, movementIntent);
+    setTimeout(regenerateFromGlp1, 0);
+  }, [glp1Energy, appetite, glp1Hydration, sideEffects, movementIntent, saveGlp1Inputs, regenerateFromGlp1]);
+
+  const setSideEffects = useCallback((v: SideEffectSeverity) => {
+    setSideEffectsState(v);
+    saveGlp1Inputs(glp1Energy, appetite, glp1Hydration, proteinConfidence, v, movementIntent);
+    setTimeout(regenerateFromGlp1, 0);
+  }, [glp1Energy, appetite, glp1Hydration, proteinConfidence, movementIntent, saveGlp1Inputs, regenerateFromGlp1]);
+
+  const setMovementIntent = useCallback((v: MovementIntent) => {
+    setMovementIntentState(v);
+    saveGlp1Inputs(glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, v);
+    setTimeout(regenerateFromGlp1, 0);
+  }, [glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, saveGlp1Inputs, regenerateFromGlp1]);
+
   const updateProfile = useCallback((updates: Partial<UserProfile>) => {
     setProfile((prev) => {
       const updated = { ...prev, ...updates };
@@ -789,6 +963,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         checkInHistory,
         saveDailyCheckIn,
         todayCheckIn,
+        glp1Energy,
+        setGlp1Energy,
+        appetite,
+        setAppetite,
+        glp1Hydration,
+        setGlp1Hydration,
+        proteinConfidence,
+        setProteinConfidence,
+        sideEffects,
+        setSideEffects,
+        movementIntent,
+        setMovementIntent,
+        riskResult,
+        glp1InputHistory,
       }}
     >
       {children}

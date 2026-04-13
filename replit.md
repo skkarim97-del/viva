@@ -2,11 +2,22 @@
 
 ## Overview
 
-This project is a monorepo utilizing pnpm workspaces and TypeScript to develop a mobile-first AI health and wellness coaching application named Viva. The Viva app, built with Expo/React Native, provides personalized coaching across physical health, mental well-being, energy, stress, sleep, and daily habits. It aims to be a premium, calm, and intelligent daily guide for users, focusing on clarity, confidence, simplicity, and actionable insights. The application integrates AI (OpenAI) for coaching, leverages health data from various providers, and offers a personalized, adaptive experience.
+This project is a monorepo utilizing pnpm workspaces and TypeScript to develop a mobile-first AI health and wellness coaching application named VIVA. The app has been pivoted to serve as a premium GLP-1 patient support platform (iOS/Android/web) built with Expo/React Native. VIVA is purpose-built for GLP-1 medication users (semaglutide, tirzepatide, liraglutide), covering appetite management, side effects, protein/hydration coaching, recovery support, muscle preservation, and treatment consistency.
 
 ## User Preferences
 
 The user prefers an understated, confident, premium, and modern feel for the application. The tone should be calm confidence, simplicity, clarity, and human, avoiding hype, slang, jargon, or emojis. Every sentence should either explain meaning or tell the user what to do.
+
+**Critical rules:**
+- No em dashes. Use periods instead.
+- Hydration always in cups (8-10 cups). Never liters.
+- ActionCategory: "consistent" (NOT "mind"). Categories: move, fuel, hydrate, recover, consistent.
+- DailyStatusLabel strings: "You're in a good place today" | "A few small adjustments will help today" | "Let's make today a bit easier" | "Your body may need more support today"
+- Forbidden patient-facing words: dropout risk, churn, adherence risk, compliance risk, failing treatment.
+- Risk engine scoring: Recovery Breakdown (+25), Activity Decline (+20), Fueling Breakdown (+25), Symptom Load (+20), Consistency Breakdown (+10). Scores: 0-20=low, 21-40=mild, 41-70=elevated, 71+=high.
+- Coach responses: 3-5 sentences, no lists, no bullets, conversational.
+- Bundle ID: com.sullyk97.vivahealth.app, owner: sullyk97.
+- pnpm-workspace.yaml overrides REMOVED (do not re-add).
 
 ## System Architecture
 
@@ -14,7 +25,7 @@ The system is a pnpm workspace monorepo using Node.js 24 and TypeScript 5.9. The
 
 ### UI/UX Decisions (Viva App)
 
-- **Design Philosophy**: Optimize for clarity, confidence, simplicity, and action. The app should feel like a smart daily brief, a premium wellness product, and an Apple-native health coach, not a cluttered dashboard or medical portal.
+- **Design Philosophy**: Optimize for clarity, confidence, simplicity, and action. The app should feel like a supportive daily companion for GLP-1 patients, not a cluttered dashboard or medical portal.
 - **Design System**:
     - **Colors**: Primary blue (#1A5CFF light / #5B8AFF dark), Sky blue accent (#5AC8FA), Apple-like neutrals. Green (#34C759) is used only for positive states, readiness, and progress.
     - **Card Style**: Background contrast only (no borders), #F7F7FA cards on white, radius 16-20.
@@ -24,24 +35,39 @@ The system is a pnpm workspace monorepo using Node.js 24 and TypeScript 5.9. The
     - **Dividers**: HairlineWidth only, using background color rather than border color.
 - **Brand**: "VIVA" wordmark (all caps, Inter_500Medium, letter-spacing 3) with a stylized V pulse line symbol. App icon is a white V-pulse mark on a black background.
 
+### GLP-1 Data Model
+
+- **UserProfile fields**: glp1Medication, glp1Reason, glp1Duration, glp1DoseOptional, glp1InjectionDayOptional, baselineSideEffects, proteinConfidence, hydrationConfidence, mealsPerDay, underEatingConcern, strengthTrainingBaseline
+- **GLP-1 Daily Inputs**: appetite (normal/low/very_low), sideEffects (none/mild/moderate/rough), proteinConfidence (good/okay/poor), movementIntent (walk/strength/light_recovery/rest), energy (great/good/tired/depleted), hydration (good/okay/poor)
+- **AsyncStorage keys**: @viva_glp1_inputs, @viva_glp1_history, @viva_profile, @viva_chat, @viva_wellness, @viva_completions, @viva_integrations, @viva_weekly_plan, @viva_checkins
+
 ### Technical Implementations & Features
 
-- **Onboarding**: A 9-step premium flow covering goals, profile, activity, energy, sleep, and device integration.
-- **Dashboard (Today tab)**: Card-based layout with a status card (streak, progress), feeling card, coach insight, refine card, Your Day card, habit tracker, and metric tiles. Emphasizes progressive disclosure.
-- **Adaptive Coaching**: Full rules engine in `generateDailyPlan()` and coach system prompt. IF [data condition] THEN [action] WHY [reason] across sleep/HRV/strain/stress/nutrition. Recovery > performance. Trends > single day. Sleep < 6h + HRV down = full recovery day. HRV declining 5 days = 2-day recovery protocol. Consecutive high strain = enforced rest. No workouts in 3 days = scheduled session. 5+ consistent days = deload. Completion history and weak categories also feed back into plan simplification.
-- **Daily Status & State**: Displays a status pill (e.g., "Strong Day") and drivers. Daily state (Recover, Maintain, Build, Push) drives the plan.
-- **Coach Insight**: A multi-signal coaching paragraph generated from HRV, sleep trends, recovery, activity, and user inputs, updated reactively.
-- **Your Day (State-Based Single Selection)**: 5 checkable actions per day (Move/Fuel/Hydrate/Recover/Mind), with 4 options per category mapped to state tags. Each action includes a data-driven "reason" explaining WHY it was chosen (references sleep, recovery, stress, energy, etc.). Recommendations are provided, and users can override. Fuel options follow an intensity spectrum (Heavy/Moderate/Light/Minimal). Recover options are standardized duration-based (under 7h / 8h / 9h / 10+h).
-- **"Why VIVA chose this plan"**: Expandable section below Your Day showing plain-English explanation of today's plan drivers (sleep trends, recovery status, activity load, manual inputs, goals).
-- **End-of-Day Check-in**: Modal triggered after 3+ actions completed. Captures energy (great/good/low/crashed), focus (sharp/decent/foggy/scattered), mood (great/good/flat/rough), and plan realism (yes/no). Stored in AsyncStorage (@viva_checkins) via AppContext for future adaptive recommendations.
-- **Completion Tracking**: Tracks daily completion rate and weekly consistency, displayed in the Habit Tracker card and progress bar. Persisted in AsyncStorage.
-- **Trends Tab**: Summaries, key insights, correlations, and pattern detection. Key Metrics section shows 4-week averages with mini SVG sparkline charts for Recovery/Body, Activity, and Habits categories.
-- **AI Coach**: Integrated as an expandable card on the Today screen, offering a full-screen chat modal with streaming SSE responses. Contextual health data is sent to the coach for enriched interactions.
-- **Weekly Plan**: AI-powered weekly coaching layer with 5 categories per day, editable via a bottom sheet. Synchronizes with the Today screen and persists in AsyncStorage.
-- **Metric Drill-Down**: Provides detailed analysis, 30-day charts, and actionable advice for individual metrics.
-- **Health Data Providers**: `data/healthProviders.ts` handles integration with Apple HealthKit (`react-native-health`), Health Connect (Android, `react-native-health-connect`), Garmin (via backend API), and Samsung Health (delegates to Health Connect), with a 28-day data window. `connectProvider()` handles availability checks, permission requests, and structured error responses. Expo config plugin at `plugins/withHealthKit.js` adds HealthKit entitlements and usage descriptions for iOS builds. `toggleIntegration` in AppContext is async with progressive status feedback (Connecting/Syncing/Connected/Sync failed).
-- **State Management**: Context-based state management (`AppContext`) with computed DailyInsights.
+- **Onboarding**: 8-step GLP-1 flow: welcome, goals, glp1_context (medication/reason/duration/dose/injection day), side_effects, nutrition (protein/hydration confidence, meals, under-eating, strength training), activity, integrations, summary.
+- **Dashboard (Today tab)**: Status card with GLP-1-aware daily status, feeling card, coach insight, GLP-1 daily inputs (appetite, side effects, protein confidence, movement intent, energy, hydration) in the "Refine your day" section, Your Day actions, habit tracker, and metric tiles.
+- **Adaptive Coaching**: Risk engine (calculateDropoutRisk) with rules-based scoring. GLP-1 coach system prompt covers side effect management, protein coaching, muscle preservation, hydration, and treatment consistency. Recovery > performance. Side effect management > training goals. Protein > calories. Consistency > intensity.
+- **Daily Actions**: 5 checkable actions per day (Move/Fuel/Hydrate/Recover/Stay Consistent), with GLP-1-informed recommendations.
+- **Weekly Plan**: AI-powered weekly coaching with Move/Fuel/Hydrate/Recover/Consistent categories. GLP-1 specific rules (strength training for muscle preservation, gentler plans on symptom days, protein-forward fueling).
+- **Trends Tab**: Recovery/Body, Movement, and Consistency sections. "What We're Noticing" insights, correlations during treatment, and pattern detection.
+- **AI Coach**: Full-screen chat modal with streaming SSE responses. GLP-1 focused quick actions: side effects, protein intake, exercise, hydration, weekly focus. System prompt fully rewritten for GLP-1 context.
+- **Risk Engine**: calculateDropoutRisk() with rolling baselines for recovery, activity, fueling, symptoms, and consistency. translateRiskToUserMessage() maps scores to patient-friendly labels.
+- **Health Data Providers**: `data/healthProviders.ts` handles integration with Apple HealthKit, Health Connect (Android), Garmin, and Samsung Health.
+- **State Management**: Context-based state management (AppContext) with GLP-1 state fields (glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent, riskResult, glp1InputHistory).
 - **Navigation**: Tab bar for Today, Plan, Trends, Settings. Modals for subscription. Stack for onboarding and metric drill-down.
+
+## Important Files
+
+- `artifacts/pulse-pilot/types/index.ts` - All type definitions including GLP-1 types
+- `artifacts/pulse-pilot/context/AppContext.tsx` - State management with GLP-1 fields
+- `artifacts/pulse-pilot/data/riskEngine.ts` - Dropout risk calculation engine
+- `artifacts/pulse-pilot/data/riskTranslation.ts` - Risk score to user message translation
+- `artifacts/pulse-pilot/data/mockData.ts` - Mock data generation and daily plan logic
+- `artifacts/pulse-pilot/app/onboarding/index.tsx` - 8-step GLP-1 onboarding flow
+- `artifacts/pulse-pilot/app/(tabs)/index.tsx` - Today tab with GLP-1 daily inputs
+- `artifacts/pulse-pilot/app/(tabs)/plan.tsx` - Weekly plan with GLP-1 categories
+- `artifacts/pulse-pilot/app/(tabs)/trends.tsx` - Trends with treatment-aware insights
+- `artifacts/pulse-pilot/app/(tabs)/coach.tsx` - Coach tab with GLP-1 quick actions
+- `artifacts/api-server/src/routes/coach/index.ts` - API with GLP-1 system prompts
 
 ## External Dependencies
 
@@ -59,3 +85,8 @@ The system is a pnpm workspace monorepo using Node.js 24 and TypeScript 5.9. The
     - Samsung Health (delegates to Health Connect on Android)
 - **Persistence**: AsyncStorage (for Expo/React Native)
 - **Charting**: `react-native-svg` (for sparkline charts)
+
+## API Base URL
+
+- Web: `/api`
+- Native: `https://${EXPO_PUBLIC_DOMAIN}/api`

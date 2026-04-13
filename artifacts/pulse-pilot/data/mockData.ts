@@ -20,27 +20,38 @@ import {
   type StressLevel,
   type EnergyLevel,
   type CategoryOption,
+  type FocusItem,
+  type GLP1DailyInputs,
 } from "@/types";
 
 export const defaultProfile: UserProfile = {
   id: "user_1",
   name: "",
   age: 32,
-  sex: "male",
-  height: 70,
-  weight: 185,
-  goalWeight: 170,
+  sex: "female",
+  height: 65,
+  weight: 195,
+  goalWeight: 160,
   dietaryPreference: "balanced",
   workoutPreference: "mixed",
   injuries: "",
-  availableWorkoutTime: 45,
-  daysAvailableToTrain: 4,
-  coachingTone: "motivating",
-  goals: ["fat_loss", "better_sleep"],
+  availableWorkoutTime: 30,
+  daysAvailableToTrain: 3,
+  coachingTone: "gentle",
+  goals: ["fat_loss", "stay_consistent"],
   tier: "free",
   onboardingComplete: false,
   fastingEnabled: false,
   units: "imperial",
+  glp1Medication: undefined,
+  glp1Reason: undefined,
+  glp1Duration: undefined,
+  proteinConfidence: undefined,
+  hydrationConfidence: undefined,
+  mealsPerDay: 3,
+  underEatingConcern: false,
+  strengthTrainingBaseline: "no",
+  activityLevel: "light",
 };
 
 function generateDateString(daysAgo: number): string {
@@ -55,22 +66,22 @@ export function generateMockMetrics(days: number = 30): HealthMetrics[] {
     const baseHrv = 42 + Math.sin(i / 7) * 8;
     const baseRhr = 62 - Math.sin(i / 10) * 3;
     const baseSleep = 7.2 + Math.sin(i / 5) * 0.8;
-    const baseSteps = 7500 + Math.sin(i / 3) * 2500;
-    const baseWeight = 185 - (i > 15 ? 0 : (15 - i) * 0.15);
+    const baseSteps = 6000 + Math.sin(i / 3) * 2000;
+    const baseWeight = 195 - (i > 15 ? 0 : (15 - i) * 0.2);
 
     metrics.push({
       date: generateDateString(i),
       steps: Math.round(baseSteps + (Math.random() - 0.5) * 1000),
-      caloriesBurned: Math.round(2100 + (Math.random() - 0.5) * 400),
-      activeCalories: Math.round(350 + (Math.random() - 0.5) * 200),
+      caloriesBurned: Math.round(1800 + (Math.random() - 0.5) * 300),
+      activeCalories: Math.round(250 + (Math.random() - 0.5) * 150),
       restingHeartRate: Math.round(baseRhr + (Math.random() - 0.5) * 4),
       hrv: Math.round(baseHrv + (Math.random() - 0.5) * 6),
       weight: Math.round((baseWeight + (Math.random() - 0.5) * 1) * 10) / 10,
       sleepDuration: Math.round((baseSleep + (Math.random() - 0.5) * 1.2) * 10) / 10,
       sleepQuality: Math.round(70 + Math.sin(i / 6) * 15 + (Math.random() - 0.5) * 10),
       recoveryScore: Math.round(65 + Math.sin(i / 5) * 15 + (Math.random() - 0.5) * 10),
-      strain: Math.round(8 + Math.sin(i / 4) * 4 + (Math.random() - 0.5) * 3),
-      vo2Max: 42,
+      strain: Math.round(6 + Math.sin(i / 4) * 3 + (Math.random() - 0.5) * 2),
+      vo2Max: 38,
     });
   }
   return metrics;
@@ -78,7 +89,7 @@ export function generateMockMetrics(days: number = 30): HealthMetrics[] {
 
 export function generateMockWorkouts(): WorkoutEntry[] {
   const workouts: WorkoutEntry[] = [];
-  const types = ["Strength Training", "Zone 2 Run", "HIIT", "Yoga", "Cycling", "Walking"];
+  const types = ["Walking", "Strength Training", "Walking", "Light Yoga", "Walking", "Walking"];
   for (let i = 13; i >= 0; i--) {
     if (i % 2 === 0) {
       const type = types[i % types.length];
@@ -86,9 +97,9 @@ export function generateMockWorkouts(): WorkoutEntry[] {
         id: `w_${i}`,
         date: generateDateString(i),
         type,
-        duration: 30 + Math.round(Math.random() * 30),
-        intensity: type === "HIIT" ? "very_high" : type === "Strength Training" ? "high" : type === "Yoga" || type === "Walking" ? "low" : "moderate",
-        caloriesBurned: 200 + Math.round(Math.random() * 300),
+        duration: 20 + Math.round(Math.random() * 20),
+        intensity: type === "Strength Training" ? "moderate" : type === "Light Yoga" ? "low" : "low",
+        caloriesBurned: 100 + Math.round(Math.random() * 150),
       });
     }
   }
@@ -100,8 +111,8 @@ export function generateTodayMetrics(): HealthMetrics {
   return all[0];
 }
 
-function makeActions(yourDay: { move: string; fuel: string; hydrate: string; recover: string; mind: string }, reasons?: { move: string; fuel: string; hydrate: string; recover: string; mind: string }): DailyAction[] {
-  const categories: ActionCategory[] = ["move", "fuel", "hydrate", "recover", "mind"];
+function makeActions(yourDay: { move: string; fuel: string; hydrate: string; recover: string; consistent: string }, reasons?: { move: string; fuel: string; hydrate: string; recover: string; consistent: string }): DailyAction[] {
+  const categories: ActionCategory[] = ["move", "fuel", "hydrate", "recover", "consistent"];
   return categories.map(cat => ({
     id: cat,
     category: cat,
@@ -132,7 +143,48 @@ function pickOptionTitle(category: ActionCategory, tag: StateTag): string {
   return match ? match.title : options[1].title;
 }
 
-export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInputs, history?: CompletionRecord[], recentMetrics?: HealthMetrics[]): DailyPlan {
+function generateFocusItems(
+  dailyState: import("@/types").DailyState,
+  metrics: HealthMetrics,
+  inputs?: WellnessInputs,
+  glp1Inputs?: GLP1DailyInputs,
+): FocusItem[] {
+  const items: FocusItem[] = [];
+
+  if (glp1Inputs?.appetite === "very_low" || glp1Inputs?.appetite === "low") {
+    items.push({ text: "Prioritize protein early today. Even small amounts help.", category: "fuel" });
+  }
+
+  if (glp1Inputs?.hydration === "poor" || glp1Inputs?.hydration === "okay") {
+    items.push({ text: "Front-load hydration this morning.", category: "hydrate" });
+  }
+
+  if (glp1Inputs?.sideEffects === "moderate" || glp1Inputs?.sideEffects === "rough") {
+    items.push({ text: "Keep movement light and easy today.", category: "move" });
+  }
+
+  if (glp1Inputs?.proteinConfidence === "poor") {
+    items.push({ text: "Add one extra protein-rich snack if you can.", category: "fuel" });
+  }
+
+  if (metrics.sleepDuration < 7) {
+    items.push({ text: "Aim for an earlier wind-down tonight.", category: "recover" });
+  }
+
+  if (dailyState === "recover" || dailyState === "maintain") {
+    items.push({ text: "Complete your daily check-in to keep your streak.", category: "consistent" });
+  }
+
+  if (items.length === 0) {
+    items.push({ text: "Stay consistent with your routine today.", category: "consistent" });
+    items.push({ text: "Keep hydration steady throughout the day.", category: "hydrate" });
+    items.push({ text: "Include protein at every meal.", category: "fuel" });
+  }
+
+  return items.slice(0, 5);
+}
+
+export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInputs, history?: CompletionRecord[], recentMetrics?: HealthMetrics[], glp1Inputs?: GLP1DailyInputs): DailyPlan {
   const feeling = inputs?.feeling ?? null;
   const energy = inputs?.energy ?? null;
   const stress = inputs?.stress ?? null;
@@ -153,21 +205,9 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
   const sleepDeclining3 = last3.length >= 3 && last3.every((m, i) => i === 0 || m.sleepDuration < last3[i - 1].sleepDuration);
   const hrvDeclining5 = last5.length >= 5 && last5[last5.length - 1].hrv < last5[0].hrv - 5 && last5.every((m, i) => i === 0 || m.hrv <= last5[i - 1].hrv + 2);
 
-  const sleepConsistencyOff = last3.length >= 3 && (() => {
-    const durations = last3.map(m => m.sleepDuration);
-    const maxDiff = Math.max(...durations) - Math.min(...durations);
-    return maxDiff > 1.5;
-  })();
-
   const yesterdayStrain = last7.length >= 2 ? last7[last7.length - 2]?.strain ?? 0 : 0;
   const avgStrain = last7.length >= 3 ? last7.reduce((s, m) => s + m.strain, 0) / last7.length : 5;
-  const highStrainYesterday = yesterdayStrain > avgStrain * 1.2;
-  const consecutiveHighStrain = last3.length >= 2 && last3.slice(-2).every(m => m.strain > avgStrain * 1.2);
   const consecutivePoorRecovery = last3.length >= 3 && last3.every(m => m.recoveryScore < 50);
-
-  const recentWorkoutDays = last7.filter(m => m.strain > 4).length;
-  const noWorkout3Days = last3.length >= 3 && last3.every(m => m.strain <= 3.5);
-  const consistent5Days = recentWorkoutDays >= 5;
 
   let readinessScore = Math.round(
     metrics.recoveryScore * 0.3 +
@@ -195,18 +235,28 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
   else if (hrvDeviation < -10) readinessScore = Math.min(readinessScore, 50);
 
   if (consecutivePoorRecovery) readinessScore = Math.min(readinessScore, 35);
-  if (consecutiveHighStrain) readinessScore = Math.min(readinessScore, 45);
   if (hrvDeclining5) readinessScore = Math.min(readinessScore, 45);
   if (rhrElevated && Math.abs(hrvDeviation) < 5) readinessScore = Math.min(readinessScore, 50);
   if (sleepDeclining3) readinessScore = Math.min(readinessScore, 55);
 
+  if (glp1Inputs?.sideEffects === "rough") readinessScore = Math.min(readinessScore, 35);
+  else if (glp1Inputs?.sideEffects === "moderate") readinessScore = Math.min(readinessScore, 50);
+
+  if (glp1Inputs?.appetite === "very_low") readinessScore = Math.min(readinessScore, 50);
+
+  if (glp1Inputs?.energy === "depleted") readinessScore = Math.min(readinessScore, 35);
+  else if (glp1Inputs?.energy === "tired") readinessScore = Math.min(readinessScore, 50);
+
   const readinessLabel = readinessScore >= 80 ? "Excellent" : readinessScore >= 65 ? "Good" : readinessScore >= 45 ? "Moderate" : "Low";
 
-  const feelingOverride = feeling === "tired" || feeling === "stressed";
   const stressOverride = stress === "high" || stress === "very_high";
   const lowEnergy = energy === "low";
-  const dataIsGood = metrics.recoveryScore >= 65 && metrics.sleepQuality >= 70;
-  const noTraining = trainingIntent === "none";
+  const isDehydrated = hydration === "dehydrated" || hydration === "low";
+  const sleepLow = metrics.sleepDuration < 6.5;
+  const sleepCritical = metrics.sleepDuration < 6 && hrvDeviation < -10;
+  const sleepGoodHrvGood = metrics.sleepDuration > 7.5 && hrvDeviation >= 0;
+  const symptomsHeavy = glp1Inputs?.sideEffects === "rough" || glp1Inputs?.sideEffects === "moderate";
+  const appetiteLow = glp1Inputs?.appetite === "very_low" || glp1Inputs?.appetite === "low";
 
   let headline = "";
   let summary = "";
@@ -216,370 +266,148 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
   let optional = "";
   let workoutType = "";
   let workoutIntensity: "low" | "moderate" | "high" = "moderate";
-  let workoutDuration = 40;
+  let workoutDuration = 30;
   let workoutDesc = "";
 
-  const isDehydrated = hydration === "dehydrated" || hydration === "low";
-
-  const recentHistory = history?.slice(-7) ?? [];
-  const weeklyRate = recentHistory.length > 0
-    ? Math.round(recentHistory.reduce((sum, r) => sum + r.completionRate, 0) / recentHistory.length)
-    : -1;
-  const categoryRates: Record<string, { done: number; total: number }> = {};
-  for (const rec of recentHistory) {
-    for (const a of rec.actions) {
-      if (!categoryRates[a.category]) categoryRates[a.category] = { done: 0, total: 0 };
-      categoryRates[a.category].total++;
-      if (a.completed) categoryRates[a.category].done++;
-    }
-  }
-  const weakCategories = Object.entries(categoryRates)
-    .filter(([, v]) => v.total >= 3 && v.done / v.total < 0.4)
-    .map(([k]) => k);
-
-  if (weeklyRate >= 0 && weeklyRate < 40 && recentHistory.length >= 3) {
-    readinessScore = Math.min(readinessScore, 50);
-  }
-
-  const sleepCritical = metrics.sleepDuration < 6 && hrvDeviation < -10;
-  const sleepLow = metrics.sleepDuration < 6.5;
-  const sleepGoodHrvGood = metrics.sleepDuration > 7.5 && hrvDeviation >= 0;
-
-  if (sleepCritical) {
+  if (sleepCritical || (glp1Inputs?.sideEffects === "rough" && glp1Inputs?.energy === "depleted")) {
     dailyState = "recover";
-    headline = "Recovery day. Your body needs it.";
-    summary = "Under 6 hours of sleep and your HRV is down. Walking and stretching only today.";
-    dailyFocus = "Full recovery";
+    headline = "Let's keep today gentle.";
+    summary = symptomsHeavy
+      ? "Side effects are heavy and energy is very low. Your body needs a simple, supportive day."
+      : "Sleep was very short and your body is showing it. Rest and hydration are the priority.";
+    dailyFocus = "Rest and recover";
     whyThisPlan = [
-      "Sleep under 6 hours with dropping HRV is a clear sign of nervous system fatigue.",
-      "Training today would dig a deeper hole. Recovery is the productive choice.",
-      "Hydrate well, eat nourishing food, and aim for an early night.",
-    ];
-    workoutType = "Recovery Walk";
-    workoutIntensity = "low";
-    workoutDuration = 20;
-    workoutDesc = "Walking and light stretching only.";
-    optional = "If you feel restless, 10 minutes of gentle yoga can help settle your system.";
-  } else if (stress === "very_high") {
-    dailyState = "recover";
-    headline = "Take it slow today.";
-    summary = "High stress needs simplicity. Protect your energy and nourish yourself.";
-    dailyFocus = "Simplify and recover";
-    whyThisPlan = [
-      "Stress affects your entire body. sleep, digestion, energy, and mood.",
-      "Simplifying today protects the rest of your week.",
-      "Recovery isn't just physical. your mind needs rest too.",
+      symptomsHeavy ? "Heavy side effects on GLP-1 are common in the early weeks and after dose changes." : "Short sleep affects energy, appetite, and how your body handles treatment.",
+      "A gentle day now helps you stay consistent over the longer term.",
+      "Focus on hydration, small protein-rich meals, and rest.",
     ];
     workoutType = "Rest";
     workoutIntensity = "low";
-    workoutDuration = 20;
-    workoutDesc = "Gentle movement only.";
-    optional = "A short walk in nature can help reset your nervous system.";
-  } else if (stressOverride && (sleepDeclining3 || metrics.sleepDuration < 6.5)) {
+    workoutDuration = 0;
+    workoutDesc = "Full rest or a very gentle walk if you feel up to it.";
+    optional = "A short walk after a meal can help with nausea and digestion.";
+  } else if (symptomsHeavy) {
     dailyState = "recover";
-    headline = "Your body is sending clear signals.";
-    summary = "Stress plus poor sleep is compounding. Remove intense training and prioritize rest tonight.";
-    dailyFocus = "De-stress and sleep";
+    headline = "Symptoms are heavier today. Let's simplify.";
+    summary = "Side effects can make everything harder. Today is about doing what feels manageable and not pushing.";
+    dailyFocus = "Manage symptoms";
     whyThisPlan = [
-      "Compounding stress and poor sleep accelerate burnout.",
-      "Removing training today is the fastest path to feeling better tomorrow.",
-      "Early sleep tonight will have a bigger impact than any workout.",
+      "When side effects are heavier, your body is working harder to adjust.",
+      "Hydration and small meals help manage nausea and fatigue.",
+      "Lighter days are part of staying on track long-term.",
     ];
-    workoutType = "Rest";
+    workoutType = "Gentle Walk";
     workoutIntensity = "low";
     workoutDuration = 15;
-    workoutDesc = "10-15 min breathing or gentle walk.";
-    optional = "Try to be in bed 30 minutes earlier tonight.";
-  } else if (hrvDeviation < -15) {
-    dailyState = "recover";
-    headline = "Recovery protocol today.";
-    summary = "Your HRV is well below your baseline. Prioritize walking, hydration, and an early night.";
-    dailyFocus = "Restore your nervous system";
+    workoutDesc = "Short walk if you feel up to it. No pressure.";
+    optional = "Ginger tea or small sips of electrolyte water can help with nausea.";
+  } else if (appetiteLow && (isDehydrated || glp1Inputs?.proteinConfidence === "poor")) {
+    dailyState = "maintain";
+    headline = "Fueling needs attention today.";
+    summary = "Appetite is low and hydration or protein may be falling short. Small, nutrient-dense meals will help you feel better.";
+    dailyFocus = "Focus on fueling";
     whyThisPlan = [
-      "HRV down more than 15% is a strong indicator of systemic stress.",
-      "Gentle movement and hydration support faster recovery.",
-      "Sleep is your best recovery tool right now.",
+      "Low appetite is one of the most common effects of GLP-1 medications.",
+      "Under-eating can lead to muscle loss and lower energy over time.",
+      "Even small amounts of protein-rich food make a real difference.",
     ];
-    workoutType = "Recovery Walk";
+    workoutType = "Light Movement";
     workoutIntensity = "low";
-    workoutDuration = 25;
-    workoutDesc = "Easy walk and hydration focus.";
-    optional = "Skip screens 30 minutes before bed tonight.";
-  } else if (consecutiveHighStrain) {
+    workoutDuration = 20;
+    workoutDesc = "Easy walk or gentle movement. Focus energy on eating well.";
+    optional = "Protein shakes or smoothies are a good option when appetite is low.";
+  } else if (stressOverride || stress === "very_high") {
     dailyState = "recover";
-    headline = "Earned rest day.";
-    summary = "Two or more hard days in a row. Your body needs to absorb that work before you push again.";
-    dailyFocus = "Active recovery";
+    headline = "Take it slow today.";
+    summary = "Stress affects how your body handles treatment, sleep, and appetite. Simplify today.";
+    dailyFocus = "Simplify and recover";
     whyThisPlan = [
-      "Cumulative fatigue from consecutive hard days increases injury risk.",
-      "Recovery days are where adaptation actually happens.",
-      "Quality rest now means a stronger performance next session.",
+      "Stress raises cortisol, which can interfere with treatment benefits.",
+      "A simple, low-pressure day helps your body stay in a better place.",
+      "Recovery is not just physical. your mind needs rest too.",
     ];
-    workoutType = "Active Recovery";
+    workoutType = "Rest or Gentle Walk";
     workoutIntensity = "low";
-    workoutDuration = 25;
-    workoutDesc = "Light mobility work and easy walking.";
-    optional = "Foam rolling and stretching are great choices today.";
-  } else if (hrvDeclining5) {
+    workoutDuration = 15;
+    workoutDesc = "Gentle movement only.";
+    optional = "A short walk in fresh air can help reset your system.";
+  } else if (consecutivePoorRecovery || hrvDeclining5) {
     dailyState = "recover";
-    headline = "Your body needs a reset.";
-    summary = "HRV has been declining for 5 days. Two low-intensity days plus sleep focus will get you back on track.";
+    headline = "Your body is asking for more recovery.";
+    summary = "Recovery signals have been lower than usual. A lighter day with good sleep tonight will help you get back on track.";
     dailyFocus = "Recovery protocol";
     whyThisPlan = [
-      "A 5-day HRV decline signals early burnout. Catching it now prevents worse.",
-      "Two light days with good sleep typically reverses the trend.",
-      "This is the smart play. not the easy one, the productive one.",
+      "Lower recovery signals often show up before you feel tired.",
+      "Catching it early prevents bigger dips in energy and consistency.",
+      "Prioritize sleep and hydration over training today.",
     ];
-    workoutType = "Light Movement";
-    workoutIntensity = "low";
-    workoutDuration = 25;
-    workoutDesc = "Walking, yoga, or gentle stretching.";
-    optional = "Focus on sleep quality for the next two nights.";
-  } else if (noTraining && !stressOverride && !feelingOverride) {
-    dailyState = "maintain";
-    headline = "Focus on balance today.";
-    summary = "No training planned. A great day to nourish, hydrate, and recharge.";
-    dailyFocus = "Nourish and recharge";
-    whyThisPlan = [
-      "Rest days are when your body and mind repair and adapt.",
-      "Light movement and good nutrition accelerate recovery.",
-      "Investing in rest today makes tomorrow more productive.",
-    ];
-    workoutType = "Rest Day";
+    workoutType = "Light Walk";
     workoutIntensity = "low";
     workoutDuration = 20;
-    workoutDesc = "Light movement and mobility.";
-    optional = "If you feel the urge to train, keep it very light.";
-  } else if (stressOverride && dataIsGood) {
-    dailyState = "recover";
-    headline = "Ease the tension today.";
-    summary = "Your body is ready, but stress changes things. Focus on calming your system.";
-    dailyFocus = "Stress management first";
+    workoutDesc = "Easy walk and stretching only.";
+    optional = "Start winding down 30 minutes earlier tonight.";
+  } else if (sleepGoodHrvGood && readinessScore >= 75 && !appetiteLow) {
+    dailyState = "push";
+    headline = "You're in a good place today.";
+    summary = "Sleep was solid, recovery is strong, and your body is ready. A good day for strength training or a longer walk.";
+    dailyFocus = "Make the most of today";
     whyThisPlan = [
-      "Stress raises cortisol, which affects sleep, appetite, and recovery.",
-      "Gentle movement and breathing help calm your nervous system.",
-      "The right nutrition can support your body's stress response.",
+      "Good recovery and sleep support muscle-preserving activity.",
+      "Strength training is especially important on GLP-1 to preserve lean mass.",
+      "Fuel well around your activity today.",
     ];
-    workoutType = "Stress Relief";
-    workoutIntensity = "low";
-    workoutDuration = 30;
-    workoutDesc = "Gentle yoga or stretching focused on stress relief.";
-    optional = "If you start feeling better, a moderate walk can help too.";
-  } else if (feelingOverride && dataIsGood) {
-    if (feeling === "tired") {
-      dailyState = "maintain";
-      headline = "Keep it gentle today.";
-      summary = "You're running low. Focus on recharging with good food, water, and rest.";
-      dailyFocus = "Recharge your energy";
-      whyThisPlan = [
-        "Fatigue you can feel often shows up in data tomorrow.",
-        "Good nutrition and hydration are the fastest way to restore energy.",
-        "Consistency beats intensity when you're running low.",
-      ];
-      workoutType = "Light Activity";
-      workoutIntensity = "low";
-      workoutDuration = 30;
-      workoutDesc = "Easy walk or gentle yoga.";
-    } else {
-      dailyState = "recover";
-      headline = "Prioritize calm today.";
-      summary = "Your body could handle training, but stress changes the equation. Take care of yourself.";
-      dailyFocus = "Calm and restore";
-      whyThisPlan = [
-        "Stress affects digestion, sleep quality, and energy levels.",
-        "Gentle movement and breathing help your nervous system settle.",
-        "Caring for your mind is caring for your body.",
-      ];
-      workoutType = "Stress Relief";
-      workoutIntensity = "low";
-      workoutDuration = 30;
-      workoutDesc = "Gentle movement focused on stress relief.";
-    }
-    optional = "If you start feeling better, a moderate walk can shift your mood.";
-  } else if (lowEnergy && dataIsGood) {
-    dailyState = "maintain";
-    headline = "Keep it gentle today.";
-    summary = "Your data supports activity, but energy is low. Nourish and hydrate first.";
-    dailyFocus = "Restore your energy";
-    whyThisPlan = [
-      "Low energy often signals dehydration, poor nutrition, or accumulated stress.",
-      "Addressing the basics. water, food, rest. is the fastest fix.",
-      "A gentle day now prevents a forced rest day later.",
-    ];
-    workoutType = "Light Activity";
-    workoutIntensity = "low";
-    workoutDuration = 30;
-    workoutDesc = "Easy movement to stay active without adding strain.";
-    optional = "If energy picks up after eating and hydrating, you can increase to moderate.";
-  } else if (sleepDeclining3 && !sleepGoodHrvGood) {
-    dailyState = "maintain";
-    headline = "Sleep needs attention.";
-    summary = "Your sleep has been declining for 3 days. Prioritize rest tonight over training today.";
-    dailyFocus = "Protect your sleep";
-    whyThisPlan = [
-      "Three-day trends matter more than any single night.",
-      "Declining sleep accumulates fatigue faster than one bad night.",
-      "An early, consistent bedtime tonight is worth more than a workout.",
-    ];
-    workoutType = "Light Activity";
-    workoutIntensity = "low";
-    workoutDuration = 25;
-    workoutDesc = "Easy walk only. Save energy for sleep tonight.";
-    optional = "Set a fixed wind-down time 30 minutes before bed. No screens.";
-  } else if (rhrElevated && Math.abs(hrvDeviation) < 5 && readinessScore >= 45) {
-    dailyState = "build";
-    headline = "Keep it moderate today.";
-    summary = "Your resting heart rate is elevated even though HRV looks stable. Possible early fatigue or illness signal.";
-    dailyFocus = "Moderate effort only";
-    whyThisPlan = [
-      "Elevated resting heart rate with stable HRV often signals early stress or illness.",
-      "Avoiding max effort today helps you catch it before it becomes a setback.",
-      "If you feel fine tomorrow, you can push harder then.",
-    ];
-    workoutType = "Moderate Cardio";
+    workoutType = "Strength Training";
     workoutIntensity = "moderate";
-    workoutDuration = 35;
-    workoutDesc = "Moderate effort. No max effort or heavy lifting.";
-    optional = "Monitor how you feel. If energy drops, switch to a walk.";
-  } else if (noWorkout3Days && readinessScore >= 45) {
-    dailyState = "build";
-    headline = "Time to move.";
-    summary = sleepLow
-      ? "Three days without activity, but sleep was short. A lighter workout will get you moving without overdoing it."
-      : "Three days without meaningful activity. A 30-45 minute workout today will restore your rhythm.";
-    dailyFocus = "Rebuild consistency";
-    whyThisPlan = [
-      "Three days off is enough rest. Longer gaps break momentum.",
-      "Even moderate effort today maintains fitness and mental clarity.",
-      "Consistency matters more than intensity right now.",
-    ];
-    workoutType = sleepLow ? "Light Activity" : "Strength or Cardio";
-    workoutIntensity = sleepLow ? "low" : "moderate";
-    workoutDuration = sleepLow ? 25 : 40;
-    workoutDesc = sleepLow ? "Light movement. Reduced intensity due to low sleep." : "30-45 min workout. Strength or cardio based on preference.";
-    optional = "If you're easing back in, start with a 20-minute walk and build up.";
-  } else if (consistent5Days) {
-    dailyState = "maintain";
-    headline = "Solid week. Ease off today.";
-    summary = "Five or more active days this week. A lighter day helps your body absorb the work.";
-    dailyFocus = "Deload and absorb";
-    whyThisPlan = [
-      "Consistent training needs periodic lighter days to avoid plateaus.",
-      "Your muscles and nervous system adapt during recovery, not during training.",
-      "One lighter day now protects the quality of your next hard session.",
-    ];
-    workoutType = "Light Movement";
-    workoutIntensity = "low";
     workoutDuration = 30;
-    workoutDesc = "Easy movement, mobility, or yoga.";
-    optional = "If you feel great, keep it to moderate at most.";
-  } else if (sleepGoodHrvGood && readinessScore >= 75) {
-    const feelingGreat = feeling === "great" || energy === "excellent" || energy === "high";
-    dailyState = "push";
-    headline = feelingGreat ? "You're ready. Make the most of today." : "Green light for intensity.";
-    summary = feelingGreat
-      ? "You feel great and your body agrees. A good day to challenge yourself."
-      : "Sleep was solid and your HRV is above baseline. Your body is ready to perform.";
-    dailyFocus = "Challenge yourself today";
-    whyThisPlan = feelingGreat
-      ? [
-          "When body and mind are aligned, that's when real progress happens.",
-          "Recovery and sleep are supporting you. take advantage of it.",
-          "Challenge your body, nourish it well, and rest tonight.",
-        ]
-      : [
-          "Good sleep plus above-baseline HRV is a green light for high intensity.",
-          "Recovery and sleep signals support a bigger effort today.",
-          "Push now, recover well tonight, and you'll build real momentum.",
-        ];
-    optional = "If you feel fatigued mid-session, drop to moderate. Listen to your body.";
-    workoutType = "Strength Training";
-    workoutIntensity = "high";
-    workoutDuration = 50;
-    workoutDesc = "Full body strength with compound movements.";
-  } else if (readinessScore >= 75) {
-    const feelingGreat = feeling === "great" || energy === "excellent" || energy === "high";
-    dailyState = "push";
-    headline = feelingGreat ? "You're ready. Make the most of today." : "A strong day ahead.";
-    summary = feelingGreat
-      ? "You feel great and your body agrees. A good day to challenge yourself."
-      : "Recovery is strong, sleep was solid. You have the capacity to push.";
-    dailyFocus = "Challenge yourself today";
-    whyThisPlan = feelingGreat
-      ? [
-          "When body and mind are aligned, that's when real progress happens.",
-          "Recovery and sleep are supporting you. take advantage of it.",
-          "Challenge your body, nourish it well, and rest tonight.",
-        ]
-      : [
-          "Your body is fully recharged from last night.",
-          "Recovery and sleep signals support a bigger effort today.",
-          "Push now, recover well tonight, and you'll build real momentum.",
-        ];
-    optional = "If you feel fatigued mid-session, drop to moderate. Listen to your body.";
-    workoutType = "Strength Training";
-    workoutIntensity = "high";
-    workoutDuration = 50;
-    workoutDesc = "Full body strength with compound movements.";
-  } else if (readinessScore >= 45) {
+    workoutDesc = "Strength training focused on compound movements.";
+    optional = "Include a protein-rich meal within an hour after training.";
+  } else if (readinessScore >= 65) {
     dailyState = "build";
-    headline = sleepLow ? "Take it easier today." : "Build momentum today.";
+    headline = "A solid day to build momentum.";
+    summary = "Recovery supports activity today. Stay consistent with movement, protein, and hydration.";
+    dailyFocus = "Steady progress";
+    whyThisPlan = [
+      "Consistent moderate effort is more effective than occasional intense days.",
+      "Your body can handle activity today without adding extra strain.",
+      "Pair your movement with good fueling for the best results.",
+    ];
+    workoutType = "Walk or Light Strength";
+    workoutIntensity = "moderate";
+    workoutDuration = 30;
+    workoutDesc = "30 min walk or light strength session.";
+    optional = "If energy drops, a walk is always a great fallback.";
+  } else if (readinessScore >= 45) {
+    dailyState = "maintain";
+    headline = "Keep it steady today.";
     summary = sleepLow
-      ? "Sleep was under 6.5 hours. Reduce intensity by about 30% and focus on the basics."
-      : "Recovery is solid, but not fully reset. Stay consistent and take care of the basics.";
-    dailyFocus = sleepLow ? "Lighter effort, strong basics" : "Steady progress today";
-    whyThisPlan = sleepLow
-      ? [
-          "Insufficient sleep reduces reaction time and increases injury risk.",
-          "Reducing intensity today preserves your progress without adding risk.",
-          "Good nutrition and hydration partially offset the sleep deficit.",
-        ]
-      : [
-          "Your body is partially recharged. a moderate effort keeps you progressing.",
-          "Good nutrition and hydration will support your recovery overnight.",
-          "Consistency in the basics is what separates good weeks from great ones.",
-        ];
-    optional = "If energy feels low, a 20-minute walk is a great alternative.";
-    workoutType = sleepLow ? "Light Activity" : "Cardio";
-    workoutIntensity = sleepLow ? "low" : "moderate";
-    workoutDuration = sleepLow ? 30 : 40;
-    workoutDesc = sleepLow ? "Reduced intensity. No HIIT today." : "Steady-state cardio at a conversational pace.";
+      ? "Sleep was short. A lighter day with good nutrition will help you recover."
+      : "Recovery is moderate. Stay consistent with the basics and keep movement gentle.";
+    dailyFocus = "Basics first";
+    whyThisPlan = [
+      "On moderate days, the basics matter most. hydration, protein, rest.",
+      "Gentle movement helps you stay in rhythm without overdoing it.",
+      "Consistency on days like this is what builds long-term results.",
+    ];
+    workoutType = "Gentle Walk";
+    workoutIntensity = "low";
+    workoutDuration = 20;
+    workoutDesc = "Easy walk. No pressure on pace or distance.";
+    optional = "If you feel good, you can extend to 30 minutes.";
   } else {
     dailyState = "recover";
-    headline = "Recovery first today.";
-    summary = "Your body is asking for rest. Focus on sleep, nutrition, hydration, and calm.";
+    headline = "Your body needs a break today.";
+    summary = "Recovery is low. Focus on rest, hydration, and nourishing food. Movement can wait.";
     dailyFocus = "Rest and restore";
     whyThisPlan = [
-      "Your body needs time to repair. that includes rest, nutrition, and calm.",
-      "Sleep, hydration, and stress management are your best tools right now.",
+      "Rest days help your body adjust to treatment and recover from accumulated strain.",
+      "Good nutrition and hydration are your best tools right now.",
       "Pushing through fatigue creates more fatigue, not progress.",
     ];
-    optional = "A 20-minute easy walk is the most you should do today.";
-    workoutType = "Active Recovery";
+    optional = "A 10-minute easy walk is the most you should do today.";
+    workoutType = "Rest";
     workoutIntensity = "low";
-    workoutDuration = 20;
-    workoutDesc = "Light mobility work and stretching.";
-  }
-
-  if (trainingIntent === "light" && workoutIntensity === "high") {
-    workoutIntensity = "moderate";
-    workoutDuration = Math.min(workoutDuration, 35);
-  }
-
-  if (trainingIntent === "moderate" && workoutIntensity === "high") {
-    workoutDuration = Math.min(workoutDuration, 45);
-  }
-
-  if (highStrainYesterday && workoutIntensity === "high") {
-    workoutIntensity = "moderate";
-    workoutDuration = Math.min(workoutDuration, 35);
-    if (!whyThisPlan.some(w => w.includes("strain"))) {
-      whyThisPlan.push("Yesterday was a high-strain day. Dialing back prevents overtraining.");
-    }
-  }
-
-  if (sleepConsistencyOff && !whyThisPlan.some(w => w.includes("circadian") || w.includes("bedtime"))) {
-    whyThisPlan.push("Your sleep timing has been inconsistent. A fixed wind-down routine tonight will help.");
+    workoutDuration = 0;
+    workoutDesc = "Full rest day.";
   }
 
   const recommendedTag = stateTagFromReadiness(readinessScore, feeling, stress, energy);
@@ -588,55 +416,38 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     fuel: pickOptionTitle("fuel", recommendedTag),
     hydrate: pickOptionTitle("hydrate", recommendedTag),
     recover: pickOptionTitle("recover", recommendedTag),
-    mind: pickOptionTitle("mind", recommendedTag),
+    consistent: pickOptionTitle("consistent", recommendedTag),
   };
 
   const moveReason =
-    dailyState === "recover" ? "Recovery is the priority. Gentle movement protects your progress."
-    : dailyState === "push" ? "Sleep and recovery support intensity today."
-    : sleepLow ? "Sleep was short. Lower intensity reduces injury risk."
-    : stressOverride ? "Stress is elevated. Calming movement helps your nervous system."
-    : noWorkout3Days ? "Three days without activity. Time to rebuild momentum."
-    : consistent5Days ? "Five active days this week. A lighter day helps your body absorb the work."
-    : lowEnergy ? "Energy is low. Gentle movement keeps you active without adding strain."
-    : readinessScore >= 65 ? "Recovery and energy support a solid effort today."
-    : "Moderate effort matches your current readiness.";
+    dailyState === "recover" ? "Recovery is the priority. Gentle movement helps without adding strain."
+    : dailyState === "push" ? "Your body is ready for activity. Strength training helps preserve muscle on GLP-1."
+    : symptomsHeavy ? "Side effects are heavier today. Keep movement light and comfortable."
+    : sleepLow ? "Sleep was short. Lower intensity protects your energy."
+    : "Consistent gentle movement supports your treatment journey.";
 
   const fuelReason =
-    dailyState === "push" ? "Higher energy output needs more fuel to support performance."
-    : stressOverride ? "Stress depletes nutrients. Nourishing food supports your stress response."
-    : dailyState === "recover" ? "Recovery meals help your body repair without adding digestive load."
-    : lowEnergy ? "Balanced meals help stabilize energy when you're running low."
-    : isDehydrated ? "Hydration and nutrition work together. Focus on water-rich foods too."
-    : readinessScore >= 65 ? "Solid recovery means your body can use fuel efficiently."
-    : "Steady nutrition keeps your energy stable today.";
+    appetiteLow ? "Appetite is low, which is common on GLP-1. Small, protein-rich meals help prevent under-eating."
+    : dailyState === "push" ? "Activity needs fuel. Focus on protein to preserve muscle."
+    : stressOverride ? "Stress depletes nutrients. Nourishing food supports your body's response."
+    : dailyState === "recover" ? "Recovery meals help your body repair. Prioritize protein and easy-to-digest foods."
+    : "Steady fueling with protein at every meal supports your treatment.";
 
   const hydrateReason =
-    isDehydrated ? "You're behind on hydration. Extra water and electrolytes today."
-    : dailyState === "push" ? "Higher intensity increases fluid loss. Stay ahead of it."
-    : stressOverride ? "Stress increases cortisol, which affects hydration. Steady sipping helps."
-    : sleepLow ? "Dehydration worsens fatigue from poor sleep."
-    : readinessScore >= 65 ? "Consistent hydration supports the solid day ahead."
-    : "Hydration supports recovery and energy.";
+    isDehydrated ? "Hydration is low. Extra water and electrolytes are important on GLP-1."
+    : symptomsHeavy ? "Good hydration helps manage side effects like nausea and fatigue."
+    : "Consistent hydration supports energy, digestion, and treatment effectiveness.";
 
   const recoverReason =
-    sleepDeclining3 ? "Sleep has declined for 3 days. Extra rest tonight breaks the trend."
-    : sleepCritical ? "Under 6 hours with low HRV. Maximum sleep priority tonight."
+    sleepDeclining3 ? "Sleep has been declining. Prioritize an earlier bedtime tonight."
+    : sleepCritical ? "Sleep was very short. Maximum rest priority tonight."
     : dailyState === "recover" ? "Your body needs extra rest to bounce back."
-    : dailyState === "push" ? "Good recovery means you can maintain a normal sleep target."
-    : stressOverride ? "Stress disrupts sleep quality. Prioritize wind-down time."
-    : sleepLow ? "Last night was short. Aim higher tonight to offset the deficit."
-    : "Consistent sleep is your most powerful recovery tool.";
+    : "Consistent sleep is your most powerful recovery tool on treatment.";
 
-  const mindReason =
-    stressOverride ? "Stress is elevated. Calming your nervous system is the priority."
-    : dailyState === "recover" ? "Rest days are a great time for mental recovery too."
-    : dailyState === "push" ? "Capture your clarity. Strong days are worth reflecting on."
-    : feeling === "tired" ? "Fatigue affects your mind too. A short reset helps."
-    : lowEnergy ? "Low energy often responds well to a brief mental reset."
-    : "A few minutes of mental care compounds over time.";
+  const consistentReason =
+    "Checking in daily helps you stay aware of patterns and build momentum on your journey.";
 
-  const actionReasons = { move: moveReason, fuel: fuelReason, hydrate: hydrateReason, recover: recoverReason, mind: mindReason };
+  const actionReasons = { move: moveReason, fuel: fuelReason, hydrate: hydrateReason, recover: recoverReason, consistent: consistentReason };
 
   const sleepHours = metrics.sleepDuration;
   let sleepSummary = "";
@@ -658,10 +469,10 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
   }
 
   const statusLabel: import("@/types").DailyStatusLabel =
-    dailyState === "push" ? "Strong Day"
-    : dailyState === "build" ? "On Track"
-    : dailyState === "maintain" ? "Slightly Off Track"
-    : "Off Track";
+    dailyState === "push" ? "You're in a good place today"
+    : dailyState === "build" ? "A few small adjustments will help today"
+    : dailyState === "maintain" ? "Let's make today a bit easier"
+    : "Your body may need more support today";
 
   const statusDrivers: string[] = [];
 
@@ -673,20 +484,23 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
   else if (sleepHours >= 6.5) statusDrivers.push("Sleep was adequate");
   else statusDrivers.push("Sleep was short");
 
-  if (feeling === "great" || energy === "excellent" || energy === "high") statusDrivers.push("Feeling strong");
+  if (symptomsHeavy) statusDrivers.push("Symptoms are heavier today");
+  else if (appetiteLow) statusDrivers.push("Appetite is low");
+  else if (feeling === "great" || energy === "excellent" || energy === "high") statusDrivers.push("Feeling good");
   else if (feeling === "stressed" || stressOverride) statusDrivers.push("Stress is elevated");
   else if (feeling === "tired") statusDrivers.push("Feeling tired");
   else if (energy === "low") statusDrivers.push("Energy is low");
   else if (isDehydrated) statusDrivers.push("Hydration is low");
-  else if (trainingIntent === "none") statusDrivers.push("Rest day");
-  else if (metrics.steps >= 8000) statusDrivers.push("Movement is strong");
+  else if (metrics.steps >= 6000) statusDrivers.push("Movement is on track");
   else statusDrivers.push("Movement has been light");
 
   const guidance =
     dailyState === "push" ? "Make the most of today"
     : dailyState === "build" ? "Stay consistent today"
     : dailyState === "maintain" ? "Focus on the basics today"
-    : "Rest and restore today";
+    : "Rest and support your body today";
+
+  const focusItems = generateFocusItems(dailyState, metrics, inputs, glp1Inputs);
 
   return {
     date: metrics.date,
@@ -713,26 +527,20 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
       description: workoutDesc,
     },
     nutritionTarget: {
-      calories: readinessScore >= 65 ? 2200 : 1900,
-      protein: 160,
-      carbs: workoutIntensity === "high" ? 240 : readinessScore >= 65 ? 220 : 180,
-      fat: 65,
+      calories: readinessScore >= 65 ? 1800 : 1600,
+      protein: 120,
+      carbs: workoutIntensity === "high" ? 180 : readinessScore >= 65 ? 160 : 140,
+      fat: 55,
       hydration: isDehydrated ? 112 : 96,
-      note: isDehydrated
-        ? "You're behind on hydration. Drink 16-24 oz of water now and keep sipping through the day."
-        : stressOverride
-        ? "Focus on calming, whole foods. Magnesium-rich greens, omega-3s from fish, and complex carbs support your stress response."
-        : workoutIntensity === "high"
-        ? "Fuel your effort with extra carbs post-workout. Include protein within an hour of training."
-        : readinessScore >= 65
-        ? "Fuel your effort with protein and complex carbs. Include colorful vegetables and stay well hydrated."
-        : "Focus on nutrient-dense, anti-inflammatory foods. Good nutrition accelerates recovery and restores energy.",
+      note: appetiteLow
+        ? "Appetite is low. Focus on nutrient-dense, protein-rich foods in smaller portions. Protein shakes can help."
+        : symptomsHeavy
+        ? "Side effects may make eating harder. Try bland, easy-to-digest foods and sip water throughout the day."
+        : isDehydrated
+        ? "Hydration is low. Drink water with each meal and consider adding electrolytes."
+        : "Focus on protein at every meal to preserve muscle. Include vegetables and stay hydrated.",
     },
-    fastingGuidance: lowEnergy && inputs?.trainingIntent !== "none"
-      ? "Consider breaking your fast with a balanced meal (protein + carbs) if energy is low."
-      : metrics.recoveryScore >= 75
-      ? "16:8 window. Eat between 12pm and 8pm. On well-recovered days you could push to 18 hours."
-      : "16:8 window. Eat between 12pm and 8pm. Do not extend beyond 16 hours today.",
+    focusItems,
   };
 }
 
@@ -744,12 +552,12 @@ export function generateWeeklyPlan(): WeeklyPlan {
   monday.setDate(today.getDate() - ((dayOfWeek + 6) % 7));
 
   const focusAreas = [
-    "Strength + Stress Management",
-    "Cardio + Hydration Focus",
-    "Recovery + Nourish",
-    "Strength + Sleep Optimization",
-    "Active Movement + Nutrition",
-    "Recovery + Mental Wellness",
+    "Strength + Protein Focus",
+    "Walking + Hydration",
+    "Recovery + Gentle Movement",
+    "Strength + Protein Focus",
+    "Walking + Consistency",
+    "Recovery + Rest",
     "Light Movement + Meal Prep",
   ];
 
@@ -759,10 +567,10 @@ export function generateWeeklyPlan(): WeeklyPlan {
     fuel: pickOptionTitle("fuel", tag),
     hydrate: pickOptionTitle("hydrate", tag),
     recover: pickOptionTitle("recover", tag),
-    mind: pickOptionTitle("mind", tag),
+    consistent: pickOptionTitle("consistent", tag),
   }));
 
-  const categories: ActionCategory[] = ["move", "fuel", "hydrate", "recover", "mind"];
+  const categories: ActionCategory[] = ["move", "fuel", "hydrate", "recover", "consistent"];
 
   const planDays: WeeklyPlanDay[] = dayNames.map((name, i) => {
     const date = new Date(monday);
@@ -783,9 +591,9 @@ export function generateWeeklyPlan(): WeeklyPlan {
 
   return {
     weekStartDate: monday.toISOString().split("T")[0],
-    weekSummary: "This week focuses on steady progress with two lighter days to support recovery. Your plan balances movement, nutrition, hydration, and rest based on your recent patterns.",
+    weekSummary: "This week balances strength training with lighter recovery days. Focus on protein at every meal, consistent hydration, and keeping movement simple. Two strength sessions support muscle preservation while you lose weight.",
     days: planDays,
-    adjustmentNote: "If stress is high or sleep drops mid-week, swap a training day for yoga, stretching, and extra recovery time.",
+    adjustmentNote: "If side effects are heavier after a dose change, swap any training day for gentle walking and extra rest.",
   };
 }
 
@@ -813,36 +621,36 @@ function trendSummary(label: string, values: number[], trend: "up" | "down" | "s
 
   switch (label) {
     case "Weight": {
-      if (Math.abs(change) < 0.5) return "Weight has been steady over the last 4 weeks. Your body composition is stable.";
+      if (Math.abs(change) < 0.5) return "Weight has been steady over the last 4 weeks.";
       return trend === "down"
-        ? `Down ${Math.abs(change).toFixed(1)} lbs over the past 4 weeks. Steady, sustainable progress.`
-        : `Up ${Math.abs(change).toFixed(1)} lbs over the past 4 weeks. Check your nutrition if this isn't intentional.`;
+        ? `Down ${Math.abs(change).toFixed(1)} lbs over the past 4 weeks. Steady progress on treatment.`
+        : `Up ${Math.abs(change).toFixed(1)} lbs over the past 4 weeks. This is normal early in treatment and may stabilize.`;
     }
     case "HRV": {
-      if (trend === "up") return "Trending up. Your body is adapting well and recovery capacity is improving.";
-      if (trend === "down") return "Trending down over 4 weeks. This may reflect accumulated stress or too little recovery.";
-      return `Holding steady around ${Math.round(avg)} ms. Consistent recovery and rest are keeping things balanced.`;
+      if (trend === "up") return "Trending up. Your body is adapting well and recovery is improving.";
+      if (trend === "down") return "Trending down. This may reflect accumulated fatigue or treatment adjustment.";
+      return `Holding steady around ${Math.round(avg)} ms. Consistent recovery patterns.`;
     }
     case "Resting HR": {
-      if (trend === "down") return "Gradually decreasing. This is a sign of improving cardiovascular fitness.";
-      if (trend === "up") return "Trending higher. Consider whether stress, poor sleep, or overtraining may be a factor.";
-      return `Stable around ${Math.round(avg)} bpm. Your heart is in a consistent rhythm.`;
+      if (trend === "down") return "Gradually decreasing. A positive sign for cardiovascular health.";
+      if (trend === "up") return "Trending higher. Consider whether stress, poor sleep, or dehydration may be a factor.";
+      return `Stable around ${Math.round(avg)} bpm.`;
     }
     case "Sleep": {
-      if (avg >= 7.5) return `Averaging ${avg.toFixed(1)} hours. Solid sleep is supporting your recovery and energy.`;
-      if (avg < 6.5) return `Averaging only ${avg.toFixed(1)} hours. Getting closer to 7-8 hours would improve recovery and focus.`;
-      return `Averaging ${avg.toFixed(1)} hours. A bit more sleep would give your body extra recovery time.`;
+      if (avg >= 7.5) return `Averaging ${avg.toFixed(1)} hours. Solid sleep supports your treatment.`;
+      if (avg < 6.5) return `Averaging ${avg.toFixed(1)} hours. More sleep would help with energy and side effects.`;
+      return `Averaging ${avg.toFixed(1)} hours. A bit more sleep would support better recovery.`;
     }
     case "Steps": {
       const avgK = Math.round(avg).toLocaleString();
-      if (avg >= 8000) return `Averaging ${avgK} daily. Strong daily movement that supports your overall health.`;
-      if (avg >= 5000) return `Averaging ${avgK} daily. Adding a short walk could push you into a stronger range.`;
-      return `Averaging ${avgK} daily. Look for ways to add more movement throughout your day.`;
+      if (avg >= 7000) return `Averaging ${avgK} daily. Good daily movement.`;
+      if (avg >= 4000) return `Averaging ${avgK} daily. A short daily walk could help.`;
+      return `Averaging ${avgK} daily. Adding more gentle movement would support your journey.`;
     }
     case "Recovery": {
-      if (avg >= 70) return "Recovery has been strong. Your body is bouncing back well between sessions.";
-      if (avg < 50) return "Recovery has been low. More rest and better sleep would help you recharge.";
-      return "Recovery is moderate. Consistent sleep and lighter training days will help it climb.";
+      if (avg >= 70) return "Recovery has been strong. Your body is responding well.";
+      if (avg < 50) return "Recovery has been lower. Better sleep and hydration would help.";
+      return "Recovery is moderate. Consistent sleep and rest days will help it improve.";
     }
     default:
       return "";
@@ -900,13 +708,13 @@ export function getMetricDetail(
       headline: todayMetrics.sleepDuration >= 7.5
         ? "You slept well."
         : todayMetrics.sleepDuration >= 6.5
-        ? "Sleep was okay. Not great."
-        : "Not enough sleep last night.",
+        ? "Sleep was okay."
+        : "Sleep was short last night.",
       explanation: `${todayMetrics.sleepDuration.toFixed(1)} hours, ${todayMetrics.sleepQuality}% quality. 7-day average: ${avg.toFixed(1)} hours.`,
-      whatItMeans: "Sleep is when your body repairs muscle, consolidates memory, and regulates hormones. Less than 7 hours consistently undermines recovery and training.",
+      whatItMeans: "Sleep is when your body recovers and adjusts to treatment. Consistent sleep supports energy, appetite regulation, and side effect management.",
       recommendation: todayMetrics.sleepDuration < 7
-        ? "Set a bedtime alarm for 9:30pm. Avoid screens 30 min before bed. Keep the room cool and dark."
-        : "Keep this up. Consistency matters more than occasional long nights.",
+        ? "Try winding down 30 minutes earlier tonight. Keep the room cool and dark."
+        : "Keep this up. Consistent sleep supports your treatment.",
       currentValue: `${todayMetrics.sleepDuration.toFixed(1)}`,
       unit: "hrs",
     },
@@ -916,26 +724,26 @@ export function getMetricDetail(
         ? "HRV looks good. Recovery is on track."
         : todayMetrics.hrv >= 35
         ? "HRV is slightly below average."
-        : "HRV is low. Your body needs rest.",
+        : "HRV is low. Your body needs more rest.",
       explanation: `${todayMetrics.hrv} ms today. 7-day average: ${Math.round(avg)} ms.`,
-      whatItMeans: "HRV measures variation between heartbeats. Higher means well-recovered and ready for stress. Lower means your nervous system is under load.",
+      whatItMeans: "HRV reflects how well-recovered your nervous system is. Higher values mean your body is handling stress well.",
       recommendation: todayMetrics.hrv < 38
-        ? "Take it easy. Skip high-intensity work. Focus on hydration, light movement, and sleep."
-        : "HRV supports training today. Listen to your body during the session.",
+        ? "Take it easy. Focus on hydration, gentle movement, and rest."
+        : "HRV supports activity today. Listen to your body.",
       currentValue: `${todayMetrics.hrv}`,
       unit: "ms",
     },
     steps: {
       title: "Daily Steps",
-      headline: todayMetrics.steps >= 8000
-        ? "Step goal hit."
-        : todayMetrics.steps >= 5000
-        ? "Partway to your step goal."
-        : "Movement has been low today.",
-      explanation: `${todayMetrics.steps.toLocaleString()} steps. Goal: 8,000. 7-day average: ${Math.round(avg).toLocaleString()}.`,
-      whatItMeans: "Consistent movement outside of workouts supports cardiovascular health, metabolism, and recovery.",
-      recommendation: todayMetrics.steps < 6000
-        ? "Take a 20-minute walk after your next meal. Small breaks add up."
+      headline: todayMetrics.steps >= 7000
+        ? "Good movement today."
+        : todayMetrics.steps >= 4000
+        ? "Partway to your movement goal."
+        : "Movement has been light today.",
+      explanation: `${todayMetrics.steps.toLocaleString()} steps. 7-day average: ${Math.round(avg).toLocaleString()}.`,
+      whatItMeans: "Gentle daily movement supports digestion, energy, and treatment effectiveness. Walking after meals can help with nausea.",
+      recommendation: todayMetrics.steps < 5000
+        ? "A 15-minute walk after your next meal can help with energy and digestion."
         : "On track. Keep moving throughout the day.",
       currentValue: todayMetrics.steps.toLocaleString(),
       unit: "steps",
@@ -948,38 +756,38 @@ export function getMetricDetail(
         ? "Resting heart rate is normal."
         : "Resting heart rate is elevated.",
       explanation: `${todayMetrics.restingHeartRate} bpm today. 7-day average: ${Math.round(avg)} bpm.`,
-      whatItMeans: "Lower resting HR generally indicates better fitness. Elevated can signal stress, poor sleep, or incomplete recovery.",
+      whatItMeans: "Resting heart rate reflects overall cardiovascular health and recovery status.",
       recommendation: todayMetrics.restingHeartRate > 66
-        ? "Elevated resting HR often means more recovery is needed. Prioritize sleep and hydration."
-        : "In a healthy range. Keep up consistent training and recovery.",
+        ? "Elevated resting HR may mean more recovery or hydration is needed."
+        : "In a healthy range. Keep up your routine.",
       currentValue: `${todayMetrics.restingHeartRate}`,
       unit: "bpm",
     },
     recovery: {
       title: "Recovery",
       headline: todayMetrics.recoveryScore >= 75
-        ? "Recovery is strong. Ready to train."
+        ? "Recovery is strong."
         : todayMetrics.recoveryScore >= 50
-        ? "Recovery is moderate. Train carefully."
-        : "Recovery is low. Rest is the priority.",
+        ? "Recovery is moderate."
+        : "Recovery is low. Take it easy.",
       explanation: `Recovery score: ${todayMetrics.recoveryScore}%. Based on HRV, resting heart rate, and sleep quality.`,
-      whatItMeans: "Recovery combines multiple signals to estimate how prepared your body is for stress. Higher scores support harder training. Lower scores mean your body is still adapting.",
+      whatItMeans: "Recovery shows how prepared your body is for activity. On GLP-1, listening to recovery signals helps you stay consistent.",
       recommendation: todayMetrics.recoveryScore < 50
-        ? "Skip intense training. Focus on active recovery, hydration, and sleep."
-        : "Enough recovery to train. Match intensity to how you feel.",
+        ? "Focus on rest, hydration, and protein today. Skip intense activity."
+        : "Recovery supports activity today. Match effort to how you feel.",
       currentValue: `${todayMetrics.recoveryScore}`,
       unit: "%",
     },
     weight: {
       title: "Weight",
       headline: trendDir === "down"
-        ? "Weight is trending down. On track."
+        ? "Weight is trending down."
         : trendDir === "up"
         ? "Weight has been trending up."
         : "Weight is stable.",
       explanation: `${todayMetrics.weight} lbs today. 7-day average: ${avg.toFixed(1)} lbs.`,
-      whatItMeans: "Daily weight fluctuates from water, food timing, and other factors. The weekly trend matters more than any single day.",
-      recommendation: "Weigh yourself at the same time each day. Focus on the trend, not the number.",
+      whatItMeans: "Weight changes on GLP-1 are expected. Focus on the weekly trend, not daily fluctuations. Preserving muscle matters as much as the number.",
+      recommendation: "Weigh yourself at the same time each day. Focus on protein and strength training to preserve muscle.",
       currentValue: `${todayMetrics.weight}`,
       unit: "lbs",
     },
@@ -1016,20 +824,3 @@ const platformIntegrations: IntegrationStatus[] = Platform.OS === "ios"
     ];
 
 export const integrations: IntegrationStatus[] = platformIntegrations;
-
-export const coachResponses: Record<string, string> = {
-  workout:
-    "You can train today, but keep it moderate.\n\nRecovery is slightly below your usual level. A hard session could create extra fatigue without much benefit.\n\nRecommendation: Zone 2 cardio or controlled strength work. Save the heavy lifting for a day when recovery is above 80%.",
-  hrv:
-    "Your HRV has been below your 7-day average for two days.\n\nThis usually means accumulated stress from training, sleep, work, or diet.\n\nThis is not alarming. Prioritize sleep tonight and keep today lighter. If it stays low for 3+ days, reduce training volume.",
-  eat:
-    "Today, aim for about 2,100 calories.\n\n160g protein. 200g carbs. 60g fat.\n\nEat complex carbs before your workout. Get 30-40g protein within an hour after. Dinner: lean protein with vegetables.\n\n96oz water minimum.",
-  fast:
-    "Your 16:8 window works well today.\n\nStart eating at noon. Last meal by 8pm.\n\nWith moderate recovery, do not extend beyond 16 hours. On well-recovered days, you could push to 18 hours.\n\nMake your first meal protein-rich.",
-  weight:
-    "Down about 2 pounds over 4 weeks.\n\nThat is 0.5 lbs per week. Healthy pace.\n\nYour strength metrics are holding steady. That means fat loss, not muscle loss.\n\nStay the course.",
-  overtraining:
-    "Not overtraining yet, but close to the edge.\n\nHRV has been below baseline for 2 days. Resting heart rate is up 3 bpm.\n\nTake tomorrow as a full rest day. Come back with a lower-intensity session.\n\nCheck that you are sleeping 7+ hours and eating enough for your training load.",
-  week:
-    "This week:\n\nMonday: Strength, upper body, 45 min\nTuesday: Zone 2 run, 35 min\nWednesday: Rest\nThursday: Strength, lower body, 45 min\nFriday: Zone 2 bike, 40 min\nSaturday: Rest\nSunday: HIIT, 25 min\n\nGood mix of strength and cardio with enough recovery. Volume is moderate given your recent HRV.",
-};

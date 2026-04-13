@@ -25,7 +25,29 @@ export interface UserProfile {
   sleepHabit?: "7_8" | "6_7" | "under_6" | "inconsistent";
   usualBedtime?: string;
   usualWakeTime?: string;
+
+  glp1Medication?: "semaglutide" | "tirzepatide" | "liraglutide" | "other";
+  glp1Reason?: "weight_loss" | "metabolic_health" | "diabetes" | "other";
+  glp1Duration?: "less_1_month" | "1_3_months" | "3_6_months" | "6_plus_months";
+  glp1DoseOptional?: string;
+  glp1InjectionDayOptional?: string;
+  baselineSideEffects?: SideEffectType[];
+  proteinConfidence?: "low" | "medium" | "high";
+  hydrationConfidence?: "low" | "medium" | "high";
+  mealsPerDay?: number;
+  underEatingConcern?: boolean;
+  strengthTrainingBaseline?: "yes" | "sometimes" | "no";
+  walkingFrequency?: "daily" | "few_times" | "rarely" | "never";
 }
+
+export type SideEffectType =
+  | "nausea"
+  | "fatigue"
+  | "constipation"
+  | "poor_appetite"
+  | "dizziness"
+  | "sleep_disruption"
+  | "none";
 
 export type HealthGoal =
   | "fat_loss"
@@ -37,7 +59,9 @@ export type HealthGoal =
   | "endurance"
   | "improve_fitness"
   | "reduce_stress"
-  | "stay_consistent";
+  | "stay_consistent"
+  | "metabolic_health"
+  | "preserve_muscle";
 
 export type SubscriptionTier = "free" | "premium" | "premium_plus";
 
@@ -71,9 +95,13 @@ export interface WorkoutEntry {
 
 export type DailyState = "recover" | "maintain" | "build" | "push";
 
-export type DailyStatusLabel = "Strong Day" | "On Track" | "Slightly Off Track" | "Off Track";
+export type DailyStatusLabel =
+  | "You're in a good place today"
+  | "A few small adjustments will help today"
+  | "Let's make today a bit easier"
+  | "Your body may need more support today";
 
-export type ActionCategory = "move" | "fuel" | "recover" | "mind" | "hydrate";
+export type ActionCategory = "move" | "fuel" | "recover" | "hydrate" | "consistent";
 
 export interface DailyAction {
   id: string;
@@ -90,12 +118,31 @@ export interface CompletionRecord {
   completionRate: number;
 }
 
+export type AppetiteLevel = "normal" | "low" | "very_low" | null;
+export type ProteinConfidenceDaily = "good" | "okay" | "poor" | null;
+export type HydrationDaily = "good" | "okay" | "poor" | null;
+export type SideEffectSeverity = "none" | "mild" | "moderate" | "rough" | null;
+export type MovementIntent = "walk" | "strength" | "light_recovery" | "rest" | null;
+export type EnergyDaily = "great" | "good" | "tired" | "depleted" | null;
+
+export interface GLP1DailyInputs {
+  date: string;
+  energy: EnergyDaily;
+  appetite: AppetiteLevel;
+  hydration: HydrationDaily;
+  proteinConfidence: ProteinConfidenceDaily;
+  sideEffects: SideEffectSeverity;
+  movementIntent: MovementIntent;
+}
+
 export interface DailyCheckIn {
   date: string;
-  energy: "great" | "good" | "low" | "crashed";
-  focus: "sharp" | "decent" | "foggy" | "scattered";
-  mood: "great" | "good" | "flat" | "rough";
-  planRealistic: boolean;
+  energy: EnergyDaily;
+  appetite: AppetiteLevel;
+  hydration: HydrationDaily;
+  proteinConfidence: ProteinConfidenceDaily;
+  sideEffects: SideEffectSeverity;
+  movementIntent: MovementIntent;
 }
 
 export interface DailyPlan {
@@ -116,7 +163,7 @@ export interface DailyPlan {
     fuel: string;
     hydrate: string;
     recover: string;
-    mind: string;
+    consistent: string;
   };
   whyThisPlan: string[];
   optional?: string;
@@ -125,6 +172,12 @@ export interface DailyPlan {
   workoutRecommendation: WorkoutRecommendation;
   nutritionTarget: NutritionTarget;
   fastingGuidance?: string;
+  focusItems?: FocusItem[];
+}
+
+export interface FocusItem {
+  text: string;
+  category: ActionCategory;
 }
 
 export interface WorkoutRecommendation {
@@ -164,7 +217,6 @@ export interface WeeklyDayAction {
   chosen: string;
   completed: boolean;
 }
-
 
 export interface ChatMessage {
   id: string;
@@ -210,39 +262,39 @@ export interface CategoryOption {
 
 export const CATEGORY_OPTIONS: Record<ActionCategory, CategoryOption[]> = {
   move: [
-    { id: "move_great", title: "60 min strength training", subtitle: "Strong training day", category: "move", stateTag: "great", durationMinutes: 60, intensity: "high", supportText: ["5 min dynamic warmup", "Post-workout stretch"] },
-    { id: "move_good", title: "45 min cardio", subtitle: "Solid baseline movement", category: "move", stateTag: "good", durationMinutes: 45, intensity: "moderate", supportText: ["Keep a conversational pace", "Cool down with 5 min walk"] },
-    { id: "move_tired", title: "20 min recovery walk", subtitle: "Gentle recovery movement", category: "move", stateTag: "tired", durationMinutes: 20, intensity: "low", supportText: ["Fresh air helps energy", "No pace pressure"] },
-    { id: "move_stressed", title: "15 min yoga or mobility", subtitle: "Nervous system reset", category: "move", stateTag: "stressed", durationMinutes: 15, intensity: "low", supportText: ["Focus on breathing", "Gentle stretching only"] },
-  ],
-  mind: [
-    { id: "mind_great", title: "10 min journaling", subtitle: "Capture your clarity", category: "mind", stateTag: "great", durationMinutes: 10, supportText: ["Write freely, no rules", "Reflect on what's working"] },
-    { id: "mind_good", title: "10 min guided meditation", subtitle: "Centered and focused", category: "mind", stateTag: "good", durationMinutes: 10, supportText: ["Use a timer or app", "Find a quiet spot"] },
-    { id: "mind_tired", title: "15 min hot bath", subtitle: "Rest and restore", category: "mind", stateTag: "tired", durationMinutes: 15, supportText: ["Add epsom salts if available", "No screens during"] },
-    { id: "mind_stressed", title: "5 min box breathing", subtitle: "Calm your nervous system", category: "mind", stateTag: "stressed", durationMinutes: 5, supportText: ["4 counts in, hold, out, hold", "Repeat 5 cycles"] },
+    { id: "move_great", title: "30 min strength training", subtitle: "Preserve muscle on treatment", category: "move", stateTag: "great", durationMinutes: 30, intensity: "moderate", supportText: ["Strength training helps preserve lean mass", "Focus on compound movements"] },
+    { id: "move_good", title: "30 min walk", subtitle: "Steady daily movement", category: "move", stateTag: "good", durationMinutes: 30, intensity: "low", supportText: ["Walking supports digestion and energy", "Post-meal walks can help with nausea"] },
+    { id: "move_tired", title: "15 min gentle movement", subtitle: "Keep momentum without overdoing it", category: "move", stateTag: "tired", durationMinutes: 15, intensity: "low", supportText: ["Gentle movement helps energy levels", "No pressure on pace or distance"] },
+    { id: "move_stressed", title: "Full rest day", subtitle: "Let your body recover", category: "move", stateTag: "stressed", durationMinutes: 0, intensity: "low", supportText: ["Rest is part of the plan", "Your body needs time to adjust"] },
   ],
   fuel: [
-    { id: "fuel_great", title: "Heavy fuel (performance focus)", subtitle: "Higher calories, protein, and carbs", category: "fuel", stateTag: "great", supportText: ["Protein at every meal", "Include whole grains for energy"] },
-    { id: "fuel_good", title: "Moderate fuel (balanced)", subtitle: "Steady energy and recovery", category: "fuel", stateTag: "good", supportText: ["Protein, carbs, and fats each meal", "Include colorful vegetables"] },
-    { id: "fuel_tired", title: "Light fuel (easy digestion)", subtitle: "Lower volume, gentle meals", category: "fuel", stateTag: "tired", supportText: ["Warm, simple meals", "Steady blood sugar support"] },
-    { id: "fuel_stressed", title: "Minimal fuel (reset)", subtitle: "Light eating or fasting approach", category: "fuel", stateTag: "stressed", supportText: ["Give your system a break", "Hydrate well between light meals"] },
+    { id: "fuel_great", title: "3 protein-focused meals", subtitle: "Hit your protein targets today", category: "fuel", stateTag: "great", supportText: ["Aim for 25-30g protein per meal", "Protein preserves muscle during weight loss"] },
+    { id: "fuel_good", title: "Balanced meals + protein snack", subtitle: "Steady fueling throughout the day", category: "fuel", stateTag: "good", supportText: ["Smaller meals may feel easier", "Include protein at every meal"] },
+    { id: "fuel_tired", title: "Small frequent meals", subtitle: "Eat even if appetite is low", category: "fuel", stateTag: "tired", supportText: ["Low appetite is common on GLP-1s", "Try nutrient-dense small portions"] },
+    { id: "fuel_stressed", title: "Focus on not under-eating", subtitle: "Your body still needs fuel", category: "fuel", stateTag: "stressed", supportText: ["Under-eating slows your metabolism", "Protein shakes can help when appetite is low"] },
   ],
   hydrate: [
-    { id: "hydrate_great", title: "Post-workout hydration focus", subtitle: "Replace what you lose", category: "hydrate", stateTag: "great", supportText: ["Water + electrolytes around training", "Track intake if possible"] },
-    { id: "hydrate_good", title: "8 cups water baseline", subtitle: "Stay consistent today", category: "hydrate", stateTag: "good", supportText: ["Sip throughout the day", "One glass with each meal"] },
-    { id: "hydrate_tired", title: "10+ cups + electrolytes", subtitle: "Extra hydration for recovery", category: "hydrate", stateTag: "tired", supportText: ["Dehydration worsens fatigue", "Add a pinch of salt or electrolyte mix"] },
-    { id: "hydrate_stressed", title: "Steady hydration + lower caffeine", subtitle: "Calm your system", category: "hydrate", stateTag: "stressed", supportText: ["Swap afternoon coffee for herbal tea", "Hydration supports stress response"] },
+    { id: "hydrate_great", title: "8 cups + electrolytes", subtitle: "Full hydration with activity", category: "hydrate", stateTag: "great", supportText: ["Electrolytes help with GLP-1 side effects", "Sip throughout the day"] },
+    { id: "hydrate_good", title: "8 cups water", subtitle: "Stay consistent today", category: "hydrate", stateTag: "good", supportText: ["Front-load fluids before noon", "One glass with each meal"] },
+    { id: "hydrate_tired", title: "10+ cups + electrolytes", subtitle: "Extra hydration for recovery", category: "hydrate", stateTag: "tired", supportText: ["Dehydration worsens fatigue and nausea", "Add electrolytes if feeling dizzy"] },
+    { id: "hydrate_stressed", title: "Steady sipping all day", subtitle: "Hydration supports your body's response", category: "hydrate", stateTag: "stressed", supportText: ["Dehydration makes everything harder", "Set reminders if needed"] },
   ],
   recover: [
-    { id: "recover_great", title: "Aim for under 7 hours", subtitle: "Light recovery day", category: "recover", stateTag: "great", supportText: ["You're well recovered", "Keep a consistent wake time"] },
-    { id: "recover_good", title: "Aim for 8 hours", subtitle: "Standard recovery target", category: "recover", stateTag: "good", supportText: ["Screen-free 30 min before bed", "Keep the room cool and dark"] },
-    { id: "recover_tired", title: "Aim for 9 hours", subtitle: "Deep recovery focus", category: "recover", stateTag: "tired", supportText: ["Start winding down early", "Skip late-night screens"] },
-    { id: "recover_stressed", title: "Aim for 10+ hours", subtitle: "Full reset mode", category: "recover", stateTag: "stressed", supportText: ["Your body needs extra rest", "Prioritize sleep above all else"] },
+    { id: "recover_great", title: "Aim for 7-8 hours", subtitle: "Maintain your sleep quality", category: "recover", stateTag: "great", supportText: ["Consistent sleep supports treatment", "Keep a consistent wake time"] },
+    { id: "recover_good", title: "Aim for 8 hours", subtitle: "Solid recovery target", category: "recover", stateTag: "good", supportText: ["Screen-free 30 min before bed", "Keep the room cool and dark"] },
+    { id: "recover_tired", title: "Aim for 8+ hours", subtitle: "Your body needs extra rest", category: "recover", stateTag: "tired", supportText: ["Start winding down early", "Prioritize sleep above all else tonight"] },
+    { id: "recover_stressed", title: "Early wind-down tonight", subtitle: "Full reset mode", category: "recover", stateTag: "stressed", supportText: ["Your body needs extra recovery", "Prioritize sleep above everything"] },
+  ],
+  consistent: [
+    { id: "consistent_great", title: "Complete your daily check-in", subtitle: "Keep the momentum going", category: "consistent", stateTag: "great", supportText: ["Consistency compounds over time", "You're building a strong habit"] },
+    { id: "consistent_good", title: "Log your meals and water", subtitle: "Small actions build habits", category: "consistent", stateTag: "good", supportText: ["Tracking helps you stay aware", "Even rough days count"] },
+    { id: "consistent_tired", title: "Just check in today", subtitle: "Showing up is enough", category: "consistent", stateTag: "tired", supportText: ["A simple check-in keeps your streak", "Low days are part of the journey"] },
+    { id: "consistent_stressed", title: "Keep routines simple today", subtitle: "Do the basics and rest", category: "consistent", stateTag: "stressed", supportText: ["Simplify to essentials today", "Tomorrow is a fresh start"] },
   ],
 };
 
 export const WEEKLY_OPTIONS: Record<ActionCategory, string[]> = Object.fromEntries(
-  (["move", "fuel", "hydrate", "recover", "mind"] as ActionCategory[]).map(cat => [
+  (["move", "fuel", "hydrate", "recover", "consistent"] as ActionCategory[]).map(cat => [
     cat,
     CATEGORY_OPTIONS[cat].map(o => o.title),
   ])
@@ -278,8 +330,34 @@ export interface WellnessInputs {
   trainingIntent: TrainingIntent;
 }
 
+export interface GLP1WellnessInputs {
+  energy: EnergyDaily;
+  appetite: AppetiteLevel;
+  hydration: HydrationDaily;
+  proteinConfidence: ProteinConfidenceDaily;
+  sideEffects: SideEffectSeverity;
+  movementIntent: MovementIntent;
+}
+
+export type RiskLevel = "low" | "mild" | "elevated" | "high";
+
+export interface RiskDriver {
+  category: "recovery" | "activity" | "fueling" | "symptoms" | "consistency";
+  label: string;
+  score: number;
+}
+
+export interface DropoutRiskResult {
+  riskLevel: RiskLevel;
+  riskScore: number;
+  riskDrivers: RiskDriver[];
+  interventionFocus: string[];
+  userMessage: string;
+  supportHeadline: string;
+}
+
 export const ACTION_OPTIONS: Record<ActionCategory, string[]> = Object.fromEntries(
-  (["move", "fuel", "hydrate", "recover", "mind"] as ActionCategory[]).map(cat => [
+  (["move", "fuel", "hydrate", "recover", "consistent"] as ActionCategory[]).map(cat => [
     cat,
     CATEGORY_OPTIONS[cat].map(o => o.title),
   ])
