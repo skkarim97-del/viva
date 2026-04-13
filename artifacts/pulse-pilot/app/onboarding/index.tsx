@@ -21,6 +21,7 @@ import type { HealthGoal, SideEffectType } from "@/types";
 
 const STEPS = [
   "welcome",
+  "name",
   "goals",
   "glp1_context",
   "side_effects",
@@ -97,6 +98,7 @@ export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const { updateProfile, completeOnboarding, toggleIntegration, integrations } = useApp();
   const [step, setStep] = useState<Step>("welcome");
+  const [userName, setUserName] = useState("");
   const [selectedGoals, setSelectedGoals] = useState<HealthGoal[]>([]);
 
   const [medication, setMedication] = useState<"semaglutide" | "tirzepatide" | "liraglutide" | "other" | null>(null);
@@ -153,6 +155,7 @@ export default function OnboardingScreen() {
 
   const finishOnboarding = () => {
     updateProfile({
+      name: userName.trim(),
       goals: selectedGoals.length > 0 ? selectedGoals : ["stay_consistent"],
       glp1Medication: medication || undefined,
       glp1Reason: reason || undefined,
@@ -195,6 +198,7 @@ export default function OnboardingScreen() {
 
   const canProceed = () => {
     switch (step) {
+      case "name": return userName.trim().length > 0;
       case "goals": return selectedGoals.length > 0;
       case "glp1_context": return medication !== null;
       case "side_effects": return selectedSideEffects.length > 0;
@@ -241,6 +245,24 @@ export default function OnboardingScreen() {
               <Text style={[styles.welcomeSub, { color: c.mutedForeground + "CC" }]}>
                 Stay on track between visits. Viva combines wearable data with simple daily check-ins to help you feel your best on GLP-1.
               </Text>
+            </View>
+          )}
+
+          {step === "name" && (
+            <View style={styles.section}>
+              <Text style={[styles.stepTitle, { color: c.foreground }]}>What should we{"\n"}call you?</Text>
+              <Text style={[styles.stepSub, { color: c.mutedForeground }]}>Your first name is fine</Text>
+              <TextInput
+                style={[styles.nameInput, { color: c.foreground, backgroundColor: c.card, borderColor: userName.trim() ? c.primary : c.muted }]}
+                placeholder="First name"
+                placeholderTextColor={c.mutedForeground}
+                value={userName}
+                onChangeText={setUserName}
+                autoFocus
+                autoCapitalize="words"
+                returnKeyType="next"
+                onSubmitEditing={() => { if (userName.trim()) next(); }}
+              />
             </View>
           )}
 
@@ -549,7 +571,7 @@ export default function OnboardingScreen() {
               <View style={[styles.summaryIconWrap, { backgroundColor: c.success + "15" }]}>
                 <Feather name="check" size={36} color={c.success} />
               </View>
-              <Text style={[styles.summaryTitle, { color: c.foreground }]}>You're all set</Text>
+              <Text style={[styles.summaryTitle, { color: c.foreground }]}>{userName.trim() ? `You're all set, ${userName.trim()}` : "You're all set"}</Text>
               <Text style={[styles.summarySub, { color: c.mutedForeground }]}>Here's what Viva will help you with</Text>
 
               <View style={[styles.summaryCard, { backgroundColor: c.card }]}>
@@ -626,6 +648,7 @@ const styles = StyleSheet.create({
   section: { gap: 16, paddingTop: 8 },
   stepTitle: { fontSize: 28, fontFamily: "Montserrat_700Bold", lineHeight: 36, letterSpacing: -0.4 },
   stepSub: { fontSize: 15, fontFamily: "Montserrat_400Regular", lineHeight: 22, marginTop: -8 },
+  nameInput: { fontSize: 18, fontFamily: "Montserrat_500Medium", paddingVertical: 16, paddingHorizontal: 18, borderRadius: 16, borderWidth: 1.5, marginTop: 8 },
   sectionLabel: { fontSize: 12, fontFamily: "Montserrat_600SemiBold", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 },
   goalGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 4 },
   goalCard: { width: "47%", flexGrow: 1, flexDirection: "row", alignItems: "center", paddingVertical: 14, paddingHorizontal: 14, borderRadius: 16, gap: 10 },

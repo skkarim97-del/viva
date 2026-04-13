@@ -1,0 +1,180 @@
+I want to extend the branding pass to use my brand colors as consistent accents across the entire app UI.
+
+Brand colors:
+- Primary navy: #142240
+- Accent blue: #38B6FF
+- White: #FFFFFF
+
+GOAL
+
+Use the navy and light blue as accents throughout the app in a clean, premium, and consistent way.
+
+The app should feel cohesive and branded, but NOT overly saturated or loud.
+
+=====================================
+PART 1: ACCENT COLOR SYSTEM
+=====================================
+
+Define a clear color hierarchy:
+
+Primary color (structure):
+#142240 (navy)
+
+Accent color (interaction and highlights):
+#38B6FF (light blue)
+
+Neutral:
+white backgrounds, subtle grays where needed
+
+-------------------------------------
+
+Use navy for:
+- main headings
+- primary buttons
+- important labels
+- key UI structure
+- icons when active or primary
+
+Use light blue for:
+- highlights
+- selected states
+- interactive elements
+- progress indicators
+- key metrics
+- links
+- subtle emphasis in text
+- icons when indicating action or insight
+
+=====================================
+PART 2: WHERE TO APPLY ACCENTS
+=====================================
+
+Apply the light blue accent (#38B6FF) in these areas:
+
+1. Today Tab
+- highlight key recommendations
+- emphasize important words in summaries
+- icons for actions
+- selected inputs or toggles
+
+2. Plan Tab
+- highlight the selected day
+- highlight key actions (Move, Fuel, Hydrate, etc.)
+- progress indicators or completion states
+
+3. Trends Tab
+- highlight key metrics (sleep, steps, etc.)
+- line charts or indicators
+- trend direction indicators
+
+4. Coach Tab
+- highlight important advice
+- emphasize 1–2 key actions in responses
+- use subtle blue for links or actionable text
+
+5. Inputs / Controls
+- selected state for segmented controls
+- toggles
+- focus state for inputs
+
+6. Navigation / Tabs
+- active tab indicator
+- selected tab icon or label
+
+7. Buttons
+- primary: navy background (#142240), white text
+- secondary or ghost: navy text with subtle blue accent on interaction
+- hover/pressed states: introduce light blue
+
+=====================================
+PART 3: DESIGN CONSTRAINTS (IMPORTANT)
+=====================================
+
+Do NOT:
+- use light blue everywhere
+- make the app feel neon or flashy
+- over-highlight every piece of text
+- mix in random additional colors
+
+Do:
+- keep most surfaces white
+- use navy for structure and grounding
+- use light blue sparingly for emphasis
+- keep a clean, minimal, premium look
+
+Rule of thumb:
+- 80–85% neutral (white / navy)
+- 10–15% accent (light blue)
+
+=====================================
+PART 4: TEXT ACCENT USAGE
+=====================================
+
+Allow selective accent coloring in text.
+
+Examples:
+- highlight 1 key phrase in a summary
+- emphasize a recommendation
+- highlight an actionable word
+
+Do NOT:
+- color entire paragraphs blue
+- overuse colored text
+
+=====================================
+PART 5: ICON SYSTEM
+=====================================
+
+Standardize icon colors:
+
+- default icons: navy
+- active / important icons: light blue
+- secondary icons: muted gray or navy
+
+=====================================
+PART 6: COMPONENT CONSISTENCY
+=====================================
+
+Make sure accent usage is consistent across:
+- cards
+- buttons
+- inputs
+- tabs
+- charts
+- summaries
+
+Everything should feel like one system, not random styling.
+
+=====================================
+PART 7: IMPLEMENTATION
+=====================================
+
+Update shared styles, theme, or constants so colors are not hardcoded everywhere.
+
+If needed, create:
+
+colors.ts:
+- primary: #142240
+- accent: #38B6FF
+- background: #FFFFFF
+- textPrimary: #142240
+- textSecondary: muted gray or navy
+
+Apply these consistently across the app.
+
+=====================================
+PART 8: FINAL RESULT
+=====================================
+
+The app should feel:
+- premium
+- clean
+- cohesive
+- modern
+- trustworthy (healthcare)
+- slightly tech-forward (AI)
+
+NOT:
+- flashy
+- over-designed
+- colorful startup app
