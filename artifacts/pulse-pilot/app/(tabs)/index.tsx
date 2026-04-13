@@ -954,6 +954,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: "Montserrat_500Medium",
     textAlign: "center",
+    marginTop: 12,
     marginBottom: 16,
     letterSpacing: 0.3,
     opacity: 0.6,
