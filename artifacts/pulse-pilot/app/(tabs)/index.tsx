@@ -951,11 +951,11 @@ const styles = StyleSheet.create({
   },
 
   tagline: {
-    fontSize: 13,
+    fontSize: 16,
     fontFamily: "Montserrat_500Medium",
     textAlign: "center",
-    marginBottom: 12,
-    letterSpacing: 0.2,
+    marginBottom: 16,
+    letterSpacing: 0.3,
     opacity: 0.6,
   },
   statusCard: {
