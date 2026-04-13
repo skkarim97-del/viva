@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "VIVA",
+    "name": "Viva Ai",
     "slug": "viva",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/icon.png",
     "scheme": "viva",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -15,6 +15,7 @@
       "backgroundColor": "#0F1923"
     },
     "ios": {
+      "icon": "./assets/icon.png",
       "supportsTablet": false,
       "bundleIdentifier": "com.sullyk97.vivahealth.app",
       "buildNumber": "1",
