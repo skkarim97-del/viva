@@ -322,9 +322,9 @@ function generateFocusItems(
   }
 
   if (items.length === 0) {
-    items.push({ text: "Stay consistent with your routine today.", category: "consistent" });
     items.push({ text: "Keep hydration steady throughout the day.", category: "hydrate" });
     items.push({ text: "Include protein at every meal.", category: "fuel" });
+    items.push({ text: "Log your dose if you haven't already.", category: "consistent" });
   }
 
   return items.slice(0, 5);

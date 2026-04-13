@@ -384,14 +384,13 @@ export default function DashboardScreen() {
 
   const statusColor = STATUS_COLOR_MAP[dailyPlan.statusLabel](c);
 
-  const consistentAction = dailyPlan.actions.find(a => a.category === "consistent");
-  const isDoseAction = consistentAction?.text?.includes("dose") || consistentAction?.text?.includes("Dose");
+  const hasMedProfile = !!profile.medicationProfile;
   const ACTION_META: Record<ActionCategory, { label: string; icon: keyof typeof Feather.glyphMap; color: string }> = {
     move: { label: "Move", icon: "activity", color: c.primary },
     fuel: { label: "Fuel", icon: "coffee", color: c.warning },
     hydrate: { label: "Hydrate", icon: "droplet", color: "#5AC8FA" },
     recover: { label: "Recover", icon: "battery-charging", color: c.info },
-    consistent: { label: isDoseAction ? "Medication" : "Stay Consistent", icon: isDoseAction ? "shield" : "check-circle", color: c.accent },
+    consistent: { label: "Medication", icon: "shield", color: c.accent },
   };
 
   const completedCount = dailyPlan.actions.filter(a => a.completed).length;
@@ -651,7 +650,7 @@ export default function DashboardScreen() {
           </View>
           {dailyPlan.actions.map((action) => {
             const meta = ACTION_META[action.category];
-            const isConsistentDose = action.category === "consistent" && isDoseAction;
+            const isConsistentDose = action.category === "consistent" && hasMedProfile;
             const doseAlreadyLogged = action.text.includes("\u2713");
             return (
               <View key={action.id} style={[

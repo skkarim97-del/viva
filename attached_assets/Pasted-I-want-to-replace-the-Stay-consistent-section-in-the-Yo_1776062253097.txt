@@ -1,0 +1,158 @@
+I want to replace the “Stay consistent” section in the Your Plan area with a medication tracking / logging module.
+
+This should be a core part of the product, not a generic habit tracker.
+
+=====================================
+PART 1: REMOVE GENERIC “STAY CONSISTENT”
+=====================================
+
+Completely remove:
+- “Stay consistent”
+- generic daily check-in language tied to that section
+
+We no longer want generic habit tracking.
+
+=====================================
+PART 2: ADD MEDICATION TRACKING MODULE
+=====================================
+
+Replace that section with a new module:
+
+Title:
+Medication
+
+This module should reflect the user’s medication setup from onboarding:
+- medication name
+- dose
+- frequency (daily or weekly)
+
+=====================================
+PART 3: WEEKLY MEDICATION LOGIC
+=====================================
+
+For weekly medications (Ozempic, Wegovy, Mounjaro, Zepbound):
+
+Display:
+- “Log your dose this week”
+- or “Dose logged this week ✓”
+
+States:
+
+1. Not logged yet
+- CTA: “Log dose”
+- subtle reminder styling
+
+2. Logged
+- show: “Dose logged ✓”
+- show last dose date
+- remove CTA or disable it
+
+Important:
+Once logged, do NOT keep prompting repeatedly that week.
+
+=====================================
+PART 4: DAILY MEDICATION LOGIC
+=====================================
+
+For daily medications (Saxenda, etc):
+
+Display:
+- “Log today’s dose”
+
+States:
+
+1. Not logged today
+- CTA: “Mark as taken”
+
+2. Logged today
+- “Taken today ✓”
+
+3. Missed
+- optional: allow “Missed” state
+
+Also track:
+- adherence streak (optional, subtle)
+
+=====================================
+PART 5: LIGHTWEIGHT UX (VERY IMPORTANT)
+=====================================
+
+This must feel:
+- fast
+- 1-tap interaction
+- not annoying
+- not like admin work
+
+Design:
+- compact card
+- consistent with other plan items
+- same visual hierarchy
+
+Avoid:
+- forms
+- multiple steps
+- friction
+
+=====================================
+PART 6: INTEGRATE INTO PLAN FLOW
+=====================================
+
+Medication should feel like part of the daily plan, not separate.
+
+It should:
+- sit alongside Move / Fuel / Hydrate / Recover
+- count toward completion (like 1 of 5 items)
+
+=====================================
+PART 7: BACKEND STORAGE
+=====================================
+
+Track:
+- last_dose_date
+- dose_logged_today (for daily)
+- dose_logged_this_week (for weekly)
+- missed_doses
+- adherence_streak
+- medication_log_history
+
+=====================================
+PART 8: MEDICATION-AWARE MESSAGING
+=====================================
+
+Update copy dynamically:
+
+Examples:
+- “Dose due today”
+- “You haven’t logged this week’s dose yet”
+- “Dose logged 2 days ago”
+- “Stay on track with your weekly dose”
+
+Tone:
+- supportive
+- not nagging
+- not clinical
+
+=====================================
+PART 9: CONNECT TO INSIGHTS (IMPORTANT)
+=====================================
+
+Medication logging should feed into:
+- Trends
+- Insights
+- Coach
+
+Examples:
+- missed dose → mention in trends
+- consistent logging → positive reinforcement
+- dose timing → affect plan + insights
+
+=====================================
+PART 10: FINAL OUTPUT
+=====================================
+
+After implementing, summarize:
+1. how “Stay consistent” was removed
+2. how medication tracking replaces it
+3. how weekly vs daily logic works
+4. how the UI behaves in different states
+5. how logging feeds into trends and insights
