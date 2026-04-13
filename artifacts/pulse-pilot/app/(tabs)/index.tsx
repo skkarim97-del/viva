@@ -57,7 +57,7 @@ const NAUSEA_OPTIONS: { key: NonNullable<NauseaLevel>; label: string; tint: stri
 const DIGESTION_OPTIONS: { key: NonNullable<DigestionStatus>; label: string; tint: string }[] = [
   { key: "fine", label: "Fine", tint: TINT_GREEN },
   { key: "bloated", label: "Bloated", tint: TINT_BLUE },
-  { key: "constipated", label: "Constipated", tint: TINT_PURPLE },
+  { key: "constipated", label: "Constip.", tint: TINT_PURPLE },
   { key: "diarrhea", label: "Diarrhea", tint: TINT_RED },
 ];
 
