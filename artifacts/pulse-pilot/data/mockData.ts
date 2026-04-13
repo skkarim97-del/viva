@@ -16,15 +16,17 @@ import {
   type CompletionRecord,
   type ActionCategory,
   type StateTag,
+  type PlanTier,
+  type CategoryOption,
+  type FocusItem,
   type FeelingType,
   type StressLevel,
   type EnergyLevel,
-  type CategoryOption,
-  type FocusItem,
   type GLP1DailyInputs,
   type MedicationProfile,
+  type MedicationLogEntry,
 } from "@/types";
-import { getDoseTier } from "./medicationData";
+import { getDoseTier, getMedicationFrequency, type MedicationBrand } from "./medicationData";
 
 export const defaultProfile: UserProfile = {
   id: "user_1",
@@ -145,6 +147,148 @@ function pickOptionTitle(category: ActionCategory, tag: StateTag): string {
   return match ? match.title : options[1].title;
 }
 
+function computeDaysSinceLastDose(medicationLog?: MedicationLogEntry[]): number | null {
+  if (!medicationLog || medicationLog.length === 0) return null;
+  const takenDoses = medicationLog.filter(e => e.status === "taken").sort((a, b) => b.date.localeCompare(a.date));
+  if (takenDoses.length === 0) return null;
+  const todayStr = new Date().toISOString().split("T")[0];
+  const todayParts = todayStr.split("-").map(Number);
+  const doseParts = takenDoses[0].date.split("-").map(Number);
+  const todayDate = new Date(todayParts[0], todayParts[1] - 1, todayParts[2]);
+  const doseDate = new Date(doseParts[0], doseParts[1] - 1, doseParts[2]);
+  return Math.max(0, Math.round((todayDate.getTime() - doseDate.getTime()) / 86400000));
+}
+
+export type MedContext = {
+  doseTier: "low" | "mid" | "high";
+  recentTitration: boolean;
+  daysSinceDose: number | null;
+  frequency: "weekly" | "daily";
+  isNewToMed: boolean;
+};
+
+function safeMedFrequency(brand: string): "weekly" | "daily" {
+  try {
+    return getMedicationFrequency(brand.toLowerCase() as MedicationBrand);
+  } catch {
+    return "weekly";
+  }
+}
+
+function buildMedContext(medicationProfile?: MedicationProfile, medicationLog?: MedicationLogEntry[]): MedContext | null {
+  if (!medicationProfile) return null;
+  return {
+    doseTier: getDoseTier(medicationProfile.medicationBrand, medicationProfile.doseValue),
+    recentTitration: medicationProfile.recentTitration === true,
+    daysSinceDose: computeDaysSinceLastDose(medicationLog),
+    frequency: medicationProfile.frequency || safeMedFrequency(medicationProfile.medicationBrand),
+    isNewToMed: medicationProfile.timeOnMedicationBucket === "less_1_month",
+  };
+}
+
+function pickMedAwarePlanTier(
+  category: ActionCategory,
+  baseTag: StateTag,
+  glp1Inputs?: GLP1DailyInputs,
+  medCtx?: MedContext | null,
+): PlanTier {
+  const needsMoreWhenStressed = category === "recover" || category === "hydrate";
+  const baseTierMap: Record<StateTag, PlanTier> = needsMoreWhenStressed
+    ? { stressed: "high", tired: "moderate", good: "low", great: "minimal" }
+    : { great: "high", good: "moderate", tired: "low", stressed: "minimal" };
+  const tiers: PlanTier[] = ["minimal", "low", "moderate", "high"];
+  let idx = tiers.indexOf(baseTierMap[baseTag]);
+
+  const bump = (n: number) => { idx = Math.min(3, idx + n); };
+  const drop = (n: number) => { idx = Math.max(0, idx - n); };
+
+  if (medCtx) {
+    if (medCtx.recentTitration) {
+      if (needsMoreWhenStressed) bump(1); else drop(1);
+    }
+    if (medCtx.doseTier === "high") {
+      if (category === "hydrate" || category === "recover") bump(1);
+      if (category === "move" || category === "fuel") drop(1);
+    }
+    if (medCtx.daysSinceDose !== null && medCtx.frequency === "weekly") {
+      if (medCtx.daysSinceDose <= 2) {
+        if (category === "move" || category === "fuel") drop(1);
+        if (category === "hydrate" || category === "recover") bump(1);
+      } else if (medCtx.daysSinceDose >= 5) {
+        if (category === "move") bump(1);
+      }
+    }
+    if (medCtx.isNewToMed) {
+      if (category === "move") drop(1);
+      if (category === "recover") bump(1);
+    }
+  }
+
+  if (glp1Inputs) {
+    if (glp1Inputs.appetite === "very_low" && category === "fuel") drop(1);
+    if (glp1Inputs.sideEffects === "rough") {
+      if (category === "move") idx = 0;
+      if (category === "hydrate" || category === "recover") bump(1);
+    } else if (glp1Inputs.sideEffects === "moderate") {
+      if (category === "move") drop(1);
+    }
+    if (glp1Inputs.energy === "great" && category === "move") bump(1);
+    else if (glp1Inputs.energy === "depleted" && category === "move") idx = 0;
+  }
+
+  return tiers[Math.max(0, Math.min(3, idx))];
+}
+
+function pickOptionByTier(category: ActionCategory, tier: PlanTier): CategoryOption {
+  const options = CATEGORY_OPTIONS[category];
+  const match = options.find(o => o.planTier === tier);
+  return match || options[1];
+}
+
+function pickMedAwareOption(
+  category: ActionCategory,
+  baseTag: StateTag,
+  glp1Inputs?: GLP1DailyInputs,
+  medCtx?: MedContext | null,
+): CategoryOption {
+  const tier = pickMedAwarePlanTier(category, baseTag, glp1Inputs, medCtx);
+  return pickOptionByTier(category, tier);
+}
+
+function buildConsistentAction(
+  baseTag: StateTag,
+  medicationProfile?: MedicationProfile,
+  medicationLog?: MedicationLogEntry[],
+): { title: string; reason: string } {
+  if (!medicationProfile) {
+    const opt = pickOptionTitle("consistent", baseTag);
+    return { title: opt, reason: "Checking in daily helps you stay aware of patterns and build momentum." };
+  }
+
+  const freq = medicationProfile.frequency || safeMedFrequency(medicationProfile.medicationBrand);
+  const todayStr = new Date().toISOString().split("T")[0];
+
+  if (freq === "daily") {
+    const todayLogged = medicationLog?.some(e => e.date === todayStr && e.status === "taken");
+    if (todayLogged) {
+      return { title: "Dose logged \u2713", reason: "Today's dose is recorded. Keep it up." };
+    }
+    return { title: "Log today's dose", reason: "Tracking your daily dose helps you stay on schedule." };
+  }
+
+  const today = new Date();
+  const dayOfWeek = today.getDay();
+  const weekStart = new Date(today);
+  weekStart.setDate(today.getDate() - ((dayOfWeek + 6) % 7));
+  const weekStartStr = weekStart.toISOString().split("T")[0];
+
+  const thisWeekLogged = medicationLog?.some(e => e.date >= weekStartStr && e.status === "taken");
+  if (thisWeekLogged) {
+    return { title: "Dose logged \u2713", reason: "This week's dose is recorded. Stay consistent with your schedule." };
+  }
+  return { title: "Log your dose this week", reason: "Logging your weekly dose helps you stay on track with treatment." };
+}
+
 function generateFocusItems(
   dailyState: import("@/types").DailyState,
   metrics: HealthMetrics,
@@ -186,7 +330,7 @@ function generateFocusItems(
   return items.slice(0, 5);
 }
 
-export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInputs, history?: CompletionRecord[], recentMetrics?: HealthMetrics[], glp1Inputs?: GLP1DailyInputs, medicationProfile?: MedicationProfile): DailyPlan {
+export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInputs, history?: CompletionRecord[], recentMetrics?: HealthMetrics[], glp1Inputs?: GLP1DailyInputs, medicationProfile?: MedicationProfile, medicationLog?: MedicationLogEntry[]): DailyPlan {
   const feeling = inputs?.feeling ?? null;
   const energy = inputs?.energy ?? null;
   const stress = inputs?.stress ?? null;
@@ -444,41 +588,59 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
   }
 
   const recommendedTag = stateTagFromReadiness(readinessScore, feeling, stress, energy);
+  const medCtx = buildMedContext(medicationProfile, medicationLog);
+
+  const moveOpt = pickMedAwareOption("move", recommendedTag, glp1Inputs, medCtx);
+  const fuelOpt = pickMedAwareOption("fuel", recommendedTag, glp1Inputs, medCtx);
+  const hydrateOpt = pickMedAwareOption("hydrate", recommendedTag, glp1Inputs, medCtx);
+  const recoverOpt = pickMedAwareOption("recover", recommendedTag, glp1Inputs, medCtx);
+  const consistentData = buildConsistentAction(recommendedTag, medicationProfile, medicationLog);
+
   const yourDay = {
-    move: pickOptionTitle("move", recommendedTag),
-    fuel: pickOptionTitle("fuel", recommendedTag),
-    hydrate: pickOptionTitle("hydrate", recommendedTag),
-    recover: pickOptionTitle("recover", recommendedTag),
-    consistent: pickOptionTitle("consistent", recommendedTag),
+    move: moveOpt.title,
+    fuel: fuelOpt.title,
+    hydrate: hydrateOpt.title,
+    recover: recoverOpt.title,
+    consistent: consistentData.title,
   };
 
+  const doseWindowNote = medCtx?.daysSinceDose !== null && medCtx?.frequency === "weekly" && medCtx.daysSinceDose <= 2
+    ? " You're within 1-2 days of your dose, so lighter is better."
+    : "";
+  const titrationNote = medCtx?.recentTitration
+    ? " Your body is still adjusting to the new dose."
+    : "";
+
   const moveReason =
-    dailyState === "recover" ? "Recovery is the priority. Gentle movement helps without adding strain."
+    dailyState === "recover" ? "Recovery is the priority. Gentle movement helps without adding strain." + titrationNote
     : dailyState === "push" ? "Your body is ready for activity. Strength training helps preserve muscle on GLP-1."
-    : symptomsHeavy ? "Side effects are heavier today. Keep movement light and comfortable."
+    : symptomsHeavy ? "Side effects are heavier today. Keep movement light and comfortable." + doseWindowNote
     : sleepLow ? "Sleep was short. Lower intensity protects your energy."
-    : "Consistent gentle movement supports your treatment journey.";
+    : medCtx?.doseTier === "high" ? "At a higher dose, moderate movement with good recovery is the sweet spot."
+    : "Consistent gentle movement supports your treatment journey." + doseWindowNote;
 
   const fuelReason =
-    appetiteLow ? "Appetite is low, which is common on GLP-1. Small, protein-rich meals help prevent under-eating."
+    appetiteLow ? "Appetite is low, which is common on GLP-1. Small, protein-rich meals help prevent under-eating." + doseWindowNote
     : dailyState === "push" ? "Activity needs fuel. Focus on protein to preserve muscle."
     : stressOverride ? "Stress depletes nutrients. Nourishing food supports your body's response."
     : dailyState === "recover" ? "Recovery meals help your body repair. Prioritize protein and easy-to-digest foods."
+    : medCtx?.doseTier === "high" ? "Higher doses can suppress appetite more. Protein-first meals help maintain muscle."
     : "Steady fueling with protein at every meal supports your treatment.";
 
   const hydrateReason =
     isDehydrated ? "Hydration is low. Extra water and electrolytes are important on GLP-1."
     : symptomsHeavy ? "Good hydration helps manage side effects like nausea and fatigue."
+    : medCtx?.doseTier === "high" ? "Hydration needs increase at higher doses. Electrolytes help with nausea."
     : "Consistent hydration supports energy, digestion, and treatment effectiveness.";
 
   const recoverReason =
     sleepDeclining3 ? "Sleep has been declining. Prioritize an earlier bedtime tonight."
     : sleepCritical ? "Sleep was very short. Maximum rest priority tonight."
-    : dailyState === "recover" ? "Your body needs extra rest to bounce back."
+    : dailyState === "recover" ? "Your body needs extra rest to bounce back." + titrationNote
+    : medCtx?.recentTitration ? "Sleep matters more during a dose adjustment. Aim for the higher end of the range."
     : "Consistent sleep is your most powerful recovery tool on treatment.";
 
-  const consistentReason =
-    "Checking in daily helps you stay aware of patterns and build momentum on your journey.";
+  const consistentReason = consistentData.reason;
 
   const actionReasons = { move: moveReason, fuel: fuelReason, hydrate: hydrateReason, recover: recoverReason, consistent: consistentReason };
 

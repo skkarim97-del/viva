@@ -283,12 +283,15 @@ export type TrainingIntent = "none" | "light" | "moderate" | "intense" | null;
 
 export type StateTag = "great" | "good" | "tired" | "stressed";
 
+export type PlanTier = "high" | "moderate" | "low" | "minimal";
+
 export interface CategoryOption {
   id: string;
   title: string;
   subtitle: string;
   category: ActionCategory;
   stateTag: StateTag;
+  planTier: PlanTier;
   supportText?: string[];
   durationMinutes?: number;
   intensity?: "low" | "moderate" | "high";
@@ -296,34 +299,34 @@ export interface CategoryOption {
 
 export const CATEGORY_OPTIONS: Record<ActionCategory, CategoryOption[]> = {
   move: [
-    { id: "move_great", title: "30 min strength training", subtitle: "Preserve muscle on treatment", category: "move", stateTag: "great", durationMinutes: 30, intensity: "moderate", supportText: ["Strength training helps preserve lean mass", "Focus on compound movements"] },
-    { id: "move_good", title: "30 min walk", subtitle: "Steady daily movement", category: "move", stateTag: "good", durationMinutes: 30, intensity: "low", supportText: ["Walking supports digestion and energy", "Post-meal walks can help with nausea"] },
-    { id: "move_tired", title: "15 min gentle movement", subtitle: "Keep momentum without overdoing it", category: "move", stateTag: "tired", durationMinutes: 15, intensity: "low", supportText: ["Gentle movement helps energy levels", "No pressure on pace or distance"] },
-    { id: "move_stressed", title: "Full rest day", subtitle: "Let your body recover", category: "move", stateTag: "stressed", durationMinutes: 0, intensity: "low", supportText: ["Rest is part of the plan", "Your body needs time to adjust"] },
+    { id: "move_strength", title: "30-45 min strength", subtitle: "Preserve muscle on treatment", category: "move", stateTag: "great", planTier: "high", durationMinutes: 37, intensity: "moderate", supportText: ["Strength training preserves lean mass during weight loss", "Focus on compound movements like squats and presses"] },
+    { id: "move_walk", title: "20-40 min walk", subtitle: "Steady daily movement", category: "move", stateTag: "good", planTier: "moderate", durationMinutes: 30, intensity: "low", supportText: ["Walking supports digestion and energy", "Post-meal walks can help with nausea"] },
+    { id: "move_light", title: "10-20 min light movement", subtitle: "Keep momentum without overdoing it", category: "move", stateTag: "tired", planTier: "low", durationMinutes: 15, intensity: "low", supportText: ["Gentle movement helps energy levels", "No pressure on pace or distance"] },
+    { id: "move_rest", title: "Full rest day", subtitle: "Let your body recover", category: "move", stateTag: "stressed", planTier: "minimal", durationMinutes: 0, intensity: "low", supportText: ["Rest is part of the plan", "Your body needs time to adjust"] },
   ],
   fuel: [
-    { id: "fuel_great", title: "3 protein-focused meals", subtitle: "Hit your protein targets today", category: "fuel", stateTag: "great", supportText: ["Aim for 25-30g protein per meal", "Protein preserves muscle during weight loss"] },
-    { id: "fuel_good", title: "Balanced meals + protein snack", subtitle: "Steady fueling throughout the day", category: "fuel", stateTag: "good", supportText: ["Smaller meals may feel easier", "Include protein at every meal"] },
-    { id: "fuel_tired", title: "Small frequent meals", subtitle: "Eat even if appetite is low", category: "fuel", stateTag: "tired", supportText: ["Low appetite is common on GLP-1s", "Try nutrient-dense small portions"] },
-    { id: "fuel_stressed", title: "Focus on not under-eating", subtitle: "Your body still needs fuel", category: "fuel", stateTag: "stressed", supportText: ["Under-eating slows your metabolism", "Protein shakes can help when appetite is low"] },
+    { id: "fuel_full", title: "3 protein-focused meals", subtitle: "Hit your protein targets today", category: "fuel", stateTag: "great", planTier: "high", supportText: ["Aim for 25-30g protein per meal", "Protein preserves muscle during weight loss"] },
+    { id: "fuel_balanced", title: "2-3 meals + protein snack", subtitle: "Steady fueling throughout the day", category: "fuel", stateTag: "good", planTier: "moderate", supportText: ["Smaller meals may feel easier", "Include protein at every meal"] },
+    { id: "fuel_light", title: "Small frequent meals + protein", subtitle: "Eat even if appetite is low", category: "fuel", stateTag: "tired", planTier: "low", supportText: ["Low appetite is common on GLP-1s", "Try nutrient-dense small portions"] },
+    { id: "fuel_minimal", title: "Light meals + easy digestion", subtitle: "Your body still needs fuel", category: "fuel", stateTag: "stressed", planTier: "minimal", supportText: ["Under-eating slows your metabolism", "Protein shakes can help when appetite is low"] },
   ],
   hydrate: [
-    { id: "hydrate_great", title: "8 cups + electrolytes", subtitle: "Full hydration with activity", category: "hydrate", stateTag: "great", supportText: ["Electrolytes help with GLP-1 side effects", "Sip throughout the day"] },
-    { id: "hydrate_good", title: "8 cups water", subtitle: "Stay consistent today", category: "hydrate", stateTag: "good", supportText: ["Front-load fluids before noon", "One glass with each meal"] },
-    { id: "hydrate_tired", title: "10+ cups + electrolytes", subtitle: "Extra hydration for recovery", category: "hydrate", stateTag: "tired", supportText: ["Dehydration worsens fatigue and nausea", "Add electrolytes if feeling dizzy"] },
-    { id: "hydrate_stressed", title: "Steady sipping all day", subtitle: "Hydration supports your body's response", category: "hydrate", stateTag: "stressed", supportText: ["Dehydration makes everything harder", "Set reminders if needed"] },
+    { id: "hydrate_high", title: "10+ cups + electrolytes", subtitle: "High hydration for active or symptom days", category: "hydrate", stateTag: "tired", planTier: "high", supportText: ["Dehydration worsens fatigue and nausea", "Add electrolytes if feeling dizzy"] },
+    { id: "hydrate_standard", title: "8-10 cups + electrolytes", subtitle: "Full hydration with activity", category: "hydrate", stateTag: "great", planTier: "moderate", supportText: ["Electrolytes help with GLP-1 side effects", "Sip throughout the day"] },
+    { id: "hydrate_light", title: "6-8 cups water", subtitle: "Stay consistent today", category: "hydrate", stateTag: "good", planTier: "low", supportText: ["Front-load fluids before noon", "One glass with each meal"] },
+    { id: "hydrate_steady", title: "Steady sipping all day", subtitle: "Hydration supports your body's response", category: "hydrate", stateTag: "stressed", planTier: "minimal", supportText: ["Dehydration makes everything harder", "Set reminders if needed"] },
   ],
   recover: [
-    { id: "recover_great", title: "Aim for 7-8 hours", subtitle: "Maintain your sleep quality", category: "recover", stateTag: "great", supportText: ["Consistent sleep supports treatment", "Keep a consistent wake time"] },
-    { id: "recover_good", title: "Aim for 8 hours", subtitle: "Solid recovery target", category: "recover", stateTag: "good", supportText: ["Screen-free 30 min before bed", "Keep the room cool and dark"] },
-    { id: "recover_tired", title: "Aim for 8+ hours", subtitle: "Your body needs extra rest", category: "recover", stateTag: "tired", supportText: ["Start winding down early", "Prioritize sleep above all else tonight"] },
-    { id: "recover_stressed", title: "Early wind-down tonight", subtitle: "Full reset mode", category: "recover", stateTag: "stressed", supportText: ["Your body needs extra recovery", "Prioritize sleep above everything"] },
+    { id: "recover_rest", title: "Early wind-down + 8+ hours", subtitle: "Full reset mode", category: "recover", stateTag: "stressed", planTier: "high", supportText: ["Your body needs extra recovery", "Prioritize sleep above everything"] },
+    { id: "recover_extended", title: "8+ hours sleep", subtitle: "Your body needs extra rest", category: "recover", stateTag: "tired", planTier: "moderate", supportText: ["Start winding down early", "Prioritize sleep above all else tonight"] },
+    { id: "recover_solid", title: "7-8 hours sleep", subtitle: "Solid recovery target", category: "recover", stateTag: "good", planTier: "low", supportText: ["Screen-free 30 min before bed", "Keep the room cool and dark"] },
+    { id: "recover_maintain", title: "7-8 hours sleep", subtitle: "Maintain your sleep quality", category: "recover", stateTag: "great", planTier: "minimal", supportText: ["Consistent sleep supports treatment", "Keep a consistent wake time"] },
   ],
   consistent: [
-    { id: "consistent_great", title: "Complete your daily check-in", subtitle: "Keep the momentum going", category: "consistent", stateTag: "great", supportText: ["Consistency compounds over time", "You're building a strong habit"] },
-    { id: "consistent_good", title: "Log your meals and water", subtitle: "Small actions build habits", category: "consistent", stateTag: "good", supportText: ["Tracking helps you stay aware", "Even rough days count"] },
-    { id: "consistent_tired", title: "Just check in today", subtitle: "Showing up is enough", category: "consistent", stateTag: "tired", supportText: ["A simple check-in keeps your streak", "Low days are part of the journey"] },
-    { id: "consistent_stressed", title: "Keep routines simple today", subtitle: "Do the basics and rest", category: "consistent", stateTag: "stressed", supportText: ["Simplify to essentials today", "Tomorrow is a fresh start"] },
+    { id: "consistent_great", title: "Complete your daily check-in", subtitle: "Keep the momentum going", category: "consistent", stateTag: "great", planTier: "high", supportText: ["Consistency compounds over time", "You're building a strong habit"] },
+    { id: "consistent_good", title: "Log your meals and water", subtitle: "Small actions build habits", category: "consistent", stateTag: "good", planTier: "moderate", supportText: ["Tracking helps you stay aware", "Even rough days count"] },
+    { id: "consistent_tired", title: "Just check in today", subtitle: "Showing up is enough", category: "consistent", stateTag: "tired", planTier: "low", supportText: ["A simple check-in keeps your streak", "Low days are part of the journey"] },
+    { id: "consistent_stressed", title: "Keep routines simple today", subtitle: "Do the basics and rest", category: "consistent", stateTag: "stressed", planTier: "minimal", supportText: ["Simplify to essentials today", "Tomorrow is a fresh start"] },
   ],
 };
 

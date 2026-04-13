@@ -1,0 +1,237 @@
+I want to upgrade the "Your Plan" system so it becomes more dynamic, variable, and medication-aware.
+
+Right now the UI looks strong, but the logic is too static.
+
+The goal is:
+Make the plan feel adaptive, intelligent, and personalized to:
+- user inputs
+- Apple Health data
+- medication type
+- dose level
+- recent titration
+- time since last dose
+
+=====================================
+PART 1: VARIABLE RANGES (NOT FIXED TASKS)
+=====================================
+
+Replace fixed prescriptions like:
+- “30 min walk”
+- “8 cups water”
+
+With flexible, intelligent ranges.
+
+Examples:
+
+MOVE
+Instead of:
+- 30 min walk
+
+Use:
+- 20–40 min walk
+- 30–45 min strength
+- 10–20 min light movement
+
+HYDRATE
+Instead of:
+- 8 cups water
+
+Use:
+- 6–8 cups
+- 8–10 cups
+- 10+ cups (for higher need days)
+
+RECOVER (SLEEP)
+Instead of:
+- Aim for 8 hours
+
+Use:
+- 7–8 hours
+- 8+ hours
+- Early wind-down + 7–8 hours
+
+FUEL
+Instead of:
+- Balanced meals
+
+Use:
+- 2–3 small meals + protein snack
+- Light meals + easy digestion
+- Protein-first meals
+
+Goal:
+Make recommendations feel adaptable and realistic, not rigid.
+
+=====================================
+PART 2: CLEAR LOW → HIGH LOGIC
+=====================================
+
+Each category should clearly map from low → high intensity / need.
+
+Examples:
+
+MOVE
+- Strength (higher load)
+- Walk (moderate)
+- Light (low)
+- Rest (minimal)
+
+HYDRATE
+- Light hydration (6–8)
+- Standard (8–10)
+- High (10+)
+- Electrolytes emphasis
+
+FUEL
+- Full meals
+- Balanced meals
+- Light meals
+- Minimal intake support (very low appetite days)
+
+RECOVER
+- Normal sleep
+- Extended sleep
+- Early recovery focus
+- Full rest mode
+
+Make this progression visually and logically clear.
+
+=====================================
+PART 3: MEDICATION-AWARE PLAN LOGIC
+=====================================
+
+This is critical.
+
+Plan recommendations should adapt based on:
+
+1. DOSE LEVEL
+Higher dose:
+- increase hydration ranges
+- simplify meals
+- reduce movement intensity
+- increase recovery emphasis
+
+Lower dose:
+- more normal ranges
+- more movement allowed
+- less aggressive hydration prompts
+
+-------------------------------------
+
+2. RECENT TITRATION (last 14 days)
+If recently increased dose:
+- simplify plan
+- reduce intensity
+- emphasize hydration + protein
+- more “light” and “rest” options
+
+-------------------------------------
+
+3. TIME SINCE LAST DOSE
+For weekly meds:
+- 0–2 days after dose → lower appetite, lower energy → lighter plan
+- 3–5 days → moderate
+- later in cycle → more flexibility
+
+-------------------------------------
+
+4. DAILY INPUTS
+If:
+- appetite = very low → shift to smaller meals + protein support
+- side effects = rough → simplify entire plan
+- energy = great → allow more movement
+
+=====================================
+PART 4: “STAY CONSISTENT” → MEDICATION TRACKING
+=====================================
+
+Replace generic “Stay consistent” with medication-aware tracking.
+
+If medication is WEEKLY:
+- show: “Log your dose this week”
+- show status:
+  - “Dose not logged yet”
+  - “Dose logged ✓”
+- once logged, stop prompting for the rest of the week
+
+If medication is DAILY:
+- show: “Log today’s dose”
+- track daily adherence
+- allow quick tap: Taken / Missed
+
+UI should feel:
+- lightweight
+- not annoying
+- easy to complete in 1 tap
+
+=====================================
+PART 5: PLAN ITEM INTERACTIONS
+=====================================
+
+When user taps a plan item (like Move, Hydrate, Recover):
+
+Keep your current modal UI (it’s good), but:
+
+Upgrade it to:
+- show 3–4 variable options (ranges)
+- show a “Best match today” tag based on logic
+- show subtle reasoning when helpful
+
+Example:
+“30–40 min walk”
+→ Best match today
+→ “Supports recovery without adding strain”
+
+=====================================
+PART 6: PLAN SHOULD FEEL ADAPTIVE
+=====================================
+
+The plan should visibly change based on:
+
+- inputs changing
+- medication context
+- day in dose cycle
+
+Examples:
+
+High dose + rough side effects:
+→ lighter plan
+→ hydration ↑
+→ recovery ↑
+
+Low dose + high energy:
+→ movement ↑
+→ normal hydration
+→ less restrictive
+
+User should feel:
+“This plan actually adjusted to me”
+
+=====================================
+PART 7: KEEP UX CLEAN
+=====================================
+
+Important:
+Do NOT make this complex.
+
+Keep:
+- simple UI
+- clear options
+- minimal text
+- fast interactions
+
+Avoid:
+- too many choices
+- too much explanation
+- clutter
+
+=====================================
+PART 8: FINAL OUTPUT
+=====================================
+
+After implementing, summarize:
+1. how plan items became variable (ranges vs fixed)
+2. how low → high logic was structured
+3. how medication affects plan generation
+4. how weekly vs daily medication tracking works
+5. how plan adapts to inputs

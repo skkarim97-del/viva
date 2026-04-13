@@ -1,0 +1,134 @@
+I want to keep the current pill-based UI for user inputs, but map every input to a structured numeric and semantic value internally for analytics and intelligence.
+
+Do NOT change the UI to numeric sliders or scales.
+
+=====================================
+PART 1: ADD NUMERIC MAPPING TO INPUTS
+=====================================
+
+Each input option should map to a numeric value behind the scenes.
+
+Example mappings:
+
+ENERGY
+- Great → 4
+- Good → 3
+- Tired → 2
+- Depleted → 1
+
+APPETITE
+- Strong → 4
+- Normal → 3
+- Low → 2
+- Very Low → 1
+
+HYDRATION
+- High → 4
+- Good → 3
+- Okay → 2
+- Poor → 1
+
+PROTEIN
+- High → 4
+- Good → 3
+- Okay → 2
+- Low → 1
+
+SIDE EFFECTS (inverse scale)
+- None → 4
+- Mild → 3
+- Moderate → 2
+- Rough → 1
+
+MOVEMENT
+- Strength → 4
+- Walk → 3
+- Light → 2
+- Rest → 1
+
+Store both:
+- label (string)
+- score (number)
+
+=====================================
+PART 2: STORE 7-DAY ROLLING DATA
+=====================================
+
+For each category, store recent history:
+
+- last 7 days of inputs
+- average score
+- trend direction (up / flat / down)
+
+Example:
+appetite_avg_7d = 2.1
+movement_trend = down
+
+=====================================
+PART 3: USE THIS FOR INSIGHTS
+=====================================
+
+Use numeric mapping to power insights like:
+
+- appetite trending lower this week
+- activity dropped compared to last week
+- hydration improving
+- side effects trending worse after dose increase
+
+But always surface insights in natural language, not numbers.
+
+Example:
+“Your appetite has been lower than usual this week”
+
+NOT:
+“Your appetite score is 2.1”
+
+=====================================
+PART 4: USE FOR CORRELATIONS
+=====================================
+
+Enable simple correlation logic:
+
+- low appetite + low protein → worse recovery
+- low hydration → lower energy next day
+- high side effects → lower movement next day
+
+These should power the Trends tab.
+
+=====================================
+PART 5: DO NOT SHOW NUMBERS IN UI
+=====================================
+
+Important:
+
+Do NOT expose numeric scores to the user.
+
+The product should feel:
+- intuitive
+- human
+- not clinical
+
+Numbers are for:
+- internal logic
+- insights
+- trends
+- future modeling
+
+=====================================
+PART 6: FUTURE EXTENSION
+=====================================
+
+This structure should allow future:
+- dropout risk modeling
+- pattern detection
+- personalization improvements
+
+=====================================
+PART 7: FINAL OUTPUT
+=====================================
+
+After implementing, summarize:
+1. how each input maps to numeric values
+2. how 7-day tracking is stored
+3. how insights use these values
+4. how correlations are generated

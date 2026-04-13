@@ -319,9 +319,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setCheckInHistory(JSON.parse(savedCheckIns));
       }
 
+      let loadedMedLog: import("@/types").MedicationLogEntry[] = [];
       const savedMedLog = await AsyncStorage.getItem(MED_LOG_KEY);
       if (savedMedLog) {
-        setMedicationLog(JSON.parse(savedMedLog));
+        loadedMedLog = JSON.parse(savedMedLog);
+        setMedicationLog(loadedMedLog);
       }
 
       const savedIntegrations = await AsyncStorage.getItem(INTEGRATIONS_KEY);
@@ -377,7 +379,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         loadedHistory,
         allMetrics,
         currentGlp1Inputs ?? undefined,
-        savedProfileData.medicationProfile
+        savedProfileData.medicationProfile,
+        loadedMedLog
       );
       const todayCompletion = loadedHistory.find(r => r.date === todayDate);
       if (todayCompletion) {
@@ -453,7 +456,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         sideEffects,
         movementIntent,
       };
-      const newPlan = generateDailyPlan(metricsRef, { feeling: f, energy: e, stress: s, hydration: h, trainingIntent: ti }, completionHistory, metrics, currentGlp1, profile.medicationProfile);
+      const newPlan = generateDailyPlan(metricsRef, { feeling: f, energy: e, stress: s, hydration: h, trainingIntent: ti }, completionHistory, metrics, currentGlp1, profile.medicationProfile, medicationLog);
       const todayCompletion = completionHistory.find(r => r.date === todayDate);
       if (todayCompletion) {
         for (const a of newPlan.actions) {
@@ -468,7 +471,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       computeRisk(metrics, glp1InputHistory, completionHistory, profile.medicationProfile);
     }
-  }, [metricsRef, completionHistory, metrics, glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent, glp1InputHistory, computeRisk, profile.medicationProfile]);
+  }, [metricsRef, completionHistory, metrics, glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent, glp1InputHistory, computeRisk, profile.medicationProfile, medicationLog]);
 
   const regenerateFromGlp1 = useCallback(() => {
     if (metricsRef) {
@@ -482,7 +485,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         sideEffects,
         movementIntent,
       };
-      const newPlan = generateDailyPlan(metricsRef, { feeling, energy, stress, hydration, trainingIntent }, completionHistory, metrics, currentGlp1, profile.medicationProfile);
+      const newPlan = generateDailyPlan(metricsRef, { feeling, energy, stress, hydration, trainingIntent }, completionHistory, metrics, currentGlp1, profile.medicationProfile, medicationLog);
       const todayCompletion = completionHistory.find(r => r.date === todayDate);
       if (todayCompletion) {
         for (const a of newPlan.actions) {
@@ -497,7 +500,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       computeRisk(metrics, glp1InputHistory, completionHistory, profile.medicationProfile);
     }
-  }, [metricsRef, feeling, energy, stress, hydration, trainingIntent, completionHistory, metrics, glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent, glp1InputHistory, computeRisk, profile.medicationProfile]);
+  }, [metricsRef, feeling, energy, stress, hydration, trainingIntent, completionHistory, metrics, glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent, glp1InputHistory, computeRisk, profile.medicationProfile, medicationLog]);
 
   const generateCompletionFeedback = (action: DailyAction, completed: boolean, completedCount: number, total: number): string | null => {
     if (!completed) return null;

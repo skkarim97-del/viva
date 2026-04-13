@@ -384,12 +384,14 @@ export default function DashboardScreen() {
 
   const statusColor = STATUS_COLOR_MAP[dailyPlan.statusLabel](c);
 
+  const consistentAction = dailyPlan.actions.find(a => a.category === "consistent");
+  const isDoseAction = consistentAction?.text?.includes("dose") || consistentAction?.text?.includes("Dose");
   const ACTION_META: Record<ActionCategory, { label: string; icon: keyof typeof Feather.glyphMap; color: string }> = {
     move: { label: "Move", icon: "activity", color: c.primary },
     fuel: { label: "Fuel", icon: "coffee", color: c.warning },
     hydrate: { label: "Hydrate", icon: "droplet", color: "#5AC8FA" },
     recover: { label: "Recover", icon: "battery-charging", color: c.info },
-    consistent: { label: "Stay Consistent", icon: "check-circle", color: c.accent },
+    consistent: { label: isDoseAction ? "Medication" : "Stay Consistent", icon: isDoseAction ? "shield" : "check-circle", color: c.accent },
   };
 
   const completedCount = dailyPlan.actions.filter(a => a.completed).length;
@@ -649,13 +651,30 @@ export default function DashboardScreen() {
           </View>
           {dailyPlan.actions.map((action) => {
             const meta = ACTION_META[action.category];
+            const isConsistentDose = action.category === "consistent" && isDoseAction;
+            const doseAlreadyLogged = action.text.includes("\u2713");
             return (
               <View key={action.id} style={[
                 styles.actionRow,
                 { backgroundColor: action.completed ? c.success + "0A" : "transparent" },
               ]}>
                 <Pressable
-                  onPress={() => { haptic(); toggleAction(action.id); }}
+                  onPress={() => {
+                    haptic();
+                    if (isConsistentDose && !action.completed && !doseAlreadyLogged && profile.medicationProfile) {
+                      const todayStr = new Date().toISOString().split("T")[0];
+                      logMedicationDose({
+                        id: `dose_${Date.now()}`,
+                        date: todayStr,
+                        medicationBrand: profile.medicationProfile.medicationBrand,
+                        status: "taken",
+                        doseValue: profile.medicationProfile.doseValue,
+                        doseUnit: profile.medicationProfile.doseUnit,
+                        timestamp: Date.now(),
+                      });
+                    }
+                    toggleAction(action.id);
+                  }}
                   style={({ pressed }) => [
                     styles.actionCheck,
                     {
@@ -668,7 +687,26 @@ export default function DashboardScreen() {
                   {action.completed && <Feather name="check" size={11} color="#fff" />}
                 </Pressable>
                 <Pressable
-                  onPress={() => { haptic(); setEditingAction(action.category); }}
+                  onPress={() => {
+                    haptic();
+                    if (isConsistentDose) {
+                      if (!action.completed && !doseAlreadyLogged && profile.medicationProfile) {
+                        const todayStr = new Date().toISOString().split("T")[0];
+                        logMedicationDose({
+                          id: `dose_${Date.now()}`,
+                          date: todayStr,
+                          medicationBrand: profile.medicationProfile.medicationBrand,
+                          status: "taken",
+                          doseValue: profile.medicationProfile.doseValue,
+                          doseUnit: profile.medicationProfile.doseUnit,
+                          timestamp: Date.now(),
+                        });
+                        toggleAction(action.id);
+                      }
+                      return;
+                    }
+                    setEditingAction(action.category);
+                  }}
                   style={({ pressed }) => [
                     styles.actionBody,
                     { opacity: pressed ? 0.7 : 1 },
@@ -682,18 +720,18 @@ export default function DashboardScreen() {
                     <Text style={[
                       styles.actionText,
                       {
-                        color: action.completed ? c.mutedForeground : c.foreground,
+                        color: action.completed || doseAlreadyLogged ? c.mutedForeground : c.foreground,
                         textDecorationLine: action.completed ? "line-through" : "none",
                         opacity: action.completed ? 0.6 : 1,
                       },
                     ]}>
                       {action.text}
                     </Text>
-                    {action.reason && !action.completed && (
+                    {action.reason && !action.completed && !doseAlreadyLogged && (
                       <Text style={[styles.actionReason, { color: c.mutedForeground }]}>{action.reason}</Text>
                     )}
                   </View>
-                  <Feather name="chevron-right" size={14} color={c.mutedForeground + "40"} />
+                  {!isConsistentDose && <Feather name="chevron-right" size={14} color={c.mutedForeground + "40"} />}
                 </Pressable>
               </View>
             );
@@ -832,6 +870,7 @@ export default function DashboardScreen() {
               const meta = ACTION_META[editingAction];
               const options = CATEGORY_OPTIONS[editingAction];
               const currentAction = dailyPlan.actions.find(a => a.category === editingAction);
+              const recommendedOption = options.find(o => o.title === currentAction?.recommended);
               const selectedOption = options.find(o => o.title === currentAction?.text);
               return (
                 <>
@@ -850,7 +889,7 @@ export default function DashboardScreen() {
                   <View style={styles.modalOptions}>
                     {options.map((option) => {
                       const isSelected = currentAction?.text === option.title;
-                      const isRecommended = option.stateTag === dailyPlan.recommendedStateTag;
+                      const isBestMatch = option.title === currentAction?.recommended;
                       return (
                         <Pressable
                           key={option.id}
@@ -880,11 +919,14 @@ export default function DashboardScreen() {
                               {isSelected && <Feather name="check-circle" size={18} color={meta.color} />}
                             </View>
                             <Text style={[styles.modalOptionSubtitle, { color: c.mutedForeground }]}>{option.subtitle}</Text>
-                            {isRecommended && !isSelected && (
+                            {isBestMatch && !isSelected && (
                               <View style={[styles.recommendedBadge, { backgroundColor: c.success + "14" }]}>
                                 <Feather name="zap" size={10} color={c.success} />
                                 <Text style={[styles.recommendedText, { color: c.success }]}>Best match today</Text>
                               </View>
+                            )}
+                            {isBestMatch && isSelected && currentAction?.reason && (
+                              <Text style={[styles.modalOptionReason, { color: c.mutedForeground }]}>{currentAction.reason}</Text>
                             )}
                           </View>
                         </Pressable>
@@ -1479,6 +1521,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Montserrat_400Regular",
     opacity: 0.7,
+  },
+  modalOptionReason: {
+    fontSize: 12,
+    fontFamily: "Montserrat_400Regular",
+    opacity: 0.6,
+    marginTop: 4,
+    lineHeight: 16,
   },
   recommendedBadge: {
     flexDirection: "row",

@@ -1,0 +1,135 @@
+I do NOT want to build a full telehealth / doctor dashboard yet.
+
+We are focusing on the consumer product first.
+
+However, I want to structure the system so a future clinician layer is easy to add.
+
+=====================================
+PART 1: KEEP PRODUCT CONSUMER-ONLY
+=====================================
+
+Do NOT:
+- add a clinician UI
+- add doctor dashboards
+- add alert systems
+- add medical workflow features
+
+The app should remain:
+- patient-facing
+- simple
+- focused on daily support
+
+=====================================
+PART 2: STRUCTURE DATA FOR FUTURE CLINICIAN VIEW
+=====================================
+
+Even though we are not building the doctor UI, we should structure data so it can be surfaced later.
+
+For each user, track:
+
+1. Medication context
+- medication_brand
+- dose
+- frequency
+- titration status
+- time on medication
+
+2. Adherence
+- dose logged (yes/no)
+- missed doses
+- delayed doses
+- adherence streak
+
+3. Daily inputs (with numeric mapping)
+- energy
+- appetite
+- hydration
+- protein
+- side effects
+- movement
+
+4. Trends
+- 7-day averages
+- trend direction (up/down/flat)
+- consistency metrics
+
+5. Key signals
+- appetite decline
+- recovery drop
+- activity drop
+- increased side effects
+
+=====================================
+PART 3: CREATE A SIMPLE “SUMMARY OBJECT”
+=====================================
+
+Create a structured summary that could later power a clinician dashboard.
+
+Example:
+
+{
+  "patient_status": "stable" | "needs_attention",
+  "key_flags": [
+    "low_appetite",
+    "declining_recovery",
+    "missed_dose"
+  ],
+  "medication_context": {...},
+  "adherence_summary": {...},
+  "trend_summary": {...},
+  "last_7_day_overview": {...}
+}
+
+This should NOT be shown in UI yet.
+This is internal structure only.
+
+=====================================
+PART 4: ENABLE FUTURE “WEEKLY SUMMARY”
+=====================================
+
+Add a lightweight weekly summary generator that could later be reused for clinicians.
+
+Examples:
+- Appetite has been lower this week
+- Recovery dipped after recent dose change
+- Hydration improved
+- Activity slightly decreased
+
+Keep it human-readable.
+
+=====================================
+PART 5: DESIGN FOR EXPORTABILITY
+=====================================
+
+Structure data so it could later be:
+- exported
+- shared
+- or viewed by a clinician
+
+Do NOT build sharing UI yet.
+Just structure data cleanly.
+
+=====================================
+PART 6: KEEP UX PATIENT-FIRST
+=====================================
+
+Everything in the app should still feel:
+- supportive
+- simple
+- non-clinical
+- non-alarming
+
+No:
+- risk scores
+- medical flags
+- warnings framed clinically
+
+=====================================
+PART 7: FINAL OUTPUT
+=====================================
+
+After implementing, summarize:
+1. how data is structured for future clinician use
+2. what summary object was created
+3. how trends and adherence are tracked
+4. how this can later translate into a clinician dashboard
