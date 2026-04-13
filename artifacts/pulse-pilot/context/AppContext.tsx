@@ -271,7 +271,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       const savedProfile = await AsyncStorage.getItem(PROFILE_KEY);
       if (savedProfile) {
-        setProfile(JSON.parse(savedProfile));
+        const parsed = JSON.parse(savedProfile);
+        if (parsed.onboardingComplete && !parsed.medicationProfile && defaultProfile.medicationProfile) {
+          parsed.medicationProfile = defaultProfile.medicationProfile;
+        }
+        setProfile(parsed);
       }
 
       const savedChat = await AsyncStorage.getItem(CHAT_KEY);
@@ -385,7 +389,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         );
       }
 
-      const savedProfileData = savedProfile ? JSON.parse(savedProfile) : defaultProfile;
+      let savedProfileData = savedProfile ? JSON.parse(savedProfile) : defaultProfile;
+      if (savedProfileData.onboardingComplete && !savedProfileData.medicationProfile && defaultProfile.medicationProfile) {
+        savedProfileData = { ...savedProfileData, medicationProfile: defaultProfile.medicationProfile };
+      }
 
       const today = allMetrics[allMetrics.length - 1];
       setTodayMetrics(today);
