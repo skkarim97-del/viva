@@ -1022,7 +1022,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const todayCheckIn = (() => {
     const todayDate = new Date().toISOString().split("T")[0];
-    return checkInHistory.find(c => c.date === todayDate) ?? null;
+    const found = checkInHistory.find(c => c.date === todayDate);
+    if (found && found.mentalState) return found;
+    return null;
   })();
 
   return (
