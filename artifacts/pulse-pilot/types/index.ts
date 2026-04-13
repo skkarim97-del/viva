@@ -118,9 +118,9 @@ export interface CompletionRecord {
   completionRate: number;
 }
 
-export type AppetiteLevel = "normal" | "low" | "very_low" | null;
-export type ProteinConfidenceDaily = "good" | "okay" | "poor" | null;
-export type HydrationDaily = "good" | "okay" | "poor" | null;
+export type AppetiteLevel = "strong" | "normal" | "low" | "very_low" | null;
+export type ProteinConfidenceDaily = "high" | "good" | "okay" | "low" | null;
+export type HydrationDaily = "high" | "good" | "okay" | "poor" | null;
 export type SideEffectSeverity = "none" | "mild" | "moderate" | "rough" | null;
 export type MovementIntent = "walk" | "strength" | "light_recovery" | "rest" | null;
 export type EnergyDaily = "great" | "good" | "tired" | "depleted" | null;

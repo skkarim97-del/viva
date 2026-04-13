@@ -1,0 +1,216 @@
+I want to do a more polished UI and product logic pass on the Today screen and coach experience.
+
+The current version is cleaner, but it now feels too flat and generic. I want it to feel more premium, visually intentional, and dynamic.
+
+Please make the following changes:
+
+=====================================
+PART 1: INPUT SECTION CONTAINER
+=====================================
+
+The full daily input area should sit inside its own light gray card / container background, similar to the other content sections in the app.
+
+Goals:
+- visually group all inputs together
+- make the input area feel like a proper section, not floating rows
+- improve hierarchy and aesthetics
+
+Design direction:
+- use a very light gray background for the full input section card
+- maintain rounded corners
+- use clean padding inside the section
+- spacing between each input row should still be consistent
+- make it feel premium and cohesive with the rest of the app
+
+=====================================
+PART 2: RESTORE COLOR-CODED INPUT LOGIC
+=====================================
+
+I do NOT want the input selections to all use the exact same navy / blue selected style.
+
+I want to bring back the more expressive color system for the selected options, but in a tasteful and premium way.
+
+Use this logic:
+- positive / strong states = green
+- moderate / balanced states = blue
+- lower / caution states = purple
+- negative / poor / rough states = red
+
+Examples:
+ENERGY
+- Great = green
+- Good = blue
+- Tired = purple
+- Depleted = red
+
+APPETITE
+- Strong = green
+- Normal = blue
+- Low = purple
+- Very Low = red
+
+HYDRATION
+- High = green
+- Good = blue
+- Okay = purple
+- Poor = red
+
+PROTEIN
+- High = green
+- Good = blue
+- Okay = purple
+- Low = red
+
+SIDE EFFECTS
+- None = green
+- Mild = blue
+- Moderate = purple
+- Rough = red
+
+MOVEMENT
+Use a more neutral but still thoughtful mapping:
+- Strength = green
+- Walk = blue
+- Light = purple
+- Rest = red OR muted depending on what looks best aesthetically
+
+Important:
+- keep the tones soft and premium, not childish
+- selected states should use subtle tinted backgrounds with matching text / border
+- not overly saturated
+- default state should remain neutral and understated
+
+This color system should help users scan the page quickly and make the experience feel more alive.
+
+=====================================
+PART 3: REMOVE THE TOP FEELING LABELS
+=====================================
+
+Remove the “How are you feeling” style options from the top summary area.
+
+I do NOT want the top of the Today screen showing:
+- Great
+- Good
+- Tired
+- Stressed
+
+That feels redundant and clunky.
+
+Instead, the top section should move straight into a premium support summary and then the structured daily input section below.
+
+The page should feel cleaner and less repetitive.
+
+=====================================
+PART 4: MAKE THE TODAY SCREEN FEEL MORE INTERCONNECTED
+=====================================
+
+Right now the screen still feels like separate blocks stacked on top of each other.
+
+I want it to feel more interconnected and dynamic.
+
+Please improve how the following relate to one another:
+- top summary
+- daily inputs
+- recommendations
+- explanation / insight block
+- coach prompt / chat entry
+
+The page should feel like one flowing support system where:
+1. the app notices recent patterns
+2. the patient logs today’s inputs
+3. the app updates guidance based on those inputs
+4. the user can ask the coach follow-up questions based on the same logic
+
+Make sure the recommendations and explanation clearly reflect the current selected inputs, not just static mock logic.
+
+Example:
+If appetite is very low and side effects are rough, the recommendations and explanation should visibly adapt.
+If energy is great and hydration is high, the screen should feel different and more supportive of momentum.
+
+=====================================
+PART 5: MAKE THE TODAY SCREEN MORE DYNAMIC
+=====================================
+
+I want the Today tab to feel more dynamic and responsive.
+
+Please improve:
+- the top support summary so it changes based on inputs and recent data
+- the recommendations so they adapt more clearly based on the user’s selected state
+- the explanation block so it references both trends and current daily inputs
+- the visual hierarchy so the screen feels more premium and guided
+
+The user should feel:
+- the app is actually responding to them
+- the app understands what is happening today
+- the page is personalized, not generic
+
+=====================================
+PART 6: CHAT / COACH CLEANUP
+=====================================
+
+The chat / coach function still references a “score” in some places.
+
+Remove all score-based wording from the patient-facing experience.
+
+Do NOT use words like:
+- score
+- readiness score
+- adherence score
+- recovery score
+- support score
+
+Replace that wording with more natural language like:
+- how things look today
+- what needs the most support
+- recent patterns
+- what to focus on
+- where momentum looks good
+- where your body may need more help
+
+Audit the coach copy and any related prompts or summaries so that no patient-facing text references a score.
+
+=====================================
+PART 7: KEEP THE APP PREMIUM
+=====================================
+
+Important:
+The changes should improve aesthetics, not make the screen feel louder or messier.
+
+Keep it:
+- premium
+- polished
+- soft
+- modern
+- health-tech credible
+
+Do NOT:
+- oversaturate colors
+- make the colored chips too bright
+- add clutter
+- add too much text
+
+=====================================
+PART 8: IMPLEMENTATION DETAILS
+=====================================
+
+Please inspect the current Today tab, input components, recommendation logic, and coach prompt logic.
+
+Update the relevant files to:
+- add a gray container around the input section
+- restore tasteful semantic color-coded selections
+- remove the top feeling labels
+- improve dynamic logic between inputs and recommendations
+- remove all score wording from patient-facing coach / UI copy
+
+If there is a reusable input component, update it there instead of making one-off changes.
+
+=====================================
+PART 9: FINAL RESULT
+=====================================
+
+After implementation, summarize:
+1. how the input section container was improved
+2. how the color mapping was restored
+3. how the top of the Today screen was cleaned up
+4. how the screen became more dynamic / interconnected
+5. where score language was removed

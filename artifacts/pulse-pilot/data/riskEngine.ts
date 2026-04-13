@@ -78,7 +78,7 @@ function checkFuelingBreakdown(inputs: GLP1DailyInputs[]): RiskDriver | null {
 
   const recent = inputs.slice(-3);
   const lowAppetiteDays = recent.filter(i => i.appetite === "very_low").length;
-  const poorProtein = recent.some(i => i.proteinConfidence === "poor");
+  const poorProtein = recent.some(i => i.proteinConfidence === "low");
   const poorHydration = recent.some(i => i.hydration === "poor");
 
   if (lowAppetiteDays >= 2 && (poorProtein || poorHydration)) {

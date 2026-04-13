@@ -163,7 +163,7 @@ function generateFocusItems(
     items.push({ text: "Keep movement light and easy today.", category: "move" });
   }
 
-  if (glp1Inputs?.proteinConfidence === "poor") {
+  if (glp1Inputs?.proteinConfidence === "low") {
     items.push({ text: "Add one extra protein-rich snack if you can.", category: "fuel" });
   }
 
@@ -301,7 +301,7 @@ export function generateDailyPlan(metrics: HealthMetrics, inputs?: WellnessInput
     workoutDuration = 15;
     workoutDesc = "Short walk if you feel up to it. No pressure.";
     optional = "Ginger tea or small sips of electrolyte water can help with nausea.";
-  } else if (appetiteLow && (isDehydrated || glp1Inputs?.proteinConfidence === "poor")) {
+  } else if (appetiteLow && (isDehydrated || glp1Inputs?.proteinConfidence === "low")) {
     dailyState = "maintain";
     headline = "Fueling needs attention today.";
     summary = "Appetite is low and hydration or protein may be falling short. Small, nutrient-dense meals will help you feel better.";

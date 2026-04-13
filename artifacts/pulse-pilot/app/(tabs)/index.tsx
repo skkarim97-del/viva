@@ -17,12 +17,13 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { InputRow } from "@/components/InputRow";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { useApp } from "@/context/AppContext";
 import { generateCoachInsight } from "@/data/insights";
 import { useColors } from "@/hooks/useColors";
 import { CATEGORY_OPTIONS } from "@/types";
-import type { MetricKey, FeelingType, ChatMessage, DailyStatusLabel, ActionCategory, AppetiteLevel, SideEffectSeverity, ProteinConfidenceDaily, MovementIntent, EnergyDaily } from "@/types";
+import type { MetricKey, FeelingType, ChatMessage, DailyStatusLabel, ActionCategory, AppetiteLevel, SideEffectSeverity, ProteinConfidenceDaily, MovementIntent, EnergyDaily, HydrationDaily } from "@/types";
 
 const FEELINGS: { key: NonNullable<FeelingType>; label: string }[] = [
   { key: "great", label: "Great" },
@@ -31,30 +32,46 @@ const FEELINGS: { key: NonNullable<FeelingType>; label: string }[] = [
   { key: "stressed", label: "Stressed" },
 ];
 
-const APPETITE_LEVELS: { key: NonNullable<AppetiteLevel>; label: string; color: string }[] = [
-  { key: "normal", label: "Normal", color: "#34C759" },
-  { key: "low", label: "Low", color: "#FF9500" },
-  { key: "very_low", label: "Very Low", color: "#FF6B6B" },
+const ENERGY_OPTIONS: { key: NonNullable<EnergyDaily>; label: string }[] = [
+  { key: "great", label: "Great" },
+  { key: "good", label: "Good" },
+  { key: "tired", label: "Tired" },
+  { key: "depleted", label: "Depleted" },
 ];
 
-const SIDE_EFFECT_LEVELS: { key: NonNullable<SideEffectSeverity>; label: string; color: string }[] = [
-  { key: "none", label: "None", color: "#34C759" },
-  { key: "mild", label: "Mild", color: "#5AC8FA" },
-  { key: "moderate", label: "Moderate", color: "#FF9500" },
-  { key: "rough", label: "Rough", color: "#FF6B6B" },
+const APPETITE_OPTIONS: { key: NonNullable<AppetiteLevel>; label: string }[] = [
+  { key: "strong", label: "Strong" },
+  { key: "normal", label: "Normal" },
+  { key: "low", label: "Low" },
+  { key: "very_low", label: "Very Low" },
 ];
 
-const PROTEIN_CONFIDENCE_LEVELS: { key: NonNullable<ProteinConfidenceDaily>; label: string; color: string }[] = [
-  { key: "good", label: "Good", color: "#34C759" },
-  { key: "okay", label: "Okay", color: "#FF9500" },
-  { key: "poor", label: "Poor", color: "#FF6B6B" },
+const HYDRATION_OPTIONS: { key: NonNullable<HydrationDaily>; label: string }[] = [
+  { key: "high", label: "High" },
+  { key: "good", label: "Good" },
+  { key: "okay", label: "Okay" },
+  { key: "poor", label: "Poor" },
 ];
 
-const MOVEMENT_INTENTS: { key: NonNullable<MovementIntent>; label: string; color: string }[] = [
-  { key: "strength", label: "Strength", color: "#AF52DE" },
-  { key: "walk", label: "Walk", color: "#34C759" },
-  { key: "light_recovery", label: "Light", color: "#5AC8FA" },
-  { key: "rest", label: "Rest", color: "#86868B" },
+const PROTEIN_OPTIONS: { key: NonNullable<ProteinConfidenceDaily>; label: string }[] = [
+  { key: "high", label: "High" },
+  { key: "good", label: "Good" },
+  { key: "okay", label: "Okay" },
+  { key: "low", label: "Low" },
+];
+
+const SIDE_EFFECT_OPTIONS: { key: NonNullable<SideEffectSeverity>; label: string }[] = [
+  { key: "none", label: "None" },
+  { key: "mild", label: "Mild" },
+  { key: "moderate", label: "Moderate" },
+  { key: "rough", label: "Rough" },
+];
+
+const MOVEMENT_OPTIONS: { key: NonNullable<MovementIntent>; label: string }[] = [
+  { key: "strength", label: "Strength" },
+  { key: "walk", label: "Walk" },
+  { key: "light_recovery", label: "Light" },
+  { key: "rest", label: "Rest" },
 ];
 
 const STATUS_COLOR_MAP: Record<DailyStatusLabel, (c: ReturnType<typeof useColors>) => string> = {
@@ -86,6 +103,8 @@ export default function DashboardScreen() {
     sideEffects, setSideEffects,
     proteinConfidence, setProteinConfidence,
     movementIntent, setMovementIntent,
+    glp1Energy, setGlp1Energy,
+    glp1Hydration, setGlp1Hydration,
   } = useApp();
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -155,23 +174,27 @@ export default function DashboardScreen() {
   };
 
   const selectAppetite = (a: NonNullable<AppetiteLevel>) => {
-    haptic();
     setAppetite(appetite === a ? null : a);
   };
 
   const selectSideEffects = (s: NonNullable<SideEffectSeverity>) => {
-    haptic();
     setSideEffects(sideEffects === s ? null : s);
   };
 
   const selectProteinConfidence = (p: NonNullable<ProteinConfidenceDaily>) => {
-    haptic();
     setProteinConfidence(proteinConfidence === p ? null : p);
   };
 
   const selectMovementIntent = (m: NonNullable<MovementIntent>) => {
-    haptic();
     setMovementIntent(movementIntent === m ? null : m);
+  };
+
+  const selectGlp1Energy = (e: NonNullable<EnergyDaily>) => {
+    setGlp1Energy(glp1Energy === e ? null : e);
+  };
+
+  const selectGlp1Hydration = (h: NonNullable<HydrationDaily>) => {
+    setGlp1Hydration(glp1Hydration === h ? null : h);
   };
 
   const sendAskMessage = async (text: string) => {
@@ -559,38 +582,12 @@ export default function DashboardScreen() {
         </View>
 
         <View style={styles.refineSection}>
-          <RefineRow
-            label="Appetite"
-            items={APPETITE_LEVELS}
-            selected={appetite}
-            onSelect={selectAppetite}
-            cardBg={c.card}
-            mutedColor={c.mutedForeground}
-          />
-          <RefineRow
-            label="Side Effects"
-            items={SIDE_EFFECT_LEVELS}
-            selected={sideEffects}
-            onSelect={selectSideEffects}
-            cardBg={c.card}
-            mutedColor={c.mutedForeground}
-          />
-          <RefineRow
-            label="Protein"
-            items={PROTEIN_CONFIDENCE_LEVELS}
-            selected={proteinConfidence}
-            onSelect={selectProteinConfidence}
-            cardBg={c.card}
-            mutedColor={c.mutedForeground}
-          />
-          <RefineRow
-            label="Movement"
-            items={MOVEMENT_INTENTS}
-            selected={movementIntent}
-            onSelect={selectMovementIntent}
-            cardBg={c.card}
-            mutedColor={c.mutedForeground}
-          />
+          <InputRow label="Energy" options={ENERGY_OPTIONS} selected={glp1Energy} onSelect={selectGlp1Energy} />
+          <InputRow label="Appetite" options={APPETITE_OPTIONS} selected={appetite} onSelect={selectAppetite} />
+          <InputRow label="Hydration" options={HYDRATION_OPTIONS} selected={glp1Hydration} onSelect={selectGlp1Hydration} />
+          <InputRow label="Protein" options={PROTEIN_OPTIONS} selected={proteinConfidence} onSelect={selectProteinConfidence} />
+          <InputRow label="Side Effects" options={SIDE_EFFECT_OPTIONS} selected={sideEffects} onSelect={selectSideEffects} />
+          <InputRow label="Movement" options={MOVEMENT_OPTIONS} selected={movementIntent} onSelect={selectMovementIntent} />
         </View>
 
         <View style={[styles.askCard, { backgroundColor: c.card }]}>
@@ -822,47 +819,24 @@ export default function DashboardScreen() {
             </View>
 
             <View style={{ gap: 20, paddingHorizontal: 4 }}>
-              <View style={{ gap: 8 }}>
-                <Text style={[styles.checkInLabel, { color: c.foreground }]}>Energy</Text>
-                <View style={styles.checkInChipRow}>
-                  {(["great", "good", "tired", "depleted"] as const).map(v => (
-                    <Pressable key={v} onPress={() => { haptic(); setCheckInEnergy(checkInEnergy === v ? null : v); }}
-                      style={[styles.checkInChip, { flex: 1, backgroundColor: checkInEnergy === v ? c.accent + "18" : c.background, borderColor: checkInEnergy === v ? c.accent + "40" : c.border + "30" }]}>
-                      <Text style={[styles.checkInChipText, { color: checkInEnergy === v ? c.accent : c.foreground }]}>
-                        {v === "great" ? "Great" : v === "good" ? "Good" : v === "tired" ? "Tired" : "Low"}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-
-              <View style={{ gap: 8 }}>
-                <Text style={[styles.checkInLabel, { color: c.foreground }]}>Side effects</Text>
-                <View style={styles.checkInChipRow}>
-                  {(["none", "mild", "moderate", "rough"] as const).map(v => (
-                    <Pressable key={v} onPress={() => { haptic(); setCheckInSideEffects(checkInSideEffects === v ? null : v); }}
-                      style={[styles.checkInChip, { flex: 1, backgroundColor: checkInSideEffects === v ? c.accent + "18" : c.background, borderColor: checkInSideEffects === v ? c.accent + "40" : c.border + "30" }]}>
-                      <Text style={[styles.checkInChipText, { color: checkInSideEffects === v ? c.accent : c.foreground }]}>
-                        {v === "none" ? "None" : v === "mild" ? "Mild" : v === "moderate" ? "Some" : "Rough"}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-
-              <View style={{ gap: 8 }}>
-                <Text style={[styles.checkInLabel, { color: c.foreground }]}>Protein</Text>
-                <View style={styles.checkInChipRow}>
-                  {(["good", "okay", "poor"] as const).map(v => (
-                    <Pressable key={v} onPress={() => { haptic(); setCheckInProtein(checkInProtein === v ? null : v); }}
-                      style={[styles.checkInChip, { flex: 1, backgroundColor: checkInProtein === v ? c.accent + "18" : c.background, borderColor: checkInProtein === v ? c.accent + "40" : c.border + "30" }]}>
-                      <Text style={[styles.checkInChipText, { color: checkInProtein === v ? c.accent : c.foreground }]}>
-                        {v === "good" ? "Good" : v === "okay" ? "Okay" : "Low"}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
+              <InputRow
+                label="Energy"
+                options={ENERGY_OPTIONS}
+                selected={checkInEnergy}
+                onSelect={(v) => setCheckInEnergy(checkInEnergy === v ? null : v)}
+              />
+              <InputRow
+                label="Side Effects"
+                options={SIDE_EFFECT_OPTIONS}
+                selected={checkInSideEffects}
+                onSelect={(v) => setCheckInSideEffects(checkInSideEffects === v ? null : v)}
+              />
+              <InputRow
+                label="Protein"
+                options={PROTEIN_OPTIONS}
+                selected={checkInProtein}
+                onSelect={(v) => setCheckInProtein(checkInProtein === v ? null : v)}
+              />
 
               <Pressable
                 onPress={() => {
@@ -902,45 +876,6 @@ export default function DashboardScreen() {
   );
 }
 
-function RefineRow<T extends string>({ label, items, selected, onSelect, cardBg, mutedColor }: {
-  label: string;
-  items: { key: T; label: string; color: string }[];
-  selected: T | null;
-  onSelect: (key: T) => void;
-  cardBg: string;
-  mutedColor: string;
-}) {
-  return (
-    <View style={styles.refineRow}>
-      <Text style={[styles.refineLabel, { color: mutedColor }]}>{label}</Text>
-      <View style={styles.refineChipRow}>
-        {items.map(({ key, label: chipLabel, color }) => {
-          const isSelected = selected === key;
-          return (
-            <Pressable
-              key={key}
-              onPress={() => onSelect(key)}
-              style={({ pressed }) => [
-                styles.refineChip,
-                {
-                  backgroundColor: isSelected ? color + "18" : cardBg,
-                  borderWidth: 1,
-                  borderColor: isSelected ? color + "40" : "transparent",
-                  opacity: pressed ? 0.8 : 1,
-                  transform: [{ scale: pressed ? 0.96 : isSelected ? 1.02 : 1 }],
-                },
-              ]}
-            >
-              <Text style={[styles.refineChipLabel, { color: isSelected ? color : mutedColor }]}>
-                {chipLabel}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
 
 
 const styles = StyleSheet.create({
@@ -1065,32 +1000,8 @@ const styles = StyleSheet.create({
   },
 
   refineSection: {
-    gap: 16,
+    gap: 20,
     marginBottom: 12,
-    paddingHorizontal: 4,
-  },
-  refineRow: {
-    gap: 10,
-  },
-  refineLabel: {
-    fontSize: 12,
-    fontFamily: "Montserrat_600SemiBold",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  refineChipRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  refineChip: {
-    flex: 1,
-    paddingVertical: 9,
-    borderRadius: 18,
-    alignItems: "center",
-  },
-  refineChipLabel: {
-    fontSize: 12,
-    fontFamily: "Montserrat_500Medium",
   },
 
   dayCard: {
@@ -1197,25 +1108,6 @@ const styles = StyleSheet.create({
   checkInDoneText: {
     fontSize: 13,
     fontFamily: "Montserrat_400Regular",
-  },
-  checkInLabel: {
-    fontSize: 14,
-    fontFamily: "Montserrat_600SemiBold",
-  },
-  checkInChipRow: {
-    flexDirection: "row" as const,
-    gap: 8,
-  },
-  checkInChip: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: "center" as const,
-  },
-  checkInChipText: {
-    fontSize: 13,
-    fontFamily: "Montserrat_500Medium",
   },
   checkInSubmit: {
     paddingVertical: 14,
