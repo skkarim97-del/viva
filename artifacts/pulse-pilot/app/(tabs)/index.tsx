@@ -213,7 +213,12 @@ export default function DashboardScreen() {
         }),
       });
 
-      if (!response.ok) throw new Error(`API error: ${response.status}`);
+      if (!response.ok) {
+        let errorBody = "";
+        try { errorBody = await response.text(); } catch {}
+        console.log("[Coach] HTTP error", response.status, errorBody);
+        throw { status: response.status, body: errorBody };
+      }
       const reader = response.body?.getReader();
       if (!reader) throw new Error("No stream reader");
 
@@ -262,11 +267,31 @@ export default function DashboardScreen() {
         setAskMessages((prev) => [...prev, assistantMsg]);
         addChatMessage(assistantMsg);
       }
-    } catch {
+    } catch (err: any) {
+      console.log("[Coach] Full error:", err);
+      console.log("[Coach] Error message:", err?.message);
+      console.log("[Coach] Error status:", err?.status);
+      console.log("[Coach] Error body:", err?.body);
+
+      let userMessage = "Something went wrong. Try again in a moment.";
+      if (err?.message === "Network request failed" || err?.message?.includes("network") || err?.message?.includes("fetch")) {
+        userMessage = "Network error. Check your connection and try again.";
+      } else if (err?.status === 500) {
+        userMessage = `Server error (500). ${err?.body || "The AI service may be temporarily unavailable."}`;
+      } else if (err?.status === 401 || err?.status === 403) {
+        userMessage = "Configuration error. The AI service is not properly set up.";
+      } else if (err?.status === 429) {
+        userMessage = "Rate limited. Wait a moment and try again.";
+      } else if (err?.status) {
+        userMessage = `Server returned ${err.status}. ${err?.body || ""}`;
+      } else if (err?.message) {
+        userMessage = `Error: ${err.message}`;
+      }
+
       const errorMsg: ChatMessage = {
         id: Date.now().toString(),
         role: "assistant",
-        content: "Could not connect right now. Try again in a moment.",
+        content: userMessage,
         timestamp: Date.now(),
       };
       setAskMessages((prev) => [...prev, errorMsg]);

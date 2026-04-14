@@ -1,0 +1,53 @@
+Fix Apple Health connection UX.
+
+Current issue:
+This is happening in a real TestFlight build on a physical iPhone, not a simulator. So Apple Health should generally be available unless something in our implementation, capability setup, entitlement config, or device-level availability check is wrong. Right now, tapping Apple Health shows a blocking error modal:
+“Connection Failed — Apple Health is not available on this device.”
+
+This is creating a bad user experience and may also be masking an actual integration/configuration bug.
+
+Required changes:
+
+1. Remove blocking error modal
+
+* Do NOT show an alert or modal for this case
+
+2. Replace with non-blocking UX
+
+* Show inline message or toast:
+  “Apple Health isn’t available on this device. You can still use Viva with manual inputs.”
+
+3. Detect device capability before attempting connection
+
+* Before trying to connect, explicitly check whether Apple Health is available on this physical iPhone / TestFlight build
+* If Apple Health is unavailable:
+
+  * disable or grey out the connect button
+  * show helper text instead of triggering an error
+* If Apple Health should be available on TestFlight/iPhone but the check is still failing, investigate the actual root cause instead of just surfacing a generic unavailable message
+
+4. Troubleshoot why this is failing on TestFlight on iPhone
+   I need you to audit the full Apple Health connection path and identify what is still broken. Check all of the following:
+
+* whether HealthKit availability is being checked correctly in the app
+* whether the native module is actually present in the TestFlight build
+* whether the iOS entitlements / capabilities are correctly configured
+* whether the Info.plist usage descriptions are present and correct
+* whether the app plugin / native linking is properly included in the Expo build
+* whether the permission request is being skipped because availability returns false too early
+* whether this is a package integration issue versus a device availability issue
+
+5. Allow full app usage without connection
+
+* No interruptions
+* No repeated prompts
+* The app should work normally without Apple Health
+
+6. Output
+   Tell me:
+
+* exactly how Apple Health availability is being detected right now
+* what UI state is shown when unavailable
+* why this is failing specifically in TestFlight on a physical iPhone
+* whether this is a UX-only problem or a deeper config / integration bug
+* exactly what files you changed

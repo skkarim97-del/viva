@@ -320,11 +320,30 @@ router.post("/chat", async (req: Request, res: Response) => {
     res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
     res.end();
   } catch (error: any) {
-    console.error("Coach chat error:", error);
+    console.error("Coach chat error:", error?.message || error);
+    console.error("Coach chat error type:", error?.constructor?.name);
+    console.error("Coach chat error status:", error?.status || error?.response?.status);
+    if (error?.response?.data) console.error("Coach chat error data:", JSON.stringify(error.response.data));
+
+    let statusCode = 500;
+    let errorDetail = "Failed to generate response";
+
+    if (error?.status === 401 || error?.message?.includes("auth") || error?.message?.includes("API key")) {
+      statusCode = 401;
+      errorDetail = "AI service authentication failed. API key may be missing or invalid.";
+    } else if (error?.status === 429) {
+      statusCode = 429;
+      errorDetail = "AI service rate limited. Try again shortly.";
+    } else if (error?.code === "ECONNREFUSED" || error?.code === "ENOTFOUND") {
+      errorDetail = `AI service unreachable (${error.code}).`;
+    } else if (error?.message) {
+      errorDetail = `AI error: ${error.message}`;
+    }
+
     if (!res.headersSent) {
-      res.status(500).json({ error: "Failed to generate response" });
+      res.status(statusCode).json({ error: errorDetail });
     } else {
-      res.write(`data: ${JSON.stringify({ error: "Stream interrupted" })}\n\n`);
+      res.write(`data: ${JSON.stringify({ error: errorDetail })}\n\n`);
       res.end();
     }
   }
