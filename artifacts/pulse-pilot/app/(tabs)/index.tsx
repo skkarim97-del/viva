@@ -331,17 +331,19 @@ export default function DashboardScreen() {
         <Text style={[styles.tagline, { color: c.mutedForeground }]}>{greetingText}</Text>
 
         <View style={[styles.statusCard, { backgroundColor: c.card }]}>
+          {streakDays > 0 && (
+            <View style={styles.streakRow}>
+              <View style={[styles.streakBadge, { backgroundColor: c.warning + "14" }]}>
+                <Feather name="zap" size={12} color={c.warning} />
+                <Text style={[styles.streakText, { color: c.warning }]}>{streakDays}d streak</Text>
+              </View>
+            </View>
+          )}
           <View style={styles.statusTopRow}>
             <View style={[styles.statusIndicator, { backgroundColor: statusColor + "14" }]}>
               <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
               <Text style={[styles.statusLabel, { color: statusColor }]}>{dailyPlan.statusLabel}</Text>
             </View>
-            {streakDays > 0 && (
-              <View style={[styles.streakBadge, { backgroundColor: c.warning + "14" }]}>
-                <Feather name="zap" size={12} color={c.warning} />
-                <Text style={[styles.streakText, { color: c.warning }]}>{streakDays}d</Text>
-              </View>
-            )}
           </View>
           <Text style={[styles.headline, { color: c.foreground }]} numberOfLines={2} adjustsFontSizeToFit>{dailyPlan.headline}</Text>
           <Text style={[styles.driversInline, { color: c.mutedForeground }]} numberOfLines={2}>
@@ -1334,20 +1336,21 @@ const styles = StyleSheet.create({
   },
   statusTopRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
     width: "100%",
+  },
+  streakRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginBottom: 6,
   },
   streakBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
     paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 14,
-    flexShrink: 0,
-    minWidth: 52,
-    justifyContent: "center",
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   streakText: {
     fontSize: 12,
@@ -1388,8 +1391,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 20,
-    flexShrink: 1,
-    marginRight: 8,
   },
   statusDot: {
     width: 7,

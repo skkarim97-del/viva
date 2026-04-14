@@ -1,0 +1,65 @@
+Refine the home card UI so the red alert text and the streak badge are no longer grouped in the same row.
+
+Current issue:
+
+* the red alert/insight text and the streak badge are sitting together
+* this creates visual tension and weakens hierarchy
+* the red text is a high-priority health/wellness insight
+* the streak is a secondary gamification/progress signal
+* combining them makes the streak feel like part of the warning, which is not the intent
+* it also makes the layout more fragile when the text wraps
+
+What I want:
+
+* separate the streak badge from the red alert text
+* keep the red alert text clean, isolated, and easy to scan
+* move the streak badge to a more stable and reusable location in the card UI
+* the overall result should feel more premium, intentional, and polished
+
+Target hierarchy:
+
+1. card header / top area
+2. streak badge in a subtle but visible position, ideally top-right of the card
+3. red alert / status pill on its own row, full width or mostly full width
+4. main headline and supporting text below
+
+Implementation guidance:
+
+1. Find the component for the main home card / daily summary card where the red status message and streak badge currently appear together
+2. Remove the streak badge from that same status-message row
+3. Reposition the streak badge into the card header area or top-right area of the card so it feels like a persistent secondary signal
+4. Keep the red status message on its own row so it has room to breathe and can wrap cleanly without interacting with the streak badge
+5. Make sure the red status message remains visually prominent and readable
+6. Make sure the streak badge remains subtle and does not compete with the main health insight
+7. Preserve the existing visual language of the app. This is a hierarchy and layout improvement, not a redesign
+
+Styling goals:
+
+* streak badge should feel secondary
+* red status text should feel focused and clear
+* spacing should be clean and balanced
+* no awkward empty space or crowding
+* card should still feel compact and premium on mobile
+
+Behavior goals:
+
+* short and long alert text should both render cleanly
+* streak badge should stay in the same consistent place regardless of text length
+* the alert row should never need to compensate for the streak badge anymore
+
+Suggested layout direction:
+
+* place the streak badge near the top-right of the card, either aligned with the card’s top padding or lightly attached to the header area
+* place the red alert/status pill below it on its own row
+* then keep the main headline and supporting copy beneath that
+
+After making the change:
+
+* test with no streak
+* test with a 1-day streak
+* test with a multi-day streak like 7d or 14d
+* test with short alert text
+* test with longer alert text that wraps
+* confirm the card still feels balanced in all cases
+
+Please implement the change directly in the relevant component and keep it visually polished.
