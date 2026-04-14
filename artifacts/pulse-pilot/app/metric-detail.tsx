@@ -13,15 +13,24 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Polyline } from "react-native-svg";
 
 import { useApp } from "@/context/AppContext";
+import type { AvailableMetricType } from "@/data/healthProviders";
 import { getMetricDetail } from "@/data/mockData";
 import { useColors } from "@/hooks/useColors";
 import type { MetricKey } from "@/types";
+
+const METRIC_KEY_TO_TYPE: Record<string, AvailableMetricType> = {
+  sleep: "sleep",
+  hrv: "hrv",
+  steps: "steps",
+  restingHR: "heartRate",
+  recovery: "heartRate",
+};
 
 export default function MetricDetailScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const { key } = useLocalSearchParams<{ key: MetricKey }>();
-  const { todayMetrics, metrics, insights } = useApp();
+  const { todayMetrics, metrics, insights, hasHealthData, availableMetricTypes } = useApp();
   const topPad = Platform.OS === "web" ? 60 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -29,6 +38,37 @@ export default function MetricDetailScreen() {
     return (
       <View style={[styles.loading, { backgroundColor: c.background }]}>
         <Text style={{ color: c.mutedForeground }}>Loading...</Text>
+      </View>
+    );
+  }
+
+  const requiredType = METRIC_KEY_TO_TYPE[key as string];
+  const metricUnavailable = requiredType && (!hasHealthData || !availableMetricTypes.includes(requiredType));
+
+  if (metricUnavailable) {
+    return (
+      <View style={[styles.container, { backgroundColor: c.background }]}>
+        <View style={[styles.header, { paddingTop: topPad + 12 }]}>
+          <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.backBtn, { opacity: pressed ? 0.6 : 1 }]}>
+            <Feather name="chevron-left" size={24} color={c.foreground} />
+          </Pressable>
+          <Text style={[styles.headerTitle, { color: c.foreground }]}>
+            {key === "sleep" ? "Sleep" : key === "hrv" ? "HRV" : key === "steps" ? "Steps" : key === "restingHR" ? "Heart Rate" : key === "recovery" ? "Recovery" : "Metric"}
+          </Text>
+          <View style={{ width: 24 }} />
+        </View>
+        <View style={styles.unavailableWrap}>
+          <View style={[styles.unavailableIcon, { backgroundColor: c.muted }]}>
+            <Feather name="activity" size={28} color={c.mutedForeground} />
+          </View>
+          <Text style={[styles.unavailableTitle, { color: c.foreground }]}>Not available yet</Text>
+          <Text style={[styles.unavailableBody, { color: c.mutedForeground }]}>
+            Connect Apple Health in Settings to see this metric. Once synced, your data will appear here automatically.
+          </Text>
+          <Pressable onPress={() => router.back()} style={[styles.unavailableBtn, { backgroundColor: c.primary }]}>
+            <Text style={[styles.unavailableBtnText, { color: "#FFFFFF" }]}>Go back</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -220,5 +260,40 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: "Montserrat_400Regular",
     lineHeight: 22,
+  },
+  unavailableWrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 32,
+    gap: 14,
+  },
+  unavailableIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  unavailableTitle: {
+    fontSize: 19,
+    fontFamily: "Montserrat_600SemiBold",
+  },
+  unavailableBody: {
+    fontSize: 15,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 22,
+    textAlign: "center",
+  },
+  unavailableBtn: {
+    marginTop: 8,
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  unavailableBtnText: {
+    fontSize: 15,
+    fontFamily: "Montserrat_600SemiBold",
   },
 });
