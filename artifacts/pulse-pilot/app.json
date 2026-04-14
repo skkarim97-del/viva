@@ -27,8 +27,7 @@
         "ITSAppUsesNonExemptEncryption": false
       },
       "entitlements": {
-        "com.apple.developer.healthkit": true,
-        "com.apple.developer.healthkit.access": []
+        "com.apple.developer.healthkit": true
       }
     },
     "android": {
