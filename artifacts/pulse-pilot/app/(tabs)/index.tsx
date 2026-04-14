@@ -1334,8 +1334,9 @@ const styles = StyleSheet.create({
   },
   statusTopRow: {
     flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    gap: 8,
+    width: "100%",
   },
   streakBadge: {
     flexDirection: "row",
@@ -1344,6 +1345,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 14,
+    flexShrink: 0,
+    minWidth: 52,
+    justifyContent: "center",
   },
   streakText: {
     fontSize: 12,
@@ -1384,6 +1388,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 20,
+    flexShrink: 1,
+    marginRight: 8,
   },
   statusDot: {
     width: 7,

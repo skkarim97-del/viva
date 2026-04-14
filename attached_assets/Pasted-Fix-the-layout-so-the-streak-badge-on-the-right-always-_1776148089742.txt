@@ -1,0 +1,62 @@
+Fix the layout so the streak badge on the right always stays cleanly aligned, regardless of how long the text on the left is.
+
+What is happening now:
+
+* the text on the left is affecting the position of the streak badge on the right
+* when the text wraps or changes length, the badge looks pushed off to the side or vertically misaligned
+* I want the badge to feel anchored in a fixed right-side position within the row
+
+What I want:
+
+* the row should use a horizontal flex layout
+* the left text/content block should take up the remaining available width
+* the streak badge on the right should never shrink, drift, or get pushed around by the text
+* the badge should stay consistently aligned with the row, ideally centered vertically unless the design clearly looks better top-aligned
+* spacing between the text block and the badge should remain consistent
+* the badge should keep a fixed width and height so it looks visually stable across all states
+
+Implementation guidance:
+
+1. Find the component that renders the summary/status row where this streak badge appears
+2. Update the parent row container to use a proper horizontal layout:
+
+   * `flexDirection: 'row'`
+   * `justifyContent: 'space-between'`
+   * `alignItems: 'center'` as the default
+   * `width: '100%'`
+3. Wrap the left-side text/content in its own container and give it:
+
+   * `flex: 1`
+   * a small right margin, around 8 to 12
+   * allow wrapping naturally without affecting the right-side badge
+4. Update the streak badge container so it is layout-stable:
+
+   * fixed width and height
+   * centered content
+   * `flexShrink: 0`
+   * `alignSelf: 'center'` if needed
+5. Make sure the badge remains visually aligned even when the left text becomes 2 lines
+6. If centered alignment looks off because of wrapped text, try `alignItems: 'flex-start'` on the parent row and add a tiny top margin to the badge, but only if it looks better in practice
+7. Preserve the current styling language of the app. This is a layout fix, not a redesign
+
+Technical goal:
+
+* long text should wrap inside the left content area
+* the badge should remain anchored at the right edge
+* no overlap
+* no drifting
+* no inconsistent vertical alignment
+
+After implementing:
+
+* test with a short line of text
+* test with a medium line of text
+* test with a long line that wraps to 2 lines
+* make sure the badge position remains clean in all 3 cases
+
+If helpful, the target structure should effectively behave like:
+
+* left content container: flexible width
+* right badge container: fixed size, non-shrinking, consistently aligned
+
+Please make the change directly in the relevant component and keep the UI polished.
