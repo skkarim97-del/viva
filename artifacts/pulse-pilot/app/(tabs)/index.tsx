@@ -93,6 +93,7 @@ export default function DashboardScreen() {
     medicationLog, logMedicationDose, removeMedicationDose,
     adaptiveInsights,
     hasHealthData,
+    availableMetricTypes,
   } = useApp();
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -275,12 +276,13 @@ export default function DashboardScreen() {
     }
   };
 
-  const metricItems: { key: MetricKey; label: string; value: string; unit: string }[] = [
-    { key: "sleep", label: "Sleep", value: todayMetrics.sleepDuration.toFixed(1), unit: "hrs" },
-    { key: "steps", label: "Steps", value: todayMetrics.steps >= 1000 ? `${(todayMetrics.steps / 1000).toFixed(1)}` : `${todayMetrics.steps}`, unit: todayMetrics.steps >= 1000 ? "k" : "" },
-    { key: "restingHR", label: "Heart Rate", value: `${todayMetrics.restingHeartRate}`, unit: "bpm" },
-    { key: "hrv", label: "HRV", value: `${todayMetrics.hrv}`, unit: "ms" },
+  const allMetricItems: { key: MetricKey; label: string; value: string; unit: string; requiredType: string }[] = [
+    { key: "sleep", label: "Sleep", value: todayMetrics.sleepDuration.toFixed(1), unit: "hrs", requiredType: "sleep" },
+    { key: "steps", label: "Steps", value: todayMetrics.steps >= 1000 ? `${(todayMetrics.steps / 1000).toFixed(1)}` : `${todayMetrics.steps}`, unit: todayMetrics.steps >= 1000 ? "k" : "", requiredType: "steps" },
+    { key: "restingHR", label: "Heart Rate", value: `${todayMetrics.restingHeartRate}`, unit: "bpm", requiredType: "heartRate" },
+    { key: "hrv", label: "HRV", value: `${todayMetrics.hrv}`, unit: "ms", requiredType: "hrv" },
   ];
+  const metricItems = allMetricItems.filter(item => availableMetricTypes.includes(item.requiredType as any));
 
   const statusColor = STATUS_COLOR_MAP[dailyPlan.statusLabel](c);
 
@@ -856,24 +858,31 @@ export default function DashboardScreen() {
           </View>
         )}
 
-        {hasHealthData ? (
-          <View style={styles.metricsRow}>
-            {metricItems.map((item) => (
-              <Pressable
-                key={item.key}
-                onPress={() => openMetric(item.key)}
-                style={({ pressed }) => [
-                  styles.metricTile,
-                  { backgroundColor: c.card, opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] },
-                ]}
-              >
-                <Text style={[styles.metricLabel, { color: c.mutedForeground }]} numberOfLines={1}>{item.label}</Text>
-                <View style={styles.metricValueRow}>
-                  <Text style={[styles.metricValue, { color: c.foreground }]}>{item.value}</Text>
-                  <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>{item.unit}</Text>
-                </View>
-              </Pressable>
-            ))}
+        {hasHealthData && metricItems.length > 0 ? (
+          <View>
+            <View style={styles.metricsRow}>
+              {metricItems.map((item) => (
+                <Pressable
+                  key={item.key}
+                  onPress={() => openMetric(item.key)}
+                  style={({ pressed }) => [
+                    styles.metricTile,
+                    { backgroundColor: c.card, opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] },
+                  ]}
+                >
+                  <Text style={[styles.metricLabel, { color: c.mutedForeground }]} numberOfLines={1}>{item.label}</Text>
+                  <View style={styles.metricValueRow}>
+                    <Text style={[styles.metricValue, { color: c.foreground }]}>{item.value}</Text>
+                    <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>{item.unit}</Text>
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+            {metricItems.length < allMetricItems.length && (
+              <Text style={[styles.partialDataNote, { color: c.mutedForeground }]}>
+                Some metrics require Apple Watch or manual entry
+              </Text>
+            )}
           </View>
         ) : (
           <View style={[styles.emptyHealthCard, { backgroundColor: c.card }]}>
@@ -1679,6 +1688,14 @@ const styles = StyleSheet.create({
     fontFamily: "Montserrat_400Regular",
     opacity: 0.5,
     marginTop: 2,
+  },
+  partialDataNote: {
+    fontSize: 11,
+    fontFamily: "Montserrat_400Regular",
+    textAlign: "center",
+    opacity: 0.5,
+    marginTop: 8,
+    fontStyle: "italic",
   },
   metricTile: {
     flex: 1,

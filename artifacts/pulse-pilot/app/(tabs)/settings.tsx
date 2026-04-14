@@ -159,46 +159,56 @@ export default function SettingsScreen() {
       <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>Apple Health</Text>
       <View style={[styles.section, { backgroundColor: c.card }]}>
         {integrations.map((integration, i) => (
-          <Pressable
-            key={integration.id}
-            onPress={() => toggleIntegration(integration.id)}
-            style={({ pressed }) => [
-              styles.settingRow,
-              i < integrations.length - 1 && [styles.settingRowBorder, { borderBottomColor: c.background }],
-              { opacity: pressed ? 0.8 : 1 },
-            ]}
-          >
-            <View style={[styles.settingIcon, { backgroundColor: c.accent + "10" }]}>
-              <Feather name={integration.icon as keyof typeof Feather.glyphMap} size={16} color={c.accent} />
-            </View>
-            <Text style={[styles.settingLabel, { color: c.foreground }]}>{integration.name}</Text>
-            <View
-              style={[
-                styles.statusDot,
-                {
-                  backgroundColor:
-                    integration.lastSync === "Connecting..." || integration.lastSync === "Syncing..."
-                      ? c.warning || "#F59E0B"
-                      : integration.lastSync === "Sync failed"
-                      ? c.destructive || "#EF4444"
-                      : integration.connected
-                      ? c.success
-                      : c.muted,
-                },
+          <React.Fragment key={integration.id}>
+            <Pressable
+              onPress={() => toggleIntegration(integration.id)}
+              style={({ pressed }) => [
+                styles.settingRow,
+                i < integrations.length - 1 && !integration.lastSync?.includes("failed") && [styles.settingRowBorder, { borderBottomColor: c.background }],
+                { opacity: pressed ? 0.8 : 1 },
               ]}
-            />
-            <Text style={[styles.statusText, { color: c.mutedForeground }]}>
-              {integration.lastSync === "Connecting..." || integration.lastSync === "Syncing..."
-                ? integration.lastSync
-                : integration.lastSync === "Sync failed"
-                ? "Sync failed"
-                : integration.connected
-                ? integration.lastSync
-                  ? `Synced ${integration.lastSync}`
-                  : "Connected"
-                : "Tap to connect"}
-            </Text>
-          </Pressable>
+            >
+              <View style={[styles.settingIcon, { backgroundColor: c.accent + "10" }]}>
+                <Feather name={integration.icon as keyof typeof Feather.glyphMap} size={16} color={c.accent} />
+              </View>
+              <Text style={[styles.settingLabel, { color: c.foreground }]}>{integration.name}</Text>
+              <View
+                style={[
+                  styles.statusDot,
+                  {
+                    backgroundColor:
+                      integration.lastSync === "Connecting..." || integration.lastSync === "Syncing..."
+                        ? c.warning || "#F59E0B"
+                        : integration.lastSync === "Sync failed"
+                        ? c.destructive || "#EF4444"
+                        : integration.connected
+                        ? c.success
+                        : c.muted,
+                  },
+                ]}
+              />
+              <Text style={[styles.statusText, { color: c.mutedForeground }]}>
+                {integration.lastSync === "Connecting..." || integration.lastSync === "Syncing..."
+                  ? integration.lastSync
+                  : integration.lastSync === "Sync failed"
+                  ? "Sync failed"
+                  : integration.connected
+                  ? integration.lastSync
+                    ? `Synced ${integration.lastSync}`
+                    : "Connected"
+                  : "Tap to connect"}
+              </Text>
+            </Pressable>
+            {integration.lastSync === "Sync failed" && (
+              <Pressable
+                onPress={() => toggleIntegration(integration.id)}
+                style={({ pressed }) => [styles.retryButton, { backgroundColor: c.accent + "15", opacity: pressed ? 0.7 : 1 }]}
+              >
+                <Feather name="refresh-cw" size={12} color={c.accent} />
+                <Text style={[styles.retryText, { color: c.accent }]}>Retry sync</Text>
+              </Pressable>
+            )}
+          </React.Fragment>
         ))}
       </View>
 
@@ -361,6 +371,22 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 13,
     fontFamily: "Montserrat_400Regular",
+  },
+  retryButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    alignSelf: "center",
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  retryText: {
+    fontSize: 12,
+    fontFamily: "Montserrat_600SemiBold",
   },
   upgradeCard: {
     flexDirection: "row",

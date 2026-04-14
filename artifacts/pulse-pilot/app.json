@@ -24,7 +24,6 @@
       },
       "infoPlist": {
         "NSHealthShareUsageDescription": "VIVA reads your health data including sleep, steps, heart rate, and HRV to provide personalized wellness coaching and daily plans.",
-        "NSHealthUpdateUsageDescription": "VIVA uses write access to sync your wellness goals with Apple Health.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "entitlements": {

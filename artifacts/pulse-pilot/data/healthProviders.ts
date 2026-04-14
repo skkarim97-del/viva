@@ -188,13 +188,13 @@ function fillDefaults(partial: Partial<HealthMetrics>[], days: number): HealthMe
       steps: existing.steps ?? 0,
       caloriesBurned: existing.caloriesBurned ?? 0,
       activeCalories: existing.activeCalories ?? 0,
-      restingHeartRate: existing.restingHeartRate ?? 65,
-      hrv: existing.hrv ?? 40,
-      weight: existing.weight ?? result[result.length - 1]?.weight ?? 180,
-      sleepDuration: existing.sleepDuration ?? 7,
-      sleepQuality: existing.sleepQuality ?? 70,
-      recoveryScore: existing.recoveryScore ?? 60,
-      strain: existing.strain ?? 10,
+      restingHeartRate: existing.restingHeartRate ?? 0,
+      hrv: existing.hrv ?? 0,
+      weight: existing.weight ?? result[result.length - 1]?.weight ?? 0,
+      sleepDuration: existing.sleepDuration ?? 0,
+      sleepQuality: existing.sleepQuality ?? 0,
+      recoveryScore: existing.recoveryScore ?? 0,
+      strain: existing.strain ?? 0,
       vo2Max: existing.vo2Max,
       distance: existing.distance,
       pace: existing.pace,
@@ -234,10 +234,12 @@ export async function connectProvider(
   }
 }
 
+export type AvailableMetricType = "steps" | "heartRate" | "hrv" | "sleep" | "calories" | "weight" | "distance";
+
 export async function fetchHealthData(
   connectedProviders: string[],
   days: number = 28
-): Promise<{ metrics: HealthMetrics[]; source: string | null }> {
+): Promise<{ metrics: HealthMetrics[]; source: string | null; availableTypes: AvailableMetricType[] }> {
   for (const id of connectedProviders) {
     const provider = healthProviders[id];
     if (!provider) continue;
@@ -251,12 +253,28 @@ export async function fetchHealthData(
 
       const metrics = await provider.fetchMetrics(days);
       if (metrics.length > 0) {
-        return { metrics, source: id };
+        const types = detectAvailableTypes(metrics);
+        return { metrics, source: id, availableTypes: types };
       }
     } catch {
       continue;
     }
   }
 
-  return { metrics: [], source: null };
+  return { metrics: [], source: null, availableTypes: [] };
+}
+
+function detectAvailableTypes(metrics: HealthMetrics[]): AvailableMetricType[] {
+  const types: AvailableMetricType[] = [];
+  const hasRealData = (vals: number[]) => vals.some(v => v > 0);
+
+  if (hasRealData(metrics.map(m => m.steps))) types.push("steps");
+  if (hasRealData(metrics.map(m => m.restingHeartRate))) types.push("heartRate");
+  if (hasRealData(metrics.map(m => m.hrv))) types.push("hrv");
+  if (hasRealData(metrics.map(m => m.sleepDuration))) types.push("sleep");
+  if (hasRealData(metrics.map(m => m.activeCalories))) types.push("calories");
+  if (hasRealData(metrics.map(m => m.weight))) types.push("weight");
+  if (hasRealData(metrics.map(m => m.distance ?? 0))) types.push("distance");
+
+  return types;
 }

@@ -19,7 +19,7 @@ import {
 } from "@/lib/engine";
 import { computeInsights, type DailyInsights } from "@/data/insights";
 import type { UserPatterns, AdaptiveInsight } from "@/types";
-import { fetchHealthData, connectProvider } from "@/data/healthProviders";
+import { fetchHealthData, connectProvider, type AvailableMetricType } from "@/data/healthProviders";
 import { Platform, Alert } from "react-native";
 import type {
   UserProfile,
@@ -66,6 +66,7 @@ interface AppContextType {
   metrics: HealthMetrics[];
   todayMetrics: HealthMetrics | null;
   hasHealthData: boolean;
+  availableMetricTypes: AvailableMetricType[];
   dailyPlan: DailyPlan | null;
   weeklyPlan: WeeklyPlan | null;
   trends: TrendData[];
@@ -138,6 +139,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [metrics, setMetrics] = useState<HealthMetrics[]>([]);
   const [todayMetrics, setTodayMetrics] = useState<HealthMetrics | null>(null);
   const [hasHealthData, setHasHealthData] = useState(false);
+  const [availableMetricTypes, setAvailableMetricTypes] = useState<AvailableMetricType[]>([]);
   const [dailyPlan, setDailyPlan] = useState<DailyPlan | null>(null);
   const [weeklyPlan, setWeeklyPlan] = useState<WeeklyPlan | null>(null);
   const [trends, setTrends] = useState<TrendData[]>([]);
@@ -431,17 +433,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       let dataSource: string | null = null;
       let healthDataFound = false;
 
+      let loadedAvailableTypes: AvailableMetricType[] = [];
       if (connectedIds.length > 0) {
         const result = await fetchHealthData(connectedIds, 28);
         if (result.metrics.length > 0) {
           allMetrics = result.metrics;
           dataSource = result.source;
           healthDataFound = true;
+          loadedAvailableTypes = result.availableTypes;
         }
       }
 
       setMetrics(allMetrics);
       setHasHealthData(healthDataFound);
+      setAvailableMetricTypes(loadedAvailableTypes);
 
       if (dataSource) {
         setIntegrationsState((prev) =>
@@ -463,8 +468,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         steps: 0,
         caloriesBurned: 0,
         activeCalories: 0,
-        restingHeartRate: 60,
-        hrv: 40,
+        restingHeartRate: 0,
+        hrv: 0,
         weight: savedProfileData?.weight ?? 0,
         sleepDuration: 0,
         sleepQuality: 0,
@@ -906,6 +911,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (connectedIds.length === 0) {
       setMetrics([]);
       setHasHealthData(false);
+      setAvailableMetricTypes([]);
       setTrends([]);
       return;
     }
@@ -914,6 +920,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (result.metrics.length > 0) {
         setMetrics(result.metrics);
         setHasHealthData(true);
+        setAvailableMetricTypes(result.availableTypes);
         setTodayMetrics(result.metrics[result.metrics.length - 1]);
         setTrends(generateTrendDataFromMetrics(result.metrics));
         if (result.source) {
@@ -927,6 +934,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
       } else {
         setHasHealthData(false);
+        setAvailableMetricTypes([]);
         setTrends([]);
       }
     } catch {
@@ -937,7 +945,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const current = integrationsState.find((i) => i.id === id);
     if (!current) return;
 
-    if (current.connected) {
+    const isSyncFailed = current.lastSync === "Sync failed";
+
+    if (current.connected && !isSyncFailed) {
       setIntegrationsState((prev) => {
         const updated = prev.map((i) =>
           i.id === id ? { ...i, connected: false, lastSync: undefined } : i
@@ -949,30 +959,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    setIntegrationsState((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, lastSync: "Connecting..." } : i))
-    );
-
-    const result = await connectProvider(id);
-
-    if (!result.success) {
+    if (!isSyncFailed) {
       setIntegrationsState((prev) =>
-        prev.map((i) => (i.id === id ? { ...i, lastSync: undefined } : i))
+        prev.map((i) => (i.id === id ? { ...i, lastSync: "Connecting..." } : i))
       );
-      Alert.alert(
-        "Connection Failed",
-        result.error || "Could not connect. Please try again."
-      );
-      return;
-    }
 
-    setIntegrationsState((prev) => {
-      const updated = prev.map((i) =>
-        i.id === id ? { ...i, connected: true, lastSync: "Syncing..." } : i
+      const result = await connectProvider(id);
+
+      if (!result.success) {
+        setIntegrationsState((prev) =>
+          prev.map((i) => (i.id === id ? { ...i, lastSync: undefined } : i))
+        );
+        Alert.alert(
+          "Connection Failed",
+          result.error || "Could not connect. Please try again."
+        );
+        return;
+      }
+
+      setIntegrationsState((prev) => {
+        const updated = prev.map((i) =>
+          i.id === id ? { ...i, connected: true, lastSync: "Syncing..." } : i
+        );
+        AsyncStorage.setItem(INTEGRATIONS_KEY, JSON.stringify(updated.map((i) => ({ id: i.id, connected: i.connected }))));
+        return updated;
+      });
+    } else {
+      setIntegrationsState((prev) =>
+        prev.map((i) => (i.id === id ? { ...i, lastSync: "Syncing..." } : i))
       );
-      AsyncStorage.setItem(INTEGRATIONS_KEY, JSON.stringify(updated.map((i) => ({ id: i.id, connected: i.connected }))));
-      return updated;
-    });
+    }
 
     const connectedIds = integrationsState
       .filter((i) => i.connected || i.id === id)
@@ -983,10 +999,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (data.metrics.length > 0) {
         setMetrics(data.metrics);
         setHasHealthData(true);
+        setAvailableMetricTypes(data.availableTypes);
         setTodayMetrics(data.metrics[data.metrics.length - 1]);
         setTrends(generateTrendDataFromMetrics(data.metrics));
       } else {
         setHasHealthData(false);
+        setAvailableMetricTypes([]);
       }
       setIntegrationsState((prev) =>
         prev.map((i) =>
@@ -1131,6 +1149,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         metrics,
         todayMetrics,
         hasHealthData,
+        availableMetricTypes,
         dailyPlan,
         weeklyPlan,
         trends,

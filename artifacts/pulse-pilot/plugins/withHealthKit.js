@@ -10,8 +10,7 @@ function withHealthKit(config) {
   config = withInfoPlist(config, (mod) => {
     mod.modResults.NSHealthShareUsageDescription =
       "VIVA reads your health data including sleep, steps, heart rate, and HRV to provide personalized wellness coaching and daily plans.";
-    mod.modResults.NSHealthUpdateUsageDescription =
-      "VIVA uses write access to sync your wellness goals with Apple Health.";
+    delete mod.modResults.NSHealthUpdateUsageDescription;
     if (!mod.modResults.UIBackgroundModes) {
       mod.modResults.UIBackgroundModes = [];
     }

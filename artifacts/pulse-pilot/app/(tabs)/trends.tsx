@@ -63,7 +63,7 @@ function buildSparkPoints(data: number[], width: number, height: number): string
 
 export default function TrendsScreen() {
   const c = useColors();
-  const { insights, metrics, completionHistory, weeklyConsistency, weeklyDaysCompleted, streakDays, todayCompletionRate, dailyPlan, profile, medicationLog, inputAnalytics, hasHealthData } = useApp();
+  const { insights, metrics, completionHistory, weeklyConsistency, weeklyDaysCompleted, streakDays, todayCompletionRate, dailyPlan, profile, medicationLog, inputAnalytics, hasHealthData, availableMetricTypes } = useApp();
 
   const correlations = useMemo(() => buildCorrelations(metrics), [metrics]);
   const patterns = useMemo(() => detectPatterns(metrics), [metrics]);
@@ -117,17 +117,19 @@ export default function TrendsScreen() {
   const completedCount = planActionsFiltered.filter(a => a.completed).length;
   const totalActions = planActionsFiltered.length;
 
-  const recoveryMetrics: SparkMetric[] = [
-    { label: "Sleep", value: `${avgSleep}`, unit: "hrs", data: sleepData, color: "#AF52DE", detailKey: "Sleep" },
-    { label: "HRV", value: `${avgHrv}`, unit: "ms", data: hrvData, color: "#5AC8FA", detailKey: "HRV" },
-    { label: "Resting HR", value: `${avgRHR}`, unit: "bpm", data: rhrData, color: "#FF6B6B", detailKey: "Resting HR" },
+  const allRecoveryMetrics: (SparkMetric & { requiredType: string })[] = [
+    { label: "Sleep", value: `${avgSleep}`, unit: "hrs", data: sleepData, color: "#AF52DE", detailKey: "Sleep", requiredType: "sleep" },
+    { label: "HRV", value: `${avgHrv}`, unit: "ms", data: hrvData, color: "#5AC8FA", detailKey: "HRV", requiredType: "hrv" },
+    { label: "Resting HR", value: `${avgRHR}`, unit: "bpm", data: rhrData, color: "#FF6B6B", detailKey: "Resting HR", requiredType: "heartRate" },
   ];
+  const recoveryMetrics = allRecoveryMetrics.filter(m => availableMetricTypes.includes(m.requiredType as any));
 
-  const activityMetrics: SparkMetric[] = [
-    { label: "Steps", value: avgSteps >= 1000 ? `${(avgSteps / 1000).toFixed(1)}k` : `${avgSteps}`, unit: "avg", data: stepsData, color: "#34C759", detailKey: "Steps" },
-    { label: "Active Days", value: `${activeDaysPerWeek}`, unit: "/week", data: activityData.map(v => v * 7), color: "#142240" },
-    { label: "Active Cal", value: `${avgActiveCalories}`, unit: "avg", data: activeCalData, color: "#FF9500" },
+  const allActivityMetrics: (SparkMetric & { requiredType: string })[] = [
+    { label: "Steps", value: avgSteps >= 1000 ? `${(avgSteps / 1000).toFixed(1)}k` : `${avgSteps}`, unit: "avg", data: stepsData, color: "#34C759", detailKey: "Steps", requiredType: "steps" },
+    { label: "Active Days", value: `${activeDaysPerWeek}`, unit: "/week", data: activityData.map(v => v * 7), color: "#142240", requiredType: "steps" },
+    { label: "Active Cal", value: `${avgActiveCalories}`, unit: "avg", data: activeCalData, color: "#FF9500", requiredType: "calories" },
   ];
+  const activityMetrics = allActivityMetrics.filter(m => availableMetricTypes.includes(m.requiredType as any));
 
   const habitsMetrics: SparkMetric[] = [
     { label: "Weekly", value: `${weeklyDaysCompleted}/7`, unit: "days", data: habitRateData, color: "#142240" },
@@ -291,65 +293,79 @@ export default function TrendsScreen() {
         <Text style={[styles.sectionTitle, { color: c.foreground }]}>Key Metrics</Text>
         <Text style={[styles.sectionSub, { color: c.mutedForeground }]}>{hasHealthData ? "4-week averages" : "Connect Apple Health for health metrics"}</Text>
 
-        {hasHealthData ? (
+        {hasHealthData && (recoveryMetrics.length > 0 || activityMetrics.length > 0) ? (
           <>
-            <Text style={[styles.categoryLabel, { color: c.mutedForeground }]}>Recovery / Body</Text>
-            <View style={styles.metricsRow}>
-              {recoveryMetrics.map((m) => (
-                <Pressable
-                  key={m.label}
-                  onPress={() => m.detailKey && openDetail(m.detailKey)}
-                  style={({ pressed }) => [styles.metricTile, { backgroundColor: c.card, opacity: pressed ? 0.8 : 1 }]}
-                >
-                  <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>{m.label}</Text>
-                  <View style={styles.metricValueRow}>
-                    <Text style={[styles.metricValue, { color: c.foreground }]}>{m.value}</Text>
-                    <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>{m.unit}</Text>
-                  </View>
-                  {m.data.length >= 2 && (
-                    <Svg width={60} height={20} style={styles.spark}>
-                      <Polyline
-                        points={buildSparkPoints(m.data, 60, 20)}
-                        fill="none"
-                        stroke={m.color}
-                        strokeWidth={1.5}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </Svg>
-                  )}
-                </Pressable>
-              ))}
-            </View>
+            {recoveryMetrics.length > 0 && (
+              <>
+                <Text style={[styles.categoryLabel, { color: c.mutedForeground }]}>Recovery / Body</Text>
+                <View style={styles.metricsRow}>
+                  {recoveryMetrics.map((m) => (
+                    <Pressable
+                      key={m.label}
+                      onPress={() => m.detailKey && openDetail(m.detailKey)}
+                      style={({ pressed }) => [styles.metricTile, { backgroundColor: c.card, opacity: pressed ? 0.8 : 1 }]}
+                    >
+                      <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>{m.label}</Text>
+                      <View style={styles.metricValueRow}>
+                        <Text style={[styles.metricValue, { color: c.foreground }]}>{m.value}</Text>
+                        <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>{m.unit}</Text>
+                      </View>
+                      {m.data.length >= 2 && (
+                        <Svg width={60} height={20} style={styles.spark}>
+                          <Polyline
+                            points={buildSparkPoints(m.data, 60, 20)}
+                            fill="none"
+                            stroke={m.color}
+                            strokeWidth={1.5}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </Svg>
+                      )}
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            )}
 
-            <Text style={[styles.categoryLabel, { color: c.mutedForeground }]}>Movement</Text>
-            <View style={styles.metricsRow}>
-              {activityMetrics.map((m) => (
-                <Pressable
-                  key={m.label}
-                  onPress={() => m.detailKey && openDetail(m.detailKey)}
-                  style={({ pressed }) => [styles.metricTile, { backgroundColor: c.card, opacity: pressed ? 0.8 : 1 }]}
-                >
-                  <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>{m.label}</Text>
-                  <View style={styles.metricValueRow}>
-                    <Text style={[styles.metricValue, { color: c.foreground }]}>{m.value}</Text>
-                    <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>{m.unit}</Text>
-                  </View>
-                  {m.data.length >= 2 && (
-                    <Svg width={60} height={20} style={styles.spark}>
-                      <Polyline
-                        points={buildSparkPoints(m.data, 60, 20)}
-                        fill="none"
-                        stroke={m.color}
-                        strokeWidth={1.5}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </Svg>
-                  )}
-                </Pressable>
-              ))}
-            </View>
+            {activityMetrics.length > 0 && (
+              <>
+                <Text style={[styles.categoryLabel, { color: c.mutedForeground }]}>Movement</Text>
+                <View style={styles.metricsRow}>
+                  {activityMetrics.map((m) => (
+                    <Pressable
+                      key={m.label}
+                      onPress={() => m.detailKey && openDetail(m.detailKey)}
+                      style={({ pressed }) => [styles.metricTile, { backgroundColor: c.card, opacity: pressed ? 0.8 : 1 }]}
+                    >
+                      <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>{m.label}</Text>
+                      <View style={styles.metricValueRow}>
+                        <Text style={[styles.metricValue, { color: c.foreground }]}>{m.value}</Text>
+                        <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>{m.unit}</Text>
+                      </View>
+                      {m.data.length >= 2 && (
+                        <Svg width={60} height={20} style={styles.spark}>
+                          <Polyline
+                            points={buildSparkPoints(m.data, 60, 20)}
+                            fill="none"
+                            stroke={m.color}
+                            strokeWidth={1.5}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </Svg>
+                      )}
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            )}
+
+            {(recoveryMetrics.length < allRecoveryMetrics.length || activityMetrics.length < allActivityMetrics.length) && (
+              <Text style={[styles.partialDataNote, { color: c.mutedForeground }]}>
+                Some metrics require Apple Watch or manual entry
+              </Text>
+            )}
           </>
         ) : (
           <View style={[styles.emptyMetricsCard, { backgroundColor: c.card }]}>
@@ -457,6 +473,14 @@ const styles = StyleSheet.create({
     opacity: 0.5,
     fontStyle: "italic",
     marginTop: 2,
+  },
+  partialDataNote: {
+    fontSize: 11,
+    fontFamily: "Montserrat_400Regular",
+    textAlign: "center",
+    opacity: 0.5,
+    marginTop: 8,
+    fontStyle: "italic",
   },
   sectionWrap: {
     gap: 10,
