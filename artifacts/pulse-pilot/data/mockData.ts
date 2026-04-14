@@ -24,7 +24,7 @@ export const defaultProfile: UserProfile = {
   coachingTone: "gentle",
   goals: ["fat_loss", "stay_consistent"],
   tier: "free",
-  onboardingComplete: true,
+  onboardingComplete: false,
   fastingEnabled: false,
   units: "imperial",
   glp1Medication: "tirzepatide",
@@ -174,7 +174,7 @@ function trendSummary(label: string, values: number[], trend: "up" | "down" | "s
 }
 
 export function generateTrendDataFromMetrics(metrics: HealthMetrics[]): TrendData[] {
-  if (!metrics || metrics.length === 0) return generateTrendData();
+  if (!metrics || metrics.length === 0) return [];
 
   const configs: { label: string; extract: (m: HealthMetrics) => number; unit: string }[] = [
     { label: "Weight", extract: (m) => m.weight, unit: "lbs" },

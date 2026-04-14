@@ -3,9 +3,6 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 
 import {
   defaultProfile,
-  generateMockMetrics,
-  generateMockWorkouts,
-  generateTrendData,
   generateTrendDataFromMetrics,
   integrations as defaultIntegrations,
 } from "@/data/mockData";
@@ -68,6 +65,7 @@ interface AppContextType {
   completeOnboarding: () => void;
   metrics: HealthMetrics[];
   todayMetrics: HealthMetrics | null;
+  hasHealthData: boolean;
   dailyPlan: DailyPlan | null;
   weeklyPlan: WeeklyPlan | null;
   trends: TrendData[];
@@ -95,6 +93,7 @@ interface AppContextType {
   toggleWeeklyAction: (date: string, category: ActionCategory) => void;
   completionHistory: CompletionRecord[];
   weeklyConsistency: number;
+  weeklyDaysCompleted: number;
   streakDays: number;
   todayCompletionRate: number;
   lastCompletionFeedback: string | null;
@@ -138,6 +137,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<UserProfile>(defaultProfile);
   const [metrics, setMetrics] = useState<HealthMetrics[]>([]);
   const [todayMetrics, setTodayMetrics] = useState<HealthMetrics | null>(null);
+  const [hasHealthData, setHasHealthData] = useState(false);
   const [dailyPlan, setDailyPlan] = useState<DailyPlan | null>(null);
   const [weeklyPlan, setWeeklyPlan] = useState<WeeklyPlan | null>(null);
   const [trends, setTrends] = useState<TrendData[]>([]);
@@ -427,22 +427,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         .filter((i) => i.connected)
         .map((i) => i.id);
 
-      let allMetrics: HealthMetrics[];
+      let allMetrics: HealthMetrics[] = [];
       let dataSource: string | null = null;
+      let healthDataFound = false;
 
       if (connectedIds.length > 0) {
         const result = await fetchHealthData(connectedIds, 28);
         if (result.metrics.length > 0) {
           allMetrics = result.metrics;
           dataSource = result.source;
-        } else {
-          allMetrics = generateMockMetrics(28);
+          healthDataFound = true;
         }
-      } else {
-        allMetrics = generateMockMetrics(28);
       }
 
       setMetrics(allMetrics);
+      setHasHealthData(healthDataFound);
 
       if (dataSource) {
         setIntegrationsState((prev) =>
@@ -459,7 +458,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         savedProfileData = { ...savedProfileData, medicationProfile: defaultProfile.medicationProfile };
       }
 
-      const today = allMetrics[allMetrics.length - 1];
+      const neutralMetrics: HealthMetrics = {
+        date: todayDate,
+        steps: 0,
+        caloriesBurned: 0,
+        activeCalories: 0,
+        restingHeartRate: 60,
+        hrv: 40,
+        weight: savedProfileData?.weight ?? 0,
+        sleepDuration: 0,
+        sleepQuality: 0,
+        recoveryScore: 0,
+        strain: 0,
+        vo2Max: 0,
+      };
+
+      const today = healthDataFound ? allMetrics[allMetrics.length - 1] : neutralMetrics;
       setTodayMetrics(today);
       setMetricsRef(today);
 
@@ -472,11 +486,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       } catch {}
 
       const initCheckIn = loadedCheckIns.find(c => c.date === todayDate);
+      const metricsForPlan = healthDataFound ? allMetrics : [neutralMetrics];
       const plan = generateDailyPlan(
         today,
         { feeling: currentFeeling, energy: currentEnergy, stress: currentStress, hydration: currentHydration, trainingIntent: currentTrainingIntent },
         loadedHistory,
-        allMetrics,
+        metricsForPlan,
         currentGlp1Inputs ?? undefined,
         savedProfileData.medicationProfile,
         loadedMedLog,
@@ -503,14 +518,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       } else {
         baseWeekly = generatedWeekly;
       }
-      setBaselineAndAdapt(baseWeekly, loadedGlp1History, loadedCheckIns, allMetrics, savedProfileData.medicationProfile, loadedMedLog);
+      setBaselineAndAdapt(baseWeekly, loadedGlp1History, loadedCheckIns, metricsForPlan, savedProfileData.medicationProfile, loadedMedLog);
 
-      fetchAIWeeklyPlan(allMetrics, savedProfileData, loadedHistory);
-      setTrends(generateTrendDataFromMetrics(allMetrics));
-      const allWorkouts = generateMockWorkouts();
-      setWorkouts(allWorkouts);
-
-      setInsights(computeInsights(allMetrics, today, allWorkouts, savedProfileData, loadedHistory));
+      if (healthDataFound) {
+        fetchAIWeeklyPlan(allMetrics, savedProfileData, loadedHistory);
+        setTrends(generateTrendDataFromMetrics(allMetrics));
+        setInsights(computeInsights(allMetrics, today, [], savedProfileData, loadedHistory));
+      } else {
+        setTrends([]);
+        setInsights(null);
+      }
+      setWorkouts([]);
 
       computeRisk(allMetrics, loadedGlp1History, loadedHistory, savedProfileData.medicationProfile);
       recomputeAnalytics(loadedGlp1History, savedProfileData.medicationProfile, loadedMedLog, loadedHistory);
@@ -886,16 +904,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const syncHealthData = useCallback(async (integrations: IntegrationStatus[]) => {
     const connectedIds = integrations.filter((i) => i.connected).map((i) => i.id);
     if (connectedIds.length === 0) {
-      const mockMetrics = generateMockMetrics(28);
-      setMetrics(mockMetrics);
-      setTodayMetrics(mockMetrics[mockMetrics.length - 1]);
-      setTrends(generateTrendDataFromMetrics(mockMetrics));
+      setMetrics([]);
+      setHasHealthData(false);
+      setTrends([]);
       return;
     }
     try {
       const result = await fetchHealthData(connectedIds, 28);
       if (result.metrics.length > 0) {
         setMetrics(result.metrics);
+        setHasHealthData(true);
         setTodayMetrics(result.metrics[result.metrics.length - 1]);
         setTrends(generateTrendDataFromMetrics(result.metrics));
         if (result.source) {
@@ -907,6 +925,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             )
           );
         }
+      } else {
+        setHasHealthData(false);
+        setTrends([]);
       }
     } catch {
     }
@@ -961,8 +982,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const data = await fetchHealthData(connectedIds, 28);
       if (data.metrics.length > 0) {
         setMetrics(data.metrics);
+        setHasHealthData(true);
         setTodayMetrics(data.metrics[data.metrics.length - 1]);
         setTrends(generateTrendDataFromMetrics(data.metrics));
+      } else {
+        setHasHealthData(false);
       }
       setIntegrationsState((prev) =>
         prev.map((i) =>
@@ -989,11 +1013,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [updateProfile]
   );
 
-  const weeklyConsistency = (() => {
-    const recent = completionHistory.slice(-7);
-    if (recent.length === 0) return -1;
-    return Math.round(recent.reduce((sum, r) => sum + r.completionRate, 0) / recent.length);
+  const weeklyDaysCompleted = (() => {
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    const monday = new Date(now);
+    monday.setDate(monday.getDate() - mondayOffset);
+    monday.setHours(0, 0, 0, 0);
+    const mondayStr = monday.toISOString().split("T")[0];
+
+    const thisWeekRecords = completionHistory.filter(r => r.date >= mondayStr && r.completionRate >= 40);
+    return thisWeekRecords.length;
   })();
+
+  const weeklyConsistency = weeklyDaysCompleted > 0 ? Math.round((weeklyDaysCompleted / 7) * 100) : 0;
 
   const streakDays = (() => {
     if (completionHistory.length === 0) return 0;
@@ -1097,6 +1130,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         completeOnboarding,
         metrics,
         todayMetrics,
+        hasHealthData,
         dailyPlan,
         weeklyPlan,
         trends,
@@ -1124,6 +1158,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         toggleWeeklyAction,
         completionHistory,
         weeklyConsistency,
+        weeklyDaysCompleted,
         streakDays,
         todayCompletionRate,
         lastCompletionFeedback,

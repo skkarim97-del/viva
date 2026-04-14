@@ -1,0 +1,158 @@
+Chunk 1: Core Product Fixes
+Onboarding, settings architecture, Apple Health integration, and data logic
+
+We need to fix the core product loop before anything else. Right now the app looks polished, but the foundational logic is broken. The main issues are: onboarding is not appearing on first launch, the settings page does not reflect the right user profile fields, Apple Health integration is failing, and the app is showing metrics that are static instead of real. This next iteration should focus on making the app actually work as a real product, not just a front-end demo.
+
+1. Fix onboarding so it always appears on first launch
+
+The onboarding flow is currently not being triggered when the beta app is downloaded. That is a major issue because without onboarding, the app has no user-specific context to personalize recommendations, populate settings, or drive any logic downstream.
+
+Implement the following:
+
+On first app launch, route the user into onboarding automatically
+Do not allow the user into the main app until onboarding is completed
+Persist onboarding completion using a flag like hasCompletedOnboarding
+Store onboarding answers in persistent storage so they are accessible across the app
+If the user deletes and reinstalls the app, onboarding should run again unless a persisted auth/user record intentionally restores state
+Add a fallback check so if onboarding data is incomplete, the app routes back into onboarding or a completion flow
+
+The onboarding should collect these fields:
+
+Medication type
+Current weight
+Dosage
+Dosage frequency or regularity, such as weekly or daily
+Goal or goals
+
+These are the actual profile inputs that matter for a GLP-1 retention app. They should become the canonical user profile fields used throughout the app.
+
+2. Make Settings a true reflection of onboarding data
+
+The current Settings screen has the wrong fields. It should not be centered around generic wellness preferences like fasting, coaching tone, training days, or unrelated goal structures. It should reflect the core inputs that actually drive the app.
+
+Update Settings so it becomes an editable version of the onboarding profile.
+
+Remove these fields:
+
+Training days
+Fasting preference
+Coaching tone
+Current setup of weight / goal weight if it is structured in a disconnected way
+
+Replace the current profile/settings fields with:
+
+Medication type
+Current weight
+Dosage
+Dosage frequency
+Goals
+
+Requirements:
+
+Settings should load these fields from the same source of truth as onboarding
+If the user edits these values in Settings, the updated values should persist and be reflected in recommendations and summaries
+Avoid having onboarding and settings use separate disconnected state objects
+There should be one clean user profile model used throughout the app
+3. Fix Apple Health integration and permission flow
+
+The app currently throws an error saying Apple Health is not available on this device. This needs to be fixed because Apple Health is the core passive data layer for the product.
+
+Implement a proper HealthKit integration flow:
+
+Check device eligibility clearly
+Request HealthKit permissions on a real iPhone device
+Make the error handling more intelligent and user-friendly
+Distinguish between:
+HealthKit unavailable on this device
+Permissions denied
+Health data available but no values yet
+Connection/setup failure
+
+Important logic:
+
+The app must not assume the user has an Apple Watch
+If the user has no Apple Watch, still pull whatever Apple Health / HealthKit data is available from the iPhone itself
+This includes data like:
+Steps
+Calories
+Movement/activity
+Sleep, if available through phone or synced apps
+
+The app should work for:
+
+Apple Watch users with richer data
+iPhone-only users with lighter HealthKit data
+Users with no available data yet
+
+Do not hard-gate the app behind Apple Watch ownership.
+
+4. Add proper fallback logic for health data
+
+Right now the app behaves as if it has dynamic data even when it doesn’t. That kills trust fast. We need explicit fallback states.
+
+Implement this logic:
+
+If HealthKit is connected and valid data exists, show the relevant metrics
+If HealthKit is connected but a certain metric is unavailable, show a clean unavailable state for that metric
+If HealthKit is not connected, do not show fake values
+If the user only has iPhone data and not Apple Watch data, show whatever is available without pretending the app has full recovery or strain-level insight
+
+Examples:
+
+Do not show static recovery scores if no wearable-based recovery data exists
+Do not show movement numbers unless they are actually being read from HealthKit
+If no data exists, show something like:
+“No health data available yet”
+“Connect Apple Health to unlock passive insights”
+“Using limited phone-based health data”
+5. Remove all static or fake metrics from Trends and Key Metrics
+
+The Trends tab and key metrics area currently appear to show data that is not actually being pulled from Apple Health. That needs to stop immediately.
+
+Requirements:
+
+Audit every metric shown in Trends and key summary cards
+For each metric, confirm whether it is:
+Pulled from live health data
+Calculated from user check-ins
+Hardcoded placeholder data
+
+Any metric that is currently hardcoded should either:
+
+Be replaced with real logic
+Or be hidden until real data exists
+
+No fake numbers. No demo stats. No static summary cards masquerading as intelligence.
+
+6. Create clean data-source separation across the app
+
+The app needs a clearer architecture for where each insight is coming from. Right now it feels blurred.
+
+Refactor the data layer so the app clearly distinguishes between:
+
+User profile data from onboarding/settings
+Daily check-in data entered manually
+Passive health data from Apple Health / iPhone / Apple Watch
+Derived summary logic and recommendations
+Empty states when data is missing
+
+This will make the app more reliable and much easier to scale later.
+
+7. Fix tracking logic and weekly completion calculations
+
+There are some logic bugs in the consistency / completion layer that make the app feel sloppy.
+
+Fix the following:
+
+If there are only 4 daily inputs, the completion tracker should say 4 out of 4, not 4 out of 5
+Weekly completion should reflect the number of days completed during the current calendar week
+If only 1 day has been completed, it should not show 100%
+Display should be based on actual count of completed days out of 7
+
+Recommended display:
+
+Top line: percentage, calculated correctly
+Bottom line: label like weekly completion
+Supporting copy or tooltip could say 1 of 7 days completed this week
+
+Make sure the weekly logic resets correctly each week and is not just calculating based on whether the current day’s checklist is complete.

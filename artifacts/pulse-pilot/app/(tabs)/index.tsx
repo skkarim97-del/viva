@@ -92,6 +92,7 @@ export default function DashboardScreen() {
     glp1Energy, setGlp1Energy,
     medicationLog, logMedicationDose, removeMedicationDose,
     adaptiveInsights,
+    hasHealthData,
   } = useApp();
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -849,24 +850,34 @@ export default function DashboardScreen() {
           </View>
         )}
 
-        <View style={styles.metricsRow}>
-          {metricItems.map((item) => (
-            <Pressable
-              key={item.key}
-              onPress={() => openMetric(item.key)}
-              style={({ pressed }) => [
-                styles.metricTile,
-                { backgroundColor: c.card, opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] },
-              ]}
-            >
-              <Text style={[styles.metricLabel, { color: c.mutedForeground }]} numberOfLines={1}>{item.label}</Text>
-              <View style={styles.metricValueRow}>
-                <Text style={[styles.metricValue, { color: c.foreground }]}>{item.value}</Text>
-                <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>{item.unit}</Text>
-              </View>
-            </Pressable>
-          ))}
-        </View>
+        {hasHealthData ? (
+          <View style={styles.metricsRow}>
+            {metricItems.map((item) => (
+              <Pressable
+                key={item.key}
+                onPress={() => openMetric(item.key)}
+                style={({ pressed }) => [
+                  styles.metricTile,
+                  { backgroundColor: c.card, opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] },
+                ]}
+              >
+                <Text style={[styles.metricLabel, { color: c.mutedForeground }]} numberOfLines={1}>{item.label}</Text>
+                <View style={styles.metricValueRow}>
+                  <Text style={[styles.metricValue, { color: c.foreground }]}>{item.value}</Text>
+                  <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>{item.unit}</Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        ) : (
+          <View style={[styles.emptyHealthCard, { backgroundColor: c.card }]}>
+            <Feather name="heart" size={20} color={c.mutedForeground} />
+            <Text style={[styles.emptyHealthTitle, { color: c.foreground }]}>No health data available yet</Text>
+            <Text style={[styles.emptyHealthDesc, { color: c.mutedForeground }]}>
+              Connect Apple Health in Settings to unlock passive insights like sleep, steps, and heart rate.
+            </Text>
+          </View>
+        )}
       </ScrollView>
 
       <Modal
@@ -1597,6 +1608,25 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
     marginBottom: 16,
+  },
+  emptyHealthCard: {
+    borderRadius: 20,
+    padding: 24,
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 8,
+  },
+  emptyHealthTitle: {
+    fontSize: 15,
+    fontFamily: "Montserrat_600SemiBold",
+    textAlign: "center",
+  },
+  emptyHealthDesc: {
+    fontSize: 13,
+    fontFamily: "Montserrat_400Regular",
+    textAlign: "center",
+    lineHeight: 18,
+    paddingHorizontal: 16,
   },
   metricTile: {
     flex: 1,

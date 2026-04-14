@@ -1,21 +1,37 @@
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   Pressable,
+  TextInput,
+  Modal,
+  Platform,
 } from "react-native";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
+import { getDoseOptions, type MedicationBrand } from "@/data/medicationData";
+
+const GOAL_LABELS: Record<string, string> = {
+  fat_loss: "Weight Loss",
+  stay_consistent: "Stay Consistent",
+  muscle_preservation: "Preserve Muscle",
+  energy: "More Energy",
+  metabolic_health: "Metabolic Health",
+  general_wellness: "General Wellness",
+};
 
 export default function SettingsScreen() {
   const c = useColors();
-  const { profile, integrations, toggleIntegration } = useApp();
+  const { profile, updateProfile, integrations, toggleIntegration } = useApp();
+
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
 
   const tierLabel =
     profile.tier === "premium_plus"
@@ -27,6 +43,36 @@ export default function SettingsScreen() {
   const handleUpgrade = () => {
     router.push("/subscription");
   };
+
+  const startEdit = (field: string, currentValue: string) => {
+    setEditingField(field);
+    setEditValue(currentValue);
+  };
+
+  const saveEdit = () => {
+    if (!editingField || !editValue.trim()) {
+      setEditingField(null);
+      return;
+    }
+    if (editingField === "weight") {
+      const w = parseFloat(editValue);
+      if (!isNaN(w) && w > 0) updateProfile({ weight: w });
+    } else if (editingField === "goalWeight") {
+      const w = parseFloat(editValue);
+      if (!isNaN(w) && w > 0) updateProfile({ goalWeight: w });
+    }
+    setEditingField(null);
+  };
+
+  const medProfile = profile.medicationProfile;
+  const doseDisplay = medProfile
+    ? `${medProfile.doseValue} ${medProfile.doseUnit} ${medProfile.frequency}`
+    : "Not set";
+  const medicationDisplay = medProfile?.medicationBrand || "Not set";
+  const goalsDisplay = profile.goals.length > 0
+    ? profile.goals.map(g => GOAL_LABELS[g] || g.replace(/_/g, " ")).join(", ")
+    : "Not set";
+  const weightUnit = profile.units === "imperial" ? "lbs" : "kg";
 
   return (
     <ScrollView
@@ -40,7 +86,7 @@ export default function SettingsScreen() {
       <View style={[styles.profileCard, { backgroundColor: c.card }]}>
         <View style={[styles.profileAvatar, { backgroundColor: c.accent + "12" }]}>
           <Text style={[styles.profileInitial, { color: c.accent }]}>
-            {profile.name ? profile.name[0].toUpperCase() : "P"}
+            {profile.name ? profile.name[0].toUpperCase() : "V"}
           </Text>
         </View>
         <View style={styles.profileInfo}>
@@ -56,6 +102,58 @@ export default function SettingsScreen() {
             <Feather name="arrow-up-circle" size={22} color={c.accent} />
           </Pressable>
         ) : null}
+      </View>
+
+      <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>Treatment</Text>
+      <View style={[styles.section, { backgroundColor: c.card }]}>
+        {[
+          { label: "Medication", value: medicationDisplay, icon: "package" as const, editable: false },
+          { label: "Dosage", value: doseDisplay, icon: "thermometer" as const, editable: false },
+        ].map((item, i) => (
+          <View
+            key={item.label}
+            style={[
+              styles.settingRow,
+              i < 1 && [styles.settingRowBorder, { borderBottomColor: c.background }],
+            ]}
+          >
+            <View style={[styles.settingIcon, { backgroundColor: c.accent + "10" }]}>
+              <Feather name={item.icon} size={16} color={c.accent} />
+            </View>
+            <Text style={[styles.settingLabel, { color: c.foreground }]}>{item.label}</Text>
+            <Text style={[styles.settingValue, { color: c.mutedForeground }]} numberOfLines={1}>
+              {item.value}
+            </Text>
+          </View>
+        ))}
+      </View>
+
+      <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>Profile</Text>
+      <View style={[styles.section, { backgroundColor: c.card }]}>
+        {[
+          { label: "Current Weight", value: `${profile.weight} ${weightUnit}`, icon: "trending-down" as const, field: "weight" },
+          { label: "Goal Weight", value: `${profile.goalWeight} ${weightUnit}`, icon: "target" as const, field: "goalWeight" },
+          { label: "Goals", value: goalsDisplay, icon: "flag" as const, field: null },
+        ].map((item, i) => (
+          <Pressable
+            key={item.label}
+            onPress={item.field ? () => startEdit(item.field, item.field === "weight" ? `${profile.weight}` : `${profile.goalWeight}`) : undefined}
+            style={({ pressed }) => [
+              styles.settingRow,
+              i < 2 && [styles.settingRowBorder, { borderBottomColor: c.background }],
+              { opacity: pressed && item.field ? 0.7 : 1 },
+            ]}
+          >
+            <View style={[styles.settingIcon, { backgroundColor: c.accent + "10" }]}>
+              <Feather name={item.icon} size={16} color={c.accent} />
+            </View>
+            <Text style={[styles.settingLabel, { color: c.foreground }]}>{item.label}</Text>
+            <Text style={[styles.settingValue, { color: c.mutedForeground }]} numberOfLines={1}>
+              {item.value}
+            </Text>
+            {item.field && <Feather name="edit-2" size={13} color={c.mutedForeground + "60"} />}
+          </Pressable>
+        ))}
       </View>
 
       <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>Apple Health</Text>
@@ -104,57 +202,15 @@ export default function SettingsScreen() {
         ))}
       </View>
 
-      <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>Profile</Text>
-      <View style={[styles.section, { backgroundColor: c.card }]}>
-        {[
-          { label: "Weight", value: `${profile.weight} lbs`, icon: "trending-down" as const },
-          { label: "Goal Weight", value: `${profile.goalWeight} lbs`, icon: "target" as const },
-          { label: "Training Days", value: `${profile.daysAvailableToTrain}/week`, icon: "calendar" as const },
-          {
-            label: "Goals",
-            value: profile.goals.map((g) => g.replace("_", " ")).join(", ") || "Not set",
-            icon: "flag" as const,
-          },
-        ].map((item, i) => (
-          <View
-            key={item.label}
-            style={[
-              styles.settingRow,
-              i < 3 && [styles.settingRowBorder, { borderBottomColor: c.background }],
-            ]}
-          >
-            <View style={[styles.settingIcon, { backgroundColor: c.accent + "10" }]}>
-              <Feather name={item.icon} size={16} color={c.accent} />
-            </View>
-            <Text style={[styles.settingLabel, { color: c.foreground }]}>{item.label}</Text>
-            <Text style={[styles.settingValue, { color: c.mutedForeground }]} numberOfLines={1}>
-              {item.value}
-            </Text>
-          </View>
-        ))}
-      </View>
-
       <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>Preferences</Text>
       <View style={[styles.section, { backgroundColor: c.card }]}>
-        {[
-          { label: "Units", value: profile.units === "imperial" ? "Imperial" : "Metric", icon: "sliders" as const },
-          { label: "Coaching Tone", value: profile.coachingTone, icon: "mic" as const },
-          { label: "Fasting", value: profile.fastingEnabled ? "Enabled" : "Disabled", icon: "clock" as const },
-        ].map((item, i) => (
-          <View
-            key={item.label}
-            style={[
-              styles.settingRow,
-              i < 2 && [styles.settingRowBorder, { borderBottomColor: c.background }],
-            ]}
-          >
-            <View style={[styles.settingIcon, { backgroundColor: c.accent + "10" }]}>
-              <Feather name={item.icon} size={16} color={c.accent} />
-            </View>
-            <Text style={[styles.settingLabel, { color: c.foreground }]}>{item.label}</Text>
-            <Text style={[styles.settingValue, { color: c.mutedForeground }]}>{item.value}</Text>
+        <View style={styles.settingRow}>
+          <View style={[styles.settingIcon, { backgroundColor: c.accent + "10" }]}>
+            <Feather name="sliders" size={16} color={c.accent} />
           </View>
-        ))}
+          <Text style={[styles.settingLabel, { color: c.foreground }]}>Units</Text>
+          <Text style={[styles.settingValue, { color: c.mutedForeground }]}>{profile.units === "imperial" ? "Imperial" : "Metric"}</Text>
+        </View>
       </View>
 
       <Pressable onPress={handleUpgrade} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}>
@@ -179,6 +235,33 @@ export default function SettingsScreen() {
       </Text>
 
       <View style={{ height: 100 }} />
+
+      <Modal visible={editingField !== null} transparent animationType="fade" onRequestClose={() => setEditingField(null)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setEditingField(null)}>
+          <Pressable style={[styles.modalContent, { backgroundColor: c.card }]} onPress={(e) => e.stopPropagation()}>
+            <Text style={[styles.modalTitle, { color: c.foreground }]}>
+              {editingField === "weight" ? "Current Weight" : "Goal Weight"}
+            </Text>
+            <TextInput
+              style={[styles.modalInput, { color: c.foreground, borderColor: c.border, backgroundColor: c.background }]}
+              value={editValue}
+              onChangeText={setEditValue}
+              keyboardType="numeric"
+              autoFocus
+              placeholder={`Enter ${weightUnit}`}
+              placeholderTextColor={c.mutedForeground + "60"}
+            />
+            <View style={styles.modalButtons}>
+              <Pressable onPress={() => setEditingField(null)} style={[styles.modalButton, { backgroundColor: c.background }]}>
+                <Text style={[styles.modalButtonText, { color: c.mutedForeground }]}>Cancel</Text>
+              </Pressable>
+              <Pressable onPress={saveEdit} style={[styles.modalButton, { backgroundColor: c.accent }]}>
+                <Text style={[styles.modalButtonText, { color: "#fff" }]}>Save</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ScrollView>
   );
 }
@@ -268,7 +351,7 @@ const styles = StyleSheet.create({
   settingValue: {
     fontSize: 14,
     fontFamily: "Montserrat_400Regular",
-    maxWidth: 140,
+    maxWidth: 160,
   },
   statusDot: {
     width: 8,
@@ -307,5 +390,47 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginTop: 12,
     opacity: 0.6,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  modalContent: {
+    width: "100%",
+    maxWidth: 340,
+    borderRadius: 20,
+    padding: 24,
+    gap: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontFamily: "Montserrat_600SemiBold",
+    textAlign: "center",
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 18,
+    fontFamily: "Montserrat_500Medium",
+    textAlign: "center",
+  },
+  modalButtons: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  modalButtonText: {
+    fontSize: 15,
+    fontFamily: "Montserrat_600SemiBold",
   },
 });

@@ -63,7 +63,7 @@ function buildSparkPoints(data: number[], width: number, height: number): string
 
 export default function TrendsScreen() {
   const c = useColors();
-  const { insights, metrics, completionHistory, weeklyConsistency, streakDays, todayCompletionRate, dailyPlan, profile, medicationLog, inputAnalytics } = useApp();
+  const { insights, metrics, completionHistory, weeklyConsistency, weeklyDaysCompleted, streakDays, todayCompletionRate, dailyPlan, profile, medicationLog, inputAnalytics, hasHealthData } = useApp();
 
   const correlations = useMemo(() => buildCorrelations(metrics), [metrics]);
   const patterns = useMemo(() => detectPatterns(metrics), [metrics]);
@@ -113,8 +113,9 @@ export default function TrendsScreen() {
   const activeCalData = weeklyAverages(last28.map(m => m.activeCalories || 0));
   const habitRateData = computeHabitWeeklyRates(completionHistory);
 
-  const completedCount = dailyPlan ? dailyPlan.actions.filter(a => a.completed).length : 0;
-  const totalActions = dailyPlan ? dailyPlan.actions.length : 5;
+  const planActionsFiltered = dailyPlan ? dailyPlan.actions.filter(a => a.category !== "consistent") : [];
+  const completedCount = planActionsFiltered.filter(a => a.completed).length;
+  const totalActions = planActionsFiltered.length;
 
   const recoveryMetrics: SparkMetric[] = [
     { label: "Sleep", value: `${avgSleep}`, unit: "hrs", data: sleepData, color: "#AF52DE", detailKey: "Sleep" },
@@ -129,7 +130,7 @@ export default function TrendsScreen() {
   ];
 
   const habitsMetrics: SparkMetric[] = [
-    { label: "Weekly", value: `${weeklyConsistency >= 0 ? weeklyConsistency : 0}%`, unit: "completion", data: habitRateData, color: "#142240" },
+    { label: "Weekly", value: `${weeklyDaysCompleted}/7`, unit: "days", data: habitRateData, color: "#142240" },
     { label: "Streak", value: `${streakDays}`, unit: "days", data: [streakDays], color: "#FF9500" },
     { label: "Today", value: `${completedCount}/${totalActions}`, unit: "done", data: [completedCount], color: "#34C759" },
   ];
@@ -285,65 +286,76 @@ export default function TrendsScreen() {
 
       <View style={styles.sectionWrap}>
         <Text style={[styles.sectionTitle, { color: c.foreground }]}>Key Metrics</Text>
-        <Text style={[styles.sectionSub, { color: c.mutedForeground }]}>4-week averages</Text>
+        <Text style={[styles.sectionSub, { color: c.mutedForeground }]}>{hasHealthData ? "4-week averages" : "Connect Apple Health for health metrics"}</Text>
 
-        <Text style={[styles.categoryLabel, { color: c.mutedForeground }]}>Recovery / Body</Text>
-        <View style={styles.metricsRow}>
-          {recoveryMetrics.map((m) => (
-            <Pressable
-              key={m.label}
-              onPress={() => m.detailKey && openDetail(m.detailKey)}
-              style={({ pressed }) => [styles.metricTile, { backgroundColor: c.card, opacity: pressed ? 0.8 : 1 }]}
-            >
-              <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>{m.label}</Text>
-              <View style={styles.metricValueRow}>
-                <Text style={[styles.metricValue, { color: c.foreground }]}>{m.value}</Text>
-                <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>{m.unit}</Text>
-              </View>
-              {m.data.length >= 2 && (
-                <Svg width={60} height={20} style={styles.spark}>
-                  <Polyline
-                    points={buildSparkPoints(m.data, 60, 20)}
-                    fill="none"
-                    stroke={m.color}
-                    strokeWidth={1.5}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </Svg>
-              )}
-            </Pressable>
-          ))}
-        </View>
+        {hasHealthData ? (
+          <>
+            <Text style={[styles.categoryLabel, { color: c.mutedForeground }]}>Recovery / Body</Text>
+            <View style={styles.metricsRow}>
+              {recoveryMetrics.map((m) => (
+                <Pressable
+                  key={m.label}
+                  onPress={() => m.detailKey && openDetail(m.detailKey)}
+                  style={({ pressed }) => [styles.metricTile, { backgroundColor: c.card, opacity: pressed ? 0.8 : 1 }]}
+                >
+                  <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>{m.label}</Text>
+                  <View style={styles.metricValueRow}>
+                    <Text style={[styles.metricValue, { color: c.foreground }]}>{m.value}</Text>
+                    <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>{m.unit}</Text>
+                  </View>
+                  {m.data.length >= 2 && (
+                    <Svg width={60} height={20} style={styles.spark}>
+                      <Polyline
+                        points={buildSparkPoints(m.data, 60, 20)}
+                        fill="none"
+                        stroke={m.color}
+                        strokeWidth={1.5}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </Svg>
+                  )}
+                </Pressable>
+              ))}
+            </View>
 
-        <Text style={[styles.categoryLabel, { color: c.mutedForeground }]}>Movement</Text>
-        <View style={styles.metricsRow}>
-          {activityMetrics.map((m) => (
-            <Pressable
-              key={m.label}
-              onPress={() => m.detailKey && openDetail(m.detailKey)}
-              style={({ pressed }) => [styles.metricTile, { backgroundColor: c.card, opacity: pressed ? 0.8 : 1 }]}
-            >
-              <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>{m.label}</Text>
-              <View style={styles.metricValueRow}>
-                <Text style={[styles.metricValue, { color: c.foreground }]}>{m.value}</Text>
-                <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>{m.unit}</Text>
-              </View>
-              {m.data.length >= 2 && (
-                <Svg width={60} height={20} style={styles.spark}>
-                  <Polyline
-                    points={buildSparkPoints(m.data, 60, 20)}
-                    fill="none"
-                    stroke={m.color}
-                    strokeWidth={1.5}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </Svg>
-              )}
-            </Pressable>
-          ))}
-        </View>
+            <Text style={[styles.categoryLabel, { color: c.mutedForeground }]}>Movement</Text>
+            <View style={styles.metricsRow}>
+              {activityMetrics.map((m) => (
+                <Pressable
+                  key={m.label}
+                  onPress={() => m.detailKey && openDetail(m.detailKey)}
+                  style={({ pressed }) => [styles.metricTile, { backgroundColor: c.card, opacity: pressed ? 0.8 : 1 }]}
+                >
+                  <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>{m.label}</Text>
+                  <View style={styles.metricValueRow}>
+                    <Text style={[styles.metricValue, { color: c.foreground }]}>{m.value}</Text>
+                    <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>{m.unit}</Text>
+                  </View>
+                  {m.data.length >= 2 && (
+                    <Svg width={60} height={20} style={styles.spark}>
+                      <Polyline
+                        points={buildSparkPoints(m.data, 60, 20)}
+                        fill="none"
+                        stroke={m.color}
+                        strokeWidth={1.5}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </Svg>
+                  )}
+                </Pressable>
+              ))}
+            </View>
+          </>
+        ) : (
+          <View style={[styles.emptyMetricsCard, { backgroundColor: c.card }]}>
+            <Feather name="heart" size={18} color={c.mutedForeground} />
+            <Text style={[styles.emptyMetricsText, { color: c.mutedForeground }]}>
+              Using limited phone-based health data. Connect Apple Health in Settings to see recovery, sleep, and movement trends.
+            </Text>
+          </View>
+        )}
 
         <Text style={[styles.categoryLabel, { color: c.mutedForeground }]}>Consistency</Text>
         <View style={styles.metricsRow}>
@@ -392,6 +404,18 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 20,
     gap: 12,
+  },
+  emptyMetricsCard: {
+    borderRadius: 16,
+    padding: 20,
+    alignItems: "center",
+    gap: 8,
+  },
+  emptyMetricsText: {
+    fontSize: 13,
+    fontFamily: "Montserrat_400Regular",
+    textAlign: "center",
+    lineHeight: 18,
   },
   summaryHeader: {
     fontSize: 18,
