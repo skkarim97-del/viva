@@ -2,8 +2,7 @@
   "build": {
     "production": {
       "ios": {
-        "image": "macos-sequoia-15.3-xcode-16.2",
-        "buildType": "app-store"
+        "image": "macos-sequoia-15.3-xcode-16.2"
       }
     }
   },
