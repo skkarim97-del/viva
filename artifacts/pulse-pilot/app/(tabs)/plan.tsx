@@ -308,6 +308,7 @@ const styles = StyleSheet.create({
     fontFamily: "Montserrat_400Regular",
     lineHeight: 22,
     opacity: 0.75,
+    letterSpacing: -0.1,
   },
   dayCard: {
     padding: 16,

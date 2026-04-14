@@ -150,6 +150,9 @@ export default function TrendsScreen() {
           {insights.weekSummary.split("\n\n").map((line, i) => (
             <Text key={i} style={[styles.summaryText, { color: c.foreground }]}>{line}</Text>
           ))}
+          {!hasHealthData && (
+            <Text style={[styles.dataSourceNote, { color: c.mutedForeground }]}>Based on your daily check-ins and plan activity</Text>
+          )}
         </View>
       )}
 
@@ -350,9 +353,12 @@ export default function TrendsScreen() {
           </>
         ) : (
           <View style={[styles.emptyMetricsCard, { backgroundColor: c.card }]}>
-            <Feather name="heart" size={18} color={c.mutedForeground} />
+            <View style={[styles.emptyMetricsIconWrap, { backgroundColor: c.accent + "12" }]}>
+              <Feather name="activity" size={18} color={c.accent} />
+            </View>
+            <Text style={[styles.emptyMetricsTitle, { color: c.foreground }]}>Health metrics unavailable</Text>
             <Text style={[styles.emptyMetricsText, { color: c.mutedForeground }]}>
-              Using limited phone-based health data. Connect Apple Health in Settings to see recovery, sleep, and movement trends.
+              Connect Apple Health in Settings to see recovery, sleep, and movement trends. Your consistency data below is based on daily check-ins.
             </Text>
           </View>
         )}
@@ -406,16 +412,32 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   emptyMetricsCard: {
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 20,
+    padding: 24,
     alignItems: "center",
-    gap: 8,
+    gap: 10,
+  },
+  emptyMetricsIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 2,
+  },
+  emptyMetricsTitle: {
+    fontSize: 15,
+    fontFamily: "Montserrat_600SemiBold",
+    textAlign: "center",
+    letterSpacing: -0.2,
   },
   emptyMetricsText: {
     fontSize: 13,
     fontFamily: "Montserrat_400Regular",
     textAlign: "center",
-    lineHeight: 18,
+    lineHeight: 20,
+    opacity: 0.7,
+    paddingHorizontal: 8,
   },
   summaryHeader: {
     fontSize: 18,
@@ -426,6 +448,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Montserrat_400Regular",
     lineHeight: 22,
+    opacity: 0.75,
+    letterSpacing: -0.1,
+  },
+  dataSourceNote: {
+    fontSize: 11,
+    fontFamily: "Montserrat_400Regular",
+    opacity: 0.5,
+    fontStyle: "italic",
+    marginTop: 2,
   },
   sectionWrap: {
     gap: 10,

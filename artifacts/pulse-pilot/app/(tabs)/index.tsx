@@ -556,7 +556,7 @@ export default function DashboardScreen() {
           <View style={[styles.insightsCard, { backgroundColor: c.card }]}>
             <View style={styles.insightsHeader}>
               <Feather name="trending-up" size={14} color={c.accent} />
-              <Text style={[styles.insightsTitle, { color: c.foreground }]}>Based on Your Data</Text>
+              <Text style={[styles.insightsTitle, { color: c.foreground }]}>{hasHealthData ? "Based on Your Data" : "Based on Your Check-ins"}</Text>
             </View>
             {adaptiveInsights.slice(0, 3).map((insight) => (
               <View key={insight.id} style={styles.insightRow}>
@@ -752,9 +752,15 @@ export default function DashboardScreen() {
 
         <View style={[styles.askCard, { backgroundColor: c.card }]}>
           {coachInsight ? (
-            <Text style={[styles.coachInsightText, { color: c.foreground }]}>
-              {coachInsight}
-            </Text>
+            <View style={{ gap: 6 }}>
+              <View style={styles.insightsHeader}>
+                <Feather name="message-circle" size={14} color={c.accent} />
+                <Text style={[styles.insightsTitle, { color: c.foreground }]}>Your Coach</Text>
+              </View>
+              <Text style={[styles.coachInsightText, { color: c.foreground }]}>
+                {coachInsight}
+              </Text>
+            </View>
           ) : null}
 
           {askMessages.length > 0 && !showChat && (
@@ -871,10 +877,22 @@ export default function DashboardScreen() {
           </View>
         ) : (
           <View style={[styles.emptyHealthCard, { backgroundColor: c.card }]}>
-            <Feather name="heart" size={20} color={c.mutedForeground} />
-            <Text style={[styles.emptyHealthTitle, { color: c.foreground }]}>No health data available yet</Text>
+            <View style={[styles.emptyHealthIconWrap, { backgroundColor: c.accent + "12" }]}>
+              <Feather name="heart" size={20} color={c.accent} />
+            </View>
+            <Text style={[styles.emptyHealthTitle, { color: c.foreground }]}>Connect Apple Health</Text>
             <Text style={[styles.emptyHealthDesc, { color: c.mutedForeground }]}>
-              Connect Apple Health in Settings to unlock passive insights like sleep, steps, and heart rate.
+              Unlock passive insights like sleep, steps, and heart rate. Your recommendations will become more personalized over time.
+            </Text>
+            <Pressable
+              onPress={() => { haptic(); router.push("/(tabs)/settings"); }}
+              style={({ pressed }) => [styles.emptyHealthBtn, { backgroundColor: c.accent, opacity: pressed ? 0.85 : 1 }]}
+            >
+              <Feather name="settings" size={13} color="#FFFFFF" />
+              <Text style={styles.emptyHealthBtnText}>Open Settings</Text>
+            </Pressable>
+            <Text style={[styles.emptyHealthNote, { color: c.mutedForeground }]}>
+              Using daily check-ins for your plan
             </Text>
           </View>
         )}
@@ -1348,11 +1366,13 @@ const styles = StyleSheet.create({
   statusTopRow: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     width: "100%",
   },
   streakRow: {
     flexDirection: "row",
     justifyContent: "flex-end",
+    width: "100%",
     marginBottom: 6,
   },
   streakBadge: {
@@ -1425,9 +1445,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Montserrat_400Regular",
     textAlign: "center",
-    lineHeight: 19,
+    lineHeight: 20,
     marginTop: 4,
-    opacity: 0.7,
+    opacity: 0.65,
+    paddingHorizontal: 8,
   },
 
   inputContainer: {
@@ -1449,8 +1470,9 @@ const styles = StyleSheet.create({
   inputSummaryText: {
     fontSize: 13,
     fontFamily: "Montserrat_400Regular",
-    lineHeight: 19,
+    lineHeight: 20,
     marginTop: -4,
+    opacity: 0.75,
   },
   inputRows: {
     gap: 14,
@@ -1611,22 +1633,52 @@ const styles = StyleSheet.create({
   },
   emptyHealthCard: {
     borderRadius: 20,
-    padding: 24,
+    padding: 28,
     alignItems: "center",
-    gap: 8,
+    gap: 10,
     marginBottom: 8,
   },
+  emptyHealthIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
   emptyHealthTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontFamily: "Montserrat_600SemiBold",
     textAlign: "center",
+    letterSpacing: -0.2,
   },
   emptyHealthDesc: {
     fontSize: 13,
     fontFamily: "Montserrat_400Regular",
     textAlign: "center",
-    lineHeight: 18,
-    paddingHorizontal: 16,
+    lineHeight: 20,
+    paddingHorizontal: 12,
+    opacity: 0.7,
+  },
+  emptyHealthBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginTop: 4,
+  },
+  emptyHealthBtnText: {
+    fontSize: 13,
+    fontFamily: "Montserrat_600SemiBold",
+    color: "#FFFFFF",
+  },
+  emptyHealthNote: {
+    fontSize: 11,
+    fontFamily: "Montserrat_400Regular",
+    opacity: 0.5,
+    marginTop: 2,
   },
   metricTile: {
     flex: 1,

@@ -1,0 +1,280 @@
+Chunk 2: UI, UX, formatting, and polish fixes
+Today tab layout, text wrapping, font consistency, and overall product presentation
+Once the core product loop is fixed, clean up the presentation layer so the app feels polished, intentional, and trustworthy. These changes are important because even if the logic improves, bad formatting and inconsistent UI still make the product feel unfinished.
+1. Fix alignment on the Today screen
+The “Let’s make today a bit easier” section should be center-aligned, not left-aligned. It currently feels visually off relative to the rest of the screen.
+Requirements:
+
+
+Center-align the title/header in that section
+
+
+Make sure the spacing above and below it feels balanced
+
+
+Keep it visually consistent with the rest of the page hierarchy
+
+
+This area should feel like a central summary block, not like a stray left-aligned text element.
+2. Fix text wrapping so phrases do not break awkwardly
+There are phrases under the daily summary that are breaking across lines in a way that looks sloppy. For example, something like “Movement is on track” should not break so that “track” gets pushed onto its own second line.
+Fix the layout so:
+
+
+Each phrase stays intact where possible
+
+
+Do not allow single orphan words to wrap awkwardly
+
+
+Adjust the width, font size, spacing, or container logic so these short summary phrases render cleanly
+
+
+Possible approaches:
+
+
+Increase card/container width
+
+
+Reduce font size slightly
+
+
+Tighten padding
+
+
+Set better line break behavior
+
+
+Use responsive logic so phrases collapse more gracefully on smaller screens
+
+
+The goal is for these health summaries to look intentional and readable, not fragmented.
+3. Standardize summary font styling across tabs
+The text styling in the “This Week” summary looks different from the summary text in the Trends tab. That inconsistency makes the product feel less premium.
+Audit and standardize:
+
+
+Font family
+
+
+Font size
+
+
+Font weight
+
+
+Font color
+
+
+Line height
+
+
+Opacity and contrast
+
+
+Spacing between title and body copy
+
+
+Any summary-style text block across the app should feel part of the same design system.
+4. Clean up visual hierarchy in summary cards
+As you refine the layout, make sure the summary cards and section headers follow a clean hierarchy.
+Recommendations:
+
+
+Primary headers should be visually distinct and consistent
+
+
+Supporting copy should be slightly muted but still readable
+
+
+Data labels should be smaller than key values
+
+
+Summary cards should not compete with each other visually
+
+
+Make sure padding and margin values are consistent between cards and sections
+
+
+The product should feel calm, premium, and health-oriented, not cluttered.
+5. Improve empty-state design so the app never feels broken
+Since some users will not have Apple Watch data, and some users may not have connected Apple Health yet, the app needs much better empty states.
+Wherever data is missing, do not leave awkward blank spots or fake metrics. Instead:
+
+
+Show clean placeholder states
+
+
+Explain what data is missing
+
+
+Tell the user what they can do next
+
+
+Examples:
+
+
+“Connect Apple Health to unlock passive insights”
+
+
+“Using phone-based health data only”
+
+
+“No sleep data available yet”
+
+
+“Complete a few daily check-ins to generate better trends”
+
+
+This makes missing data feel like a product state, not a bug.
+6. Make the app feel dynamically honest
+A big goal for this iteration is trust. The app should never imply precision it doesn’t have.
+Apply this principle across the UI:
+
+
+If a metric is real, present it confidently
+
+
+If a metric is estimated, say so
+
+
+If a metric is unavailable, say that clearly
+
+
+If advice is based only on check-ins and not passive data, the recommendation engine should reflect that
+
+
+For example:
+
+
+If Apple Health is disconnected, avoid language that sounds like the app has continuous physiological visibility
+
+
+If the app is only using daily check-ins, tailor copy accordingly
+
+
+This will make the product feel much smarter and more credible.
+7. Tighten the product language so it reflects the real app state
+As you update the screens, review copy for places where the UI might overstate what the product is doing.
+Make sure the app language reflects:
+
+
+Whether health data is connected
+
+
+Whether the user completed onboarding
+
+
+Whether recommendations are based on profile inputs, daily inputs, or passive data
+
+
+Whether a trend is real or not yet available
+
+
+The app should feel like it knows exactly what it knows and what it doesn’t.
+8. QA checklist for this next iteration
+Before shipping the next beta build, test the following flows end-to-end:
+Onboarding
+
+
+Fresh install triggers onboarding
+
+
+Onboarding completion persists
+
+
+User cannot skip into main app without completing required fields
+
+
+Onboarding data appears correctly in Settings
+
+
+Settings
+
+
+Settings reflect onboarding data
+
+
+User can edit profile values
+
+
+Updates persist after app restart
+
+
+No old irrelevant preference fields remain
+
+
+Apple Health
+
+
+Permission flow works on real iPhone
+
+
+iPhone-only users still get available health data
+
+
+App handles no-watch users gracefully
+
+
+No fake metrics appear if data is missing
+
+
+Metrics / Trends
+
+
+All displayed data is live, derived, or clearly unavailable
+
+
+Weekly completion is calculated correctly
+
+
+No 4/5 bug if only 4 tasks exist
+
+
+Trends tab does not show static placeholder values as real insights
+
+
+UI / UX
+
+
+Today section headline is centered
+
+
+Summary phrases do not wrap awkwardly
+
+
+Fonts are consistent across summary sections
+
+
+Empty states look intentional and informative
+
+
+9. Final product direction for this iteration
+The goal of this next Replit iteration is simple:
+Make the app feel like a real working pilot, not a polished prototype.
+That means:
+
+
+onboarding works
+
+
+settings make sense
+
+
+Apple Health actually connects
+
+
+iPhone-only users are supported
+
+
+fake metrics are removed
+
+
+progress logic is accurate
+
+
+the UI looks clean and consistent
+
+
+If you want, I can next turn this into an even more tactical format with:
+“exact tasks by file/component/state logic” so you can drop it straight into Replit as a step-by-step engineering prompt.
