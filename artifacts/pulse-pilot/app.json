@@ -18,12 +18,13 @@
       "icon": "./assets/icon.png",
       "supportsTablet": false,
       "bundleIdentifier": "com.sullyk97.vivaai",
-      "buildNumber": "2",
+      "buildNumber": "3",
       "config": {
         "usesNonExemptEncryption": false
       },
       "infoPlist": {
         "NSHealthShareUsageDescription": "VIVA reads your health data including sleep, steps, heart rate, and HRV to provide personalized wellness coaching and daily plans.",
+        "NSHealthUpdateUsageDescription": "VIVA may write health-related data only when explicitly triggered by the user to support personalized wellness insights.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "entitlements": {
