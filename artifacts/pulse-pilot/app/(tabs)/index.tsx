@@ -1371,7 +1371,7 @@ const styles = StyleSheet.create({
   },
   streakRow: {
     flexDirection: "row",
-    justifyContent: "flex-end",
+    justifyContent: "center",
     width: "100%",
     marginBottom: 6,
   },
