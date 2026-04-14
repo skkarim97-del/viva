@@ -52,8 +52,7 @@
         {
           "requestPermissionsBackCompat": true
         }
-      ],
-      "./plugins/withHealthKit"
+      ]
     ],
     "extra": {
     "eas": {
