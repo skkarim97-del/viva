@@ -16,7 +16,7 @@ The user prefers an understated, confident, premium, and modern feel for the app
 - Forbidden patient-facing words: dropout risk, churn, adherence risk, compliance risk, failing treatment.
 - Risk engine scoring: Recovery Breakdown (+25), Activity Decline (+20), Fueling Breakdown (+25), Symptom Load (+20), Consistency Breakdown (+10). Scores: 0-20=low, 21-40=mild, 41-70=elevated, 71+=high.
 - Coach responses: 1 framing sentence + 2-3 practical actions + optional reason. 3-5 sentences max. No lists, no bullets. Decisive and direct.
-- Bundle ID: com.sullyk97.vivahealth.app, owner: sullyk97.
+- Bundle ID: com.sullyk97.vivaai, owner: sullyk97.
 - pnpm-workspace.yaml overrides REMOVED (do not re-add).
 
 ## System Architecture

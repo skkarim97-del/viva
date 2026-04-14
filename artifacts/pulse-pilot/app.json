@@ -33,7 +33,7 @@
       }
     },
     "android": {
-      "package": "com.sullyk97.vivahealth.app",
+      "package": "com.sullyk97.vivaai",
       "versionCode": 1
     },
     "web": {
