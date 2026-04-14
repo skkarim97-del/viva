@@ -187,6 +187,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       medicationProfile: medProfile,
       medicationLog: medLog,
       completionHistory: [],
+      hasHealthData,
+    });
+    const adapted = applyAdaptiveOverrides(basePlan, severityResult);
+    setWeeklyPlan(adapted);
+  }, [hasHealthData]);
+
+  const setBaselineAndAdaptWithFlag = useCallback((
+    basePlan: WeeklyPlan,
+    inputHistory: GLP1DailyInputs[],
+    checkIns: DailyCheckIn[],
+    allMetrics: HealthMetrics[],
+    medProfile?: MedicationProfile,
+    medLog?: MedicationLogEntry[],
+    healthFlag?: boolean,
+  ) => {
+    baselineWeeklyPlanRef.current = basePlan;
+    const severityResult = computeInternalSeverity({
+      recentInputs: inputHistory.slice(-7),
+      recentCheckIns: checkIns.slice(-7),
+      recentMetrics: allMetrics.slice(-7),
+      medicationProfile: medProfile,
+      medicationLog: medLog,
+      completionHistory: [],
+      hasHealthData: healthFlag,
     });
     const adapted = applyAdaptiveOverrides(basePlan, severityResult);
     setWeeklyPlan(adapted);
@@ -208,10 +232,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       medicationProfile: medProfile,
       medicationLog: medLog,
       completionHistory: [],
+      hasHealthData,
     });
     const adapted = applyAdaptiveOverrides(baseline, severityResult);
     setWeeklyPlan(adapted);
-  }, []);
+  }, [hasHealthData]);
 
   useEffect(() => {
     loadData();
@@ -297,6 +322,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         recentCheckIns: [],
         recentMetrics: allMetrics.slice(-7),
         completionHistory: [],
+        hasHealthData: true,
       });
       setWeeklyPlan(applyAdaptiveOverrides(newBaseline, severityResult));
     } catch {}
@@ -501,7 +527,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         savedProfileData.medicationProfile,
         loadedMedLog,
         loadedPatterns,
-        initCheckIn?.mentalState ?? undefined
+        initCheckIn?.mentalState ?? undefined,
+        healthDataFound
       );
       const todayCompletion = loadedHistory.find(r => r.date === todayDate);
       if (todayCompletion) {
@@ -523,7 +550,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       } else {
         baseWeekly = generatedWeekly;
       }
-      setBaselineAndAdapt(baseWeekly, loadedGlp1History, loadedCheckIns, metricsForPlan, savedProfileData.medicationProfile, loadedMedLog);
+      setBaselineAndAdaptWithFlag(baseWeekly, loadedGlp1History, loadedCheckIns, metricsForPlan, savedProfileData.medicationProfile, loadedMedLog, healthDataFound);
 
       if (healthDataFound) {
         fetchAIWeeklyPlan(allMetrics, savedProfileData, loadedHistory);
@@ -579,7 +606,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const freshPatterns = recomputeAnalytics(glp1InputHistory, profile.medicationProfile, medicationLog, completionHistory);
 
       const currentMental = checkInHistory.find(c => c.date === todayDate)?.mentalState ?? undefined;
-      const newPlan = generateDailyPlan(metricsRef, { feeling: f, energy: e, stress: s, hydration: h, trainingIntent: ti }, completionHistory, metrics, currentGlp1, profile.medicationProfile, medicationLog, freshPatterns ?? undefined, currentMental);
+      const newPlan = generateDailyPlan(metricsRef, { feeling: f, energy: e, stress: s, hydration: h, trainingIntent: ti }, completionHistory, metrics, currentGlp1, profile.medicationProfile, medicationLog, freshPatterns ?? undefined, currentMental, hasHealthData);
       const todayCompletion = completionHistory.find(r => r.date === todayDate);
       if (todayCompletion) {
         for (const a of newPlan.actions) {
@@ -608,7 +635,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const freshPatterns = recomputeAnalytics(glp1InputHistory, profile.medicationProfile, medicationLog, completionHistory);
 
       const currentMental2 = checkInHistory.find(c => c.date === todayDate)?.mentalState ?? undefined;
-      const newPlan = generateDailyPlan(metricsRef, { feeling, energy, stress, hydration, trainingIntent }, completionHistory, metrics, currentGlp1, profile.medicationProfile, medicationLog, freshPatterns ?? undefined, currentMental2);
+      const newPlan = generateDailyPlan(metricsRef, { feeling, energy, stress, hydration, trainingIntent }, completionHistory, metrics, currentGlp1, profile.medicationProfile, medicationLog, freshPatterns ?? undefined, currentMental2, hasHealthData);
       const todayCompletion = completionHistory.find(r => r.date === todayDate);
       if (todayCompletion) {
         for (const a of newPlan.actions) {
@@ -1089,7 +1116,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         date: todayDate, energy: glp1Energy, appetite, nausea, digestion,
       };
       const freshPatterns = recomputeAnalytics(glp1InputHistory, profile.medicationProfile, medicationLog, completionHistory);
-      const newPlan = generateDailyPlan(metricsRef, { feeling, energy, stress, hydration, trainingIntent }, completionHistory, metrics, currentGlp1, profile.medicationProfile, medicationLog, freshPatterns ?? undefined, checkIn.mentalState ?? undefined);
+      const newPlan = generateDailyPlan(metricsRef, { feeling, energy, stress, hydration, trainingIntent }, completionHistory, metrics, currentGlp1, profile.medicationProfile, medicationLog, freshPatterns ?? undefined, checkIn.mentalState ?? undefined, hasHealthData);
       const todayCompletion = completionHistory.find(r => r.date === todayDate);
       if (todayCompletion) {
         for (const a of newPlan.actions) {

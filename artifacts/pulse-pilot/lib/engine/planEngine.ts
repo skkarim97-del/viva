@@ -41,10 +41,12 @@ interface WhyPlanContext {
   metrics: HealthMetrics;
   readinessScore: number;
   trigger: string;
+  wearableAvailable?: boolean;
 }
 
 function buildWhyThisPlan(ctx: WhyPlanContext): string[] {
-  const { dailyState, medicationProfile, medCtx, glp1Inputs, metrics, trigger } = ctx;
+  const { dailyState, medicationProfile, medCtx, glp1Inputs, metrics, trigger, wearableAvailable: wa } = ctx;
+  const hasWearable = wa !== false;
 
   const brandName = medicationProfile?.medicationBrand || "your medication";
   const doseStr = medicationProfile ? `${medicationProfile.doseValue} ${medicationProfile.doseUnit}` : "";
@@ -74,7 +76,9 @@ function buildWhyThisPlan(ctx: WhyPlanContext): string[] {
   let p3 = "";
 
   if (trigger === "sleep_critical") {
-    p1 = `Sleep was ${metrics.sleepDuration.toFixed(1)} hours, which affects how your body processes ${fullMedStr}.`;
+    p1 = hasWearable
+      ? `Sleep was ${metrics.sleepDuration.toFixed(1)} hours, which affects how your body processes ${fullMedStr}.`
+      : `Your inputs suggest rest is the priority to support how your body processes ${fullMedStr}.`;
     if (isTitrated) p1 += " Dose adjustments can also disrupt sleep temporarily.";
     if (inputClause) p1 += " " + inputClause;
   } else if (trigger === "symptoms_severe") {
@@ -99,16 +103,22 @@ function buildWhyThisPlan(ctx: WhyPlanContext): string[] {
       ? `Recovery signals have been lower since the ${brandName} dose change. This is expected and usually resolves within 1-2 weeks. ${inputClause}`
       : `Recovery has been strained for several days. On ${brandName}, this can correlate with disrupted sleep or under-fueling. ${inputClause}`;
   } else if (trigger === "push_day") {
-    p1 = `Sleep was ${metrics.sleepDuration.toFixed(1)} hours, recovery is ${metrics.recoveryScore}%, and your body is responding well to ${fullMedStr}. ${inputClause || "Your inputs look solid today."}`;
+    p1 = hasWearable
+      ? `Sleep was ${metrics.sleepDuration.toFixed(1)} hours, recovery is ${metrics.recoveryScore}%, and your body is responding well to ${fullMedStr}. ${inputClause || "Your inputs look solid today."}`
+      : `Your check-ins suggest your body is responding well to ${fullMedStr}. ${inputClause || "Your inputs look solid today."}`;
   } else if (trigger === "build_day") {
-    p1 = `Recovery is ${metrics.recoveryScore}% and supports steady effort today on ${fullMedStr}. ${inputClause || "No major flags in your inputs."}`;
+    p1 = hasWearable
+      ? `Recovery is ${metrics.recoveryScore}% and supports steady effort today on ${fullMedStr}. ${inputClause || "No major flags in your inputs."}`
+      : `Your inputs support steady effort today on ${fullMedStr}. ${inputClause || "No major flags in your check-ins."}`;
   } else if (trigger === "maintain_day") {
-    const sleepNote = metrics.sleepDuration < 7 ? `Sleep was ${metrics.sleepDuration.toFixed(1)} hours. ` : "";
+    const sleepNote = hasWearable && metrics.sleepDuration > 0 && metrics.sleepDuration < 7 ? `Sleep was ${metrics.sleepDuration.toFixed(1)} hours. ` : "";
     p1 = `${sleepNote}Your body can handle the basics today but is not fully charged. On ${brandName}${isHigh ? ` at ${doseStr}` : ""}, days like this are normal. ${inputClause}`;
   } else if (trigger === "rest_day") {
     p1 = isTitrated
       ? `Your body is working hard to adjust after the ${brandName} dose change. ${inputClause}`
-      : `Recovery is at ${metrics.recoveryScore}% and your body is signaling for rest. On ${fullMedStr}, rest days help your body recalibrate. ${inputClause}`;
+      : hasWearable
+        ? `Recovery is at ${metrics.recoveryScore}% and your body is signaling for rest. On ${fullMedStr}, rest days help your body recalibrate. ${inputClause}`
+        : `Your body is signaling for rest. On ${fullMedStr}, rest days help your body recalibrate. ${inputClause}`;
   } else {
     p1 = `Your body could use some extra support today. On ${fullMedStr}, listening to these signals is part of the process. ${inputClause}`;
   }
@@ -329,6 +339,7 @@ function generateFocusItems(
   metrics: HealthMetrics,
   inputs?: WellnessInputs,
   glp1Inputs?: GLP1DailyInputs,
+  wearableAvailable?: boolean,
 ): FocusItem[] {
   const items: FocusItem[] = [];
 
@@ -349,7 +360,7 @@ function generateFocusItems(
     items.push({ text: "Smaller meals spaced out may help. Avoid carbonated drinks and high-fat foods.", category: "fuel" });
   }
 
-  if (metrics.sleepDuration < 7) {
+  if (wearableAvailable && metrics.sleepDuration > 0 && metrics.sleepDuration < 7) {
     items.push({ text: `You got ${metrics.sleepDuration.toFixed(1)} hrs last night. Start winding down 30 min earlier tonight.`, category: "recover" });
   }
 
@@ -376,6 +387,7 @@ export function generateDailyPlan(
   medicationLog?: MedicationLogEntry[],
   patterns?: UserPatterns,
   mentalState?: import("@/types").MentalState,
+  hasHealthData?: boolean,
 ): DailyPlan {
   const feeling = inputs?.feeling ?? null;
   const energy = inputs?.energy ?? null;
@@ -383,30 +395,37 @@ export function generateDailyPlan(
   const hydration = inputs?.hydration ?? null;
   const trainingIntent = inputs?.trainingIntent ?? null;
 
+  const wearableAvailable = hasHealthData !== false;
+
   const last7 = recentMetrics?.slice(-7) ?? [];
   const last3 = last7.slice(-3);
   const last5 = recentMetrics?.slice(-5) ?? [];
 
-  const avg7Hrv = last7.length >= 7 ? last7.reduce((s, m) => s + m.hrv, 0) / last7.length : 0;
-  const avg7Sleep = last7.length >= 3 ? last7.reduce((s, m) => s + m.sleepDuration, 0) / last7.length : 0;
-  const avg7Rhr = last7.length >= 3 ? last7.reduce((s, m) => s + m.restingHeartRate, 0) / last7.length : 0;
+  const avg7Hrv = wearableAvailable && last7.length >= 7 ? last7.reduce((s, m) => s + m.hrv, 0) / last7.length : 0;
+  const avg7Sleep = wearableAvailable && last7.length >= 3 ? last7.reduce((s, m) => s + m.sleepDuration, 0) / last7.length : 0;
+  const avg7Rhr = wearableAvailable && last7.length >= 3 ? last7.reduce((s, m) => s + m.restingHeartRate, 0) / last7.length : 0;
 
-  const hrvDeviation = avg7Hrv > 0 ? ((metrics.hrv - avg7Hrv) / avg7Hrv) * 100 : 0;
-  const rhrElevated = avg7Rhr > 0 && metrics.restingHeartRate > avg7Rhr + 5;
+  const hrvDeviation = wearableAvailable && avg7Hrv > 0 ? ((metrics.hrv - avg7Hrv) / avg7Hrv) * 100 : 0;
+  const rhrElevated = wearableAvailable && avg7Rhr > 0 && metrics.restingHeartRate > avg7Rhr + 5;
 
-  const sleepDeclining3 = last3.length >= 3 && last3.every((m, i) => i === 0 || m.sleepDuration < last3[i - 1].sleepDuration);
-  const hrvDeclining5 = last5.length >= 5 && last5[last5.length - 1].hrv < last5[0].hrv - 5 && last5.every((m, i) => i === 0 || m.hrv <= last5[i - 1].hrv + 2);
+  const sleepDeclining3 = wearableAvailable && last3.length >= 3 && last3.every((m, i) => i === 0 || m.sleepDuration < last3[i - 1].sleepDuration);
+  const hrvDeclining5 = wearableAvailable && last5.length >= 5 && last5[last5.length - 1].hrv < last5[0].hrv - 5 && last5.every((m, i) => i === 0 || m.hrv <= last5[i - 1].hrv + 2);
 
-  const yesterdayStrain = last7.length >= 2 ? last7[last7.length - 2]?.strain ?? 0 : 0;
-  const avgStrain = last7.length >= 3 ? last7.reduce((s, m) => s + m.strain, 0) / last7.length : 5;
-  const consecutivePoorRecovery = last3.length >= 3 && last3.every(m => m.recoveryScore < 50);
+  const yesterdayStrain = wearableAvailable && last7.length >= 2 ? last7[last7.length - 2]?.strain ?? 0 : 0;
+  const avgStrain = wearableAvailable && last7.length >= 3 ? last7.reduce((s, m) => s + m.strain, 0) / last7.length : 5;
+  const consecutivePoorRecovery = wearableAvailable && last3.length >= 3 && last3.every(m => m.recoveryScore < 50);
 
-  let readinessScore = Math.round(
-    metrics.recoveryScore * 0.3 +
-    metrics.sleepQuality * 0.3 +
-    (metrics.hrv / 60) * 100 * 0.2 +
-    (1 - Math.min(metrics.restingHeartRate, 80) / 80) * 100 * 0.2
-  );
+  let readinessScore: number;
+  if (wearableAvailable) {
+    readinessScore = Math.round(
+      metrics.recoveryScore * 0.3 +
+      metrics.sleepQuality * 0.3 +
+      (metrics.hrv / 60) * 100 * 0.2 +
+      (1 - Math.min(metrics.restingHeartRate, 80) / 80) * 100 * 0.2
+    );
+  } else {
+    readinessScore = 60;
+  }
 
   if (feeling === "tired") readinessScore = Math.min(readinessScore, 55);
   else if (feeling === "stressed") readinessScore = Math.min(readinessScore, 50);
@@ -491,9 +510,9 @@ export function generateDailyPlan(
   const stressOverride = stress === "high" || stress === "very_high";
   const lowEnergy = energy === "low";
   const isDehydrated = hydration === "dehydrated" || hydration === "low";
-  const sleepLow = metrics.sleepDuration < 6.5;
-  const sleepCritical = metrics.sleepDuration < 6 && hrvDeviation < -10;
-  const sleepGoodHrvGood = metrics.sleepDuration > 7.5 && hrvDeviation >= 0;
+  const sleepLow = wearableAvailable && metrics.sleepDuration > 0 && metrics.sleepDuration < 6.5;
+  const sleepCritical = wearableAvailable && metrics.sleepDuration > 0 && metrics.sleepDuration < 6 && hrvDeviation < -10;
+  const sleepGoodHrvGood = wearableAvailable && metrics.sleepDuration > 7.5 && hrvDeviation >= 0;
   const symptomsHeavy = glp1Inputs?.nausea === "severe" || glp1Inputs?.nausea === "moderate";
   const digestiveDistress = glp1Inputs?.digestion === "diarrhea" || glp1Inputs?.digestion === "constipated";
   const appetiteLow = glp1Inputs?.appetite === "very_low" || glp1Inputs?.appetite === "low";
@@ -520,9 +539,11 @@ export function generateDailyPlan(
       : "Recovery is the priority today.";
     summary = symptomsHeavy
       ? "Nausea is heavy and energy is very low. Rest, hydration, and small meals are enough for today."
-      : `Sleep was ${metrics.sleepDuration.toFixed(1)} hrs and your body is showing it. Rest and hydration come first.`;
+      : wearableAvailable && metrics.sleepDuration > 0
+        ? `Sleep was ${metrics.sleepDuration.toFixed(1)} hrs and your body is showing it. Rest and hydration come first.`
+        : "Your inputs suggest your body needs rest today. Hydration and small meals come first.";
     dailyFocus = "Rest and recover";
-    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, trigger: sleepCritical ? "sleep_critical" : "symptoms_severe" });
+    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, wearableAvailable, trigger: sleepCritical ? "sleep_critical" : "symptoms_severe" });
     workoutType = "Rest";
     workoutIntensity = "low";
     workoutDuration = 0;
@@ -537,7 +558,7 @@ export function generateDailyPlan(
       ? "Higher doses can bring stronger nausea. Hydration, small meals, and rest are enough today."
       : "Nausea is making things harder. Hydration and small protein-rich meals will help most.";
     dailyFocus = "Manage symptoms";
-    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, trigger: "symptoms_moderate" });
+    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, wearableAvailable, trigger: "symptoms_moderate" });
     workoutType = "Gentle Walk";
     workoutIntensity = "low";
     workoutDuration = 15;
@@ -550,7 +571,7 @@ export function generateDailyPlan(
       ? "At higher doses, appetite suppression is stronger. Protein-first small meals prevent muscle loss and keep energy steadier."
       : "Appetite is low and digestion is unsettled. Nutrient-dense small meals make the biggest difference today.";
     dailyFocus = "Focus on fueling";
-    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, trigger: "appetite_digestion" });
+    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, wearableAvailable, trigger: "appetite_digestion" });
     workoutType = "Light Movement";
     workoutIntensity = "low";
     workoutDuration = 20;
@@ -561,7 +582,7 @@ export function generateDailyPlan(
     headline = "Stress is elevated. A simpler day will help.";
     summary = "High stress raises cortisol, which can blunt treatment benefits and disrupt sleep and appetite. Keep today low-pressure.";
     dailyFocus = "Simplify and recover";
-    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, trigger: "stress" });
+    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, wearableAvailable, trigger: "stress" });
     workoutType = "Rest or Gentle Walk";
     workoutIntensity = "low";
     workoutDuration = 15;
@@ -574,7 +595,7 @@ export function generateDailyPlan(
       : "Recovery has been strained. A lighter day will help reset.";
     summary = `Recovery signals have been below your baseline for ${consecutivePoorRecovery ? "3+ days" : "the past week"}. A lighter day and solid sleep tonight will help you reset.`;
     dailyFocus = "Recovery protocol";
-    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, trigger: "recovery_declining" });
+    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, wearableAvailable, trigger: "recovery_declining" });
     workoutType = "Light Walk";
     workoutIntensity = "low";
     workoutDuration = 20;
@@ -585,9 +606,11 @@ export function generateDailyPlan(
     headline = isNewToMed
       ? "Your body is responding well to treatment. A good day to build."
       : "Recovery is strong. Make the most of today.";
-    summary = `Sleep was ${metrics.sleepDuration.toFixed(1)} hrs, HRV is above your baseline, and recovery is ${metrics.recoveryScore}%. A strong day for a strength session or longer walk.`;
+    summary = wearableAvailable
+      ? `Sleep was ${metrics.sleepDuration.toFixed(1)} hrs, HRV is above your baseline, and recovery is ${metrics.recoveryScore}%. A strong day for a strength session or longer walk.`
+      : "Your check-ins suggest a strong day. A good time for a strength session or longer walk.";
     dailyFocus = "Make the most of today";
-    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, trigger: "push_day" });
+    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, wearableAvailable, trigger: "push_day" });
     workoutType = "Strength Session";
     workoutIntensity = "moderate";
     workoutDuration = 30;
@@ -596,9 +619,11 @@ export function generateDailyPlan(
   } else if (readinessScore >= 65) {
     dailyState = "build";
     headline = "A good day for steady progress.";
-    summary = `Recovery is ${metrics.recoveryScore}% and supports activity today. Stay consistent with movement, protein, and hydration.`;
+    summary = wearableAvailable
+      ? `Recovery is ${metrics.recoveryScore}% and supports activity today. Stay consistent with movement, protein, and hydration.`
+      : "Today looks good for steady progress. Stay consistent with movement, protein, and hydration.";
     dailyFocus = "Steady progress";
-    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, trigger: "build_day" });
+    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, wearableAvailable, trigger: "build_day" });
     workoutType = "Walk or Light Activity";
     workoutIntensity = "moderate";
     workoutDuration = 30;
@@ -611,9 +636,11 @@ export function generateDailyPlan(
       : "Your body could use a lighter day.";
     summary = sleepLow
       ? `Sleep was ${metrics.sleepDuration.toFixed(1)} hrs. A lighter day with protein-rich meals and extra water will help you recover.`
-      : `Recovery is at ${metrics.recoveryScore}%. Stay consistent with the basics and keep movement gentle.`;
+      : wearableAvailable
+        ? `Recovery is at ${metrics.recoveryScore}%. Stay consistent with the basics and keep movement gentle.`
+        : "Based on your check-ins, a lighter day is best. Stay consistent with the basics and keep movement gentle.";
     dailyFocus = "Basics first";
-    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, trigger: "maintain_day" });
+    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, wearableAvailable, trigger: "maintain_day" });
     workoutType = "Gentle Walk";
     workoutIntensity = "low";
     workoutDuration = 20;
@@ -624,9 +651,11 @@ export function generateDailyPlan(
     headline = isTitrated
       ? "Your body is working hard to adjust. Rest is the right call today."
       : "Your body needs a break today.";
-    summary = `Recovery is at ${metrics.recoveryScore}%. Focus on rest, hydration, and nourishing food. Movement can wait.`;
+    summary = wearableAvailable
+      ? `Recovery is at ${metrics.recoveryScore}%. Focus on rest, hydration, and nourishing food. Movement can wait.`
+      : "Your body needs a break. Focus on rest, hydration, and nourishing food. Movement can wait.";
     dailyFocus = "Rest and restore";
-    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, trigger: "rest_day" });
+    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, wearableAvailable, trigger: "rest_day" });
     optional = "A 10-minute easy walk is the most you should do today.";
     workoutType = "Rest";
     workoutIntensity = "low";
@@ -644,7 +673,7 @@ export function generateDailyPlan(
     workoutDuration = 10;
     workoutDesc = "A short walk if you feel like it. Nothing more.";
     optional = "Pick one small thing to complete. That is enough for today.";
-    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, trigger: "rest_day" });
+    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, wearableAvailable, trigger: "rest_day" });
   } else if (mentalState === "low" && (dailyState === "push" || dailyState === "build")) {
     dailyState = "maintain";
     headline = "Energy is there but your mind needs a lighter day.";
@@ -653,7 +682,7 @@ export function generateDailyPlan(
     workoutIntensity = "low";
     workoutDuration = Math.min(workoutDuration, 20);
     workoutDesc = "Gentle movement. Keep the bar low.";
-    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, trigger: "maintain_day" });
+    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, wearableAvailable, trigger: "maintain_day" });
   }
 
   let recommendedTag = stateTagFromReadiness(readinessScore, feeling, stress, energy);
@@ -689,6 +718,7 @@ export function generateDailyPlan(
     : dailyState === "push" ? "Your body is ready. Strength training is the best way to preserve muscle while losing weight on GLP-1."
     : symptomsHeavy ? "Side effects are heavier today. A short walk after meals can help with nausea without adding strain." + doseWindowNote
     : sleepLow ? `Sleep was ${metrics.sleepDuration.toFixed(1)} hrs. Lower intensity protects your energy for recovery.`
+    : !wearableAvailable ? "Daily movement supports digestion, energy, and muscle preservation on treatment."
     : medCtx?.doseTier === "high" ? "At a higher dose, moderate movement paired with good recovery is the sweet spot."
     : "Daily movement supports digestion, energy, and muscle preservation on treatment." + doseWindowNote;
 
@@ -709,6 +739,7 @@ export function generateDailyPlan(
   const recoverReason =
     sleepDeclining3 ? "Sleep has been declining for 3 nights. An earlier bedtime tonight is the highest-impact change you can make."
     : sleepCritical ? `Sleep was ${metrics.sleepDuration.toFixed(1)} hrs. Maximum rest priority tonight.`
+    : !wearableAvailable ? "Consistent sleep is your most powerful recovery tool on treatment. Aim for 7-8 hours tonight."
     : dailyState === "recover" ? "Your body needs extra rest to bounce back. Aim for 8+ hours tonight." + titrationNote
     : medCtx?.recentTitration ? "Sleep matters more during a dose adjustment. Aim for the higher end of the range (8+ hrs)."
     : "Consistent sleep is your most powerful recovery tool on treatment. It affects energy, appetite, and side effects.";
@@ -737,7 +768,9 @@ export function generateDailyPlan(
 
   const sleepHours = metrics.sleepDuration;
   let sleepSummary = "";
-  if (sleepHours < 7) {
+  if (!wearableAvailable) {
+    sleepSummary = "";
+  } else if (sleepHours < 7) {
     sleepSummary = `${sleepHours.toFixed(1)} hours. Below the 7-8 hr range that best supports treatment.`;
   } else if (sleepHours >= 8) {
     sleepSummary = `${sleepHours.toFixed(1)} hours. Strong foundation for recovery and energy.`;
@@ -746,7 +779,9 @@ export function generateDailyPlan(
   }
 
   let recoverySummary = "";
-  if (metrics.recoveryScore >= 75) {
+  if (!wearableAvailable) {
+    recoverySummary = "";
+  } else if (metrics.recoveryScore >= 75) {
     recoverySummary = `Recovery is strong at ${metrics.recoveryScore}%.`;
   } else if (metrics.recoveryScore >= 50) {
     recoverySummary = `Recovery is moderate at ${metrics.recoveryScore}%.`;
@@ -762,11 +797,13 @@ export function generateDailyPlan(
 
   const statusDrivers: string[] = [];
 
-  if (metrics.recoveryScore >= 70) statusDrivers.push("Recovery is solid");
+  if (!wearableAvailable) {
+  } else if (metrics.recoveryScore >= 70) statusDrivers.push("Recovery is solid");
   else if (metrics.recoveryScore >= 50) statusDrivers.push("Recovery is moderate");
   else statusDrivers.push("Recovery needs attention");
 
-  if (sleepHours >= 7.5) statusDrivers.push("Slept well");
+  if (!wearableAvailable) {
+  } else if (sleepHours >= 7.5) statusDrivers.push("Slept well");
   else if (sleepHours >= 6.5) statusDrivers.push("Sleep was adequate");
   else statusDrivers.push("Sleep was short");
 
@@ -778,6 +815,7 @@ export function generateDailyPlan(
   else if (feeling === "tired") statusDrivers.push("Feeling tired");
   else if (energy === "low") statusDrivers.push("Energy is low");
   else if (isDehydrated) statusDrivers.push("Hydration is low");
+  else if (!wearableAvailable) {}
   else if (metrics.steps >= 6000) statusDrivers.push("Movement is on track");
   else statusDrivers.push("Movement has been light");
 
@@ -787,7 +825,7 @@ export function generateDailyPlan(
     : dailyState === "maintain" ? "Focus on the basics today"
     : "Rest and support your body today";
 
-  const focusItems = generateFocusItems(dailyState, metrics, inputs, glp1Inputs);
+  const focusItems = generateFocusItems(dailyState, metrics, inputs, glp1Inputs, wearableAvailable);
 
   return {
     date: metrics.date,

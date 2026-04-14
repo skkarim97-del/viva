@@ -23,6 +23,7 @@ interface SeverityInput {
   medicationProfile?: MedicationProfile;
   medicationLog?: MedicationLogEntry[];
   completionHistory: CompletionRecord[];
+  hasHealthData?: boolean;
 }
 
 interface SeverityResult {
@@ -69,7 +70,8 @@ function countNegativeStreak(inputs: GLP1DailyInputs[], checkIns: DailyCheckIn[]
 }
 
 export function computeInternalSeverity(input: SeverityInput): SeverityResult {
-  const { recentInputs, recentCheckIns, recentMetrics, medicationProfile } = input;
+  const { recentInputs, recentCheckIns, recentMetrics, medicationProfile, hasHealthData } = input;
+  const wearableAvailable = hasHealthData !== false;
   const drivers: string[] = [];
 
   const last3 = recentInputs.slice(-3);
@@ -88,7 +90,7 @@ export function computeInternalSeverity(input: SeverityInput): SeverityResult {
     compositeScore += mentalSeverityScore(recentCheckIn.mentalState) * 2;
   }
 
-  if (recentMetrics.length >= 3) {
+  if (wearableAvailable && recentMetrics.length >= 3) {
     const recent3 = recentMetrics.slice(-3);
     const avgSleep = recent3.reduce((s, m) => s + m.sleepDuration, 0) / recent3.length;
     const avgRecovery = recent3.reduce((s, m) => s + m.recoveryScore, 0) / recent3.length;

@@ -1,0 +1,88 @@
+Fix the app so it handles missing Apple Health data gracefully.
+
+Problem:
+Right now, when Apple Health is unavailable or not connected, the app is treating missing wearable data like a real value. For example, it shows things like “recovery = 0.” That is incorrect and breaks trust. Missing data should never be shown as zero.
+
+What I want changed:
+
+1. Treat missing Apple Health / wearable data as unavailable, not zero
+
+* Audit all logic related to recovery, sleep, heart rate, HRV, steps, activity, and any wearable-derived metrics
+* Replace any fallback of 0 with null / undefined / unavailable state
+* Make sure calculations, summaries, and recommendation engines do not interpret missing data as a poor score
+
+2. Update the UI so missing data is clearly labeled
+
+* Anywhere a wearable metric is shown, display:
+
+  * “Unavailable” or “Not available yet” when there is no real data
+  * Never show 0 unless 0 is a valid measured value
+* Add supporting copy where helpful, such as:
+
+  * “Apple Health not connected”
+  * “Using your treatment and check-in data instead”
+
+3. Change recommendation logic to degrade gracefully
+   If Apple Health data is unavailable, recommendations, plans, and insights should still work based on the best available data in this priority order:
+
+Priority order:
+
+1. Medication type
+2. Current dose
+3. Week / stage of treatment if available
+4. Onboarding answers
+5. Daily check-in inputs from the Today tab
+6. Apple Health / wearable data only if it exists
+
+The app should still generate useful recommendations without wearable data.
+
+4. Update all recommendation and summary logic
+
+* If wearable data exists, use it
+* If wearable data does not exist, base recommendations on:
+
+  * medication + dose
+  * onboarding inputs
+  * symptom inputs
+  * energy / appetite / nausea / digestion / sleep quality / movement inputs from Today tab
+* If there is not enough data, prompt the user for a few simple inputs instead of generating misleading conclusions
+
+5. Fix copy in all relevant places
+   Replace any messaging that implies a wearable metric exists when it does not.
+
+Examples:
+
+* Do not say: “Your recovery is 0”
+* Instead say: “Recovery data unavailable”
+* Or: “Today’s guidance is based on your medication, dose, and check-ins”
+
+6. Add a clean fallback insight state
+   When Apple Health is unavailable, show a helpful message like:
+   “Apple Health isn’t available on this device. Viva will still personalize your guidance using your medication, dose, onboarding answers, and daily check-ins.”
+
+7. Check onboarding flow
+   On the Apple Health connection screen:
+
+* If Apple Health is unavailable on the device, show a non-blocking message
+* Let the user continue normally
+* Make sure the rest of the app still works without any wearable integration
+
+8. Audit all downstream uses of wearable data
+   Search the codebase for any places where missing wearable values might:
+
+* default to 0
+* be used in scoring
+* be used in recovery calculations
+* be shown in cards, charts, summaries, or recommendations
+
+9. Output I want from you
+   After making the changes, give me:
+
+* a summary of what files were changed
+* the root cause
+* the exact fallback logic now used when Apple Health is missing
+* any remaining places that still depend on wearable data
+* any suggested cleanup or refactor opportunities
+
+Important product principle:
+Wearables should improve personalization, but the app must still be useful without them. The core engine should rely first on medication, dose, onboarding inputs, and daily check-ins. Apple Health is an enhancement, not a requirement.

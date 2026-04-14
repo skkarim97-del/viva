@@ -212,17 +212,6 @@ export default function SettingsScreen() {
         ))}
       </View>
 
-      <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>Preferences</Text>
-      <View style={[styles.section, { backgroundColor: c.card }]}>
-        <View style={styles.settingRow}>
-          <View style={[styles.settingIcon, { backgroundColor: c.accent + "10" }]}>
-            <Feather name="sliders" size={16} color={c.accent} />
-          </View>
-          <Text style={[styles.settingLabel, { color: c.foreground }]}>Units</Text>
-          <Text style={[styles.settingValue, { color: c.mutedForeground }]}>{profile.units === "imperial" ? "Imperial" : "Metric"}</Text>
-        </View>
-      </View>
-
       <Pressable onPress={handleUpgrade} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}>
         <View style={[styles.upgradeCard, { backgroundColor: c.primary }]}>
           <Feather name="star" size={18} color={c.primaryForeground} />
