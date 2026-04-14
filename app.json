@@ -4,6 +4,12 @@
       "eas": {
         "projectId": "f677e743-4e1c-4664-8b68-69add95645c9"
       }
+    },
+    "ios": {
+      "bundleIdentifier": "com.sullyk97.vivaai",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     }
   }
 }
