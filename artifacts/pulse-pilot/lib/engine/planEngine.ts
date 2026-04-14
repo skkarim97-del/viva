@@ -819,6 +819,10 @@ export function generateDailyPlan(
   else if (metrics.steps >= 6000) statusDrivers.push("Movement is on track");
   else statusDrivers.push("Movement has been light");
 
+  if (statusDrivers.length === 0) {
+    statusDrivers.push("Check in to personalize your plan");
+  }
+
   const guidance =
     dailyState === "push" ? "Make the most of today"
     : dailyState === "build" ? "Stay consistent today"

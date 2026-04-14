@@ -135,11 +135,11 @@ export default function DashboardScreen() {
   const greetingText = React.useMemo(() => generateGreeting(profile), [profile?.name]);
 
   const coachInsight = React.useMemo(() => {
-    if (!todayMetrics || metrics.length === 0) return "";
+    if (!todayMetrics || metrics.length === 0 || !hasHealthData) return "";
     return generateCoachInsight(todayMetrics, metrics, {
       feeling, energy, stress, hydration, trainingIntent, completionHistory,
     });
-  }, [todayMetrics, metrics, feeling, energy, stress, hydration, trainingIntent, completionHistory]);
+  }, [todayMetrics, metrics, feeling, energy, stress, hydration, trainingIntent, completionHistory, hasHealthData]);
 
   const inputSummaryResult = React.useMemo(() => generateInputSummary({
     energy: glp1Energy, appetite, nausea, digestion,

@@ -33,7 +33,7 @@ const API_BASE = Platform.OS === "web"
 export default function CoachScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
-  const { chatMessages, addChatMessage, todayMetrics, profile, trends, dailyPlan, insights, feeling, energy, stress, hydration, trainingIntent, completionHistory, weeklyConsistency, streakDays, glp1Energy, appetite, nausea, digestion, medicationLog } = useApp();
+  const { chatMessages, addChatMessage, todayMetrics, profile, trends, dailyPlan, insights, feeling, energy, stress, hydration, trainingIntent, completionHistory, weeklyConsistency, streakDays, glp1Energy, appetite, nausea, digestion, medicationLog, hasHealthData } = useApp();
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [streamingText, setStreamingText] = useState("");
@@ -51,7 +51,7 @@ export default function CoachScreen() {
       : 0;
 
     return {
-      todayMetrics: {
+      todayMetrics: hasHealthData ? {
         hrv: todayMetrics.hrv,
         restingHeartRate: todayMetrics.restingHeartRate,
         sleepDuration: todayMetrics.sleepDuration,
@@ -62,7 +62,7 @@ export default function CoachScreen() {
         strain: todayMetrics.strain,
         caloriesBurned: todayMetrics.caloriesBurned,
         activeCalories: todayMetrics.activeCalories,
-      },
+      } : undefined,
       profile: {
         age: profile.age,
         sex: profile.sex,
@@ -98,22 +98,22 @@ export default function CoachScreen() {
         nausea,
         digestion,
       },
-      sleepInsight: insights?.sleepDebt
+      sleepInsight: hasHealthData && insights?.sleepDebt
         ? `${insights.sleepDebt.hours.toFixed(1)} hours of sleep debt this week. ${insights.sleepDebt.detail}`
         : undefined,
-      hrvBaseline: insights?.hrvBaseline?.baseline,
-      hrvDeviation: insights?.hrvBaseline
+      hrvBaseline: hasHealthData ? insights?.hrvBaseline?.baseline : undefined,
+      hrvDeviation: hasHealthData && insights?.hrvBaseline && insights.hrvBaseline.baseline > 0
         ? Math.round(((todayMetrics.hrv - insights.hrvBaseline.baseline) / insights.hrvBaseline.baseline) * 100)
         : undefined,
-      sleepDebt: insights?.sleepDebt?.hours,
-      recoveryTrend: insights?.recoveryTrend?.direction,
+      sleepDebt: hasHealthData ? insights?.sleepDebt?.hours : undefined,
+      recoveryTrend: hasHealthData ? insights?.recoveryTrend?.direction : undefined,
       weeklyCompletionRate: todayCompletionRate,
       streakDays,
       weeklyConsistency,
       medicationProfile: profile.medicationProfile || undefined,
       recentDoseLog: medicationLog.slice(-5).map(e => ({ date: e.date, status: e.status, doseValue: e.doseValue, doseUnit: e.doseUnit })),
     };
-  }, [todayMetrics, profile, trends, dailyPlan, insights, feeling, energy, stress, hydration, trainingIntent, completionHistory, streakDays, weeklyConsistency, glp1Energy, appetite, glp1Hydration, proteinConfidence, sideEffects, movementIntent, medicationLog, profile.medicationProfile]);
+  }, [todayMetrics, profile, trends, dailyPlan, insights, feeling, energy, stress, hydration, trainingIntent, completionHistory, streakDays, weeklyConsistency, glp1Energy, appetite, nausea, digestion, medicationLog, profile.medicationProfile, hasHealthData]);
 
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || isTyping) return;

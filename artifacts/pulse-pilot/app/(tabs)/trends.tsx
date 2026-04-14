@@ -65,10 +65,10 @@ export default function TrendsScreen() {
   const c = useColors();
   const { insights, metrics, completionHistory, weeklyConsistency, weeklyDaysCompleted, streakDays, todayCompletionRate, dailyPlan, profile, medicationLog, inputAnalytics, hasHealthData, availableMetricTypes } = useApp();
 
-  const correlations = useMemo(() => buildCorrelations(metrics), [metrics]);
-  const patterns = useMemo(() => detectPatterns(metrics), [metrics]);
+  const correlations = useMemo(() => hasHealthData ? buildCorrelations(metrics) : [], [metrics, hasHealthData]);
+  const patterns = useMemo(() => hasHealthData ? detectPatterns(metrics) : [], [metrics, hasHealthData]);
   const habitStats = useMemo(() => computeHabitStats(completionHistory), [completionHistory]);
-  const baseInsights = useMemo(() => buildKeyInsights(metrics, habitStats), [metrics, habitStats]);
+  const baseInsights = useMemo(() => hasHealthData ? buildKeyInsights(metrics, habitStats) : [], [metrics, habitStats, hasHealthData]);
   const keyInsights = useMemo(() => {
     const analyticsInsights = inputAnalytics?.insights ?? [];
     const combined = [...baseInsights];
@@ -77,7 +77,7 @@ export default function TrendsScreen() {
     }
     return combined.slice(0, 6);
   }, [baseInsights, inputAnalytics]);
-  const glp1Insights = useMemo(() => buildGLP1Insights(metrics, profile.medicationProfile, medicationLog, completionHistory), [metrics, profile.medicationProfile, medicationLog, completionHistory]);
+  const glp1Insights = useMemo(() => hasHealthData ? buildGLP1Insights(metrics, profile.medicationProfile, medicationLog, completionHistory) : [], [metrics, profile.medicationProfile, medicationLog, completionHistory, hasHealthData]);
 
   const openDetail = (label: string) => {
     const key = metricKeyMap[label];
