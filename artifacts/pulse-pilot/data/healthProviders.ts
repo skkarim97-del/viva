@@ -27,7 +27,8 @@ const appleHealthProvider: HealthDataProvider = {
   async isAvailable() {
     if (Platform.OS !== "ios") return false;
     try {
-      const AppleHealthKit = (await import("react-native-health")).default;
+      const healthModule = await import("react-native-health");
+      const AppleHealthKit = healthModule.default || healthModule;
       if (!AppleHealthKit) return false;
       return new Promise<boolean>((resolve) => {
         if (typeof AppleHealthKit.isAvailable === "function") {
@@ -45,7 +46,8 @@ const appleHealthProvider: HealthDataProvider = {
 
   async requestPermissions() {
     try {
-      const AppleHealthKit = (await import("react-native-health")).default;
+      const healthModule = await import("react-native-health");
+      const AppleHealthKit = healthModule.default || healthModule;
       const permissions = {
         permissions: {
           read: [
@@ -74,7 +76,8 @@ const appleHealthProvider: HealthDataProvider = {
 
   async fetchMetrics(days: number) {
     try {
-      const AppleHealthKit = (await import("react-native-health")).default;
+      const healthModule = await import("react-native-health");
+      const AppleHealthKit = healthModule.default || healthModule;
       const startDate = daysAgoDate(days).toISOString();
       const endDate = new Date().toISOString();
       const options = { startDate, endDate };
