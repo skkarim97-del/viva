@@ -424,31 +424,83 @@ export function generateDailyPlan(
       (1 - Math.min(metrics.restingHeartRate, 80) / 80) * 100 * 0.2
     );
   } else {
-    readinessScore = 60;
+    readinessScore = 70;
   }
 
-  if (feeling === "tired") readinessScore = Math.min(readinessScore, 55);
-  else if (feeling === "stressed") readinessScore = Math.min(readinessScore, 50);
-  else if (feeling === "great") readinessScore = Math.max(readinessScore, 75);
+  if (!wearableAvailable) {
+    let inputBonus = 0;
+    let inputPenalty = 0;
 
-  if (energy === "low") readinessScore = Math.min(readinessScore, 45);
-  else if (energy === "excellent" || energy === "high") readinessScore = Math.max(readinessScore, 70);
+    if (feeling === "great") inputBonus += 10;
+    else if (feeling === "tired") inputPenalty += 15;
+    else if (feeling === "stressed") inputPenalty += 20;
 
-  if (stress === "high") readinessScore = Math.min(readinessScore, 50);
-  else if (stress === "very_high") readinessScore = Math.min(readinessScore, 35);
+    if (energy === "excellent" || energy === "high") inputBonus += 10;
+    else if (energy === "low") inputPenalty += 20;
 
-  if (trainingIntent === "none") readinessScore = Math.min(readinessScore, 40);
+    if (stress === "very_high") inputPenalty += 25;
+    else if (stress === "high") inputPenalty += 15;
+    else if (stress === "low") inputBonus += 5;
 
-  if (hydration === "low") readinessScore = Math.max(readinessScore - 5, 0);
-  else if (hydration === "dehydrated") readinessScore = Math.max(readinessScore - 10, 0);
+    if (trainingIntent === "none") inputPenalty += 15;
+    else if (trainingIntent === "intense") inputBonus += 5;
 
-  if (hrvDeviation < -15) readinessScore = Math.min(readinessScore, 40);
-  else if (hrvDeviation < -10) readinessScore = Math.min(readinessScore, 50);
+    if (hydration === "dehydrated") inputPenalty += 10;
+    else if (hydration === "low") inputPenalty += 5;
+    else if (hydration === "good") inputBonus += 3;
 
-  if (consecutivePoorRecovery) readinessScore = Math.min(readinessScore, 35);
-  if (hrvDeclining5) readinessScore = Math.min(readinessScore, 45);
-  if (rhrElevated && Math.abs(hrvDeviation) < 5) readinessScore = Math.min(readinessScore, 50);
-  if (sleepDeclining3) readinessScore = Math.min(readinessScore, 55);
+    if (glp1Inputs?.nausea === "severe") inputPenalty += 25;
+    else if (glp1Inputs?.nausea === "moderate") inputPenalty += 15;
+    else if (glp1Inputs?.nausea === "none") inputBonus += 5;
+
+    if (glp1Inputs?.digestion === "diarrhea") inputPenalty += 15;
+    else if (glp1Inputs?.digestion === "constipated") inputPenalty += 10;
+    else if (glp1Inputs?.digestion === "fine") inputBonus += 5;
+
+    if (glp1Inputs?.appetite === "very_low") inputPenalty += 15;
+    else if (glp1Inputs?.appetite === "low") inputPenalty += 8;
+    else if (glp1Inputs?.appetite === "strong" || glp1Inputs?.appetite === "normal") inputBonus += 5;
+
+    if (glp1Inputs?.energy === "depleted") inputPenalty += 25;
+    else if (glp1Inputs?.energy === "tired") inputPenalty += 15;
+    else if (glp1Inputs?.energy === "great") inputBonus += 10;
+
+    readinessScore = Math.max(0, Math.min(100, readinessScore + inputBonus - inputPenalty));
+  } else {
+    if (feeling === "tired") readinessScore = Math.min(readinessScore, 55);
+    else if (feeling === "stressed") readinessScore = Math.min(readinessScore, 50);
+    else if (feeling === "great") readinessScore = Math.max(readinessScore, 75);
+
+    if (energy === "low") readinessScore = Math.min(readinessScore, 45);
+    else if (energy === "excellent" || energy === "high") readinessScore = Math.max(readinessScore, 70);
+
+    if (stress === "high") readinessScore = Math.min(readinessScore, 50);
+    else if (stress === "very_high") readinessScore = Math.min(readinessScore, 35);
+
+    if (trainingIntent === "none") readinessScore = Math.min(readinessScore, 40);
+
+    if (hydration === "low") readinessScore = Math.max(readinessScore - 5, 0);
+    else if (hydration === "dehydrated") readinessScore = Math.max(readinessScore - 10, 0);
+
+    if (hrvDeviation < -15) readinessScore = Math.min(readinessScore, 40);
+    else if (hrvDeviation < -10) readinessScore = Math.min(readinessScore, 50);
+
+    if (consecutivePoorRecovery) readinessScore = Math.min(readinessScore, 35);
+    if (hrvDeclining5) readinessScore = Math.min(readinessScore, 45);
+    if (rhrElevated && Math.abs(hrvDeviation) < 5) readinessScore = Math.min(readinessScore, 50);
+    if (sleepDeclining3) readinessScore = Math.min(readinessScore, 55);
+
+    if (glp1Inputs?.nausea === "severe") readinessScore = Math.min(readinessScore, 35);
+    else if (glp1Inputs?.nausea === "moderate") readinessScore = Math.min(readinessScore, 50);
+
+    if (glp1Inputs?.digestion === "diarrhea") readinessScore = Math.min(readinessScore, 45);
+    else if (glp1Inputs?.digestion === "constipated") readinessScore = Math.min(readinessScore, 55);
+
+    if (glp1Inputs?.appetite === "very_low") readinessScore = Math.min(readinessScore, 50);
+
+    if (glp1Inputs?.energy === "depleted") readinessScore = Math.min(readinessScore, 35);
+    else if (glp1Inputs?.energy === "tired") readinessScore = Math.min(readinessScore, 50);
+  }
 
   if (glp1Inputs?.nausea === "severe") readinessScore = Math.min(readinessScore, 35);
   else if (glp1Inputs?.nausea === "moderate") readinessScore = Math.min(readinessScore, 50);
@@ -601,14 +653,16 @@ export function generateDailyPlan(
     workoutDuration = 20;
     workoutDesc = "Easy walk and stretching only.";
     optional = "Start winding down 30 minutes earlier tonight.";
-  } else if (sleepGoodHrvGood && readinessScore >= 75 && !appetiteLow) {
+  } else if ((sleepGoodHrvGood || (!wearableAvailable && readinessScore >= 80)) && readinessScore >= 75 && !appetiteLow) {
     dailyState = "push";
     headline = isNewToMed
       ? "Your body is responding well to treatment. A good day to build."
-      : "Recovery is strong. Make the most of today.";
+      : !wearableAvailable
+        ? "You're in a great spot today. Make the most of it."
+        : "Recovery is strong. Make the most of today.";
     summary = wearableAvailable
       ? `Sleep was ${metrics.sleepDuration.toFixed(1)} hrs, HRV is above your baseline, and recovery is ${metrics.recoveryScore}%. A strong day for a strength session or longer walk.`
-      : "Your check-ins suggest a strong day. A good time for a strength session or longer walk.";
+      : "Your check-ins look strong across the board. A good time for a strength session or longer walk.";
     dailyFocus = "Make the most of today";
     whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, wearableAvailable, trigger: "push_day" });
     workoutType = "Strength Session";
@@ -633,12 +687,14 @@ export function generateDailyPlan(
     dailyState = "maintain";
     headline = sleepLow
       ? `${metrics.sleepDuration.toFixed(1)} hrs of sleep. Keep today simple.`
-      : "Your body could use a lighter day.";
+      : !wearableAvailable
+        ? "A steady day. Stay consistent with the basics."
+        : "Your body could use a lighter day.";
     summary = sleepLow
       ? `Sleep was ${metrics.sleepDuration.toFixed(1)} hrs. A lighter day with protein-rich meals and extra water will help you recover.`
       : wearableAvailable
         ? `Recovery is at ${metrics.recoveryScore}%. Stay consistent with the basics and keep movement gentle.`
-        : "Based on your check-ins, a lighter day is best. Stay consistent with the basics and keep movement gentle.";
+        : "Based on your check-ins, keep things manageable today. Focus on protein, hydration, and gentle movement.";
     dailyFocus = "Basics first";
     whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, wearableAvailable, trigger: "maintain_day" });
     workoutType = "Gentle Walk";
