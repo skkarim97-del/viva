@@ -23,13 +23,7 @@
         "usesNonExemptEncryption": false
       },
       "infoPlist": {
-        "NSHealthShareUsageDescription": "VIVA reads your health data including sleep, steps, heart rate, and HRV to provide personalized wellness coaching and daily plans.",
-        "NSHealthUpdateUsageDescription": "VIVA may write health-related data only when explicitly triggered by the user to support personalized wellness insights.",
         "ITSAppUsesNonExemptEncryption": false
-      },
-      "entitlements": {
-        "com.apple.developer.healthkit": true,
-        "com.apple.developer.healthkit.access": []
       }
     },
     "android": {
@@ -59,8 +53,7 @@
         {
           "isClinicalDataEnabled": false
         }
-      ],
-      "./plugins/withHealthKit"
+      ]
     ],
     "extra": {
     "eas": {
