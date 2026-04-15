@@ -1,6 +1,21 @@
 import { Platform } from "react-native";
 import type { HealthMetrics } from "@/types";
 
+let AppleHealthKit: any = null;
+if (Platform.OS === "ios") {
+  try {
+    const mod = require("react-native-health");
+    AppleHealthKit = mod.default || mod;
+    console.log("[HealthKit] Module loaded at init via require():", !!AppleHealthKit);
+    console.log("[HealthKit] Module keys:", AppleHealthKit ? Object.keys(AppleHealthKit).slice(0, 15) : "null");
+    console.log("[HealthKit] isAvailable type:", typeof AppleHealthKit?.isAvailable);
+    console.log("[HealthKit] initHealthKit type:", typeof AppleHealthKit?.initHealthKit);
+    console.log("[HealthKit] Constants:", !!AppleHealthKit?.Constants);
+  } catch (e: any) {
+    console.log("[HealthKit] require() failed:", e?.message || e);
+  }
+}
+
 export interface HealthDataProvider {
   id: string;
   name: string;
@@ -29,23 +44,17 @@ const appleHealthProvider: HealthDataProvider = {
       console.log("[HealthKit] Not iOS, skipping");
       return false;
     }
+
+    if (!AppleHealthKit) {
+      console.log("[HealthKit] Module not loaded (require failed at init)");
+      return false;
+    }
+
     try {
-      const healthModule = await import("react-native-health");
-      const AppleHealthKit = healthModule.default || healthModule;
-      console.log("[HealthKit] Module loaded:", !!AppleHealthKit);
-      console.log("[HealthKit] Module keys:", AppleHealthKit ? Object.keys(AppleHealthKit).slice(0, 10) : "null");
-      console.log("[HealthKit] isAvailable type:", typeof AppleHealthKit?.isAvailable);
-      console.log("[HealthKit] initHealthKit type:", typeof AppleHealthKit?.initHealthKit);
-
-      if (!AppleHealthKit) {
-        console.log("[HealthKit] Module is null/undefined");
-        return false;
-      }
-
       if (typeof AppleHealthKit.isAvailable === "function") {
         return new Promise<boolean>((resolve) => {
           const timeout = setTimeout(() => {
-            console.log("[HealthKit] isAvailable timed out after 5s");
+            console.log("[HealthKit] isAvailable timed out after 5s, assuming available");
             resolve(true);
           }, 5000);
           AppleHealthKit.isAvailable((err: any, available: boolean) => {
@@ -70,12 +79,12 @@ const appleHealthProvider: HealthDataProvider = {
   },
 
   async requestPermissions() {
-    try {
-      const healthModule = await import("react-native-health");
-      const AppleHealthKit = healthModule.default || healthModule;
-      console.log("[HealthKit] Constants:", !!AppleHealthKit?.Constants);
-      console.log("[HealthKit] Permissions:", !!AppleHealthKit?.Constants?.Permissions);
+    if (!AppleHealthKit) {
+      console.log("[HealthKit] Module not loaded, cannot request permissions");
+      return false;
+    }
 
+    try {
       if (!AppleHealthKit?.Constants?.Permissions) {
         console.log("[HealthKit] Permissions constants missing, trying initHealthKit directly");
         if (typeof AppleHealthKit?.initHealthKit === "function") {
@@ -119,9 +128,8 @@ const appleHealthProvider: HealthDataProvider = {
   },
 
   async fetchMetrics(days: number) {
+    if (!AppleHealthKit) return [];
     try {
-      const healthModule = await import("react-native-health");
-      const AppleHealthKit = healthModule.default || healthModule;
       const startDate = daysAgoDate(days).toISOString();
       const endDate = new Date().toISOString();
       const options = { startDate, endDate };
