@@ -68,9 +68,7 @@ const STATUS_COLOR_MAP: Record<DailyStatusLabel, (c: ReturnType<typeof useColors
   "Your body may need more support today": (c) => c.destructive,
 };
 
-const API_BASE = Platform.OS === "web"
-  ? "/api"
-  : `https://${process.env.EXPO_PUBLIC_DOMAIN}/api`;
+import { API_BASE } from "@/lib/apiConfig";
 
 export default function DashboardScreen() {
   const c = useColors();
@@ -196,8 +194,11 @@ export default function DashboardScreen() {
       content: m.content,
     }));
 
+    const fetchUrl = `${API_BASE}/coach/chat`;
+    console.log("[Coach] Fetching:", fetchUrl);
+
     try {
-      const response = await fetch(`${API_BASE}/coach/chat`, {
+      const response = await fetch(fetchUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -20,7 +20,6 @@ import {
 import { computeInsights, type DailyInsights } from "@/data/insights";
 import type { UserPatterns, AdaptiveInsight } from "@/types";
 import { fetchHealthData, connectProvider, type AvailableMetricType } from "@/data/healthProviders";
-import { Platform } from "react-native";
 import type {
   UserProfile,
   HealthMetrics,
@@ -54,10 +53,7 @@ import type {
   PatientSummary,
 } from "@/types";
 
-const EXPO_PUBLIC_DOMAIN = process.env.EXPO_PUBLIC_DOMAIN || "";
-const API_BASE = Platform.OS === "web"
-  ? "/api"
-  : `https://${EXPO_PUBLIC_DOMAIN}/api`;
+import { API_BASE } from "@/lib/apiConfig";
 
 interface AppContextType {
   profile: UserProfile;

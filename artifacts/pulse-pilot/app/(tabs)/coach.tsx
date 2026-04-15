@@ -26,9 +26,7 @@ const quickActions = [
   { label: "What should I focus on this week?", icon: "calendar" as const },
 ];
 
-const API_BASE = Platform.OS === "web"
-  ? "/api"
-  : `https://${process.env.EXPO_PUBLIC_DOMAIN}/api`;
+import { API_BASE } from "@/lib/apiConfig";
 
 export default function CoachScreen() {
   const c = useColors();
@@ -139,8 +137,11 @@ export default function CoachScreen() {
       content: m.content,
     }));
 
+    const fetchUrl = `${API_BASE}/coach/chat`;
+    console.log("[Coach] Fetching:", fetchUrl);
+
     try {
-      const response = await fetch(`${API_BASE}/coach/chat`, {
+      const response = await fetch(fetchUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -150,7 +151,12 @@ export default function CoachScreen() {
         }),
       });
 
-      if (!response.ok) throw new Error(`API error: ${response.status}`);
+      if (!response.ok) {
+        let errorBody = "";
+        try { errorBody = await response.text(); } catch {}
+        console.log("[Coach] HTTP error", response.status, errorBody);
+        throw { status: response.status, body: errorBody };
+      }
 
       const reader = response.body?.getReader();
       if (!reader) throw new Error("No stream reader");
@@ -199,11 +205,30 @@ export default function CoachScreen() {
           timestamp: Date.now(),
         });
       }
-    } catch {
+    } catch (err: any) {
+      console.log("[Coach] Full error:", err);
+      console.log("[Coach] Error message:", err?.message);
+      console.log("[Coach] Error status:", err?.status);
+
+      let userMessage = "Something went wrong. Try again in a moment.";
+      if (err?.message === "Network request failed" || err?.message?.includes("network") || err?.message?.includes("fetch")) {
+        userMessage = "Network error. Check your connection and try again.";
+      } else if (err?.status === 500) {
+        userMessage = `Server error (500). ${err?.body || "The AI service may be temporarily unavailable."}`;
+      } else if (err?.status === 401 || err?.status === 403) {
+        userMessage = "Configuration error. The AI service is not properly set up.";
+      } else if (err?.status === 429) {
+        userMessage = "Rate limited. Wait a moment and try again.";
+      } else if (err?.status) {
+        userMessage = `Server returned ${err.status}. ${err?.body || ""}`;
+      } else if (err?.message) {
+        userMessage = `Error: ${err.message}`;
+      }
+
       addChatMessage({
         id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
         role: "assistant",
-        content: "I was not able to connect right now. Please try again in a moment.",
+        content: userMessage,
         timestamp: Date.now(),
       });
     } finally {
