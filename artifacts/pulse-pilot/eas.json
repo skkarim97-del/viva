@@ -1,19 +1,28 @@
 {
+  "cli": {
+    "appVersionSource": "local"
+  },
   "build": {
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "node": "20.18.0",
+      "pnpm": "10.26.1",
       "ios": {
         "image": "macos-sequoia-15.3-xcode-16.2"
       }
     },
     "preview": {
       "distribution": "internal",
+      "node": "20.18.0",
+      "pnpm": "10.26.1",
       "ios": {
         "image": "macos-sequoia-15.3-xcode-16.2"
       }
     },
     "production": {
+      "node": "20.18.0",
+      "pnpm": "10.26.1",
       "ios": {
         "image": "macos-sequoia-15.3-xcode-16.2"
       }
