@@ -7,7 +7,7 @@
     "icon": "./assets/icon.png",
     "scheme": "viva",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "owner": "sullyk97",
     "splash": {
       "image": "./assets/images/icon.png",
@@ -18,7 +18,7 @@
       "icon": "./assets/icon.png",
       "supportsTablet": false,
       "bundleIdentifier": "com.sullyk97.vivaai",
-      "buildNumber": "10",
+      "buildNumber": "11",
       "config": {
         "usesNonExemptEncryption": false
       },
