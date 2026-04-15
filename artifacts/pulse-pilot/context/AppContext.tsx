@@ -20,7 +20,7 @@ import {
 import { computeInsights, type DailyInsights } from "@/data/insights";
 import type { UserPatterns, AdaptiveInsight } from "@/types";
 import { fetchHealthData, connectProvider, type AvailableMetricType } from "@/data/healthProviders";
-import { Platform, Alert } from "react-native";
+import { Platform } from "react-native";
 import type {
   UserProfile,
   HealthMetrics,
@@ -994,12 +994,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const result = await connectProvider(id);
 
       if (!result.success) {
+        const statusMsg = result.unavailable
+          ? "Not available on this device"
+          : result.error || "Connection failed";
         setIntegrationsState((prev) =>
-          prev.map((i) => (i.id === id ? { ...i, lastSync: undefined } : i))
-        );
-        Alert.alert(
-          "Connection Failed",
-          result.error || "Could not connect. Please try again."
+          prev.map((i) => (i.id === id ? { ...i, lastSync: statusMsg } : i))
         );
         return;
       }

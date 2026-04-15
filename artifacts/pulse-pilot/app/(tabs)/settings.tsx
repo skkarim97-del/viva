@@ -158,48 +158,70 @@ export default function SettingsScreen() {
 
       <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>Apple Health</Text>
       <View style={[styles.section, { backgroundColor: c.card }]}>
-        {integrations.map((integration, i) => (
+        {integrations.map((integration, i) => {
+          const isConnecting = integration.lastSync === "Connecting..." || integration.lastSync === "Syncing...";
+          const isSyncFailed = integration.lastSync === "Sync failed";
+          const isUnavailable = integration.lastSync === "Not available on this device";
+          const isError = !isConnecting && !isSyncFailed && !isUnavailable && !integration.connected && integration.lastSync && integration.lastSync !== undefined;
+          const dotColor = isConnecting
+            ? c.warning || "#F59E0B"
+            : isSyncFailed || isUnavailable || isError
+            ? c.destructive || "#EF4444"
+            : integration.connected
+            ? c.success
+            : c.muted;
+          const statusText = isConnecting
+            ? integration.lastSync!
+            : isSyncFailed
+            ? "Sync failed"
+            : isUnavailable
+            ? "Not available"
+            : isError
+            ? integration.lastSync!
+            : integration.connected
+            ? integration.lastSync
+              ? `Synced ${integration.lastSync}`
+              : "Connected"
+            : "Tap to connect";
+
+          return (
           <React.Fragment key={integration.id}>
             <Pressable
-              onPress={() => toggleIntegration(integration.id)}
+              onPress={() => !isUnavailable && toggleIntegration(integration.id)}
               style={({ pressed }) => [
                 styles.settingRow,
-                i < integrations.length - 1 && !integration.lastSync?.includes("failed") && [styles.settingRowBorder, { borderBottomColor: c.background }],
-                { opacity: pressed ? 0.8 : 1 },
+                i < integrations.length - 1 && !isSyncFailed && [styles.settingRowBorder, { borderBottomColor: c.background }],
+                { opacity: isUnavailable ? 0.5 : pressed ? 0.8 : 1 },
               ]}
             >
               <View style={[styles.settingIcon, { backgroundColor: c.accent + "10" }]}>
                 <Feather name={integration.icon as keyof typeof Feather.glyphMap} size={16} color={c.accent} />
               </View>
               <Text style={[styles.settingLabel, { color: c.foreground }]}>{integration.name}</Text>
-              <View
-                style={[
-                  styles.statusDot,
-                  {
-                    backgroundColor:
-                      integration.lastSync === "Connecting..." || integration.lastSync === "Syncing..."
-                        ? c.warning || "#F59E0B"
-                        : integration.lastSync === "Sync failed"
-                        ? c.destructive || "#EF4444"
-                        : integration.connected
-                        ? c.success
-                        : c.muted,
-                  },
-                ]}
-              />
+              <View style={[styles.statusDot, { backgroundColor: dotColor }]} />
               <Text style={[styles.statusText, { color: c.mutedForeground }]}>
-                {integration.lastSync === "Connecting..." || integration.lastSync === "Syncing..."
-                  ? integration.lastSync
-                  : integration.lastSync === "Sync failed"
-                  ? "Sync failed"
-                  : integration.connected
-                  ? integration.lastSync
-                    ? `Synced ${integration.lastSync}`
-                    : "Connected"
-                  : "Tap to connect"}
+                {statusText}
               </Text>
             </Pressable>
-            {integration.lastSync === "Sync failed" && (
+            {(isUnavailable || isError) && (
+              <View style={styles.inlineNotice}>
+                <Text style={[styles.inlineNoticeText, { color: c.mutedForeground }]}>
+                  {isUnavailable
+                    ? "Apple Health isn't available on this device. You can still use Viva with manual inputs."
+                    : integration.lastSync}
+                </Text>
+                {isError && (
+                  <Pressable
+                    onPress={() => toggleIntegration(integration.id)}
+                    style={({ pressed }) => [styles.retryButton, { backgroundColor: c.accent + "15", opacity: pressed ? 0.7 : 1, marginTop: 6 }]}
+                  >
+                    <Feather name="refresh-cw" size={12} color={c.accent} />
+                    <Text style={[styles.retryText, { color: c.accent }]}>Try again</Text>
+                  </Pressable>
+                )}
+              </View>
+            )}
+            {isSyncFailed && (
               <Pressable
                 onPress={() => toggleIntegration(integration.id)}
                 style={({ pressed }) => [styles.retryButton, { backgroundColor: c.accent + "15", opacity: pressed ? 0.7 : 1 }]}
@@ -209,7 +231,8 @@ export default function SettingsScreen() {
               </Pressable>
             )}
           </React.Fragment>
-        ))}
+          );
+        })}
       </View>
 
       <Pressable onPress={handleUpgrade} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}>
@@ -360,6 +383,16 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 13,
     fontFamily: "Montserrat_400Regular",
+  },
+  inlineNotice: {
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+    paddingTop: 2,
+  },
+  inlineNoticeText: {
+    fontSize: 12,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 17,
   },
   retryButton: {
     flexDirection: "row",

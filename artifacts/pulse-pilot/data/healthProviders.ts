@@ -25,21 +25,46 @@ const appleHealthProvider: HealthDataProvider = {
   name: "Apple Health",
 
   async isAvailable() {
-    if (Platform.OS !== "ios") return false;
+    if (Platform.OS !== "ios") {
+      console.log("[HealthKit] Not iOS, skipping");
+      return false;
+    }
     try {
       const healthModule = await import("react-native-health");
       const AppleHealthKit = healthModule.default || healthModule;
-      if (!AppleHealthKit) return false;
-      return new Promise<boolean>((resolve) => {
-        if (typeof AppleHealthKit.isAvailable === "function") {
+      console.log("[HealthKit] Module loaded:", !!AppleHealthKit);
+      console.log("[HealthKit] Module keys:", AppleHealthKit ? Object.keys(AppleHealthKit).slice(0, 10) : "null");
+      console.log("[HealthKit] isAvailable type:", typeof AppleHealthKit?.isAvailable);
+      console.log("[HealthKit] initHealthKit type:", typeof AppleHealthKit?.initHealthKit);
+
+      if (!AppleHealthKit) {
+        console.log("[HealthKit] Module is null/undefined");
+        return false;
+      }
+
+      if (typeof AppleHealthKit.isAvailable === "function") {
+        return new Promise<boolean>((resolve) => {
+          const timeout = setTimeout(() => {
+            console.log("[HealthKit] isAvailable timed out after 5s");
+            resolve(true);
+          }, 5000);
           AppleHealthKit.isAvailable((err: any, available: boolean) => {
+            clearTimeout(timeout);
+            console.log("[HealthKit] isAvailable result:", { err, available });
             resolve(!err && !!available);
           });
-        } else {
-          resolve(false);
-        }
-      });
-    } catch {
+        });
+      }
+
+      if (typeof AppleHealthKit.initHealthKit === "function") {
+        console.log("[HealthKit] isAvailable not found, but initHealthKit exists. Assuming available.");
+        return true;
+      }
+
+      console.log("[HealthKit] Neither isAvailable nor initHealthKit found on module");
+      return false;
+    } catch (e: any) {
+      console.log("[HealthKit] isAvailable threw:", e?.message || e);
       return false;
     }
   },
@@ -48,6 +73,22 @@ const appleHealthProvider: HealthDataProvider = {
     try {
       const healthModule = await import("react-native-health");
       const AppleHealthKit = healthModule.default || healthModule;
+      console.log("[HealthKit] Constants:", !!AppleHealthKit?.Constants);
+      console.log("[HealthKit] Permissions:", !!AppleHealthKit?.Constants?.Permissions);
+
+      if (!AppleHealthKit?.Constants?.Permissions) {
+        console.log("[HealthKit] Permissions constants missing, trying initHealthKit directly");
+        if (typeof AppleHealthKit?.initHealthKit === "function") {
+          return new Promise<boolean>((resolve) => {
+            AppleHealthKit.initHealthKit({ permissions: { read: [], write: [] } }, (err: string) => {
+              console.log("[HealthKit] initHealthKit with empty perms:", err || "success");
+              resolve(!err);
+            });
+          });
+        }
+        return false;
+      }
+
       const permissions = {
         permissions: {
           read: [
@@ -64,12 +105,15 @@ const appleHealthProvider: HealthDataProvider = {
           write: [],
         },
       };
+      console.log("[HealthKit] Requesting permissions with:", JSON.stringify(permissions.permissions.read));
       return new Promise<boolean>((resolve) => {
         AppleHealthKit.initHealthKit(permissions, (err: string) => {
+          console.log("[HealthKit] initHealthKit result:", err || "success");
           resolve(!err);
         });
       });
-    } catch {
+    } catch (e: any) {
+      console.log("[HealthKit] requestPermissions threw:", e?.message || e);
       return false;
     }
   },
@@ -213,27 +257,32 @@ export const healthProviders: Record<string, HealthDataProvider> = {
 
 export async function connectProvider(
   id: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; unavailable?: boolean }> {
   const provider = healthProviders[id];
   if (!provider) return { success: false, error: "Unknown provider." };
 
   try {
+    console.log(`[connectProvider] Starting connection for ${id}`);
     const available = await provider.isAvailable();
+    console.log(`[connectProvider] isAvailable result for ${id}:`, available);
+
     if (!available) {
       if (id === "apple_health" && Platform.OS !== "ios") {
-        return { success: false, error: "Apple Health requires an iOS device with a native build." };
+        return { success: false, unavailable: true, error: "Apple Health requires an iOS device with a native build." };
       }
-      return { success: false, error: `${provider.name} is not available on this device.` };
+      return { success: false, unavailable: true, error: `${provider.name} is not available on this device.` };
     }
 
     const permitted = await provider.requestPermissions();
+    console.log(`[connectProvider] requestPermissions result for ${id}:`, permitted);
     if (!permitted) {
-      return { success: false, error: `Permission denied. Open Settings to grant ${provider.name} access.` };
+      return { success: false, error: `Permission denied. Open Settings > Privacy > Health to grant access.` };
     }
 
     return { success: true };
-  } catch {
-    return { success: false, error: `Could not connect to ${provider.name}. Please try again.` };
+  } catch (e: any) {
+    console.log(`[connectProvider] Error for ${id}:`, e?.message || e);
+    return { success: false, error: `Could not connect to ${provider.name}. ${e?.message || "Please try again."}` };
   }
 }
 
