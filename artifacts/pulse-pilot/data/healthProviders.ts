@@ -5,14 +5,38 @@ let AppleHealthKit: any = null;
 if (Platform.OS === "ios") {
   try {
     const mod = require("react-native-health");
-    AppleHealthKit = mod.default || mod;
-    console.log("[HealthKit] Module loaded at init via require():", !!AppleHealthKit);
-    console.log("[HealthKit] Module keys:", AppleHealthKit ? Object.keys(AppleHealthKit).slice(0, 15) : "null");
-    console.log("[HealthKit] isAvailable type:", typeof AppleHealthKit?.isAvailable);
-    console.log("[HealthKit] initHealthKit type:", typeof AppleHealthKit?.initHealthKit);
-    console.log("[HealthKit] Constants:", !!AppleHealthKit?.Constants);
+    console.log("[HealthKit] Raw require result type:", typeof mod);
+    console.log("[HealthKit] Raw require keys:", mod ? Object.keys(mod).slice(0, 20) : "null");
+    console.log("[HealthKit] Raw mod.default type:", typeof mod?.default);
+    console.log("[HealthKit] Raw mod.isAvailable type:", typeof mod?.isAvailable);
+    console.log("[HealthKit] Raw mod.initHealthKit type:", typeof mod?.initHealthKit);
+    console.log("[HealthKit] Raw mod.Constants type:", typeof mod?.Constants);
+
+    if (typeof mod?.isAvailable === "function" || typeof mod?.initHealthKit === "function") {
+      AppleHealthKit = mod;
+      console.log("[HealthKit] Using raw module (methods found on root)");
+    } else if (mod?.default && (typeof mod.default.isAvailable === "function" || typeof mod.default.initHealthKit === "function")) {
+      AppleHealthKit = mod.default;
+      console.log("[HealthKit] Using mod.default (methods found on default export)");
+    } else {
+      AppleHealthKit = mod;
+      console.log("[HealthKit] Using raw module (fallback, methods not found yet)");
+      console.log("[HealthKit] All keys on module:", mod ? Object.keys(mod) : "null");
+      if (mod?.default) {
+        console.log("[HealthKit] All keys on mod.default:", Object.keys(mod.default));
+      }
+    }
+
+    console.log("[HealthKit] Final AppleHealthKit exists:", !!AppleHealthKit);
+    console.log("[HealthKit] Final isAvailable type:", typeof AppleHealthKit?.isAvailable);
+    console.log("[HealthKit] Final initHealthKit type:", typeof AppleHealthKit?.initHealthKit);
+    console.log("[HealthKit] Final Constants:", !!AppleHealthKit?.Constants);
+    if (AppleHealthKit?.Constants?.Permissions) {
+      console.log("[HealthKit] Permissions keys:", Object.keys(AppleHealthKit.Constants.Permissions).slice(0, 10));
+    }
   } catch (e: any) {
     console.log("[HealthKit] require() failed:", e?.message || e);
+    console.log("[HealthKit] require() error stack:", e?.stack?.slice(0, 300));
   }
 }
 
@@ -57,11 +81,17 @@ const appleHealthProvider: HealthDataProvider = {
             console.log("[HealthKit] isAvailable timed out after 5s, assuming available");
             resolve(true);
           }, 5000);
-          AppleHealthKit.isAvailable((err: any, available: boolean) => {
+          try {
+            AppleHealthKit.isAvailable((err: any, available: boolean) => {
+              clearTimeout(timeout);
+              console.log("[HealthKit] isAvailable callback:", { err, available });
+              resolve(!err && !!available);
+            });
+          } catch (callErr: any) {
             clearTimeout(timeout);
-            console.log("[HealthKit] isAvailable result:", { err, available });
-            resolve(!err && !!available);
-          });
+            console.log("[HealthKit] isAvailable call threw:", callErr?.message || callErr);
+            resolve(true);
+          }
         });
       }
 
@@ -71,6 +101,7 @@ const appleHealthProvider: HealthDataProvider = {
       }
 
       console.log("[HealthKit] Neither isAvailable nor initHealthKit found on module");
+      console.log("[HealthKit] Current module keys:", AppleHealthKit ? Object.keys(AppleHealthKit) : "null");
       return false;
     } catch (e: any) {
       console.log("[HealthKit] isAvailable threw:", e?.message || e);
@@ -85,41 +116,48 @@ const appleHealthProvider: HealthDataProvider = {
     }
 
     try {
-      if (!AppleHealthKit?.Constants?.Permissions) {
-        console.log("[HealthKit] Permissions constants missing, trying initHealthKit directly");
-        if (typeof AppleHealthKit?.initHealthKit === "function") {
-          return new Promise<boolean>((resolve) => {
-            AppleHealthKit.initHealthKit({ permissions: { read: [], write: [] } }, (err: string) => {
-              console.log("[HealthKit] initHealthKit with empty perms:", err || "success");
-              resolve(!err);
-            });
-          });
-        }
-        return false;
+      const perms = AppleHealthKit?.Constants?.Permissions;
+      console.log("[HealthKit] Permissions object exists:", !!perms);
+
+      const readPerms: any[] = [];
+      if (perms) {
+        if (perms.StepCount) readPerms.push(perms.StepCount);
+        if (perms.SleepAnalysis) readPerms.push(perms.SleepAnalysis);
+        if (perms.HeartRate) readPerms.push(perms.HeartRate);
+        if (perms.ActiveEnergyBurned) readPerms.push(perms.ActiveEnergyBurned);
+        if (perms.DistanceWalkingRunning) readPerms.push(perms.DistanceWalkingRunning);
+        if (perms.RestingHeartRate) readPerms.push(perms.RestingHeartRate);
+        if (perms.HeartRateVariabilitySDNN) readPerms.push(perms.HeartRateVariabilitySDNN);
+        if (perms.BasalEnergyBurned) readPerms.push(perms.BasalEnergyBurned);
+        if (perms.Weight) readPerms.push(perms.Weight);
+        if (perms.Workout) readPerms.push(perms.Workout);
       }
+
+      console.log("[HealthKit] Read permissions resolved:", readPerms.length, "types");
 
       const permissions = {
         permissions: {
-          read: [
-            AppleHealthKit.Constants.Permissions.StepCount,
-            AppleHealthKit.Constants.Permissions.HeartRate,
-            AppleHealthKit.Constants.Permissions.RestingHeartRate,
-            AppleHealthKit.Constants.Permissions.HeartRateVariabilitySDNN,
-            AppleHealthKit.Constants.Permissions.SleepAnalysis,
-            AppleHealthKit.Constants.Permissions.ActiveEnergyBurned,
-            AppleHealthKit.Constants.Permissions.BasalEnergyBurned,
-            AppleHealthKit.Constants.Permissions.Weight,
-            AppleHealthKit.Constants.Permissions.DistanceWalkingRunning,
-          ],
+          read: readPerms,
           write: [],
         },
       };
-      console.log("[HealthKit] Requesting permissions with:", JSON.stringify(permissions.permissions.read));
+
+      if (typeof AppleHealthKit.initHealthKit !== "function") {
+        console.log("[HealthKit] initHealthKit is not a function, type:", typeof AppleHealthKit.initHealthKit);
+        return false;
+      }
+
+      console.log("[HealthKit] Calling initHealthKit with", readPerms.length, "read permissions");
       return new Promise<boolean>((resolve) => {
-        AppleHealthKit.initHealthKit(permissions, (err: string) => {
-          console.log("[HealthKit] initHealthKit result:", err || "success");
-          resolve(!err);
-        });
+        try {
+          AppleHealthKit.initHealthKit(permissions, (err: string) => {
+            console.log("[HealthKit] initHealthKit result:", err || "success");
+            resolve(!err);
+          });
+        } catch (callErr: any) {
+          console.log("[HealthKit] initHealthKit call threw:", callErr?.message || callErr);
+          resolve(false);
+        }
       });
     } catch (e: any) {
       console.log("[HealthKit] requestPermissions threw:", e?.message || e);
@@ -271,6 +309,12 @@ export async function connectProvider(
 
   try {
     console.log(`[connectProvider] Starting connection for ${id}`);
+    console.log(`[connectProvider] AppleHealthKit module exists:`, !!AppleHealthKit);
+    console.log(`[connectProvider] AppleHealthKit keys:`, AppleHealthKit ? Object.keys(AppleHealthKit).slice(0, 15) : "null");
+    console.log(`[connectProvider] isAvailable type:`, typeof AppleHealthKit?.isAvailable);
+    console.log(`[connectProvider] initHealthKit type:`, typeof AppleHealthKit?.initHealthKit);
+    console.log(`[connectProvider] Constants type:`, typeof AppleHealthKit?.Constants);
+
     const available = await provider.isAvailable();
     console.log(`[connectProvider] isAvailable result for ${id}:`, available);
 

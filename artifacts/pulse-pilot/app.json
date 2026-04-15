@@ -7,7 +7,7 @@
     "icon": "./assets/icon.png",
     "scheme": "viva",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "owner": "sullyk97",
     "splash": {
       "image": "./assets/images/icon.png",
@@ -18,7 +18,7 @@
       "icon": "./assets/icon.png",
       "supportsTablet": false,
       "bundleIdentifier": "com.sullyk97.vivaai",
-      "buildNumber": "7",
+      "buildNumber": "8",
       "config": {
         "usesNonExemptEncryption": false
       },
@@ -56,11 +56,11 @@
       ]
     ],
     "extra": {
-    "eas": {
-      "projectId": "ac5d39aa-6233-4364-ac00-5669c1460678"
-    }
+      "eas": {
+        "projectId": "ac5d39aa-6233-4364-ac00-5669c1460678"
+      }
     },
-  "experiments": {
+    "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     }

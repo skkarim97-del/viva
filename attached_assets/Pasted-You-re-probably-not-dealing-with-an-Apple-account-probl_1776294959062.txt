@@ -1,0 +1,144 @@
+You’re probably not dealing with an Apple account problem anymore. You’re dealing with a runtime HealthKit wiring problem inside the app. Since the app now builds and gets to TestFlight, the highest-probability failure is that react-native-health is not exposing isAvailable / initHealthKit correctly at runtime on newer React Native setups, or your permission state is already stuck after an earlier deny. Both are known pain points.
+
+The hard truth: if your TestFlight build on a real iPhone says Apple Health is “not available,” that message is often misleading. react-native-health has open issues where AppleHealthKit.initHealthKit and isAvailable are undefined on React Native 0.76.x, and one confirmed workaround is to stop relying on the current default export shape. Expo SDK 54 also still allows disabling the New Architecture, which is worth trying immediately because New Architecture incompatibility is a documented risk area for third-party native modules.
+
+Do this next, in this order.
+
+1. Instrument the app so you know what is actually failing. Add a temporary log right before the connect flow:
+
+import { Platform } from 'react-native';
+
+const AppleHealthKit =
+  Platform.OS === 'ios' ? require('react-native-health') : null;
+
+console.log('HK module exists:', !!AppleHealthKit);
+console.log('HK keys:', AppleHealthKit ? Object.keys(AppleHealthKit) : []);
+console.log('HK isAvailable type:', typeof AppleHealthKit?.isAvailable);
+console.log('HK initHealthKit type:', typeof AppleHealthKit?.initHealthKit);
+console.log('HK Constants type:', typeof AppleHealthKit?.Constants);
+
+If isAvailable or initHealthKit prints undefined, stop blaming HealthKit entitlements. Your native module bridge is the problem. That lines up with the open react-native-health issues on RN 0.76.x.
+
+2. Change the import style now. Don’t use the default import form for this library for the moment. Use a runtime require on iOS, then call the methods off that object. That matches the workaround reported in the library issue.
+
+Use this pattern:
+
+import { Platform } from 'react-native';
+
+const AppleHealthKit =
+  Platform.OS === 'ios' ? require('react-native-health') : null;
+
+Then initialize like this:
+
+const permissions = {
+  permissions: {
+    read: [
+      AppleHealthKit.Constants.Permissions.StepCount,
+      AppleHealthKit.Constants.Permissions.SleepAnalysis,
+      AppleHealthKit.Constants.Permissions.HeartRate,
+      AppleHealthKit.Constants.Permissions.ActiveEnergyBurned,
+      AppleHealthKit.Constants.Permissions.DistanceWalkingRunning,
+      AppleHealthKit.Constants.Permissions.Workout,
+    ],
+    write: [],
+  },
+};
+
+AppleHealthKit.initHealthKit(permissions, (err: string) => {
+  console.log('initHealthKit err:', err);
+});
+
+The library’s own docs require initHealthKit with an explicit permissions object before reading data.
+
+3. Disable the New Architecture for now. On Expo SDK 54 and earlier, newArchEnabled: false is still supported. Since react-native-health has an open issue tied to the new bridgeless architecture and lazy native module loading, this is a very reasonable short-term move.
+
+In app.json:
+
+{
+  "expo": {
+    "newArchEnabled": false
+  }
+}
+
+Then do a fresh rebuild. This is not optional. Plugin and native config changes require a rebuild.
+
+4. Make sure you’re testing in a real iPhone release build, not Expo Go, not simulator logic. react-native-health explicitly does not work in Expo Go because it requires custom native code. Expo says the same general thing about native libraries that are not bundled into Expo Go.
+
+5. Reset permissions the right way. Apple’s privacy model means if you previously denied a specific Health permission, the app usually cannot re-prompt for that same permission. You have to go into Apple Health and grant access manually, or remove the app and retry. The library docs call this out directly.
+
+On the iPhone, do this:
+
+Open Health
+Tap your profile
+Open Apps or Sources
+Find your app
+Turn on the exact categories you want to read
+If the app does not appear there, your runtime initialization likely never succeeded
+If you denied things earlier, uninstall the TestFlight build, reinstall it, and retry after the code fix
+
+6. Verify the entitlement is truly present in the built config. Expo says EAS reads entitlements from the introspected app config and syncs supported capabilities like HealthKit during eas build. Check that your introspected config shows the HealthKit entitlement, then rebuild.
+
+Run:
+
+npx expo config --type introspect
+
+You want to see HealthKit-related entitlements in the iOS section. EAS should then sync them to Apple on build.
+
+7. Don’t over-request permissions on the first pass. Ask for a tiny set first, like Step Count and Sleep Analysis. HealthKit authorization is fine-grained and Apple requires you to request read/share access per data type. Also, for reads, the privacy model makes “denied” and “no data” hard to distinguish, so start with categories you know definitely have data in the Health app.
+
+8. Make sure you’re on an iPhone, not iPad logic. Apple’s isHealthDataAvailable() behavior is weird outside iPhone use cases. Apple notes that while the framework exists on some other platforms, the app may not be able to read or write HealthKit data there. For shipping universal apps, Apple also documents healthkit as an iPhone-limiting device capability if you declare it in UIRequiredDeviceCapabilities.
+
+Here is the exact prompt I’d give Replit Agent right now:
+
+Fix Apple HealthKit runtime integration for the Expo iOS app.
+
+Make these changes exactly:
+
+1. Replace any default import of react-native-health with a runtime iOS require:
+   const AppleHealthKit = Platform.OS === 'ios' ? require('react-native-health') : null;
+
+2. Add temporary console logs before the connect flow:
+   - whether AppleHealthKit exists
+   - Object.keys(AppleHealthKit)
+   - typeof AppleHealthKit.isAvailable
+   - typeof AppleHealthKit.initHealthKit
+   - typeof AppleHealthKit.Constants
+
+3. Update the Health connect flow to call initHealthKit with a minimal permissions object:
+   read:
+   - StepCount
+   - SleepAnalysis
+   - HeartRate
+   - ActiveEnergyBurned
+   - DistanceWalkingRunning
+   - Workout
+   write: []
+
+4. If the code currently shows “Apple Health is not available on this device,” change that logic so it logs the raw module state and raw error first before showing any UX fallback.
+
+5. In app.json, set:
+   "expo": {
+     "newArchEnabled": false
+   }
+
+6. Keep only the official react-native-health config plugin in plugins.
+
+7. Bump ios.buildNumber by 1.
+
+8. Commit all changes.
+
+Then tell me exactly:
+- which file(s) were changed
+- the final connectAppleHealth function
+- whether AppleHealthKit.isAvailable and initHealthKit are defined at runtime
+- the exact next EAS build command
+
+My best read, ranked:
+
+react-native-health export / bridge issue on your current RN setup
+New Architecture incompatibility
+stale denied permission state in Apple Health
+entitlements not actually present in the built app
+requesting categories with no data and misreading that as failure
+
+If you send me the current HealthKit connect function and the exact log output for those four typeof checks, I can narrow this down fast.
