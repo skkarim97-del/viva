@@ -1,0 +1,148 @@
+What the screenshots prove
+
+HealthKit connection is now working
+Permissions screen is showing up properly
+The app is marked Synced
+initSucceeded: true means native HealthKit setup is no longer the blocker
+
+So the problem has shifted.
+
+What’s still broken
+
+The issue now is data retrieval / mapping / rendering, not connection.
+
+Your app is clearly still showing fallback zero values:
+
+Sleep averaged 0.0 hrs
+Recovery averaged 0%
+Steps averaged 0
+
+That means one of these is happening:
+
+1. You are not actually fetching the authorized HealthKit data after sync
+
+Very likely the app is successfully connecting, but the trends screen is still reading from empty local state, mock defaults, or an unpopulated API object.
+
+2. You are requesting too few data types
+
+From the permission screen, Viva AI currently has:
+
+Heart Rate
+Sleep
+Steps
+Walking + Running Distance
+
+But you said you also want:
+
+HRV
+Calories
+Maybe resting heart rate
+Maybe active energy burned
+Maybe basal energy burned
+
+Those are not currently included in the authorization screen, so the app cannot read them yet.
+
+3. Your “no data” state is being rendered as zero instead of null
+
+This is a UX/data bug.
+If sleep data is missing, the app should say:
+
+“No sleep data yet”
+“Waiting for wearable data”
+“Connect Apple Health to unlock trends”
+
+It should not say 0.0 hrs, 0%, or 0 steps unless that is literally true.
+
+4. You may be reading the wrong sample types or wrong time windows
+
+Common issue:
+
+querying the wrong identifier
+querying only today instead of last 7 days
+sleep category parsing is wrong
+data fetch happens before permissions resolve
+async fetch succeeds but never updates React state
+Biggest tell from your screenshots
+
+The debug box says sync succeeded, but the app UI still behaves like nothing populated.
+
+That strongly suggests:
+
+HealthKit init works, but your post-sync fetch pipeline is incomplete or broken.
+
+Not a native issue anymore.
+A JS app-state / data-mapping issue now.
+
+Also yes, you should include more Apple Health fields
+
+For Viva, the minimum useful read permissions should probably include:
+
+Heart Rate
+Resting Heart Rate
+Heart Rate Variability
+Sleep Analysis
+Step Count
+Walking + Running Distance
+Active Energy Burned
+Basal Energy Burned
+
+Potentially later:
+
+Body Weight
+Flights climbed
+VO2 max
+Respiratory rate
+
+But for now, HRV + calories + resting HR are the obvious missing ones.
+
+What I’d tell Replit exactly
+
+Paste this:
+
+HealthKit sync is now working. Native init succeeds and the app shows Synced, so the issue is no longer HealthKit connection.
+
+New problem:
+Apple Health data is not flowing through to the app UI after sync. The Trends screen is still showing fallback zero values like:
+- Sleep averaged 0.0 hrs
+- Recovery averaged 0%
+- Steps averaged 0
+
+This is misleading and should not render as zero when data is missing.
+
+Please fix the following:
+
+1. After successful HealthKit authorization, immediately fetch real Apple Health data and populate app state
+   - sleep
+   - heart rate
+   - steps
+   - walking/running distance
+
+2. Add additional Apple Health permissions and fetch support for:
+   - HRV
+   - resting heart rate
+   - active energy burned
+   - basal energy burned
+
+3. Audit the data pipeline from HealthKit -> parser -> app state -> Trends screen
+   - verify async fetch actually runs after init
+   - verify returned values are mapped into the Trends view model
+   - verify state updates trigger rerender
+
+4. Fix no-data handling
+   - if no data exists, show “No data yet” or “Waiting for Apple Health data”
+   - do NOT display 0.0 hrs, 0%, or 0 unless that is truly the returned value
+
+5. Add debug logging for each metric fetch:
+   - permission granted?
+   - raw Apple Health response
+   - parsed value
+   - final state value used by UI
+
+6. Ensure weekly aggregation uses the correct date range and sample types
+   - Sleep should aggregate actual sleep duration
+   - Steps should sum
+   - Heart rate / HRV should average appropriately
+   - Calories should sum daily and weekly
+
+Output:
+Tell me exactly which Apple Health metrics were successfully fetched, which were missing, and what state object is driving the Trends screen.

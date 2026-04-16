@@ -11,6 +11,10 @@ export interface HealthDebugInfo {
   callbackReached: boolean;
   initSucceeded: boolean | null;
   rawErrorText: string | null;
+  fetchCalled: boolean;
+  fetchSucceeded: boolean | null;
+  fetchErrorText: string | null;
+  sampleCounts: string;
 }
 
 let _debugInfo: HealthDebugInfo = {
@@ -23,6 +27,10 @@ let _debugInfo: HealthDebugInfo = {
   callbackReached: false,
   initSucceeded: null,
   rawErrorText: null,
+  fetchCalled: false,
+  fetchSucceeded: null,
+  fetchErrorText: null,
+  sampleCounts: "",
 };
 
 let _debugListeners: Array<() => void> = [];
@@ -40,6 +48,26 @@ export function onDebugUpdate(fn: () => void) {
 
 function notifyDebug() {
   _debugListeners.forEach((fn) => fn());
+}
+
+let _AppleHealthKit: any = null;
+
+function resolveAppleHealthKit(): any {
+  if (_AppleHealthKit) return _AppleHealthKit;
+  if (Platform.OS !== "ios") return null;
+  try {
+    const mod = require("react-native-health");
+    const resolved =
+      mod && typeof mod.initHealthKit === "function"
+        ? mod
+        : mod?.default && typeof mod.default.initHealthKit === "function"
+        ? mod.default
+        : null;
+    if (resolved) _AppleHealthKit = resolved;
+    return resolved;
+  } catch {
+    return null;
+  }
 }
 
 export async function connectAppleHealth(): Promise<{ success: boolean; error?: string }> {
@@ -68,8 +96,6 @@ export async function connectAppleHealth(): Promise<{ success: boolean; error?: 
 
   console.log("[HealthKit] root keys:", rootKeys);
   console.log("[HealthKit] default keys:", defaultKeys);
-  console.log("[HealthKit] typeof mod.initHealthKit:", typeof mod?.initHealthKit);
-  console.log("[HealthKit] typeof mod.default?.initHealthKit:", typeof mod?.default?.initHealthKit);
 
   const AppleHealthKit =
     mod && typeof mod.initHealthKit === "function"
@@ -82,24 +108,26 @@ export async function connectAppleHealth(): Promise<{ success: boolean; error?: 
   _debugInfo.initFunctionExists = AppleHealthKit !== null && typeof AppleHealthKit.initHealthKit === "function";
   notifyDebug();
 
-  console.log("[HealthKit] resolved AppleHealthKit:", AppleHealthKit ? "found" : "NULL");
-  console.log("[HealthKit] usingDefaultExport:", _debugInfo.usingDefaultExport);
-  console.log("[HealthKit] initFunctionExists:", _debugInfo.initFunctionExists);
-
   if (!AppleHealthKit) {
     _debugInfo.rawErrorText = "initHealthKit missing on both root and default export";
     notifyDebug();
-    console.log("[HealthKit] FATAL:", _debugInfo.rawErrorText);
     return { success: false, error: _debugInfo.rawErrorText };
   }
 
+  _AppleHealthKit = AppleHealthKit;
+
+  const P = AppleHealthKit?.Constants?.Permissions ?? {};
   const options = {
     permissions: {
       read: [
-        AppleHealthKit?.Constants?.Permissions?.StepCount,
-        AppleHealthKit?.Constants?.Permissions?.HeartRate,
-        AppleHealthKit?.Constants?.Permissions?.SleepAnalysis,
-        AppleHealthKit?.Constants?.Permissions?.DistanceWalkingRunning,
+        P.StepCount,
+        P.HeartRate,
+        P.RestingHeartRate,
+        P.HeartRateVariability,
+        P.SleepAnalysis,
+        P.DistanceWalkingRunning,
+        P.ActiveEnergyBurned,
+        P.BasalEnergyBurned,
       ].filter(Boolean),
       write: [],
     },
@@ -107,12 +135,12 @@ export async function connectAppleHealth(): Promise<{ success: boolean; error?: 
 
   _debugInfo.initCalled = true;
   notifyDebug();
-  console.log("[HealthKit] Calling initHealthKit NOW with options:", JSON.stringify(options));
+  console.log("[HealthKit] Calling initHealthKit with permissions:", options.permissions.read);
 
   return new Promise<{ success: boolean; error?: string }>((resolve) => {
-    AppleHealthKit.initHealthKit(options, (err: string, results: any) => {
+    AppleHealthKit.initHealthKit(options, (err: string) => {
       _debugInfo.callbackReached = true;
-      console.log("[HealthKit] initHealthKit callback. err:", err || "none", "results:", results);
+      console.log("[HealthKit] initHealthKit callback. err:", err || "none");
 
       if (err) {
         _debugInfo.initSucceeded = false;
@@ -146,29 +174,162 @@ function daysAgoDate(days: number): Date {
   return d;
 }
 
-function fillDefaults(partial: Partial<HealthMetrics>[], days: number): HealthMetrics[] {
-  const result: HealthMetrics[] = [];
-  for (let i = 0; i < days; i++) {
-    const d = dateStr(daysAgoDate(days - 1 - i));
-    const existing = partial.find((m) => m.date === d) || {};
-    result.push({
-      date: d,
-      steps: existing.steps ?? 0,
-      caloriesBurned: existing.caloriesBurned ?? 0,
-      activeCalories: existing.activeCalories ?? 0,
-      restingHeartRate: existing.restingHeartRate ?? 0,
-      hrv: existing.hrv ?? 0,
-      weight: existing.weight ?? result[result.length - 1]?.weight ?? 0,
-      sleepDuration: existing.sleepDuration ?? 0,
-      sleepQuality: existing.sleepQuality ?? 0,
-      recoveryScore: existing.recoveryScore ?? 0,
-      strain: existing.strain ?? 0,
-      vo2Max: existing.vo2Max,
-      distance: existing.distance,
-      pace: existing.pace,
-    });
+type Sample = { startDate: string; endDate: string; value: number | string };
+
+function promisify<T>(fn: (opts: any, cb: (err: any, res: T) => void) => void, opts: any): Promise<T> {
+  return new Promise((resolve) => {
+    try {
+      fn(opts, (err, res) => {
+        if (err) {
+          console.log("[HealthKit fetch] error:", err);
+          resolve([] as unknown as T);
+        } else {
+          resolve(res);
+        }
+      });
+    } catch (e) {
+      console.log("[HealthKit fetch] threw:", e);
+      resolve([] as unknown as T);
+    }
+  });
+}
+
+function bucketByDate<T extends { startDate: string; value: any }>(samples: T[]): Record<string, T[]> {
+  const map: Record<string, T[]> = {};
+  for (const s of samples || []) {
+    const d = s.startDate?.split("T")[0];
+    if (!d) continue;
+    if (!map[d]) map[d] = [];
+    map[d].push(s);
   }
-  return result;
+  return map;
+}
+
+function avg(vals: number[]): number {
+  if (!vals.length) return 0;
+  return vals.reduce((a, b) => a + b, 0) / vals.length;
+}
+
+function sum(vals: number[]): number {
+  return vals.reduce((a, b) => a + b, 0);
+}
+
+async function fetchAppleHealthMetrics(days: number): Promise<HealthMetrics[]> {
+  const AHK = resolveAppleHealthKit();
+  if (!AHK) {
+    _debugInfo.fetchErrorText = "AppleHealthKit not resolved";
+    _debugInfo.fetchSucceeded = false;
+    notifyDebug();
+    return [];
+  }
+
+  _debugInfo.fetchCalled = true;
+  _debugInfo.fetchErrorText = null;
+  _debugInfo.fetchSucceeded = null;
+  notifyDebug();
+
+  const startDate = daysAgoDate(days - 1).toISOString();
+  const endDate = new Date().toISOString();
+  const baseOpts = { startDate, endDate };
+  const withLimit = { ...baseOpts, limit: 10000 };
+
+  console.log("[HealthKit fetch] window:", startDate, "to", endDate);
+
+  try {
+    const [
+      stepsRaw,
+      distanceRaw,
+      hrRaw,
+      restingHrRaw,
+      hrvRaw,
+      sleepRaw,
+      activeCalRaw,
+      basalCalRaw,
+    ] = await Promise.all([
+      promisify<Sample[]>(AHK.getDailyStepCountSamples?.bind(AHK) ?? (() => {}), baseOpts),
+      promisify<Sample[]>(AHK.getDailyDistanceWalkingRunningSamples?.bind(AHK) ?? (() => {}), baseOpts),
+      promisify<Sample[]>(AHK.getHeartRateSamples?.bind(AHK) ?? (() => {}), withLimit),
+      promisify<Sample[]>(AHK.getRestingHeartRateSamples?.bind(AHK) ?? (() => {}), withLimit),
+      promisify<Sample[]>(AHK.getHeartRateVariabilitySamples?.bind(AHK) ?? (() => {}), withLimit),
+      promisify<Sample[]>(AHK.getSleepSamples?.bind(AHK) ?? (() => {}), withLimit),
+      promisify<Sample[]>(AHK.getActiveEnergyBurned?.bind(AHK) ?? (() => {}), withLimit),
+      promisify<Sample[]>(AHK.getBasalEnergyBurned?.bind(AHK) ?? (() => {}), withLimit),
+    ]);
+
+    const counts = {
+      steps: stepsRaw?.length ?? 0,
+      distance: distanceRaw?.length ?? 0,
+      hr: hrRaw?.length ?? 0,
+      restingHr: restingHrRaw?.length ?? 0,
+      hrv: hrvRaw?.length ?? 0,
+      sleep: sleepRaw?.length ?? 0,
+      activeCal: activeCalRaw?.length ?? 0,
+      basalCal: basalCalRaw?.length ?? 0,
+    };
+    _debugInfo.sampleCounts = `steps:${counts.steps} dist:${counts.distance} hr:${counts.hr} rhr:${counts.restingHr} hrv:${counts.hrv} sleep:${counts.sleep} aCal:${counts.activeCal} bCal:${counts.basalCal}`;
+    console.log("[HealthKit fetch] sample counts:", counts);
+
+    const stepsByDate = bucketByDate(stepsRaw || []);
+    const distanceByDate = bucketByDate(distanceRaw || []);
+    const hrByDate = bucketByDate(hrRaw || []);
+    const restingHrByDate = bucketByDate(restingHrRaw || []);
+    const hrvByDate = bucketByDate(hrvRaw || []);
+    const activeCalByDate = bucketByDate(activeCalRaw || []);
+    const basalCalByDate = bucketByDate(basalCalRaw || []);
+
+    // Sleep: aggregate ASLEEP (or CORE/DEEP/REM) durations per day, keyed by date of startDate.
+    const sleepDurationByDate: Record<string, number> = {};
+    for (const s of sleepRaw || []) {
+      if (!s.startDate || !s.endDate) continue;
+      const v = typeof s.value === "string" ? s.value.toUpperCase() : "";
+      const isAsleep = v === "ASLEEP" || v === "CORE" || v === "DEEP" || v === "REM" || v === "ASLEEPUNSPECIFIED";
+      if (!isAsleep) continue;
+      const dayKey = s.startDate.split("T")[0];
+      const hours = (new Date(s.endDate).getTime() - new Date(s.startDate).getTime()) / 3_600_000;
+      if (hours <= 0 || hours > 16) continue;
+      sleepDurationByDate[dayKey] = (sleepDurationByDate[dayKey] || 0) + hours;
+    }
+
+    const result: HealthMetrics[] = [];
+    for (let i = 0; i < days; i++) {
+      const d = dateStr(daysAgoDate(days - 1 - i));
+      const stepsVal = sum((stepsByDate[d] || []).map((s) => Number(s.value) || 0));
+      const distanceVal = sum((distanceByDate[d] || []).map((s) => Number(s.value) || 0));
+      const hrSamples = (hrByDate[d] || []).map((s) => Number(s.value) || 0).filter((v) => v > 0);
+      const restingHrSamples = (restingHrByDate[d] || []).map((s) => Number(s.value) || 0).filter((v) => v > 0);
+      const hrvSamples = (hrvByDate[d] || []).map((s) => Number(s.value) || 0).filter((v) => v > 0);
+      const activeCalVal = sum((activeCalByDate[d] || []).map((s) => Number(s.value) || 0));
+      const basalCalVal = sum((basalCalByDate[d] || []).map((s) => Number(s.value) || 0));
+
+      const restingHr = restingHrSamples.length > 0 ? avg(restingHrSamples) : hrSamples.length > 0 ? avg(hrSamples) : 0;
+
+      result.push({
+        date: d,
+        steps: Math.round(stepsVal),
+        caloriesBurned: Math.round(activeCalVal + basalCalVal),
+        activeCalories: Math.round(activeCalVal),
+        restingHeartRate: Math.round(restingHr),
+        hrv: Math.round(avg(hrvSamples)),
+        weight: 0,
+        sleepDuration: Math.round((sleepDurationByDate[d] || 0) * 10) / 10,
+        sleepQuality: 0,
+        recoveryScore: 0,
+        strain: 0,
+        distance: distanceVal > 0 ? Math.round(distanceVal) : undefined,
+      });
+    }
+
+    _debugInfo.fetchSucceeded = true;
+    notifyDebug();
+    console.log("[HealthKit fetch] metrics ready for", days, "days. Last 3:", result.slice(-3));
+    return result;
+  } catch (e: any) {
+    _debugInfo.fetchSucceeded = false;
+    _debugInfo.fetchErrorText = `fetch exception: ${e?.message ?? String(e)}`;
+    notifyDebug();
+    console.log("[HealthKit fetch] exception:", e);
+    return [];
+  }
 }
 
 const appleHealthProvider: HealthDataProvider = {
@@ -182,7 +343,7 @@ const appleHealthProvider: HealthDataProvider = {
     return result.success;
   },
   async fetchMetrics(days: number) {
-    return fillDefaults([], days);
+    return fetchAppleHealthMetrics(days);
   },
 };
 
