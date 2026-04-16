@@ -25,7 +25,7 @@
       "node": "20.18.0",
       "pnpm": "10.26.1",
       "cache": {
-        "key": "ios-rn-health-clean-1"
+        "key": "ios-rn-health-clean-2"
       },
       "ios": {
         "image": "macos-sequoia-15.3-xcode-16.2"
