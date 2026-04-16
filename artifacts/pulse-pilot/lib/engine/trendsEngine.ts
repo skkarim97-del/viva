@@ -271,6 +271,13 @@ export function buildGLP1Insights(
     }
   }
 
+  // Gate any recovery-score correlation on actual availability. recoveryScore is not yet derived,
+  // so without real samples these blocks would emit misleading "no change" conclusions.
+  const recoverySamples14 = recent14.map(m => m.recoveryScore).filter((v): v is number => typeof v === "number");
+  const hasRecoveryTrend = recoverySamples14.length >= 6;
+  const recoverySamples7 = recent7.map(m => m.recoveryScore).filter((v): v is number => typeof v === "number");
+  const hasRecoveryWeek = recoverySamples7.length >= 4;
+
   const titration = buildTitrationContext(medicationProfile);
   if (titration.isWithinTitrationWindow && recent14.length >= 5) {
     const daysSince = titration.daysSinceDoseChange ?? 0;
@@ -284,9 +291,11 @@ export function buildGLP1Insights(
 
     const firstHalf = recent14.slice(0, Math.floor(recent14.length / 2));
     const secondHalf = recent14.slice(Math.floor(recent14.length / 2));
-    if (firstHalf.length >= 2 && secondHalf.length >= 2) {
-      const avgRecFirst = firstHalf.reduce((s, m) => s + (m.recoveryScore ?? 0), 0) / firstHalf.length;
-      const avgRecSecond = secondHalf.reduce((s, m) => s + (m.recoveryScore ?? 0), 0) / secondHalf.length;
+    const firstRec = firstHalf.map(m => m.recoveryScore).filter((v): v is number => typeof v === "number");
+    const secondRec = secondHalf.map(m => m.recoveryScore).filter((v): v is number => typeof v === "number");
+    if (hasRecoveryTrend && firstRec.length >= 2 && secondRec.length >= 2) {
+      const avgRecFirst = firstRec.reduce((s, v) => s + v, 0) / firstRec.length;
+      const avgRecSecond = secondRec.reduce((s, v) => s + v, 0) / secondRec.length;
       if (avgRecFirst - avgRecSecond > 5) {
         insights.push({
           text: `Recovery appears to have dipped since your recent dose increase. This may be related to the adjustment period and usually stabilizes within 1-2 weeks.`,
@@ -310,11 +319,15 @@ export function buildGLP1Insights(
         color: "#AF52DE",
       });
     }
-  } else if (medicationProfile.recentTitration && recent14.length >= 10) {
+  } else if (medicationProfile.recentTitration && recent14.length >= 10 && hasRecoveryTrend) {
     const firstHalf = recent14.slice(0, 7);
     const secondHalf = recent14.slice(7);
-    const avgRecFirst = firstHalf.reduce((s, m) => s + (m.recoveryScore ?? 0), 0) / firstHalf.length;
-    const avgRecSecond = secondHalf.reduce((s, m) => s + (m.recoveryScore ?? 0), 0) / secondHalf.length;
+    const firstRec = firstHalf.map(m => m.recoveryScore).filter((v): v is number => typeof v === "number");
+    const secondRec = secondHalf.map(m => m.recoveryScore).filter((v): v is number => typeof v === "number");
+    if (firstRec.length < 3 || secondRec.length < 3) { /* insufficient samples */ }
+    else {
+    const avgRecFirst = firstRec.reduce((s, v) => s + v, 0) / firstRec.length;
+    const avgRecSecond = secondRec.reduce((s, v) => s + v, 0) / secondRec.length;
     if (avgRecFirst - avgRecSecond > 5) {
       insights.push({
         text: `Recovery dropped by ${Math.round(avgRecFirst - avgRecSecond)}% since your recent dose increase. This usually stabilizes within 1-2 weeks as your body adjusts.`,
@@ -328,14 +341,17 @@ export function buildGLP1Insights(
         color: "#34C759",
       });
     }
+    }
   }
 
-  const recent7Sleep = recent7.reduce((s, m) => s + m.sleepDuration, 0) / recent7.length;
+  // Sleep-vs-recovery correlation: require real recovery samples in both buckets.
   const lowSleepDays = recent7.filter(m => m.sleepDuration < 6.5);
-  const lowSleepRecovery = lowSleepDays.length > 0 ? lowSleepDays.reduce((s, m) => s + (m.recoveryScore ?? 0), 0) / lowSleepDays.length : 0;
   const goodSleepDays = recent7.filter(m => m.sleepDuration >= 7);
-  const goodSleepRecovery = goodSleepDays.length > 0 ? goodSleepDays.reduce((s, m) => s + (m.recoveryScore ?? 0), 0) / goodSleepDays.length : 0;
-  if (lowSleepDays.length >= 2 && goodSleepDays.length >= 2 && goodSleepRecovery - lowSleepRecovery > 8) {
+  const lowSleepRecSamples = lowSleepDays.map(m => m.recoveryScore).filter((v): v is number => typeof v === "number");
+  const goodSleepRecSamples = goodSleepDays.map(m => m.recoveryScore).filter((v): v is number => typeof v === "number");
+  const lowSleepRecovery = lowSleepRecSamples.length > 0 ? lowSleepRecSamples.reduce((s, v) => s + v, 0) / lowSleepRecSamples.length : 0;
+  const goodSleepRecovery = goodSleepRecSamples.length > 0 ? goodSleepRecSamples.reduce((s, v) => s + v, 0) / goodSleepRecSamples.length : 0;
+  if (hasRecoveryWeek && lowSleepRecSamples.length >= 2 && goodSleepRecSamples.length >= 2 && goodSleepRecovery - lowSleepRecovery > 8) {
     insights.push({
       text: `Nights under 6.5 hrs drop your recovery by ${Math.round(goodSleepRecovery - lowSleepRecovery)}% compared to 7+ hr nights. On treatment, sleep is one of your strongest levers.`,
       icon: "moon",
@@ -347,13 +363,14 @@ export function buildGLP1Insights(
   for (const cr of completionHistory) {
     completionMap.set(cr.date.slice(0, 10), cr.completionRate);
   }
-  if (completionHistory.length >= 5 && recent7.length >= 5) {
+  if (hasRecoveryWeek && completionHistory.length >= 5 && recent7.length >= 5) {
     const highCompNextDayRecovery: number[] = [];
     const lowCompNextDayRecovery: number[] = [];
     for (let i = 0; i < recent7.length - 1; i++) {
       const todayRate = completionMap.get(recent7[i].date.slice(0, 10));
       if (todayRate === undefined) continue;
-      const nextDayRecovery = recent7[i + 1].recoveryScore ?? 0;
+      const nextDayRecovery = recent7[i + 1].recoveryScore;
+      if (typeof nextDayRecovery !== "number") continue;
       if (todayRate >= 80) highCompNextDayRecovery.push(nextDayRecovery);
       else if (todayRate < 50) lowCompNextDayRecovery.push(nextDayRecovery);
     }

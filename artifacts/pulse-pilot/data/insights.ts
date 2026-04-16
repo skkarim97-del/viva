@@ -99,12 +99,25 @@ function computeTrainingLoad(last14: HealthMetrics[], workouts: WorkoutEntry[]) 
     return sum + w.duration * (intensityMap[w.intensity] || 2);
   }, 0);
 
-  const avgStrain = last14.reduce((s, m) => s + (m.strain ?? 0), 0) / last14.length;
-  const recentStrain = last14.slice(-7).reduce((s, m) => s + (m.strain ?? 0), 0) / Math.min(7, last14.slice(-7).length);
-  const olderStrain = last14.slice(0, 7).reduce((s, m) => s + (m.strain ?? 0), 0) / Math.min(7, last14.slice(0, 7).length);
+  // Strain is not yet derived from HealthKit. Only use it when we actually have samples;
+  // otherwise describe trend from workout-load deltas and omit the exertion number entirely.
+  const strainAll = last14.map(m => m.strain).filter((v): v is number => typeof v === "number");
+  const strainRecent = last14.slice(-7).map(m => m.strain).filter((v): v is number => typeof v === "number");
+  const strainOlder = last14.slice(0, 7).map(m => m.strain).filter((v): v is number => typeof v === "number");
+  const hasStrain = strainAll.length >= 3 && strainRecent.length >= 2 && strainOlder.length >= 2;
+  const avgStrain = hasStrain ? strainAll.reduce((s, v) => s + v, 0) / strainAll.length : 0;
+  const recentStrain = hasStrain ? strainRecent.reduce((s, v) => s + v, 0) / strainRecent.length : 0;
+  const olderStrain = hasStrain ? strainOlder.reduce((s, v) => s + v, 0) / strainOlder.length : 0;
 
-  const trend: "rising" | "falling" | "stable" =
-    recentStrain > olderStrain * 1.15 ? "rising" : recentStrain < olderStrain * 0.85 ? "falling" : "stable";
+  // Fall back to workout-count trend when strain is not available.
+  const recentWorkoutCount = recentWorkouts.filter(w => {
+    const wDate = new Date(w.date).getTime();
+    return wDate >= Date.now() - 7 * 24 * 60 * 60 * 1000;
+  }).length;
+  const olderWorkoutCount = recentWorkouts.length - recentWorkoutCount;
+  const trend: "rising" | "falling" | "stable" = hasStrain
+    ? (recentStrain > olderStrain * 1.15 ? "rising" : recentStrain < olderStrain * 0.85 ? "falling" : "stable")
+    : (recentWorkoutCount > olderWorkoutCount + 1 ? "rising" : recentWorkoutCount < olderWorkoutCount - 1 ? "falling" : "stable");
 
   let label = "Moderate";
   if (loadScore > 400) label = "High";
@@ -112,7 +125,8 @@ function computeTrainingLoad(last14: HealthMetrics[], workouts: WorkoutEntry[]) 
   else if (loadScore < 150) label = "Low";
 
   const trendWord = trend === "rising" ? "increasing" : trend === "falling" ? "decreasing" : "steady";
-  const detail = `${recentWorkouts.length} active days in the past 2 weeks. Average exertion is ${avgStrain.toFixed(1)}. Activity level is ${trendWord}. ${
+  const exertionLine = hasStrain ? ` Average exertion is ${avgStrain.toFixed(1)}.` : "";
+  const detail = `${recentWorkouts.length} active days in the past 2 weeks.${exertionLine} Activity level is ${trendWord}. ${
     trend === "rising"
       ? "Make sure recovery keeps pace. If recovery dips below 50%, a lighter day will help."
       : trend === "falling"
@@ -124,12 +138,21 @@ function computeTrainingLoad(last14: HealthMetrics[], workouts: WorkoutEntry[]) 
 }
 
 function computeRecoveryTrend(last7: HealthMetrics[]) {
+  // Recovery score is not yet derived on this build. If no real recovery samples exist,
+  // return a neutral state with an empty detail so the UI can suppress the card.
+  const recoverySeries = last7
+    .map(m => (typeof m.recoveryScore === "number" ? m.recoveryScore : null));
+  const realCount = recoverySeries.filter(v => v !== null).length;
+  if (realCount < 3) {
+    return { direction: "stable" as const, streak: 0, detail: "" };
+  }
+
   let improving = 0;
   let declining = 0;
-
-  for (let i = 1; i < last7.length; i++) {
-    const cur = last7[i].recoveryScore ?? 0;
-    const prev = last7[i - 1].recoveryScore ?? 0;
+  for (let i = 1; i < recoverySeries.length; i++) {
+    const cur = recoverySeries[i];
+    const prev = recoverySeries[i - 1];
+    if (cur === null || prev === null) continue;
     if (cur > prev) improving++;
     else if (cur < prev) declining++;
   }
@@ -137,12 +160,14 @@ function computeRecoveryTrend(last7: HealthMetrics[]) {
   const direction: "improving" | "declining" | "stable" =
     improving >= declining + 2 ? "improving" : declining >= improving + 2 ? "declining" : "stable";
 
-  const avg = last7.reduce((s, m) => s + (m.recoveryScore ?? 0), 0) / last7.length;
+  const nonNull = recoverySeries.filter((v): v is number => v !== null);
+  const avg = nonNull.reduce((s, v) => s + v, 0) / nonNull.length;
 
   let streak = 0;
-  for (let i = last7.length - 1; i > 0; i--) {
-    const cur = last7[i].recoveryScore ?? 0;
-    const prev = last7[i - 1].recoveryScore ?? 0;
+  for (let i = recoverySeries.length - 1; i > 0; i--) {
+    const cur = recoverySeries[i];
+    const prev = recoverySeries[i - 1];
+    if (cur === null || prev === null) break;
     if (direction === "improving" && cur >= prev) streak++;
     else if (direction === "declining" && cur <= prev) streak++;
     else break;
@@ -163,8 +188,14 @@ function computeWeightProjection(last30: HealthMetrics[], profile: UserProfile) 
     return { weeksToGoal: null, rate: 0, detail: "Not enough data to project weight trends yet.", onTrack: false };
   }
 
-  const first7Avg = last30.slice(0, 7).reduce((s, m) => s + (m.weight ?? 0), 0) / 7;
-  const last7Avg = last30.slice(-7).reduce((s, m) => s + (m.weight ?? 0), 0) / 7;
+  // Pairwise non-null: an unlogged weight day must not drag the average to zero.
+  const first7Weights = last30.slice(0, 7).map(m => m.weight).filter((v): v is number => typeof v === "number");
+  const last7Weights = last30.slice(-7).map(m => m.weight).filter((v): v is number => typeof v === "number");
+  if (first7Weights.length < 3 || last7Weights.length < 3) {
+    return { weeksToGoal: null, rate: 0, detail: "Log weight regularly to project trends.", onTrack: false };
+  }
+  const first7Avg = first7Weights.reduce((s, v) => s + v, 0) / first7Weights.length;
+  const last7Avg = last7Weights.reduce((s, v) => s + v, 0) / last7Weights.length;
   const weeklyRate = ((last7Avg - first7Avg) / (last30.length / 7));
   const remaining = last7Avg - profile.goalWeight;
 
@@ -218,9 +249,15 @@ function computeCalorieBalance(last7: HealthMetrics[], today: HealthMetrics) {
 }
 
 function computeHRVBaseline(last14: HealthMetrics[], today: HealthMetrics) {
-  const baseline = last14.reduce((s, m) => s + (m.hrv ?? 0), 0) / last14.length;
-  const deviation = (today.hrv ?? 0) - baseline;
-  const deviationPct = (deviation / baseline) * 100;
+  // Filter to only real HRV readings so missing nights never get treated as 0 ms, which
+  // would create a false "low HRV" signal.
+  const hrvSamples = last14.map(m => m.hrv).filter((v): v is number => typeof v === "number");
+  if (hrvSamples.length < 5 || typeof today.hrv !== "number") {
+    return { current: today.hrv, baseline: 0, deviation: 0, detail: "" };
+  }
+  const baseline = hrvSamples.reduce((s, v) => s + v, 0) / hrvSamples.length;
+  const deviation = today.hrv - baseline;
+  const deviationPct = baseline > 0 ? (deviation / baseline) * 100 : 0;
 
   let detail = "";
   if (deviationPct > 10) {
@@ -397,7 +434,11 @@ function generateWeekSummary(
 ) {
   const avgSleep = last7.reduce((s, m) => s + m.sleepDuration, 0) / last7.length;
   const avgSteps = Math.round(last7.reduce((s, m) => s + m.steps, 0) / last7.length);
-  const avgRecovery = Math.round(last7.reduce((s, m) => s + (m.recoveryScore ?? 0), 0) / last7.length);
+  // Only compute an avgRecovery when we actually have recovery samples; otherwise sentinel -1
+  // means "suppress any recovery-gated phrasing below".
+  const recoverySamples = last7.map(m => m.recoveryScore).filter((v): v is number => typeof v === "number");
+  const hasRecovery = recoverySamples.length >= 3;
+  const avgRecovery = hasRecovery ? Math.round(recoverySamples.reduce((s, v) => s + v, 0) / recoverySamples.length) : -1;
   const recentWorkouts = workouts.filter((w) => {
     const wDate = new Date(w.date).getTime();
     const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
@@ -406,21 +447,23 @@ function generateWeekSummary(
 
   const parts: string[] = [];
 
-  if (avgSleep >= 7.5 && avgRecovery >= 65 && avgSteps >= 7000) {
+  if (hasRecovery && avgSleep >= 7.5 && avgRecovery >= 65 && avgSteps >= 7000) {
     parts.push("Strong week overall. Your sleep, recovery, and daily movement have all been in a good range. This is exactly the foundation that supports your treatment.");
-  } else if (avgSleep >= 7 && avgRecovery >= 55) {
+  } else if (hasRecovery && avgSleep >= 7 && avgRecovery >= 55) {
     parts.push("A solid week. Sleep and recovery have held steady, giving your body a stable foundation during treatment.");
-  } else if (avgSleep < 6.5 && avgRecovery < 50) {
+  } else if (hasRecovery && avgSleep < 6.5 && avgRecovery < 50) {
     parts.push("A tough week for your body. Sleep has been short and recovery has not had a chance to bounce back. This can make side effects feel heavier.");
+  } else if (avgSleep >= 7.5 && avgSteps >= 7000) {
+    parts.push("Strong week overall. Your sleep and daily movement have both been in a good range, which gives your body a stable foundation during treatment.");
   } else if (avgSleep < 7) {
-    parts.push("Sleep was a bit thin this week, averaging " + avgSleep.toFixed(1) + " hours. That puts extra pressure on recovery and energy, which matters more on treatment.");
+    parts.push("Sleep was a bit thin this week, averaging " + avgSleep.toFixed(1) + " hours. That puts extra pressure on energy, which matters more on treatment.");
   } else {
     parts.push("A mixed week. Some areas are strong while others have room to improve.");
   }
 
-  if (recovery.direction === "improving") {
+  if (hasRecovery && recovery.direction === "improving") {
     parts.push("Recovery has been trending up, which means your body is adapting well to your current routine and treatment.");
-  } else if (recovery.direction === "declining") {
+  } else if (hasRecovery && recovery.direction === "declining") {
     parts.push("Recovery has been sliding down. A lighter pace with more rest and hydration would help your body catch up.");
   }
 
@@ -432,20 +475,24 @@ function generateWeekSummary(
     parts.push("Activity was light this week. Even small increases like a daily walk or gentle stretching can make a noticeable difference in energy and how your body handles treatment.");
   }
 
-  const avgSleepQuality = last7.reduce((s, m) => s + (m.sleepQuality ?? 0), 0) / last7.length;
-  if (avgSleepQuality >= 80 && avgSleep >= 7) {
-    parts.push("Sleep quality has been strong. Good rest is one of the most powerful things supporting your treatment right now.");
-  } else if (avgSleepQuality < 60) {
-    parts.push("Sleep quality has been low even when you have been in bed. Better wind-down habits or a cooler room might help you get deeper rest.");
-  } else if (avgSleepQuality < 70 && avgSleep >= 7) {
-    parts.push("You are getting enough sleep hours, but the quality could be better. Small changes to your evening routine can make a real difference.");
+  // Sleep quality is not derived yet. Skip the block entirely unless we have real samples.
+  const sleepQualitySamples = last7.map(m => m.sleepQuality).filter((v): v is number => typeof v === "number");
+  if (sleepQualitySamples.length >= 3) {
+    const avgSleepQuality = sleepQualitySamples.reduce((s, v) => s + v, 0) / sleepQualitySamples.length;
+    if (avgSleepQuality >= 80 && avgSleep >= 7) {
+      parts.push("Sleep quality has been strong. Good rest is one of the most powerful things supporting your treatment right now.");
+    } else if (avgSleepQuality < 60) {
+      parts.push("Sleep quality has been low even when you have been in bed. Better wind-down habits or a cooler room might help you get deeper rest.");
+    } else if (avgSleepQuality < 70 && avgSleep >= 7) {
+      parts.push("You are getting enough sleep hours, but the quality could be better. Small changes to your evening routine can make a real difference.");
+    }
   }
 
-  if (training.trend === "rising" && recovery.direction !== "improving") {
+  if (hasRecovery && training.trend === "rising" && recovery.direction !== "improving") {
     parts.push("Activity has been increasing, but recovery has not kept up yet. Watch for fatigue over the next few days.");
   }
 
-  if (sleep.hours > 5 && recovery.direction === "declining" && recentWorkouts.length >= 3) {
+  if (hasRecovery && sleep.hours > 5 && recovery.direction === "declining" && recentWorkouts.length >= 3) {
     parts.push("You have been putting in the effort, but your body is asking for more recovery time. Extra rest will help you stay consistent.");
   }
 
@@ -495,9 +542,17 @@ function computeSleepIntelligence(last14: HealthMetrics[], last7: HealthMetrics[
   if (recentAvg > olderAvg + 0.2) sleepTrend = "improving";
   else if (recentAvg < olderAvg - 0.2) sleepTrend = "declining";
 
-  const recentQualityAvg = last7.reduce((s, m) => s + (m.sleepQuality ?? 0), 0) / last7.length;
-  const olderQualityAvg = last14.slice(0, 7).reduce((s, m) => s + (m.sleepQuality ?? 0), 0) / Math.min(7, last14.slice(0, 7).length);
-  const qualityTrending = recentQualityAvg < olderQualityAvg - 5 ? "declining" : recentQualityAvg > olderQualityAvg + 5 ? "improving" : "stable";
+  // Sleep quality trend only meaningful when samples exist. Otherwise stable (neutral).
+  const recentQualitySamples = last7.map(m => m.sleepQuality).filter((v): v is number => typeof v === "number");
+  const olderQualitySamples = last14.slice(0, 7).map(m => m.sleepQuality).filter((v): v is number => typeof v === "number");
+  const qualityTrending: "declining" | "improving" | "stable" =
+    recentQualitySamples.length >= 3 && olderQualitySamples.length >= 3
+      ? (() => {
+          const recentQualityAvg = recentQualitySamples.reduce((s, v) => s + v, 0) / recentQualitySamples.length;
+          const olderQualityAvg = olderQualitySamples.reduce((s, v) => s + v, 0) / olderQualitySamples.length;
+          return recentQualityAvg < olderQualityAvg - 5 ? "declining" : recentQualityAvg > olderQualityAvg + 5 ? "improving" : "stable";
+        })()
+      : "stable";
 
   let insight = "";
   if (bedtimeConsistency === "inconsistent") {
@@ -576,24 +631,35 @@ function buildSignalProfile(
   const sleepVariance = last7.reduce((s, m) => s + Math.abs(m.sleepDuration - avgSleep7), 0) / last7.length;
   const sleepConsistent = sleepVariance < 0.6;
 
-  const hrvBaseline = last14.reduce((s, m) => s + (m.hrv ?? 0), 0) / last14.length;
-  const todayHrv = todayMetrics.hrv ?? 0;
-  const hrvDev = hrvBaseline > 0 ? ((todayHrv - hrvBaseline) / hrvBaseline) * 100 : 0;
+  // Only build HRV baseline from real samples; missing HRV cannot be treated as 0 ms.
+  const hrvSamples14 = last14.map(m => m.hrv).filter((v): v is number => typeof v === "number");
+  const hasHrv = hrvSamples14.length >= 5 && typeof todayMetrics.hrv === "number";
+  const hrvBaseline = hasHrv ? hrvSamples14.reduce((s, v) => s + v, 0) / hrvSamples14.length : 0;
+  const todayHrv = typeof todayMetrics.hrv === "number" ? todayMetrics.hrv : 0;
+  const hrvDev = hasHrv && hrvBaseline > 0 ? ((todayHrv - hrvBaseline) / hrvBaseline) * 100 : 0;
 
-  const todayRecovery = todayMetrics.recoveryScore ?? 0;
-  const recoveryLevel: "strong" | "moderate" | "low" =
-    todayRecovery >= 70 ? "strong" : todayRecovery >= 50 ? "moderate" : "low";
+  // Recovery is not implemented yet — when absent, default to "moderate" neutral so no coaching
+  // path that looks for "low" or "strong" fires on fake-zero data.
+  const recoverySamples14 = last14.map(m => m.recoveryScore).filter((v): v is number => typeof v === "number");
+  const hasRecovery = recoverySamples14.length >= 3 && typeof todayMetrics.recoveryScore === "number";
+  const todayRecovery = hasRecovery ? (todayMetrics.recoveryScore as number) : 60;
+  const recoveryLevel: "strong" | "moderate" | "low" = hasRecovery
+    ? (todayRecovery >= 70 ? "strong" : todayRecovery >= 50 ? "moderate" : "low")
+    : "moderate";
 
-  const avgRecovery14 = last14.reduce((s, m) => s + (m.recoveryScore ?? 0), 0) / last14.length;
-  const recoveryVsNormal: "above" | "below" | "normal" =
-    todayRecovery > avgRecovery14 + 8 ? "above" :
-    todayRecovery < avgRecovery14 - 8 ? "below" : "normal";
+  const avgRecovery14 = hasRecovery ? recoverySamples14.reduce((s, v) => s + v, 0) / recoverySamples14.length : 60;
+  const recoveryVsNormal: "above" | "below" | "normal" = hasRecovery
+    ? (todayRecovery > avgRecovery14 + 8 ? "above" : todayRecovery < avgRecovery14 - 8 ? "below" : "normal")
+    : "normal";
 
   let recoveryStreak = 0;
   let recoveryStreakDir: "improving" | "declining" | "stable" = "stable";
-  for (let i = last7.length - 1; i > 0; i--) {
-    const cur = last7[i].recoveryScore ?? 0;
-    const prev = last7[i - 1].recoveryScore ?? 0;
+  for (let i = hasRecovery ? last7.length - 1 : 0; i > 0; i--) {
+    const curRaw = last7[i].recoveryScore;
+    const prevRaw = last7[i - 1].recoveryScore;
+    if (typeof curRaw !== "number" || typeof prevRaw !== "number") break;
+    const cur = curRaw;
+    const prev = prevRaw;
     if (cur > prev + 3) {
       if (recoveryStreakDir === "stable" || recoveryStreakDir === "improving") {
         recoveryStreakDir = "improving";

@@ -401,9 +401,13 @@ export function generateDailyPlan(
   const last3 = last7.slice(-3);
   const last5 = recentMetrics?.slice(-5) ?? [];
 
-  const avg7Hrv = wearableAvailable && last7.length >= 7 ? last7.reduce((s, m) => s + (m.hrv ?? 0), 0) / last7.length : 0;
+  // Filter-non-null averages so an unavailable metric contributes nothing instead of a fake 0.
+  const hrvSamples7 = last7.map(m => m.hrv).filter((v): v is number => typeof v === "number");
+  const rhrSamples7 = last7.map(m => m.restingHeartRate).filter((v): v is number => typeof v === "number");
+  const strainSamples7 = last7.map(m => m.strain).filter((v): v is number => typeof v === "number");
+  const avg7Hrv = wearableAvailable && hrvSamples7.length >= 3 ? hrvSamples7.reduce((s, v) => s + v, 0) / hrvSamples7.length : 0;
   const avg7Sleep = wearableAvailable && last7.length >= 3 ? last7.reduce((s, m) => s + m.sleepDuration, 0) / last7.length : 0;
-  const avg7Rhr = wearableAvailable && last7.length >= 3 ? last7.reduce((s, m) => s + (m.restingHeartRate ?? 0), 0) / last7.length : 0;
+  const avg7Rhr = wearableAvailable && rhrSamples7.length >= 3 ? rhrSamples7.reduce((s, v) => s + v, 0) / rhrSamples7.length : 0;
 
   const hrvDeviation = wearableAvailable && avg7Hrv > 0 && typeof metrics.hrv === "number" ? ((metrics.hrv - avg7Hrv) / avg7Hrv) * 100 : 0;
   const rhrElevated = wearableAvailable && avg7Rhr > 0 && typeof metrics.restingHeartRate === "number" && metrics.restingHeartRate > avg7Rhr + 5;
@@ -414,18 +418,46 @@ export function generateDailyPlan(
     && (last5[last5.length - 1].hrv as number) < (last5[0].hrv as number) - 5
     && last5.every((m, i) => i === 0 || (m.hrv as number) <= (last5[i - 1].hrv as number) + 2);
 
-  const yesterdayStrain = wearableAvailable && last7.length >= 2 ? last7[last7.length - 2]?.strain ?? 0 : 0;
-  const avgStrain = wearableAvailable && last7.length >= 3 ? last7.reduce((s, m) => s + (m.strain ?? 0), 0) / last7.length : 5;
+  // Strain is not implemented yet: all samples are null. Use neutral (5 of 21) instead of fake 0
+  // so the user is never penalized for a metric that does not exist.
+  const yesterdayStrainRaw = last7[last7.length - 2]?.strain;
+  const yesterdayStrain = typeof yesterdayStrainRaw === "number" ? yesterdayStrainRaw : 5;
+  const avgStrain = strainSamples7.length >= 3
+    ? strainSamples7.reduce((s, v) => s + v, 0) / strainSamples7.length
+    : 5;
   const consecutivePoorRecovery = wearableAvailable && last3.length >= 3 && last3.every(m => typeof m.recoveryScore === "number" && m.recoveryScore < 50);
 
+  // Readiness score: weight only the metrics we actually have. Missing metrics drop out of the
+  // formula and the remaining weights are renormalized to 100%. This prevents unimplemented
+  // fields (recoveryScore, sleepQuality, strain) from penalizing the user to zero.
   let readinessScore: number;
   if (wearableAvailable) {
-    readinessScore = Math.round(
-      (metrics.recoveryScore ?? 0) * 0.3 +
-      (metrics.sleepQuality ?? 0) * 0.3 +
-      ((metrics.hrv ?? 0) / 60) * 100 * 0.2 +
-      (1 - Math.min(metrics.restingHeartRate ?? 80, 80) / 80) * 100 * 0.2
-    );
+    const components: { value: number; weight: number }[] = [];
+    if (typeof metrics.recoveryScore === "number") {
+      components.push({ value: metrics.recoveryScore, weight: 0.3 });
+    }
+    if (typeof metrics.sleepQuality === "number") {
+      components.push({ value: metrics.sleepQuality, weight: 0.3 });
+    }
+    if (typeof metrics.hrv === "number") {
+      components.push({ value: Math.min((metrics.hrv / 60) * 100, 100), weight: 0.2 });
+    }
+    if (typeof metrics.restingHeartRate === "number") {
+      components.push({ value: (1 - Math.min(metrics.restingHeartRate, 80) / 80) * 100, weight: 0.2 });
+    }
+    // Sleep duration as a fallback signal when derived scores are unavailable.
+    if (components.length === 0 && metrics.sleepDuration > 0) {
+      const sleepScore = Math.max(0, Math.min(100, (metrics.sleepDuration / 8) * 100));
+      components.push({ value: sleepScore, weight: 1 });
+    }
+    if (components.length === 0) {
+      readinessScore = 70;
+    } else {
+      const totalWeight = components.reduce((s, c) => s + c.weight, 0);
+      readinessScore = Math.round(
+        components.reduce((s, c) => s + c.value * (c.weight / totalWeight), 0)
+      );
+    }
   } else {
     readinessScore = 70;
   }
