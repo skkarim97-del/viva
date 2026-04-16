@@ -1,0 +1,79 @@
+We still have several important issues in the latest TestFlight build. Please address the following.
+
+1. Coach/chat is still broken
+Current problem:
+- The chat box still is not working in production on device
+- Same error as before
+
+This is a blocker. Please debug the exact on-device failure again and identify the true root cause.
+
+Required:
+- verify the exact URL the iOS production bundle is using at runtime
+- verify the request actually leaves the device
+- verify method, headers, payload, and response
+- verify whether the failure is transport, ATS/HTTPS, payload serialization, response parsing, timeout, or route mismatch
+- add logging that clearly distinguishes:
+  - request never left device
+  - request failed at network layer
+  - request got non-200
+  - request returned non-JSON / parse failure
+
+Do not guess. Return the exact root cause.
+
+2. Today key metrics detail should include current + trend context
+Current problem:
+- On the Today tab, if I tap a metric under Today’s Key Metrics, the detail experience is not showing the right blend of current and trend context
+
+Required behavior:
+For metrics tapped from the Today tab, show:
+- today’s value as the primary/current stat
+- 7-day average
+- 4-week average
+- trend chart
+
+This should feel distinct from the Trends tab, which is primarily trend-first.
+
+Please make Today metric detail views explicitly today-first, while still showing the short- and medium-term benchmarks.
+
+3. Large font / accessibility layout fixes
+Current problem:
+- If the phone is set to larger than normal text, labels wrap poorly and look broken
+- Example: onboarding option labels are breaking awkwardly across lines
+
+Please improve layout behavior for larger dynamic type sizes:
+- make card text fit more gracefully
+- reduce awkward line breaks
+- adjust responsive font sizing, spacing, and line-height where needed
+- ensure buttons and option cards remain readable and polished
+- test key onboarding screens and main tabs with larger accessibility text sizes
+
+4. Recommendation engine should react more strongly to severe symptoms
+Current problem:
+- The recommendation does not seem sensitive enough to severe user inputs
+- Example: if I input severe nausea, it should materially impact the day’s recommendation
+
+Required fix:
+- Severe subjective symptoms must strongly influence the daily plan
+- Severe nausea should materially reduce intensity and change the recommendation tone/content
+- User-reported severe symptoms should not be overridden too easily by passive biometrics or generic baseline logic
+- Rebalance the engine so symptom severity has meaningful weight
+
+Please audit the current weighting and update the plan logic accordingly.
+
+5. Today check-in state must match the day in the Plan tab
+Current problem:
+- The “How are things today?” state should match that same day’s plan in the weekly Plan tab
+- There should not be drift between the Today screen and the selected/current day in Plan
+
+Required fix:
+- Make sure Today recommendations and the current day in the Plan tab are driven from the same underlying daily state
+- Ensure check-in inputs, recommendation outputs, and day-specific plan content are synchronized
+- If the user updates today’s inputs, both Today and the corresponding day in Plan should reflect the same interpretation
+
+After fixes, report back with:
+1. exact root cause of the chat failure
+2. how Today metric detail is now structured
+3. what accessibility / large-font layout changes were made
+4. how symptom severity weighting changed
+5. how Today and Plan are now kept in sync
+6. files changed
