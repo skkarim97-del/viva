@@ -79,6 +79,59 @@ export default function MetricDetailScreen() {
   const chartHeight = 90;
 
   const values = detail.trend.data.map((d) => d.value);
+
+  // Build a clean, row-based benchmark stack. Each benchmark gets its own
+  // labeled row so the hierarchy reads top-to-bottom instead of packing
+  // multiple stats onto one dense line. We compute the 7-day average here
+  // because getMetricDetail folds it into a prose sentence but doesn't
+  // expose it as a discrete field.
+  const todayValue = (() => {
+    switch (key) {
+      case "sleep": return todayMetrics.sleepDuration;
+      case "hrv": return todayMetrics.hrv ?? null;
+      case "steps": return todayMetrics.steps;
+      case "restingHR": return todayMetrics.restingHeartRate;
+      case "recovery": return todayMetrics.recoveryScore ?? null;
+      case "weight": return todayMetrics.weight;
+      case "activeCalories": return todayMetrics.activeCalories ?? null;
+      default: return null;
+    }
+  })();
+  const last7 = values.slice(-7);
+  const avg7 = last7.length > 0 ? last7.reduce((s, v) => s + v, 0) / last7.length : null;
+  const formatForKey = (n: number | null | undefined): string => {
+    if (n === null || n === undefined) return "—";
+    switch (key) {
+      case "sleep": return n.toFixed(1);
+      case "hrv":
+      case "restingHR":
+      case "recovery":
+      case "steps":
+      case "activeCalories":
+        return Math.round(n).toLocaleString();
+      case "weight": return n.toFixed(1);
+      default: return String(n);
+    }
+  };
+  const latestLabel = key === "sleep" ? "Last night" : "Today";
+  const latestFormatted = formatForKey(todayValue);
+  const avg7Formatted = formatForKey(avg7);
+  const avg28Formatted = detail.currentValue;
+
+  type BenchmarkRow = { label: string; value: string; emphasis: boolean };
+  const primary: BenchmarkRow = todayFirst
+    ? { label: latestLabel, value: latestFormatted, emphasis: true }
+    : { label: "4-week average", value: avg28Formatted, emphasis: true };
+  const benchmarks: BenchmarkRow[] = todayFirst
+    ? [
+        { label: "7-day average", value: avg7Formatted, emphasis: false },
+        { label: "4-week average", value: avg28Formatted, emphasis: false },
+      ]
+    : [
+        { label: latestLabel, value: latestFormatted, emphasis: false },
+        { label: "7-day average", value: avg7Formatted, emphasis: false },
+      ];
+
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || 1;
@@ -113,55 +166,38 @@ export default function MetricDetailScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: bottomPad + 24 }]}
         showsVerticalScrollIndicator={false}
       >
-        {todayFirst && detail.secondaryLabel && detail.secondaryValue ? (
-          // Arriving from the Today tab: lead with the current/latest reading
-          // and relegate the 4-week average to the secondary chip, because
-          // the user just tapped a "today" metric card and expects today's
-          // number to be the hero.
-          (() => {
-            const heroRaw = detail.secondaryValue;
-            const spaceIdx = heroRaw.indexOf(" ");
-            const heroValue = spaceIdx === -1 ? heroRaw : heroRaw.slice(0, spaceIdx);
-            const heroUnit = spaceIdx === -1 ? detail.unit : heroRaw.slice(spaceIdx + 1);
-            return (
-              <View style={styles.heroSection}>
-                <Text style={[styles.heroLabel, { color: c.mutedForeground }]}>{detail.secondaryLabel}</Text>
-                <View style={styles.heroValueRow}>
-                  <Text style={[styles.heroValue, { color: c.foreground }]}>{heroValue}</Text>
-                  {heroUnit ? (
-                    <Text style={[styles.heroUnit, { color: c.mutedForeground }]}>{heroUnit}</Text>
-                  ) : null}
-                  <Text style={[styles.heroTrend, { color: trendColor }]}>{trendArrow}</Text>
-                </View>
-                <View style={[styles.secondaryStat, { backgroundColor: c.muted }]}>
-                  <Text style={[styles.secondaryStatLabel, { color: c.mutedForeground }]}>4-week average</Text>
-                  <Text style={[styles.secondaryStatValue, { color: c.foreground }]}>
-                    {detail.currentValue}{detail.unit ? ` ${detail.unit}` : ""}
-                  </Text>
-                </View>
-                <Text style={[styles.heroHeadline, { color: c.foreground }]}>{detail.headline}</Text>
-              </View>
-            );
-          })()
-        ) : (
-          <View style={styles.heroSection}>
-            <Text style={[styles.heroLabel, { color: c.mutedForeground }]}>4-week average</Text>
-            <View style={styles.heroValueRow}>
-              <Text style={[styles.heroValue, { color: c.foreground }]}>{detail.currentValue}</Text>
-              {detail.unit ? (
-                <Text style={[styles.heroUnit, { color: c.mutedForeground }]}>{detail.unit}</Text>
-              ) : null}
-              <Text style={[styles.heroTrend, { color: trendColor }]}>{trendArrow}</Text>
-            </View>
-            {detail.secondaryLabel && detail.secondaryValue ? (
-              <View style={[styles.secondaryStat, { backgroundColor: c.muted }]}>
-                <Text style={[styles.secondaryStatLabel, { color: c.mutedForeground }]}>{detail.secondaryLabel}</Text>
-                <Text style={[styles.secondaryStatValue, { color: c.foreground }]}>{detail.secondaryValue}</Text>
-              </View>
+        {/* Primary stat — large, dominant, clearly labeled. Row-based
+            benchmark stack below it so 7-day, 4-week, and latest each
+            read on their own line instead of being packed together. */}
+        <View style={styles.heroSection}>
+          <Text style={[styles.heroLabel, { color: c.mutedForeground }]}>{primary.label}</Text>
+          <View style={styles.heroValueRow}>
+            <Text style={[styles.heroValue, { color: c.foreground }]}>{primary.value}</Text>
+            {detail.unit ? (
+              <Text style={[styles.heroUnit, { color: c.mutedForeground }]}>{detail.unit}</Text>
             ) : null}
-            <Text style={[styles.heroHeadline, { color: c.foreground }]}>{detail.headline}</Text>
+            <Text style={[styles.heroTrend, { color: trendColor }]}>{trendArrow}</Text>
           </View>
-        )}
+          <Text style={[styles.heroHeadline, { color: c.foreground }]}>{detail.headline}</Text>
+        </View>
+
+        <View style={[styles.benchmarkCard, { backgroundColor: c.card }]}>
+          {benchmarks.map((row, idx) => (
+            <View
+              key={row.label}
+              style={[
+                styles.benchmarkRow,
+                idx > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border },
+              ]}
+            >
+              <Text style={[styles.benchmarkLabel, { color: c.mutedForeground }]}>{row.label}</Text>
+              <Text style={[styles.benchmarkValue, { color: c.foreground }]}>
+                {row.value}
+                {detail.unit ? <Text style={[styles.benchmarkUnit, { color: c.mutedForeground }]}>{` ${detail.unit}`}</Text> : null}
+              </Text>
+            </View>
+          ))}
+        </View>
 
         <View style={[styles.section, { backgroundColor: c.card }]}>
           <Text style={[styles.sectionBody, { color: c.mutedForeground }]}>{detail.explanation}</Text>
@@ -232,31 +268,41 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   heroSection: {
-    paddingVertical: 16,
-    gap: 10,
+    paddingTop: 20,
+    paddingBottom: 4,
+    gap: 12,
   },
   heroLabel: {
     fontSize: 12,
     fontFamily: "Montserrat_600SemiBold",
     textTransform: "uppercase",
-    letterSpacing: 0.6,
+    letterSpacing: 0.8,
   },
-  secondaryStat: {
+  benchmarkCard: {
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  benchmarkRow: {
     flexDirection: "row",
-    alignSelf: "flex-start",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10,
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    paddingVertical: 14,
   },
-  secondaryStatLabel: {
-    fontSize: 12,
-    fontFamily: "Montserrat_500Medium",
-  },
-  secondaryStatValue: {
+  benchmarkLabel: {
     fontSize: 13,
+    fontFamily: "Montserrat_500Medium",
+    letterSpacing: 0.2,
+  },
+  benchmarkValue: {
+    fontSize: 17,
     fontFamily: "Montserrat_600SemiBold",
+    letterSpacing: -0.2,
+  },
+  benchmarkUnit: {
+    fontSize: 13,
+    fontFamily: "Montserrat_400Regular",
   },
   heroValueRow: {
     flexDirection: "row",
