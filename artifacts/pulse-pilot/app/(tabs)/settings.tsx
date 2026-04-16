@@ -255,8 +255,8 @@ export default function SettingsScreen() {
 
       <View style={[styles.section, { backgroundColor: c.card, padding: 16 }]}>
         <Text style={{ color: c.foreground, fontFamily: "Montserrat_700Bold", fontSize: 13, marginBottom: 10 }}>HealthKit Debug</Text>
-        <Text style={{ color: c.mutedForeground, fontFamily: "Montserrat_500Medium", fontSize: 12, lineHeight: 20 }}>
-          {`buttonPressed: ${debugInfo.buttonPressed}\nmoduleLoaded: ${debugInfo.moduleLoaded}\ninitFunctionExists: ${debugInfo.initFunctionExists}\ninitCalled: ${debugInfo.initCalled}\ncallbackReached: ${debugInfo.callbackReached}\ninitSucceeded: ${debugInfo.initSucceeded ?? "n/a"}\nrawErrorText: ${debugInfo.rawErrorText ?? "none"}`}
+        <Text style={{ color: c.mutedForeground, fontFamily: "Montserrat_500Medium", fontSize: 11, lineHeight: 18 }}>
+          {`buttonPressed: ${debugInfo.buttonPressed}\nmoduleKeysRoot: ${debugInfo.moduleKeysRoot || "(empty)"}\nmoduleKeysDefault: ${debugInfo.moduleKeysDefault || "(empty)"}\nusingDefaultExport: ${debugInfo.usingDefaultExport ?? "n/a"}\ninitFunctionExists: ${debugInfo.initFunctionExists}\ninitCalled: ${debugInfo.initCalled}\ncallbackReached: ${debugInfo.callbackReached}\ninitSucceeded: ${debugInfo.initSucceeded ?? "n/a"}\nrawErrorText: ${debugInfo.rawErrorText ?? "none"}`}
         </Text>
       </View>
 

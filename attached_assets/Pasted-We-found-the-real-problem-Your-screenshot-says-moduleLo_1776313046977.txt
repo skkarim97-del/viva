@@ -1,0 +1,119 @@
+We found the real problem.
+
+Your screenshot says:
+
+moduleLoaded: true
+initFunctionExists: false
+initCalled: true
+callbackReached: false
+
+That means the package loads, but the object you are calling does not actually have initHealthKit on that export shape. So the OS never gets a HealthKit authorization request, which is why Viva never appears in Health. This matches open react-native-health issues on newer RN setups where initHealthKit and isAvailable are undefined depending on import/export shape.
+
+Also, your agent already found the earlier gating bug:
+
+connectProvider() was stopping on isAvailable()
+the Settings button could disable itself permanently after one failed attempt
+Those blockers were real and did need removal.
+What this means
+
+This is not an Apple Developer portal issue.
+It is not a Health app settings issue.
+It is not a “login” issue.
+
+It is a runtime module resolution issue.
+
+Your current code is still calling the wrong object.
+
+What to do in Replit now
+
+Send this exact prompt to Replit Agent:
+
+We now have the key runtime signal from TestFlight:
+
+- moduleLoaded = true
+- initFunctionExists = false
+- callbackReached = false
+- Viva does not appear in Apple Health app access
+
+That means react-native-health is loading, but we are calling the wrong export object and initHealthKit never reaches the OS.
+
+Fix this exactly:
+
+1. In data/healthProviders.ts, resolve the module like this and no other way:
+
+   const mod = require('react-native-health');
+   const AppleHealthKit =
+     mod && typeof mod.initHealthKit === 'function'
+       ? mod
+       : mod?.default && typeof mod.default.initHealthKit === 'function'
+       ? mod.default
+       : null;
+
+2. Add debug fields for:
+   - moduleKeysRoot
+   - moduleKeysDefault
+   - usingDefaultExport
+   - initFunctionExists
+   - callbackReached
+   - rawErrorText
+
+3. If AppleHealthKit is null:
+   - do not try to call initHealthKit
+   - set rawErrorText to:
+     "initHealthKit missing on both root and default export"
+   - surface moduleKeysRoot and moduleKeysDefault in the debug card
+
+4. If AppleHealthKit exists:
+   - call AppleHealthKit.initHealthKit(options, callback)
+   - use read-only permissions:
+     - StepCount
+     - HeartRate
+     - SleepAnalysis
+     - DistanceWalkingRunning
+   - no write permissions
+   - no data fetch yet
+
+5. In the Settings debug card:
+   - display moduleKeysRoot
+   - display moduleKeysDefault
+   - display usingDefaultExport
+   - display initFunctionExists
+   - display callbackReached
+   - display rawErrorText
+
+6. Keep the direct button-to-connect flow.
+7. Do not reintroduce isAvailable gating.
+8. Do not change plugin config.
+9. Do not change newArchEnabled.
+
+Tell me exactly:
+- the final export-resolution code
+- whether the library required root or default export
+- the final debug fields shown on screen
+- the exact git commit message
+Then run this in shell
+cd /home/runner/workspace/artifacts/pulse-pilot
+git add .
+git commit -m "Resolve react-native-health export shape at runtime"
+eas build --platform ios --profile production --clear-cache
+eas submit --platform ios --latest
+What I expect
+
+One of these will happen:
+
+usingDefaultExport = true and permission sheet appears
+Then you’re basically done.
+Both root and default are missing initHealthKit
+Then react-native-health is still broken under your exact RN/Expo runtime, which is consistent with the open issues.
+What to send me after the next TestFlight run
+
+Only these values:
+
+moduleKeysRoot
+moduleKeysDefault
+usingDefaultExport
+initFunctionExists
+callbackReached
+rawErrorText
+
+My blunt read: the next fix is almost certainly export-shape resolution, not entitlements.

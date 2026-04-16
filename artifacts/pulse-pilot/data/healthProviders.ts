@@ -3,7 +3,9 @@ import type { HealthMetrics } from "@/types";
 
 export interface HealthDebugInfo {
   buttonPressed: number;
-  moduleLoaded: boolean;
+  moduleKeysRoot: string;
+  moduleKeysDefault: string;
+  usingDefaultExport: boolean | null;
   initFunctionExists: boolean;
   initCalled: boolean;
   callbackReached: boolean;
@@ -13,7 +15,9 @@ export interface HealthDebugInfo {
 
 let _debugInfo: HealthDebugInfo = {
   buttonPressed: 0,
-  moduleLoaded: false,
+  moduleKeysRoot: "",
+  moduleKeysDefault: "",
+  usingDefaultExport: null,
   initFunctionExists: false,
   initCalled: false,
   callbackReached: false,
@@ -44,6 +48,8 @@ export async function connectAppleHealth(): Promise<{ success: boolean; error?: 
   _debugInfo.callbackReached = false;
   _debugInfo.initSucceeded = null;
   _debugInfo.rawErrorText = null;
+  _debugInfo.usingDefaultExport = null;
+  _debugInfo.initFunctionExists = false;
   notifyDebug();
   console.log("[HealthKit] Button pressed, count:", _debugInfo.buttonPressed);
 
@@ -53,13 +59,39 @@ export async function connectAppleHealth(): Promise<{ success: boolean; error?: 
     return { success: false, error: "Apple Health requires an iOS device." };
   }
 
-  const AppleHealthKit = require("react-native-health");
+  const mod = require("react-native-health");
 
-  _debugInfo.moduleLoaded = !!AppleHealthKit;
-  _debugInfo.initFunctionExists = typeof AppleHealthKit?.initHealthKit === "function";
-  console.log("[HealthKit] module keys:", AppleHealthKit ? Object.keys(AppleHealthKit).slice(0, 25) : "null");
-  console.log("[HealthKit] typeof initHealthKit:", typeof AppleHealthKit?.initHealthKit);
+  const rootKeys = mod ? Object.keys(mod) : [];
+  const defaultKeys = mod?.default ? Object.keys(mod.default) : [];
+  _debugInfo.moduleKeysRoot = rootKeys.slice(0, 15).join(", ");
+  _debugInfo.moduleKeysDefault = defaultKeys.length > 0 ? defaultKeys.slice(0, 15).join(", ") : "(no default)";
+
+  console.log("[HealthKit] root keys:", rootKeys);
+  console.log("[HealthKit] default keys:", defaultKeys);
+  console.log("[HealthKit] typeof mod.initHealthKit:", typeof mod?.initHealthKit);
+  console.log("[HealthKit] typeof mod.default?.initHealthKit:", typeof mod?.default?.initHealthKit);
+
+  const AppleHealthKit =
+    mod && typeof mod.initHealthKit === "function"
+      ? mod
+      : mod?.default && typeof mod.default.initHealthKit === "function"
+      ? mod.default
+      : null;
+
+  _debugInfo.usingDefaultExport = AppleHealthKit === mod?.default && AppleHealthKit !== null;
+  _debugInfo.initFunctionExists = AppleHealthKit !== null && typeof AppleHealthKit.initHealthKit === "function";
   notifyDebug();
+
+  console.log("[HealthKit] resolved AppleHealthKit:", AppleHealthKit ? "found" : "NULL");
+  console.log("[HealthKit] usingDefaultExport:", _debugInfo.usingDefaultExport);
+  console.log("[HealthKit] initFunctionExists:", _debugInfo.initFunctionExists);
+
+  if (!AppleHealthKit) {
+    _debugInfo.rawErrorText = "initHealthKit missing on both root and default export";
+    notifyDebug();
+    console.log("[HealthKit] FATAL:", _debugInfo.rawErrorText);
+    return { success: false, error: _debugInfo.rawErrorText };
+  }
 
   const options = {
     permissions: {
@@ -67,6 +99,7 @@ export async function connectAppleHealth(): Promise<{ success: boolean; error?: 
         AppleHealthKit?.Constants?.Permissions?.StepCount,
         AppleHealthKit?.Constants?.Permissions?.HeartRate,
         AppleHealthKit?.Constants?.Permissions?.SleepAnalysis,
+        AppleHealthKit?.Constants?.Permissions?.DistanceWalkingRunning,
       ].filter(Boolean),
       write: [],
     },
