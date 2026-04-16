@@ -33,3 +33,7 @@ console.log("[API_BASE] __DEV__:", typeof __DEV__ !== "undefined" ? __DEV__ : "u
 if (Platform.OS !== "web" && !API_BASE.startsWith("https://")) {
   console.warn("[API_BASE] WARNING: Non-HTTPS API URL on native. iOS will block HTTP requests.", API_BASE);
 }
+
+if (Platform.OS !== "web" && API_BASE === "/api") {
+  console.error("[API_BASE] FATAL: API_BASE resolved to relative '/api' on native. Coach and other API calls will fail. Set EXPO_PUBLIC_API_URL at build time.");
+}

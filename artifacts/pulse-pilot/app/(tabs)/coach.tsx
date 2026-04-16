@@ -35,6 +35,7 @@ export default function CoachScreen() {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [streamingText, setStreamingText] = useState("");
+  const [lastFailedDraft, setLastFailedDraft] = useState<string | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const topPad = Platform.OS === "web" ? 60 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -114,16 +115,18 @@ export default function CoachScreen() {
   }, [todayMetrics, profile, trends, dailyPlan, insights, feeling, energy, stress, hydration, trainingIntent, completionHistory, streakDays, weeklyConsistency, glp1Energy, appetite, nausea, digestion, medicationLog, profile.medicationProfile, hasHealthData]);
 
   const sendMessage = useCallback(async (text: string) => {
-    if (!text.trim() || isTyping) return;
+    const trimmed = text.trim();
+    if (!trimmed || isTyping) return;
 
     const userMsg: ChatMessage = {
       id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
       role: "user",
-      content: text.trim(),
+      content: trimmed,
       timestamp: Date.now(),
     };
     addChatMessage(userMsg);
     setInput("");
+    setLastFailedDraft(null);
 
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -137,29 +140,58 @@ export default function CoachScreen() {
       content: m.content,
     }));
 
-    const fetchUrl = `${API_BASE}/coach/chat`;
-    console.log("[Coach] Fetching:", fetchUrl);
+    // Native fetch on iOS/Android cannot consume SSE (response.body is undefined
+    // and text/event-stream often hangs the connection until "Network request
+    // failed" is thrown). Use non-streaming JSON on native, streaming on web.
+    const useStream = Platform.OS === "web";
+    const fetchUrl = useStream ? `${API_BASE}/coach/chat` : `${API_BASE}/coach/chat?stream=false`;
+    console.log("[Coach] Request start:", { url: fetchUrl, useStream, platform: Platform.OS, msgLen: trimmed.length });
+
+    const controller = new AbortController();
+    const timeoutMs = 60_000;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    const payload = {
+      message: trimmed,
+      healthContext: buildHealthContext(),
+      conversationHistory,
+    };
+    console.log("[Coach] Payload summary:", { msgLen: trimmed.length, hasContext: !!payload.healthContext, historyLen: conversationHistory.length });
 
     try {
       const response = await fetch(fetchUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: text.trim(),
-          healthContext: buildHealthContext(),
-          conversationHistory,
-        }),
+        headers: useStream
+          ? { "Content-Type": "application/json" }
+          : { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
       });
+      console.log("[Coach] Response status:", response.status);
 
       if (!response.ok) {
         let errorBody = "";
         try { errorBody = await response.text(); } catch {}
-        console.log("[Coach] HTTP error", response.status, errorBody);
+        console.log("[Coach] HTTP error body:", errorBody.slice(0, 500));
         throw { status: response.status, body: errorBody };
       }
 
+      if (!useStream) {
+        const data = await response.json();
+        const fullText: string = typeof data?.content === "string" ? data.content : "";
+        console.log("[Coach] JSON parsed: contentLen=", fullText.length);
+        if (!fullText) throw new Error("Empty response from server");
+        addChatMessage({
+          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+          role: "assistant",
+          content: fullText,
+          timestamp: Date.now(),
+        });
+        return;
+      }
+
       const reader = response.body?.getReader();
-      if (!reader) throw new Error("No stream reader");
+      if (!reader) throw new Error("Streaming not supported on this platform");
 
       const decoder = new TextDecoder();
       let fullText = "";
@@ -190,6 +222,7 @@ export default function CoachScreen() {
                 });
                 setStreamingText("");
                 setIsTyping(false);
+                clearTimeout(timeoutId);
                 return;
               }
             } catch {}
@@ -206,21 +239,31 @@ export default function CoachScreen() {
         });
       }
     } catch (err: any) {
-      console.log("[Coach] Full error:", err);
-      console.log("[Coach] Error message:", err?.message);
-      console.log("[Coach] Error status:", err?.status);
+      console.log("[Coach] Caught error:", { name: err?.name, message: err?.message, status: err?.status });
 
+      // Categorize for the user. Restore their draft so they can retry.
       let userMessage = "Something went wrong. Try again in a moment.";
-      if (err?.message === "Network request failed" || err?.message?.includes("network") || err?.message?.includes("fetch")) {
-        userMessage = "Network error. Check your connection and try again.";
+      const isAbort = err?.name === "AbortError";
+      const looksLikeNetwork = err?.message === "Network request failed"
+        || err?.message?.toLowerCase?.().includes("network")
+        || err?.message?.toLowerCase?.().includes("fetch");
+
+      if (!API_BASE.startsWith("https://") && Platform.OS !== "web") {
+        userMessage = `Configuration error: API URL is not HTTPS (resolved to "${API_BASE}"). Build the app with EXPO_PUBLIC_API_URL pointing to your deployed server.`;
+      } else if (isAbort) {
+        userMessage = `Request timed out after ${Math.round(timeoutMs / 1000)}s. The server may be slow or unreachable. Tap retry below.`;
+      } else if (err?.status === 404) {
+        userMessage = `Coach endpoint not found at ${fetchUrl}. The API server may not be deployed yet, or the URL in the app is wrong.`;
       } else if (err?.status === 500) {
-        userMessage = `Server error (500). ${err?.body || "The AI service may be temporarily unavailable."}`;
+        userMessage = `Server error. ${err?.body || "The AI service may be temporarily unavailable."} Tap retry below.`;
       } else if (err?.status === 401 || err?.status === 403) {
-        userMessage = "Configuration error. The AI service is not properly set up.";
+        userMessage = "AI service is not configured (auth error). Check the OpenAI key on the server.";
       } else if (err?.status === 429) {
         userMessage = "Rate limited. Wait a moment and try again.";
       } else if (err?.status) {
-        userMessage = `Server returned ${err.status}. ${err?.body || ""}`;
+        userMessage = `Server returned ${err.status}. ${err?.body || ""} Tap retry below.`;
+      } else if (looksLikeNetwork) {
+        userMessage = `Cannot reach the server at ${API_BASE}. Check your connection or confirm the API server is deployed. Tap retry below.`;
       } else if (err?.message) {
         userMessage = `Error: ${err.message}`;
       }
@@ -231,7 +274,9 @@ export default function CoachScreen() {
         content: userMessage,
         timestamp: Date.now(),
       });
+      setLastFailedDraft(trimmed);
     } finally {
+      clearTimeout(timeoutId);
       setStreamingText("");
       setIsTyping(false);
     }
@@ -333,6 +378,23 @@ export default function CoachScreen() {
       )}
 
       <View style={[styles.inputArea, { backgroundColor: c.background, paddingBottom: bottomPad + 8 }]}>
+        {lastFailedDraft && !isTyping && (
+          <Pressable
+            onPress={() => sendMessage(lastFailedDraft)}
+            style={({ pressed }) => [
+              styles.retryBar,
+              { backgroundColor: c.card, opacity: pressed ? 0.7 : 1 },
+            ]}
+          >
+            <Feather name="refresh-cw" size={14} color={c.accent} />
+            <Text style={{ color: c.accent, fontFamily: "Montserrat_600SemiBold", fontSize: 13, flex: 1 }} numberOfLines={1}>
+              Retry: {lastFailedDraft}
+            </Text>
+            <Pressable onPress={() => { setInput(lastFailedDraft); setLastFailedDraft(null); }} hitSlop={8}>
+              <Feather name="edit-2" size={14} color={c.mutedForeground} />
+            </Pressable>
+          </Pressable>
+        )}
         <View style={[styles.inputRow, { backgroundColor: c.card }]}>
           <TextInput
             style={[styles.input, { color: c.foreground }]}
@@ -384,6 +446,16 @@ const styles = StyleSheet.create({
     fontFamily: "Montserrat_400Regular",
     lineHeight: 20,
     opacity: 0.7,
+  },
+  retryBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
   },
   quickArea: { flex: 1 },
   quickInner: {

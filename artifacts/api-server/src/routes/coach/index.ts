@@ -142,11 +142,22 @@ interface ChatRequestBody {
 
 
 router.post("/chat", async (req: Request, res: Response) => {
+  const reqId = Math.random().toString(36).slice(2, 8);
+  const wantsStream = req.query.stream !== "false" && req.get("accept") !== "application/json";
+  console.log(`[coach/chat ${reqId}] received: stream=${wantsStream} ua="${req.get("user-agent") || "?"}" len=${JSON.stringify(req.body || {}).length}b`);
   try {
     const body = req.body as ChatRequestBody;
     const { message, healthContext, conversationHistory } = body;
+    console.log(`[coach/chat ${reqId}] payload: msgLen=${message?.length ?? 0} hasContext=${!!healthContext} historyLen=${conversationHistory?.length ?? 0}`);
+
+    if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY && !process.env.OPENAI_API_KEY) {
+      console.error(`[coach/chat ${reqId}] missing OpenAI credentials`);
+      res.status(500).json({ error: "Server missing AI credentials. Contact support." });
+      return;
+    }
 
     if (!message || typeof message !== "string") {
+      console.warn(`[coach/chat ${reqId}] rejected: message missing`);
       res.status(400).json({ error: "Message is required" });
       return;
     }
@@ -299,6 +310,22 @@ router.post("/chat", async (req: Request, res: Response) => {
 
     messages.push({ role: "user", content: message });
 
+    console.log(`[coach/chat ${reqId}] calling OpenAI: model=gpt-4o-mini messages=${messages.length} stream=${wantsStream}`);
+
+    if (!wantsStream) {
+      // Non-streaming JSON path. Used by React Native (no SSE support in fetch).
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        max_completion_tokens: 8192,
+        messages,
+        stream: false,
+      });
+      const content = completion.choices[0]?.message?.content || "";
+      console.log(`[coach/chat ${reqId}] returned JSON: contentLen=${content.length}`);
+      res.json({ content });
+      return;
+    }
+
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
@@ -310,20 +337,23 @@ router.post("/chat", async (req: Request, res: Response) => {
       stream: true,
     });
 
+    let totalLen = 0;
     for await (const chunk of stream) {
       const content = chunk.choices[0]?.delta?.content;
       if (content) {
+        totalLen += content.length;
         res.write(`data: ${JSON.stringify({ content })}\n\n`);
       }
     }
 
     res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
     res.end();
+    console.log(`[coach/chat ${reqId}] returned stream: contentLen=${totalLen}`);
   } catch (error: any) {
-    console.error("Coach chat error:", error?.message || error);
-    console.error("Coach chat error type:", error?.constructor?.name);
-    console.error("Coach chat error status:", error?.status || error?.response?.status);
-    if (error?.response?.data) console.error("Coach chat error data:", JSON.stringify(error.response.data));
+    console.error(`[coach/chat ${reqId}] error:`, error?.message || error);
+    console.error(`[coach/chat ${reqId}] error type:`, error?.constructor?.name);
+    console.error(`[coach/chat ${reqId}] error status:`, error?.status || error?.response?.status);
+    if (error?.response?.data) console.error(`[coach/chat ${reqId}] error data:`, JSON.stringify(error.response.data));
 
     let statusCode = 500;
     let errorDetail = "Failed to generate response";

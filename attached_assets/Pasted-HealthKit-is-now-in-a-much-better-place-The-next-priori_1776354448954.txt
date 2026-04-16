@@ -1,0 +1,79 @@
+HealthKit is now in a much better place. The next priority is fixing the coaching/chatbot feature end-to-end.
+
+Current production bug:
+On TestFlight, when I send a coach message, the UI returns:
+“Network error. Check your connection and try again.”
+
+This means the mobile coaching request pipeline is failing. I want a real root-cause audit and fix, not just better generic error handling.
+
+Please do the following:
+
+1. Trace the full coach request path end-to-end
+   - coach screen UI submit handler
+   - API client / fetch wrapper
+   - resolved API base URL in native
+   - exact endpoint path being called
+   - request payload shape
+   - backend route/controller
+   - model/provider call
+   - final response parsing back into the UI
+
+2. Verify the iOS/TestFlight app is using the correct production API base URL
+   - native must NOT use relative /api paths
+   - confirm the exact resolved base URL at runtime
+   - log the full request URL before each coach request
+
+3. Add targeted debug logging around every failure point
+   Frontend:
+   - resolved API base URL
+   - endpoint path
+   - request start
+   - request payload summary
+   - response status
+   - parsed response body
+   - caught error name/message
+   Backend:
+   - request received
+   - payload received
+   - auth/context resolution
+   - provider/model call start
+   - provider/model error
+   - response returned
+
+4. Audit env vars and config for production
+   Frontend build:
+   - EXPO_PUBLIC_API_URL or equivalent
+   Backend:
+   - all required API keys / secrets
+   - any deployment-specific base URLs
+   - any auth secrets required by the coach route
+   Confirm whether production and local dev differ.
+
+5. Verify the backend route is actually live and reachable from mobile
+   - test the exact route used by the app
+   - confirm it is not returning 404 / 500 / timeout / invalid JSON
+   - confirm the response shape matches what the mobile app expects
+
+6. Audit request/response schema mismatch
+   - make sure frontend payload fields match backend expectations exactly
+   - make sure backend response fields match UI parsing exactly
+   - if there is any fallback or mock response path, document it
+
+7. Improve UI failure handling after root cause is found
+   - preserve the user’s drafted message
+   - provide retry
+   - surface specific error category when possible:
+     - missing API URL
+     - backend unavailable
+     - timeout
+     - invalid response
+     - auth/config issue
+   - do not leave it as one generic dead-end network bubble
+
+8. Output I want back
+   Tell me:
+   - the exact coach endpoint the iOS app is calling
+   - the resolved production API base URL
+   - the exact response/error code returned
+   - whether the bug is frontend config, backend availability, payload mismatch, auth issue, or model/provider failure
+   - the specific files changed to fix it
