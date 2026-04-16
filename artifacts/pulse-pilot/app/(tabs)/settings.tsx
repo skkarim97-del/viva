@@ -17,10 +17,12 @@ import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
 import {
   BRAND_OPTIONS,
+  MEDICATION_DATABASE,
   getDoseOptions,
   getMedicationFrequency,
   type MedicationBrand,
 } from "@/data/medicationData";
+import type { MedicationProfile } from "@/types";
 import { connectAppleHealth } from "@/data/healthProviders";
 
 const GOAL_LABELS: Record<string, string> = {
@@ -103,20 +105,40 @@ export default function SettingsScreen() {
       setMedModalOpen(false);
       return;
     }
-    const existing = profile.medicationProfile;
-    updateProfile({
-      medicationProfile: {
-        ...(existing || {}),
-        medicationBrand: medDraft.brand,
+    try {
+      const existing = profile.medicationProfile;
+      const brandKey = medDraft.brand;
+      const dbInfo = brandKey !== "other" ? MEDICATION_DATABASE[brandKey] : null;
+      const genericName = dbInfo?.genericName ?? existing?.genericName ?? "unknown";
+      const indication = dbInfo?.indication ?? existing?.indication ?? "weight loss";
+
+      const next: MedicationProfile = {
+        medicationBrand: brandKey,
+        genericName,
+        indication,
         doseValue: medDraft.doseValue,
         doseUnit: medDraft.doseUnit,
         frequency: medDraft.frequency,
-        timeOnMedicationBucket: existing?.timeOnMedicationBucket || "less_1_month",
+        timeOnMedicationBucket: existing?.timeOnMedicationBucket ?? "less_1_month",
         recentTitration: existing?.recentTitration ?? false,
-      } as any,
-    });
-    setMedModalOpen(false);
-    setMedDraft(null);
+        weekOnCurrentDose: existing?.weekOnCurrentDose,
+        startDate: existing?.startDate ?? null,
+        lastInjectionDate: existing?.lastInjectionDate ?? null,
+        previousDoseValue: existing?.previousDoseValue ?? null,
+        previousDoseUnit: existing?.previousDoseUnit ?? null,
+        previousFrequency: existing?.previousFrequency ?? null,
+        doseChangeDate: existing?.doseChangeDate ?? null,
+        telehealthPlatform: existing?.telehealthPlatform ?? null,
+        plannedDoseDay: existing?.plannedDoseDay ?? null,
+      };
+      updateProfile({ medicationProfile: next });
+      setMedModalOpen(false);
+      setMedDraft(null);
+    } catch (e: any) {
+      if (typeof __DEV__ !== "undefined" && __DEV__) console.log("[Settings] saveMedDraft failed:", e);
+      setMedModalOpen(false);
+      setMedDraft(null);
+    }
   };
 
   const setDraftBrand = (brand: MedicationBrand) => {

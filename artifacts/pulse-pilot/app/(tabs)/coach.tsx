@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { useFocusEffect } from "expo-router";
 import React, { useState, useRef, useCallback } from "react";
 import {
   View,
@@ -11,11 +12,13 @@ import {
   ScrollView,
   Platform,
   KeyboardAvoidingView,
+  Keyboard,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
+import { sendCoachMessage, CoachRequestError, describeCoachError } from "@/lib/api/coachClient";
 import type { ChatMessage } from "@/types";
 
 const quickActions = [
@@ -26,8 +29,6 @@ const quickActions = [
   { label: "What should I focus on this week?", icon: "calendar" as const },
 ];
 
-import { API_BASE } from "@/lib/apiConfig";
-
 export default function CoachScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
@@ -37,8 +38,20 @@ export default function CoachScreen() {
   const [streamingText, setStreamingText] = useState("");
   const [lastFailedDraft, setLastFailedDraft] = useState<string | null>(null);
   const flatListRef = useRef<FlatList>(null);
+  const inputRef = useRef<TextInput>(null);
   const topPad = Platform.OS === "web" ? 60 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
+
+  // Dismiss the keyboard when the user navigates away from the coach screen
+  // so it doesn't stay focused off-screen on other tabs.
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        try { inputRef.current?.blur?.(); } catch {}
+        Keyboard.dismiss();
+      };
+    }, []),
+  );
 
   const buildHealthContext = useCallback(() => {
     if (!todayMetrics) return undefined;
@@ -155,140 +168,40 @@ export default function CoachScreen() {
 
     setIsTyping(true);
     setStreamingText("");
+    Keyboard.dismiss();
 
     const conversationHistory = chatMessages.slice(-10).map((m) => ({
       role: m.role as "user" | "assistant",
       content: m.content,
     }));
 
-    // Native fetch on iOS/Android cannot consume SSE (response.body is undefined
-    // and text/event-stream often hangs the connection until "Network request
-    // failed" is thrown). Use non-streaming JSON on native, streaming on web.
-    const useStream = Platform.OS === "web";
-    const fetchUrl = useStream ? `${API_BASE}/coach/chat` : `${API_BASE}/coach/chat?stream=false`;
-    console.log("[Coach] Request start:", { url: fetchUrl, useStream, platform: Platform.OS, msgLen: trimmed.length });
-
-    const controller = new AbortController();
-    const timeoutMs = 60_000;
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-    const payload = {
-      message: trimmed,
-      healthContext: buildHealthContext(),
-      conversationHistory,
-    };
-    console.log("[Coach] Payload summary:", { msgLen: trimmed.length, hasContext: !!payload.healthContext, historyLen: conversationHistory.length });
+    let healthContext: unknown;
+    try {
+      healthContext = buildHealthContext();
+    } catch (e: any) {
+      if (typeof __DEV__ !== "undefined" && __DEV__) console.log("[Coach] buildHealthContext threw:", e);
+      healthContext = undefined;
+    }
 
     try {
-      const response = await fetch(fetchUrl, {
-        method: "POST",
-        headers: useStream
-          ? { "Content-Type": "application/json" }
-          : { "Content-Type": "application/json", "Accept": "application/json" },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
+      const { content } = await sendCoachMessage({
+        message: trimmed,
+        healthContext,
+        conversationHistory,
       });
-      console.log("[Coach] Response status:", response.status);
-
-      if (!response.ok) {
-        let errorBody = "";
-        try { errorBody = await response.text(); } catch {}
-        console.log("[Coach] HTTP error body:", errorBody.slice(0, 500));
-        throw { status: response.status, body: errorBody };
-      }
-
-      if (!useStream) {
-        const data = await response.json();
-        const fullText: string = typeof data?.content === "string" ? data.content : "";
-        console.log("[Coach] JSON parsed: contentLen=", fullText.length);
-        if (!fullText) throw new Error("Empty response from server");
-        addChatMessage({
-          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-          role: "assistant",
-          content: fullText,
-          timestamp: Date.now(),
-        });
-        return;
-      }
-
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("Streaming not supported on this platform");
-
-      const decoder = new TextDecoder();
-      let fullText = "";
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              if (data.content) {
-                fullText += data.content;
-                setStreamingText(fullText);
-              }
-              if (data.done) {
-                addChatMessage({
-                  id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-                  role: "assistant",
-                  content: fullText,
-                  timestamp: Date.now(),
-                });
-                setStreamingText("");
-                setIsTyping(false);
-                clearTimeout(timeoutId);
-                return;
-              }
-            } catch {}
-          }
-        }
-      }
-
-      if (fullText) {
-        addChatMessage({
-          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-          role: "assistant",
-          content: fullText,
-          timestamp: Date.now(),
-        });
-      }
+      addChatMessage({
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        role: "assistant",
+        content,
+        timestamp: Date.now(),
+      });
     } catch (err: any) {
-      console.log("[Coach] Caught error:", { name: err?.name, message: err?.message, status: err?.status });
-
-      // Categorize for the user. Restore their draft so they can retry.
-      let userMessage = "Something went wrong. Try again in a moment.";
-      const isAbort = err?.name === "AbortError";
-      const looksLikeNetwork = err?.message === "Network request failed"
-        || err?.message?.toLowerCase?.().includes("network")
-        || err?.message?.toLowerCase?.().includes("fetch");
-
-      if (!API_BASE.startsWith("https://") && Platform.OS !== "web") {
-        userMessage = `Configuration error: API URL is not HTTPS (resolved to "${API_BASE}"). Build the app with EXPO_PUBLIC_API_URL pointing to your deployed server.`;
-      } else if (isAbort) {
-        userMessage = `Request timed out after ${Math.round(timeoutMs / 1000)}s. The server may be slow or unreachable. Tap retry below.`;
-      } else if (err?.status === 404) {
-        userMessage = `Coach endpoint not found at ${fetchUrl}. The API server may not be deployed yet, or the URL in the app is wrong.`;
-      } else if (err?.status === 500) {
-        userMessage = `Server error. ${err?.body || "The AI service may be temporarily unavailable."} Tap retry below.`;
-      } else if (err?.status === 401 || err?.status === 403) {
-        userMessage = "AI service is not configured (auth error). Check the OpenAI key on the server.";
-      } else if (err?.status === 429) {
-        userMessage = "Rate limited. Wait a moment and try again.";
-      } else if (err?.status) {
-        userMessage = `Server returned ${err.status}. ${err?.body || ""} Tap retry below.`;
-      } else if (looksLikeNetwork) {
-        userMessage = `Cannot reach the server at ${API_BASE}. Check your connection or confirm the API server is deployed. Tap retry below.`;
-      } else if (err?.message) {
-        userMessage = `Error: ${err.message}`;
+      if (typeof __DEV__ !== "undefined" && __DEV__) {
+        console.log("[Coach] error:", { kind: err?.kind, status: err?.status, message: err?.message, body: err?.body });
       }
-
+      const userMessage = err instanceof CoachRequestError
+        ? describeCoachError(err)
+        : `Something went wrong. ${err?.message || ""}`.trim();
       addChatMessage({
         id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
         role: "assistant",
@@ -297,7 +210,6 @@ export default function CoachScreen() {
       });
       setLastFailedDraft(trimmed);
     } finally {
-      clearTimeout(timeoutId);
       setStreamingText("");
       setIsTyping(false);
     }
@@ -418,6 +330,7 @@ export default function CoachScreen() {
         )}
         <View style={[styles.inputRow, { backgroundColor: c.card }]}>
           <TextInput
+            ref={inputRef}
             style={[styles.input, { color: c.foreground }]}
             value={input}
             onChangeText={setInput}
@@ -425,6 +338,7 @@ export default function CoachScreen() {
             placeholderTextColor={c.mutedForeground + "80"}
             onSubmitEditing={() => sendMessage(input)}
             returnKeyType="send"
+            blurOnSubmit
             editable={!isTyping}
           />
           <Pressable

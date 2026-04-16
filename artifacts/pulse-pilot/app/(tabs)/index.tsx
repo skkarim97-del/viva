@@ -23,6 +23,8 @@ import { useApp } from "@/context/AppContext";
 import { generateCoachInsight } from "@/data/insights";
 import { formatDoseDisplay, getDoseOptions, type MedicationBrand } from "@/data/medicationData";
 import { generateGreeting, generateInputSummary, buildCoachContext } from "@/lib/engine";
+import { sendCoachMessage, CoachRequestError, describeCoachError } from "@/lib/api/coachClient";
+import { summarizeCoachThread } from "@/lib/coachSummary";
 import { useColors } from "@/hooks/useColors";
 import { CATEGORY_OPTIONS } from "@/types";
 import type { MetricKey, FeelingType, ChatMessage, DailyStatusLabel, ActionCategory, AppetiteLevel, NauseaLevel, DigestionStatus, EnergyDaily, MedicationLogEntry, MentalState } from "@/types";
@@ -67,8 +69,6 @@ const STATUS_COLOR_MAP: Record<DailyStatusLabel, (c: ReturnType<typeof useColors
   "Let's make today a bit easier": (c) => c.warning,
   "Your body may need more support today": (c) => c.destructive,
 };
-
-import { API_BASE } from "@/lib/apiConfig";
 
 export default function DashboardScreen() {
   const c = useColors();
@@ -194,127 +194,44 @@ export default function DashboardScreen() {
       content: m.content,
     }));
 
-    // Native fetch on iOS/Android cannot consume SSE reliably. Use non-streaming JSON
-    // on native, streaming on web (matches coach.tsx behavior).
-    const useStream = Platform.OS === "web";
-    const fetchUrl = useStream ? `${API_BASE}/coach/chat` : `${API_BASE}/coach/chat?stream=false`;
-    console.log("[Coach] Fetching:", fetchUrl, "useStream:", useStream);
+    let healthContext: unknown;
+    try {
+      healthContext = buildCoachContext(
+        todayMetrics, metrics, profile, dailyPlan, insights,
+        medicationLog,
+        { energy: glp1Energy, appetite, nausea, digestion },
+        { feeling, energy, stress, hydration, trainingIntent },
+        streakDays, weeklyConsistency, todayCompletionRate,
+        null,
+        null,
+        availableMetricTypes,
+      );
+    } catch (e: any) {
+      if (typeof __DEV__ !== "undefined" && __DEV__) console.log("[Coach] buildCoachContext threw:", e);
+      healthContext = undefined;
+    }
 
     try {
-      const response = await fetch(fetchUrl, {
-        method: "POST",
-        headers: useStream
-          ? { "Content-Type": "application/json" }
-          : { "Content-Type": "application/json", "Accept": "application/json" },
-        body: JSON.stringify({
-          message: text.trim(),
-          healthContext: buildCoachContext(
-            todayMetrics, metrics, profile, dailyPlan, insights,
-            medicationLog,
-            { energy: glp1Energy, appetite, nausea, digestion },
-            { feeling, energy, stress, hydration, trainingIntent },
-            streakDays, weeklyConsistency, todayCompletionRate,
-            null,
-            null,
-            availableMetricTypes,
-          ),
-          conversationHistory,
-        }),
+      const { content } = await sendCoachMessage({
+        message: text.trim(),
+        healthContext,
+        conversationHistory,
       });
-
-      if (!response.ok) {
-        let errorBody = "";
-        try { errorBody = await response.text(); } catch {}
-        console.log("[Coach] HTTP error", response.status, errorBody);
-        throw { status: response.status, body: errorBody };
-      }
-
-      if (!useStream) {
-        const data = await response.json();
-        const fullText: string = typeof data?.content === "string" ? data.content : "";
-        if (!fullText) throw new Error("Empty response from server");
-        const assistantMsg: ChatMessage = {
-          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-          role: "assistant",
-          content: fullText,
-          timestamp: Date.now(),
-        };
-        setAskMessages((prev) => [...prev, assistantMsg]);
-        addChatMessage(assistantMsg);
-        setStreamingText("");
-        setIsTyping(false);
-        return;
-      }
-
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("No stream reader");
-
-      const decoder = new TextDecoder();
-      let fullText = "";
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              if (data.content) {
-                fullText += data.content;
-                setStreamingText(fullText);
-              }
-              if (data.done) {
-                const assistantMsg: ChatMessage = {
-                  id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-                  role: "assistant",
-                  content: fullText,
-                  timestamp: Date.now(),
-                };
-                setAskMessages((prev) => [...prev, assistantMsg]);
-                addChatMessage(assistantMsg);
-                setStreamingText("");
-                setIsTyping(false);
-                return;
-              }
-            } catch {}
-          }
-        }
-      }
-      if (fullText) {
-        const assistantMsg: ChatMessage = {
-          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-          role: "assistant",
-          content: fullText,
-          timestamp: Date.now(),
-        };
-        setAskMessages((prev) => [...prev, assistantMsg]);
-        addChatMessage(assistantMsg);
-      }
+      const assistantMsg: ChatMessage = {
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        role: "assistant",
+        content,
+        timestamp: Date.now(),
+      };
+      setAskMessages((prev) => [...prev, assistantMsg]);
+      addChatMessage(assistantMsg);
     } catch (err: any) {
-      console.log("[Coach] Full error:", err);
-      console.log("[Coach] Error message:", err?.message);
-      console.log("[Coach] Error status:", err?.status);
-      console.log("[Coach] Error body:", err?.body);
-
-      let userMessage = "Something went wrong. Try again in a moment.";
-      if (err?.message === "Network request failed" || err?.message?.includes("network") || err?.message?.includes("fetch")) {
-        userMessage = "Network error. Check your connection and try again.";
-      } else if (err?.status === 500) {
-        userMessage = `Server error (500). ${err?.body || "The AI service may be temporarily unavailable."}`;
-      } else if (err?.status === 401 || err?.status === 403) {
-        userMessage = "Configuration error. The AI service is not properly set up.";
-      } else if (err?.status === 429) {
-        userMessage = "Rate limited. Wait a moment and try again.";
-      } else if (err?.status) {
-        userMessage = `Server returned ${err.status}. ${err?.body || ""}`;
-      } else if (err?.message) {
-        userMessage = `Error: ${err.message}`;
+      if (typeof __DEV__ !== "undefined" && __DEV__) {
+        console.log("[Coach] error:", { kind: err?.kind, status: err?.status, message: err?.message, body: err?.body });
       }
-
+      const userMessage = err instanceof CoachRequestError
+        ? describeCoachError(err)
+        : `Something went wrong. ${err?.message || ""}`.trim();
       const errorMsg: ChatMessage = {
         id: Date.now().toString(),
         role: "assistant",
@@ -817,16 +734,37 @@ export default function DashboardScreen() {
             </View>
           ) : null}
 
-          {askMessages.length > 0 && !showChat && (
-            <Pressable onPress={() => setShowChat(true)}>
-              <View style={[styles.askBubble, { backgroundColor: c.background }]}>
-                <Text style={[styles.askMsgText, { color: c.foreground }]} numberOfLines={2}>
-                  {askMessages[askMessages.length - 1].content}
-                </Text>
-              </View>
-              <Text style={[styles.chatViewAll, { color: c.accent }]}>View conversation</Text>
-            </Pressable>
-          )}
+          {chatMessages.length > 0 && !showChat && (() => {
+            const summary = summarizeCoachThread(chatMessages);
+            if (!summary) return null;
+            return (
+              <Pressable onPress={() => { haptic(); router.push("/(tabs)/coach"); }}>
+                <View style={[styles.askBubble, { backgroundColor: c.background, gap: 6 }]}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Feather name="message-square" size={11} color={c.accent} />
+                    <Text style={{ color: c.accent, fontFamily: "Montserrat_600SemiBold", fontSize: 11, letterSpacing: 0.3, textTransform: "uppercase" }} numberOfLines={1}>
+                      {summary.topic}
+                    </Text>
+                    <Text style={{ color: c.mutedForeground, fontFamily: "Montserrat_500Medium", fontSize: 11 }}>
+                      {String.fromCharCode(183)} {summary.exchangeCount} {summary.exchangeCount === 1 ? "msg" : "msgs"}
+                    </Text>
+                  </View>
+                  <Text style={[styles.askMsgText, { color: c.foreground }]} numberOfLines={2}>
+                    {summary.takeaway}
+                  </Text>
+                  {summary.nextStep ? (
+                    <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 6, marginTop: 2 }}>
+                      <Feather name="arrow-right" size={12} color={c.accent} style={{ marginTop: 3 }} />
+                      <Text style={{ color: c.mutedForeground, fontFamily: "Montserrat_500Medium", fontSize: 13, flex: 1 }} numberOfLines={2}>
+                        {summary.nextStep}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+                <Text style={[styles.chatViewAll, { color: c.accent }]}>View conversation</Text>
+              </Pressable>
+            );
+          })()}
 
           <View style={[styles.askInputRow, { backgroundColor: c.background }]}>
             <TextInput

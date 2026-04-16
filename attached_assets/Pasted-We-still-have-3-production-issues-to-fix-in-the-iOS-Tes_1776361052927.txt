@@ -1,0 +1,110 @@
+We still have 3 production issues to fix in the iOS/TestFlight app.
+
+Priority 1: Coach chat is still broken
+Symptoms:
+- Full coach screen still returns “Network error. Check your connection and try again.”
+- The Today tab coach card also shows the same network error
+- Coach worked in earlier iterations, so this is likely a request/response contract or endpoint mismatch, not a product logic problem
+
+What I need you to do:
+1. Trace the full coach request path end to end for both:
+   - Today tab coach card
+   - full coach chat screen
+2. Confirm whether both surfaces hit the exact same API base URL, route, method, headers, and request schema
+3. Log and compare:
+   - request URL
+   - HTTP method
+   - headers
+   - request body
+   - response status
+   - raw response body
+   - JSON parsing errors
+   - timeout/fetch failure reason
+4. Find the exact root cause instead of guessing
+
+Likely causes to investigate:
+- wrong production API URL in native build
+- route mismatch between app and api-server
+- payload schema drift after adding tier/context fields
+- API returning non-JSON or error JSON not handled properly
+- one surface still using old request path while another uses new path
+- app swallowing a parse error and labeling it “network error”
+
+Required fix:
+- Make both coach entry points use one shared request helper
+- Ensure both use the same production endpoint and same payload contract
+- Add robust error logging in development and cleaner graceful fallback in production
+- Return the exact root cause after fixing
+
+Priority 2: Today tab coach card UX
+Current problem:
+- It just shows a tiny preview of the previous conversation
+- That is not the right experience
+
+Desired behavior:
+- On the Today tab, do NOT show a raw snippet of the old conversation as the main content
+- Instead show a concise summary/stateful recap of the ongoing coach thread, like:
+  - what the conversation was about
+  - the current takeaway
+  - the next suggested action
+- Tapping into the chat box or “View conversation” should reopen the full discussion thread
+- The card should feel like a smart conversation summary, not a transcript preview
+
+Implement:
+1. Add a small summarization layer for the Today coach card
+2. Summarize the latest conversation into:
+   - topic
+   - short takeaway
+   - optional next-step suggestion
+3. Keep the full thread intact in the full coach screen
+4. Ensure the summary is updated after each successful coach exchange
+
+Priority 3: Keyboard dismissal
+Issue:
+- Keyboard should go down once you leave the coach chat
+
+Fix:
+- When navigating away from the chat screen or collapsing the chat, dismiss the keyboard explicitly
+- Also dismiss on submit/send if the UX feels cleaner on mobile
+- Audit focus state so the input is not left active off-screen
+
+Priority 4: Medication and dose editing crash in Settings
+Symptoms:
+- Trying to update medication or dosage in Settings causes “Something went wrong”
+- This should behave like the current weight editing flow
+- User should be able to select a new medication/dose from the same options/pattern used in onboarding
+
+Required implementation:
+1. Rework medication/dose editing to use the same stable edit pattern as weight editing
+2. Reuse the same medication options and dosage/frequency options from onboarding instead of custom ad hoc logic
+3. Ensure treatment editing supports both:
+   - weekly meds like Wegovy/Zepbound/Ozempic
+   - daily meds like Saxenda
+4. Validate that saved treatment data matches the shared app schema expected by:
+   - Today
+   - Trends
+   - recommendations
+   - coach context
+5. Fix the exact crash root cause and report it clearly
+
+Also check for likely schema issues such as:
+- medication type mismatch
+- daily vs weekly cadence mismatch
+- missing required treatment fields after edit
+- invalid enum values
+- save succeeds but downstream read crashes
+
+Implementation constraints:
+- Do not create a second treatment-editing system
+- Reuse onboarding option sets and weight-edit style UX where possible
+- Keep one shared source of truth for treatment data
+
+Required output after fixes:
+1. Exact root cause of coach failure
+2. Exact root cause of Settings treatment edit crash
+3. Files changed
+4. Confirmation that:
+   - both coach surfaces now work in TestFlight/prod path
+   - Today tab shows a conversation summary instead of a raw transcript preview
+   - keyboard dismisses when leaving chat
+   - medication/dose editing works like weight editing and supports daily + weekly GLP-1 flows
