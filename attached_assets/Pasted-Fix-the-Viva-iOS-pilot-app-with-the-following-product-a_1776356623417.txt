@@ -1,0 +1,97 @@
+Fix the Viva iOS pilot app with the following product and logic changes.
+
+1. Today screen recommendation logic
+- The app is over-weighting Apple Health signals and telling the user they need rest even when self-reported inputs are solid.
+- Update recommendation logic so daily guidance blends subjective inputs and Apple Health data.
+- If user-reported energy is Good/Great and symptoms are mild/none, do NOT show an overly negative rest warning unless there is a truly strong reason.
+- Replace harsh messaging like “Your body needs a break today” with more balanced messaging when signals are mixed.
+- Example mixed-signal message: “Sleep was short last night, but your symptoms look stable. Keep today lighter and reassess later.”
+
+2. Remove recovery percentage from patient-facing UI
+- Do not show any numeric recovery % anywhere in the app.
+- Recovery should be qualitative only.
+- If recovery inputs are incomplete, do not calculate or surface a fallback numeric score.
+- Replace “Recovery is at 0%” logic with qualitative summaries based on available data only.
+
+3. Fix recovery fallback bug
+- Right now recovery appears to default to 0 when required inputs are missing.
+- Audit the recovery computation and any fallback/default values.
+- If HRV or other required watch-derived metrics are missing, recovery should be null/unavailable internally, not 0.
+- Update all UI components to handle unavailable recovery gracefully.
+
+4. Sleep detail cleanup
+- Sleep detail currently shows “null” in the summary string.
+- Remove any sleep quality percentage from the sleep detail screen.
+- Focus sleep on quantity only for now:
+  - last night sleep duration
+  - 7-day average
+  - 30-day trend
+  - brief interpretation
+  - what to do
+- Replace strings like “4.9 hours, null% quality. 7-day average: 7.1 hours.”
+  with “4.9 hours last night. 7-day average: 7.1 hours.”
+
+5. Key Metrics section
+- Update Key Metrics to use only data we are reliably pulling from HealthKit.
+- Good options to surface:
+  - Sleep duration
+  - Resting heart rate (BPM)
+  - Steps
+  - Distance
+  - Active calories
+  - Total calories
+  - Active days per week
+  - 7-day averages / trend arrows
+- Do not show metrics requiring unavailable data.
+- If resting heart rate is available, add it cleanly to Key Metrics.
+
+6. Remove HealthKit debug UI from patient-facing settings
+- Delete or fully hide the HealthKit Debug card from production/pilot builds.
+- Patients should not see raw sync status text, sample counts, or available metric type logs.
+
+7. Remove Premium / Upgrade UI
+- Remove the “Upgrade to Premium” card and any premium gating in the pilot.
+- All pilot users should have access to all currently available features.
+- Keep the app simple and uncluttered.
+
+8. Settings: make treatment editable
+- In Settings, allow direct editing of medication/treatment details including:
+  - medication name
+  - dose
+  - cadence/frequency
+  - dose day if relevant
+- Persist changes to the shared source of truth.
+- Ensure updates flow across:
+  - Today screen
+  - Treatment card
+  - Trends
+  - Recommendations
+  - Coach context / prompts
+
+9. Fix checklist count bug
+- The app says “4 of 5 actions done today” even though there are only 4 sections now.
+- Find the old hardcoded section count or config and update it so the counter reflects the actual number of current daily actions.
+
+10. Fix coach chat network issue
+- The coach chat is still failing with “Network error. Check your connection and try again.”
+- Audit the production API base URL and request path used by the iOS/TestFlight build.
+- Confirm the app is calling the correct deployed production endpoint, not a relative /api path unless that is intentionally proxied.
+- Verify the backend route exists and returns successfully in production.
+- Add better error logging around the coach request so we can see:
+  - request URL
+  - response status
+  - error body
+  - timeout / fetch failure details
+- If needed, update the production API URL and ensure the native app uses it correctly.
+
+11. General UX cleanup
+- Patient-facing language should avoid fake precision and avoid surfacing missing data.
+- Prefer qualitative guidance over scores when HealthKit coverage is incomplete.
+- Gracefully handle missing Apple Watch-dependent metrics.
+
+After making changes:
+- list every file changed
+- explain the root cause of the recovery=0 bug
+- explain the root cause of the coach network error
+- confirm which HealthKit metrics are currently available in the app
+- confirm the HealthKit debug and premium UI are fully removed from pilot builds

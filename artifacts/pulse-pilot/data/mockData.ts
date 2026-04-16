@@ -230,7 +230,7 @@ export function getMetricDetail(
         : todayMetrics.sleepDuration >= 6.5
         ? "Sleep was okay."
         : "Sleep was short last night.",
-      explanation: `${todayMetrics.sleepDuration.toFixed(1)} hours, ${todayMetrics.sleepQuality}% quality. 7-day average: ${avg.toFixed(1)} hours.`,
+      explanation: `${todayMetrics.sleepDuration.toFixed(1)} hours last night. 7-day average: ${avg.toFixed(1)} hours.`,
       whatItMeans: "Sleep is when your body recovers and adjusts to treatment. Consistent sleep supports energy, appetite regulation, and side effect management.",
       recommendation: todayMetrics.sleepDuration < 7
         ? "Try winding down 30 minutes earlier tonight. Keep the room cool and dark."

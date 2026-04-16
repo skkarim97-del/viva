@@ -194,13 +194,18 @@ export default function DashboardScreen() {
       content: m.content,
     }));
 
-    const fetchUrl = `${API_BASE}/coach/chat`;
-    console.log("[Coach] Fetching:", fetchUrl);
+    // Native fetch on iOS/Android cannot consume SSE reliably. Use non-streaming JSON
+    // on native, streaming on web (matches coach.tsx behavior).
+    const useStream = Platform.OS === "web";
+    const fetchUrl = useStream ? `${API_BASE}/coach/chat` : `${API_BASE}/coach/chat?stream=false`;
+    console.log("[Coach] Fetching:", fetchUrl, "useStream:", useStream);
 
     try {
       const response = await fetch(fetchUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: useStream
+          ? { "Content-Type": "application/json" }
+          : { "Content-Type": "application/json", "Accept": "application/json" },
         body: JSON.stringify({
           message: text.trim(),
           healthContext: buildCoachContext(
@@ -220,6 +225,24 @@ export default function DashboardScreen() {
         console.log("[Coach] HTTP error", response.status, errorBody);
         throw { status: response.status, body: errorBody };
       }
+
+      if (!useStream) {
+        const data = await response.json();
+        const fullText: string = typeof data?.content === "string" ? data.content : "";
+        if (!fullText) throw new Error("Empty response from server");
+        const assistantMsg: ChatMessage = {
+          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+          role: "assistant",
+          content: fullText,
+          timestamp: Date.now(),
+        };
+        setAskMessages((prev) => [...prev, assistantMsg]);
+        addChatMessage(assistantMsg);
+        setStreamingText("");
+        setIsTyping(false);
+        return;
+      }
+
       const reader = response.body?.getReader();
       if (!reader) throw new Error("No stream reader");
 

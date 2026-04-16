@@ -103,22 +103,17 @@ function buildWhyThisPlan(ctx: WhyPlanContext): string[] {
       ? `Recovery signals have been lower since the ${brandName} dose change. This is expected and usually resolves within 1-2 weeks. ${inputClause}`
       : `Recovery has been strained for several days. On ${brandName}, this can correlate with disrupted sleep or under-fueling. ${inputClause}`;
   } else if (trigger === "push_day") {
-    p1 = hasWearable
-      ? `Sleep was ${metrics.sleepDuration.toFixed(1)} hours, recovery is ${metrics.recoveryScore}%, and your body is responding well to ${fullMedStr}. ${inputClause || "Your inputs look solid today."}`
-      : `Your check-ins suggest your body is responding well to ${fullMedStr}. ${inputClause || "Your inputs look solid today."}`;
+    const sleepPart = hasWearable && metrics.sleepDuration > 0 ? `Sleep was ${metrics.sleepDuration.toFixed(1)} hours and y` : "Y";
+    p1 = `${sleepPart}our body is responding well to ${fullMedStr}. ${inputClause || "Your inputs look solid today."}`;
   } else if (trigger === "build_day") {
-    p1 = hasWearable
-      ? `Recovery is ${metrics.recoveryScore}% and supports steady effort today on ${fullMedStr}. ${inputClause || "No major flags in your inputs."}`
-      : `Your inputs support steady effort today on ${fullMedStr}. ${inputClause || "No major flags in your check-ins."}`;
+    p1 = `Recovery signals support steady effort today on ${fullMedStr}. ${inputClause || "No major flags in your inputs."}`;
   } else if (trigger === "maintain_day") {
     const sleepNote = hasWearable && metrics.sleepDuration > 0 && metrics.sleepDuration < 7 ? `Sleep was ${metrics.sleepDuration.toFixed(1)} hours. ` : "";
     p1 = `${sleepNote}Your body can handle the basics today but is not fully charged. On ${brandName}${isHigh ? ` at ${doseStr}` : ""}, days like this are normal. ${inputClause}`;
   } else if (trigger === "rest_day") {
     p1 = isTitrated
       ? `Your body is working hard to adjust after the ${brandName} dose change. ${inputClause}`
-      : hasWearable
-        ? `Recovery is at ${metrics.recoveryScore}% and your body is signaling for rest. On ${fullMedStr}, rest days help your body recalibrate. ${inputClause}`
-        : `Your body is signaling for rest. On ${fullMedStr}, rest days help your body recalibrate. ${inputClause}`;
+      : `Your body is signaling for rest. On ${fullMedStr}, rest days help your body recalibrate. ${inputClause}`;
   } else {
     p1 = `Your body could use some extra support today. On ${fullMedStr}, listening to these signals is part of the process. ${inputClause}`;
   }
@@ -696,7 +691,7 @@ export function generateDailyPlan(
         ? "You're in a great spot today. Make the most of it."
         : "Recovery is strong. Make the most of today.";
     summary = wearableAvailable
-      ? `Sleep was ${metrics.sleepDuration.toFixed(1)} hrs, HRV is above your baseline, and recovery is ${metrics.recoveryScore}%. A strong day for a strength session or longer walk.`
+      ? `Sleep was ${metrics.sleepDuration.toFixed(1)} hrs and HRV is above your baseline. A strong day for a strength session or longer walk.`
       : "Your check-ins look strong across the board. A good time for a strength session or longer walk.";
     dailyFocus = "Make the most of today";
     whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, wearableAvailable, trigger: "push_day" });
@@ -708,9 +703,7 @@ export function generateDailyPlan(
   } else if (readinessScore >= 65) {
     dailyState = "build";
     headline = "A good day for steady progress.";
-    summary = wearableAvailable
-      ? `Recovery is ${metrics.recoveryScore}% and supports activity today. Stay consistent with movement, protein, and hydration.`
-      : "Today looks good for steady progress. Stay consistent with movement, protein, and hydration.";
+    summary = "Today looks good for steady progress. Stay consistent with movement, protein, and hydration.";
     dailyFocus = "Steady progress";
     whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, wearableAvailable, trigger: "build_day" });
     workoutType = "Walk or Light Activity";
@@ -720,16 +713,19 @@ export function generateDailyPlan(
     optional = "If energy drops later, a walk is always a solid fallback.";
   } else if (readinessScore >= 45) {
     dailyState = "maintain";
-    headline = sleepLow
+    const subjectiveGood = (energy === "high" || energy === "excellent" || feeling === "great" || glp1Inputs?.energy === "great") && !symptomsHeavy;
+    headline = sleepLow && !subjectiveGood
       ? `${metrics.sleepDuration.toFixed(1)} hrs of sleep. Keep today simple.`
       : !wearableAvailable
         ? "A steady day. Stay consistent with the basics."
-        : "Your body could use a lighter day.";
-    summary = sleepLow
+        : sleepLow && subjectiveGood
+          ? "You're running on light sleep but feeling steady. Match effort to how you feel."
+          : "Your body could use a lighter day.";
+    summary = sleepLow && !subjectiveGood
       ? `Sleep was ${metrics.sleepDuration.toFixed(1)} hrs. A lighter day with protein-rich meals and extra water will help you recover.`
-      : wearableAvailable
-        ? `Recovery is at ${metrics.recoveryScore}%. Stay consistent with the basics and keep movement gentle.`
-        : "Based on your check-ins, keep things manageable today. Focus on protein, hydration, and gentle movement.";
+      : sleepLow && subjectiveGood
+        ? `Sleep was ${metrics.sleepDuration.toFixed(1)} hrs but your check-ins look solid. Stay flexible. Pull back if energy fades.`
+        : "Keep things manageable today. Focus on protein, hydration, and gentle movement.";
     dailyFocus = "Basics first";
     whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, wearableAvailable, trigger: "maintain_day" });
     workoutType = "Gentle Walk";
@@ -742,9 +738,7 @@ export function generateDailyPlan(
     headline = isTitrated
       ? "Your body is working hard to adjust. Rest is the right call today."
       : "Your body needs a break today.";
-    summary = wearableAvailable
-      ? `Recovery is at ${metrics.recoveryScore}%. Focus on rest, hydration, and nourishing food. Movement can wait.`
-      : "Your body needs a break. Focus on rest, hydration, and nourishing food. Movement can wait.";
+    summary = "Your body needs a break. Focus on rest, hydration, and nourishing food. Movement can wait.";
     dailyFocus = "Rest and restore";
     whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, wearableAvailable, trigger: "rest_day" });
     optional = "A 10-minute easy walk is the most you should do today.";
@@ -874,11 +868,11 @@ export function generateDailyPlan(
   if (!wearableAvailable || typeof recoveryScoreVal !== "number") {
     recoverySummary = "";
   } else if (recoveryScoreVal >= 75) {
-    recoverySummary = `Recovery is strong at ${recoveryScoreVal}%.`;
+    recoverySummary = "Recovery is strong.";
   } else if (recoveryScoreVal >= 50) {
-    recoverySummary = `Recovery is moderate at ${recoveryScoreVal}%.`;
+    recoverySummary = "Recovery is moderate.";
   } else {
-    recoverySummary = `Recovery is low at ${recoveryScoreVal}%. Rest and hydration are the priority.`;
+    recoverySummary = "Recovery is low. Rest and hydration are the priority.";
   }
 
   const statusLabel: import("@/types").DailyStatusLabel =

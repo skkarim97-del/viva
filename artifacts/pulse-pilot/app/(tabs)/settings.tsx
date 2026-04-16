@@ -1,6 +1,5 @@
 import { Feather } from "@expo/vector-icons";
-import { router } from "expo-router";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -9,14 +8,18 @@ import {
   Pressable,
   TextInput,
   Modal,
-  Platform,
 } from "react-native";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
-import { getDoseOptions, type MedicationBrand } from "@/data/medicationData";
-import { getHealthDebugInfo, onDebugUpdate, connectAppleHealth } from "@/data/healthProviders";
+import {
+  BRAND_OPTIONS,
+  getDoseOptions,
+  getMedicationFrequency,
+  type MedicationBrand,
+} from "@/data/medicationData";
+import { connectAppleHealth } from "@/data/healthProviders";
 
 const GOAL_LABELS: Record<string, string> = {
   fat_loss: "Weight Loss",
@@ -27,40 +30,31 @@ const GOAL_LABELS: Record<string, string> = {
   general_wellness: "General Wellness",
 };
 
+type MedDraft = {
+  brand: MedicationBrand;
+  doseValue: number;
+  doseUnit: string;
+  frequency: "weekly" | "daily";
+};
+
 export default function SettingsScreen() {
   const c = useColors();
-  const { profile, updateProfile, integrations, toggleIntegration, availableMetricTypes } = useApp();
+  const { profile, updateProfile, integrations, toggleIntegration } = useApp();
 
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
-  const [debugInfo, setDebugInfo] = useState(getHealthDebugInfo());
   const [connecting, setConnecting] = useState(false);
-
-  useEffect(() => {
-    return onDebugUpdate(() => setDebugInfo(getHealthDebugInfo()));
-  }, []);
+  const [medModalOpen, setMedModalOpen] = useState(false);
+  const [medDraft, setMedDraft] = useState<MedDraft | null>(null);
 
   const handleConnectHealth = useCallback(async () => {
-    console.log("[Settings] Connect Apple Health button pressed");
     setConnecting(true);
     const result = await connectAppleHealth();
     setConnecting(false);
-    console.log("[Settings] connectAppleHealth result:", result);
     if (result.success) {
       toggleIntegration("apple_health");
     }
   }, [toggleIntegration]);
-
-  const tierLabel =
-    profile.tier === "premium_plus"
-      ? "Premium Plus"
-      : profile.tier === "premium"
-      ? "Premium"
-      : "Free";
-
-  const handleUpgrade = () => {
-    router.push("/subscription");
-  };
 
   const startEdit = (field: string, currentValue: string) => {
     setEditingField(field);
@@ -82,15 +76,82 @@ export default function SettingsScreen() {
     setEditingField(null);
   };
 
+  const openMedEditor = () => {
+    const mp = profile.medicationProfile;
+    if (mp) {
+      setMedDraft({
+        brand: mp.medicationBrand as MedicationBrand,
+        doseValue: mp.doseValue,
+        doseUnit: mp.doseUnit,
+        frequency: (mp.frequency as "weekly" | "daily") || "weekly",
+      });
+    } else {
+      setMedDraft({
+        brand: "wegovy",
+        doseValue: 0.25,
+        doseUnit: "mg",
+        frequency: "weekly",
+      });
+    }
+    setMedModalOpen(true);
+  };
+
+  const saveMedDraft = () => {
+    if (!medDraft) {
+      setMedModalOpen(false);
+      return;
+    }
+    const existing = profile.medicationProfile;
+    updateProfile({
+      medicationProfile: {
+        ...(existing || {}),
+        medicationBrand: medDraft.brand,
+        doseValue: medDraft.doseValue,
+        doseUnit: medDraft.doseUnit,
+        frequency: medDraft.frequency,
+        timeOnMedicationBucket: existing?.timeOnMedicationBucket || "less_1_month",
+        recentTitration: existing?.recentTitration ?? false,
+      } as any,
+    });
+    setMedModalOpen(false);
+    setMedDraft(null);
+  };
+
+  const setDraftBrand = (brand: MedicationBrand) => {
+    if (!medDraft) return;
+    if (brand === "other") {
+      setMedDraft({
+        brand,
+        doseValue: medDraft.doseValue,
+        doseUnit: medDraft.doseUnit,
+        frequency: medDraft.frequency,
+      });
+      return;
+    }
+    const opts = getDoseOptions(brand);
+    const freq = getMedicationFrequency(brand);
+    const first = opts[0];
+    setMedDraft({
+      brand,
+      doseValue: first?.value ?? medDraft.doseValue,
+      doseUnit: first?.unit ?? medDraft.doseUnit,
+      frequency: freq,
+    });
+  };
+
   const medProfile = profile.medicationProfile;
   const doseDisplay = medProfile
     ? `${medProfile.doseValue} ${medProfile.doseUnit} ${medProfile.frequency}`
     : "Not set";
-  const medicationDisplay = medProfile?.medicationBrand || "Not set";
+  const medicationDisplay = medProfile?.medicationBrand
+    ? medProfile.medicationBrand.charAt(0).toUpperCase() + medProfile.medicationBrand.slice(1)
+    : "Not set";
   const goalsDisplay = profile.goals.length > 0
     ? profile.goals.map(g => GOAL_LABELS[g] || g.replace(/_/g, " ")).join(", ")
     : "Not set";
   const weightUnit = profile.units === "imperial" ? "lbs" : "kg";
+
+  const draftDoseOptions = medDraft && medDraft.brand !== "other" ? getDoseOptions(medDraft.brand) : [];
 
   return (
     <ScrollView
@@ -111,39 +172,41 @@ export default function SettingsScreen() {
           <Text style={[styles.profileName, { color: c.foreground }]}>
             {profile.name || "Viva User"}
           </Text>
-          <View style={[styles.tierBadge, { backgroundColor: c.accent + "10" }]}>
-            <Text style={[styles.tierText, { color: c.accent }]}>{tierLabel}</Text>
-          </View>
         </View>
-        {profile.tier === "free" ? (
-          <Pressable onPress={handleUpgrade} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
-            <Feather name="arrow-up-circle" size={22} color={c.accent} />
-          </Pressable>
-        ) : null}
       </View>
 
       <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>Treatment</Text>
       <View style={[styles.section, { backgroundColor: c.card }]}>
-        {[
-          { label: "Medication", value: medicationDisplay, icon: "package" as const, editable: false },
-          { label: "Dosage", value: doseDisplay, icon: "thermometer" as const, editable: false },
-        ].map((item, i) => (
-          <View
-            key={item.label}
-            style={[
-              styles.settingRow,
-              i < 1 && [styles.settingRowBorder, { borderBottomColor: c.background }],
-            ]}
-          >
-            <View style={[styles.settingIcon, { backgroundColor: c.accent + "10" }]}>
-              <Feather name={item.icon} size={16} color={c.accent} />
-            </View>
-            <Text style={[styles.settingLabel, { color: c.foreground }]}>{item.label}</Text>
-            <Text style={[styles.settingValue, { color: c.mutedForeground }]} numberOfLines={1}>
-              {item.value}
-            </Text>
+        <Pressable
+          onPress={openMedEditor}
+          style={({ pressed }) => [
+            styles.settingRow,
+            styles.settingRowBorder,
+            { borderBottomColor: c.background, opacity: pressed ? 0.7 : 1 },
+          ]}
+        >
+          <View style={[styles.settingIcon, { backgroundColor: c.accent + "10" }]}>
+            <Feather name="package" size={16} color={c.accent} />
           </View>
-        ))}
+          <Text style={[styles.settingLabel, { color: c.foreground }]}>Medication</Text>
+          <Text style={[styles.settingValue, { color: c.mutedForeground }]} numberOfLines={1}>
+            {medicationDisplay}
+          </Text>
+          <Feather name="edit-2" size={13} color={c.mutedForeground + "60"} />
+        </Pressable>
+        <Pressable
+          onPress={openMedEditor}
+          style={({ pressed }) => [styles.settingRow, { opacity: pressed ? 0.7 : 1 }]}
+        >
+          <View style={[styles.settingIcon, { backgroundColor: c.accent + "10" }]}>
+            <Feather name="thermometer" size={16} color={c.accent} />
+          </View>
+          <Text style={[styles.settingLabel, { color: c.foreground }]}>Dosage</Text>
+          <Text style={[styles.settingValue, { color: c.mutedForeground }]} numberOfLines={1}>
+            {doseDisplay}
+          </Text>
+          <Feather name="edit-2" size={13} color={c.mutedForeground + "60"} />
+        </Pressable>
       </View>
 
       <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>Profile</Text>
@@ -253,30 +316,6 @@ export default function SettingsScreen() {
         })}
       </View>
 
-      <View style={[styles.section, { backgroundColor: c.card, padding: 16 }]}>
-        <Text style={{ color: c.foreground, fontFamily: "Montserrat_700Bold", fontSize: 13, marginBottom: 10 }}>HealthKit Debug</Text>
-        <Text style={{ color: c.mutedForeground, fontFamily: "Montserrat_500Medium", fontSize: 11, lineHeight: 18 }}>
-          {`buttonPressed: ${debugInfo.buttonPressed}\nusingDefaultExport: ${debugInfo.usingDefaultExport ?? "n/a"}\ninitFunctionExists: ${debugInfo.initFunctionExists}\ninitCalled: ${debugInfo.initCalled}\ncallbackReached: ${debugInfo.callbackReached}\ninitSucceeded: ${debugInfo.initSucceeded ?? "n/a"}\nrawErrorText: ${debugInfo.rawErrorText ?? "none"}\n---\nfetchCalled: ${debugInfo.fetchCalled}\nfetchSucceeded: ${debugInfo.fetchSucceeded ?? "n/a"}\nsampleCounts: ${debugInfo.sampleCounts || "(empty)"}\nfetchErrorText: ${debugInfo.fetchErrorText ?? "none"}\navailableMetricTypes: ${availableMetricTypes.length > 0 ? availableMetricTypes.join(", ") : "(none)"}`}
-        </Text>
-      </View>
-
-      <Pressable onPress={handleUpgrade} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}>
-        <View style={[styles.upgradeCard, { backgroundColor: c.primary }]}>
-          <Feather name="star" size={18} color={c.primaryForeground} />
-          <View style={styles.upgradeInfo}>
-            <Text style={[styles.upgradeTitle, { color: c.primaryForeground }]}>
-              {profile.tier === "free" ? "Upgrade to Premium" : "Manage Subscription"}
-            </Text>
-            <Text style={[styles.upgradeDesc, { color: c.primaryForeground + "BB" }]}>
-              {profile.tier === "free"
-                ? "Full AI coaching, weekly plans, and more"
-                : "View or change your current plan"}
-            </Text>
-          </View>
-          <Feather name="chevron-right" size={18} color={c.primaryForeground + "80"} />
-        </View>
-      </Pressable>
-
       <Text style={[styles.disclaimer, { color: c.mutedForeground }]}>
         Viva is for informational purposes only and does not provide medical advice.
       </Text>
@@ -303,6 +342,127 @@ export default function SettingsScreen() {
                 <Text style={[styles.modalButtonText, { color: c.mutedForeground }]}>Cancel</Text>
               </Pressable>
               <Pressable onPress={saveEdit} style={[styles.modalButton, { backgroundColor: c.accent }]}>
+                <Text style={[styles.modalButtonText, { color: "#fff" }]}>Save</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={medModalOpen} transparent animationType="fade" onRequestClose={() => setMedModalOpen(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setMedModalOpen(false)}>
+          <Pressable style={[styles.modalContent, { backgroundColor: c.card, maxWidth: 380 }]} onPress={(e) => e.stopPropagation()}>
+            <Text style={[styles.modalTitle, { color: c.foreground }]}>Edit Medication</Text>
+
+            <Text style={[styles.fieldLabel, { color: c.mutedForeground }]}>Medication</Text>
+            <View style={styles.chipRow}>
+              {BRAND_OPTIONS.map(opt => {
+                const selected = medDraft?.brand === opt.key;
+                return (
+                  <Pressable
+                    key={opt.key}
+                    onPress={() => setDraftBrand(opt.key)}
+                    style={({ pressed }) => [
+                      styles.chip,
+                      {
+                        backgroundColor: selected ? c.accent : c.background,
+                        opacity: pressed ? 0.8 : 1,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.chipText, { color: selected ? "#fff" : c.foreground }]}>{opt.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {medDraft && medDraft.brand !== "other" && draftDoseOptions.length > 0 && (
+              <>
+                <Text style={[styles.fieldLabel, { color: c.mutedForeground }]}>Dose</Text>
+                <View style={styles.chipRow}>
+                  {draftDoseOptions.map(opt => {
+                    const selected = medDraft.doseValue === opt.value && medDraft.doseUnit === opt.unit;
+                    return (
+                      <Pressable
+                        key={`${opt.value}-${opt.unit}`}
+                        onPress={() => setMedDraft({ ...medDraft, doseValue: opt.value, doseUnit: opt.unit })}
+                        style={({ pressed }) => [
+                          styles.chip,
+                          {
+                            backgroundColor: selected ? c.accent : c.background,
+                            opacity: pressed ? 0.8 : 1,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.chipText, { color: selected ? "#fff" : c.foreground }]}>{opt.label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </>
+            )}
+
+            {medDraft && medDraft.brand === "other" && (
+              <>
+                <Text style={[styles.fieldLabel, { color: c.mutedForeground }]}>Dose value</Text>
+                <TextInput
+                  style={[styles.modalInput, { color: c.foreground, borderColor: c.border, backgroundColor: c.background }]}
+                  value={`${medDraft.doseValue}`}
+                  onChangeText={(t) => {
+                    const v = parseFloat(t);
+                    setMedDraft({ ...medDraft, doseValue: isNaN(v) ? 0 : v });
+                  }}
+                  keyboardType="numeric"
+                  placeholder="e.g. 0.5"
+                  placeholderTextColor={c.mutedForeground + "60"}
+                />
+                <Text style={[styles.fieldLabel, { color: c.mutedForeground }]}>Dose unit</Text>
+                <View style={styles.chipRow}>
+                  {["mg", "ml", "units"].map(u => {
+                    const selected = medDraft.doseUnit === u;
+                    return (
+                      <Pressable
+                        key={u}
+                        onPress={() => setMedDraft({ ...medDraft, doseUnit: u })}
+                        style={({ pressed }) => [
+                          styles.chip,
+                          { backgroundColor: selected ? c.accent : c.background, opacity: pressed ? 0.8 : 1 },
+                        ]}
+                      >
+                        <Text style={[styles.chipText, { color: selected ? "#fff" : c.foreground }]}>{u}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </>
+            )}
+
+            <Text style={[styles.fieldLabel, { color: c.mutedForeground }]}>Frequency</Text>
+            <View style={styles.chipRow}>
+              {(["weekly", "daily"] as const).map(f => {
+                const selected = medDraft?.frequency === f;
+                return (
+                  <Pressable
+                    key={f}
+                    onPress={() => medDraft && setMedDraft({ ...medDraft, frequency: f })}
+                    style={({ pressed }) => [
+                      styles.chip,
+                      { backgroundColor: selected ? c.accent : c.background, opacity: pressed ? 0.8 : 1 },
+                    ]}
+                  >
+                    <Text style={[styles.chipText, { color: selected ? "#fff" : c.foreground }]}>
+                      {f.charAt(0).toUpperCase() + f.slice(1)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <View style={styles.modalButtons}>
+              <Pressable onPress={() => setMedModalOpen(false)} style={[styles.modalButton, { backgroundColor: c.background }]}>
+                <Text style={[styles.modalButtonText, { color: c.mutedForeground }]}>Cancel</Text>
+              </Pressable>
+              <Pressable onPress={saveMedDraft} style={[styles.modalButton, { backgroundColor: c.accent }]}>
                 <Text style={[styles.modalButtonText, { color: "#fff" }]}>Save</Text>
               </Pressable>
             </View>
@@ -349,16 +509,6 @@ const styles = StyleSheet.create({
   },
   profileName: {
     fontSize: 16,
-    fontFamily: "Montserrat_600SemiBold",
-  },
-  tierBadge: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  tierText: {
-    fontSize: 11,
     fontFamily: "Montserrat_600SemiBold",
   },
   sectionLabel: {
@@ -435,26 +585,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Montserrat_600SemiBold",
   },
-  upgradeCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 18,
-    borderRadius: 20,
-    gap: 14,
-    marginTop: 4,
-  },
-  upgradeInfo: {
-    flex: 1,
-    gap: 3,
-  },
-  upgradeTitle: {
-    fontSize: 16,
-    fontFamily: "Montserrat_600SemiBold",
-  },
-  upgradeDesc: {
-    fontSize: 13,
-    fontFamily: "Montserrat_400Regular",
-  },
   disclaimer: {
     fontSize: 12,
     fontFamily: "Montserrat_400Regular",
@@ -476,7 +606,7 @@ const styles = StyleSheet.create({
     maxWidth: 340,
     borderRadius: 20,
     padding: 24,
-    gap: 16,
+    gap: 12,
   },
   modalTitle: {
     fontSize: 18,
@@ -488,13 +618,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    fontSize: 18,
+    fontSize: 16,
     fontFamily: "Montserrat_500Medium",
-    textAlign: "center",
   },
   modalButtons: {
     flexDirection: "row",
     gap: 12,
+    marginTop: 4,
   },
   modalButton: {
     flex: 1,
@@ -504,6 +634,27 @@ const styles = StyleSheet.create({
   },
   modalButtonText: {
     fontSize: 15,
+    fontFamily: "Montserrat_600SemiBold",
+  },
+  fieldLabel: {
+    fontSize: 11,
+    fontFamily: "Montserrat_600SemiBold",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginTop: 4,
+  },
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  chipText: {
+    fontSize: 13,
     fontFamily: "Montserrat_600SemiBold",
   },
 });
