@@ -1,0 +1,64 @@
+Good progress. Now do the next pass and implement the actual data-tier logic, not just UI cleanup.
+
+What is still missing:
+
+1. Add explicit user data tier classification
+Create a classifier that assigns each user to:
+- self-report only
+- phone-based HealthKit
+- wearable-enhanced
+
+This must be based on actual available metric coverage, not assumptions.
+
+2. Add a data sufficiency gate before recommendations
+Before generating a daily recommendation, trend insight, or treatment pattern:
+- check what metrics are available
+- check whether enough recent history exists
+- check whether enough baseline history exists
+- check whether wearable-only metrics are missing
+
+If required metrics are missing, downgrade the specificity/confidence of the recommendation.
+
+3. Refactor recommendation logic by tier
+Do not use one blended ruleset for all users.
+
+For self-report only:
+- rely mainly on symptoms, energy, appetite, nausea, digestion, adherence
+
+For phone-based HealthKit:
+- add sleep duration, steps, distance, activity consistency
+- do not make physiological stress or recovery claims
+
+For wearable-enhanced:
+- incorporate resting heart rate and HRV relative to baseline where enough history exists
+- use those only when data sufficiency thresholds are met
+
+4. Add baseline-relative comparisons
+Where enough history exists, compare:
+- sleep vs 7-day average
+- resting heart rate vs 14-day baseline
+- HRV vs 14-day baseline
+- steps vs weekly baseline
+
+Do not use raw absolute values alone when baseline comparisons are possible.
+
+5. Add recommendation confidence internally
+Each recommendation should carry:
+- low confidence
+- moderate confidence
+- high confidence
+
+Use this confidence to soften or strengthen patient-facing language.
+Do not show the confidence score numerically in the UI.
+
+6. Prevent passive data from overpowering subjective data
+If a user reports good energy and low symptoms, a short sleep night alone should not automatically trigger a strong “rest day” recommendation.
+Require multiple converging signals for stronger caution.
+
+7. Return an implementation summary
+After changes, tell me:
+- exactly how tier classification works
+- what metrics trigger each tier
+- how data sufficiency is checked
+- what baseline windows are used
+- how subjective vs passive inputs are weighted by tier

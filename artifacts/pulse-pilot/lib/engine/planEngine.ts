@@ -23,6 +23,14 @@ import {
 import { getDoseTier, getMedicationFrequency, type MedicationBrand } from "@/data/medicationData";
 import { shouldApplyPostDoseAdjustment } from "@/data/patternEngine";
 import { buildTitrationContext, titrationReadinessPenalty } from "./titrationHelper";
+import {
+  buildTierContext,
+  maxConfidenceForTier,
+  hasConvergingNegativeSignals,
+  type DataTier,
+  type Confidence,
+  type TierContext,
+} from "./dataTier";
 
 export type MedContext = {
   doseTier: "low" | "mid" | "high";
@@ -383,6 +391,7 @@ export function generateDailyPlan(
   patterns?: UserPatterns,
   mentalState?: import("@/types").MentalState,
   hasHealthData?: boolean,
+  availableMetricTypes?: string[],
 ): DailyPlan {
   const feeling = inputs?.feeling ?? null;
   const energy = inputs?.energy ?? null;
@@ -390,7 +399,22 @@ export function generateDailyPlan(
   const hydration = inputs?.hydration ?? null;
   const trainingIntent = inputs?.trainingIntent ?? null;
 
-  const wearableAvailable = hasHealthData !== false;
+  // Build the tier context once. We use this to gate which signals can fire and which
+  // baseline-relative claims we can make.
+  const hasSubjectiveInputs = !!(feeling || energy || stress || trainingIntent || glp1Inputs);
+  const tierCtx: TierContext = buildTierContext(
+    recentMetrics ?? [],
+    metrics,
+    availableMetricTypes ?? [],
+    hasSubjectiveInputs,
+  );
+  const tier: DataTier = tierCtx.tier;
+
+  // Backwards-compat: existing code paths use `wearableAvailable` to gate physiological
+  // claims. We treat phone_health as "wearable not available" so phone-tier users never
+  // get HRV/recovery copy, but we still allow sleep/steps history to drive recommendations
+  // via the new sufficiency checks below.
+  const wearableAvailable = tier === "wearable" && hasHealthData !== false;
 
   const last7 = recentMetrics?.slice(-7) ?? [];
   const last3 = last7.slice(-3);
@@ -734,18 +758,47 @@ export function generateDailyPlan(
     workoutDesc = "Easy walk. No pressure on pace or distance.";
     optional = "If you feel good, you can extend to 30 minutes.";
   } else {
-    dailyState = "recover";
-    headline = isTitrated
-      ? "Your body is working hard to adjust. Rest is the right call today."
-      : "Your body needs a break today.";
-    summary = "Your body needs a break. Focus on rest, hydration, and nourishing food. Movement can wait.";
-    dailyFocus = "Rest and restore";
-    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, wearableAvailable, trigger: "rest_day" });
-    optional = "A 10-minute easy walk is the most you should do today.";
-    workoutType = "Rest";
-    workoutIntensity = "low";
-    workoutDuration = 0;
-    workoutDesc = "Full rest day.";
+    // Strong "rest day" requires multiple converging negative signals so that a single short
+    // night, or a single low check-in, cannot push someone into a heavy rest recommendation
+    // when other signals look fine.
+    const subjectiveGoodFinal = (energy === "high" || energy === "excellent" || feeling === "great" || glp1Inputs?.energy === "great") && !symptomsHeavy;
+    const converging = hasConvergingNegativeSignals({
+      sleepShort: !!sleepLow,
+      rhrElevated: !!rhrElevated,
+      hrvBelowBaseline: wearableAvailable && (tierCtx.deviations.hrvVsBaselinePct ?? 0) < -10,
+      recoveryLow: wearableAvailable && typeof metrics.recoveryScore === "number" && metrics.recoveryScore < 50,
+      symptomsHeavy: !!symptomsHeavy,
+      energyLow: energy === "low" || glp1Inputs?.energy === "depleted",
+      // High/very-high stress would have already routed above; this branch only sees mild stress.
+      stressHigh: false,
+    });
+    if (subjectiveGoodFinal && !converging) {
+      // Downgrade to maintain: the only thing low is the readiness math, but the user is
+      // telling us they feel fine and no other signal converges.
+      dailyState = "maintain";
+      headline = "You're feeling steady today. Keep it simple but do not pull back.";
+      summary = "Your check-ins look good even though one or two numbers are softer. Stay with the basics and adjust if anything shifts.";
+      dailyFocus = "Steady and flexible";
+      whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, wearableAvailable, trigger: "maintain_day" });
+      workoutType = "Gentle Walk";
+      workoutIntensity = "low";
+      workoutDuration = 20;
+      workoutDesc = "Easy walk. Lengthen if you feel up to it.";
+      optional = "Pull back only if symptoms or fatigue show up later.";
+    } else {
+      dailyState = "recover";
+      headline = isTitrated
+        ? "Your body is working hard to adjust. Rest is the right call today."
+        : "Your body needs a break today.";
+      summary = "Your body needs a break. Focus on rest, hydration, and nourishing food. Movement can wait.";
+      dailyFocus = "Rest and restore";
+      whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, wearableAvailable, trigger: "rest_day" });
+      optional = "A 10-minute easy walk is the most you should do today.";
+      workoutType = "Rest";
+      workoutIntensity = "low";
+      workoutDuration = 0;
+      workoutDesc = "Full rest day.";
+    }
   }
 
   if (mentalState === "burnt_out" && dailyState !== "recover") {
@@ -917,10 +970,23 @@ export function generateDailyPlan(
 
   const focusItems = generateFocusItems(dailyState, metrics, inputs, glp1Inputs, wearableAvailable);
 
+  // Recommendation confidence is the lower of the tier's max and a local "how strong is the
+  // signal" estimate. We expose this on the plan so consumers (insights, copy) can soften
+  // language when low. Never display the value numerically.
+  const tierCap = maxConfidenceForTier(tierCtx);
+  const localConfidence: Confidence =
+    (consecutivePoorRecovery || hrvDeclining5 || sleepCritical || symptomsHeavy) ? "high"
+    : (sleepLow || rhrElevated || stressOverride || appetiteLow) ? "moderate"
+    : hasSubjectiveInputs ? "moderate" : "low";
+  const order: Record<Confidence, number> = { low: 0, moderate: 1, high: 2 };
+  const recommendationConfidence: Confidence = order[localConfidence] < order[tierCap] ? localConfidence : tierCap;
+
   return {
     date: metrics.date,
     readinessScore,
     readinessLabel,
+    dataTier: tier,
+    recommendationConfidence,
     dailyState,
     recommendedStateTag: recommendedTag,
     statusLabel,

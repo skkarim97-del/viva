@@ -524,7 +524,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         loadedMedLog,
         loadedPatterns,
         initCheckIn?.mentalState ?? undefined,
-        healthDataFound
+        healthDataFound,
+        loadedAvailableTypes,
       );
       const todayCompletion = loadedHistory.find(r => r.date === todayDate);
       if (todayCompletion) {
@@ -602,7 +603,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const freshPatterns = recomputeAnalytics(glp1InputHistory, profile.medicationProfile, medicationLog, completionHistory);
 
       const currentMental = checkInHistory.find(c => c.date === todayDate)?.mentalState ?? undefined;
-      const newPlan = generateDailyPlan(metricsRef, { feeling: f, energy: e, stress: s, hydration: h, trainingIntent: ti }, completionHistory, metrics, currentGlp1, profile.medicationProfile, medicationLog, freshPatterns ?? undefined, currentMental, hasHealthData);
+      const newPlan = generateDailyPlan(metricsRef, { feeling: f, energy: e, stress: s, hydration: h, trainingIntent: ti }, completionHistory, metrics, currentGlp1, profile.medicationProfile, medicationLog, freshPatterns ?? undefined, currentMental, hasHealthData, availableMetricTypes);
       const todayCompletion = completionHistory.find(r => r.date === todayDate);
       if (todayCompletion) {
         for (const a of newPlan.actions) {
@@ -631,7 +632,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const freshPatterns = recomputeAnalytics(glp1InputHistory, profile.medicationProfile, medicationLog, completionHistory);
 
       const currentMental2 = checkInHistory.find(c => c.date === todayDate)?.mentalState ?? undefined;
-      const newPlan = generateDailyPlan(metricsRef, { feeling, energy, stress, hydration, trainingIntent }, completionHistory, metrics, currentGlp1, profile.medicationProfile, medicationLog, freshPatterns ?? undefined, currentMental2, hasHealthData);
+      const newPlan = generateDailyPlan(metricsRef, { feeling, energy, stress, hydration, trainingIntent }, completionHistory, metrics, currentGlp1, profile.medicationProfile, medicationLog, freshPatterns ?? undefined, currentMental2, hasHealthData, availableMetricTypes);
       const todayCompletion = completionHistory.find(r => r.date === todayDate);
       if (todayCompletion) {
         for (const a of newPlan.actions) {
@@ -1118,7 +1119,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         date: todayDate, energy: glp1Energy, appetite, nausea, digestion,
       };
       const freshPatterns = recomputeAnalytics(glp1InputHistory, profile.medicationProfile, medicationLog, completionHistory);
-      const newPlan = generateDailyPlan(metricsRef, { feeling, energy, stress, hydration, trainingIntent }, completionHistory, metrics, currentGlp1, profile.medicationProfile, medicationLog, freshPatterns ?? undefined, checkIn.mentalState ?? undefined, hasHealthData);
+      const newPlan = generateDailyPlan(metricsRef, { feeling, energy, stress, hydration, trainingIntent }, completionHistory, metrics, currentGlp1, profile.medicationProfile, medicationLog, freshPatterns ?? undefined, checkIn.mentalState ?? undefined, hasHealthData, availableMetricTypes);
       const todayCompletion = completionHistory.find(r => r.date === todayDate);
       if (todayCompletion) {
         for (const a of newPlan.actions) {

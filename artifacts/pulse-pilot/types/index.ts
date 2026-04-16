@@ -204,6 +204,10 @@ export interface DailyPlan {
   nutritionTarget: NutritionTarget;
   fastingGuidance?: string;
   focusItems?: FocusItem[];
+  // Internal: data tier + recommendation confidence, used to soften patient-facing copy.
+  // Never displayed numerically.
+  dataTier?: "self_report" | "phone_health" | "wearable";
+  recommendationConfidence?: "low" | "moderate" | "high";
 }
 
 export interface FocusItem {
