@@ -1,0 +1,82 @@
+dude im burning out, the latest app still doesn't work in terms of letting you connect apple health kit. it wont allow me to. figure it the fuck out, audit everything and give me crips and concise insturctions on what to do on replit to fix. i've enabled the integration in apple developer, fixed the code a bunch and nothing is working
+
+I’m checking the current state of react-native-health, Expo SDK 54, and known runtime failures with Apple Health on TestFlight so I can give you one clean path instead of more random tweaks.
+
+Thought for 42s
+
+You need to stop trying to brute-force react-native-health in this app.
+
+My best read of the audit is:
+
+Your current library is the likely blocker. react-native-health has open RN 0.76 / New Architecture issues where AppleHealthKit methods are undefined at runtime. That matches the exact failure pattern you’ve been seeing.
+Your app cannot stay on Old Architecture cleanly. You already proved react-native-reanimated 4 requires New Architecture, so turning it off breaks pods/builds. That leaves you stuck between Reanimated needing New Architecture and react-native-health misbehaving on it. This is why your current setup keeps whipsawing between build fixes and runtime failure.
+Expo will sync HealthKit capability from the app config during eas build. So once the right plugin is in place, the build should handle capability sync as long as the entitlement is present in introspected config.
+The cleanest fix is to switch libraries to @kingstinct/react-native-healthkit. It has explicit Expo plugin support, works with Expo custom/dev builds, and its docs give a direct Expo setup path plus a modern authorization API.
+What to do in Replit
+
+Send this exact prompt to Replit Agent:
+
+We are done trying to force react-native-health. Migrate the iOS Apple Health integration to @kingstinct/react-native-healthkit.
+
+Make these changes exactly:
+
+1. Remove react-native-health from the app config and runtime code.
+   - Remove ["react-native-health", { "isClinicalDataEnabled": false }] from app.json plugins
+   - Remove any imports, requires, helper wrappers, or debug code related to react-native-health
+   - Remove any old HealthKit connection logic built around initHealthKit / isAvailable callbacks
+
+2. Install the replacement library and its required dependency:
+   - @kingstinct/react-native-healthkit
+   - react-native-nitro-modules
+
+3. Update app.json plugins to use:
+   [
+     "@kingstinct/react-native-healthkit",
+     {
+       "NSHealthShareUsageDescription": "Viva reads Apple Health data like steps, sleep, heart rate, and workouts to personalize your treatment support.",
+       "NSHealthUpdateUsageDescription": "Viva may write limited health data only if needed to support your treatment experience.",
+       "background": false
+     }
+   ]
+
+4. Keep newArchEnabled: true
+   - Do not turn New Architecture off again
+
+5. Build a new Apple Health provider using @kingstinct/react-native-healthkit with this exact flow:
+   - First call isHealthDataAvailable()
+   - If false, show a non-blocking unavailable state in the UI
+   - If true, call requestAuthorization with a minimal read set only:
+     - HKQuantityTypeIdentifierStepCount
+     - HKQuantityTypeIdentifierHeartRate
+     - HKCategoryTypeIdentifierSleepAnalysis
+     - HKQuantityTypeIdentifierActiveEnergyBurned
+     - HKWorkoutTypeIdentifier
+   - Do not request write permissions for now
+   - After authorization succeeds, mark Apple Health as connected in state
+   - Do not fetch data until authorization has succeeded
+
+6. Add a temporary on-screen debug card on the Apple Health connect screen that displays:
+   - health data available: true/false
+   - authorization attempted: true/false
+   - authorization success: true/false
+   - raw authorization error text if any
+   - timestamp of last authorization attempt
+
+7. Make the connect button call only this new flow.
+   - No legacy fallback logic
+   - No react-native-health code paths
+   - No console-only debugging
+
+8. Search the whole repo and confirm there are zero runtime imports of react-native-health left.
+
+9. Bump the iOS build number.
+
+10. Give me:
+   - exact files changed
+   - final app.json plugin block
+   - the final Apple Health connect function
+   - confirmation that react-native-health is no longer used anywhere in runtime code
+   - the exact git commit message to use
+Why this path
+
+@kingstinct/react-native-healthkit explicitly documents Expo plugin setup, lets you set the Health usage descriptions in the plugin, and its runtime API is isHealthDataAvailable() plus requestAuthorization(...). Its docs also warn that requesting data before requesting authorization can crash, so your connect flow needs to request auth first and only then read data.

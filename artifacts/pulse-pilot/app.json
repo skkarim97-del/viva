@@ -18,7 +18,7 @@
       "icon": "./assets/icon.png",
       "supportsTablet": false,
       "bundleIdentifier": "com.sullyk97.vivaai",
-      "buildNumber": "11",
+      "buildNumber": "13",
       "config": {
         "usesNonExemptEncryption": false
       },
@@ -43,9 +43,11 @@
       "expo-font",
       "expo-web-browser",
       [
-        "react-native-health",
+        "@kingstinct/react-native-healthkit",
         {
-          "isClinicalDataEnabled": false
+          "NSHealthShareUsageDescription": "Viva reads Apple Health data like steps, sleep, heart rate, and workouts to personalize your treatment support.",
+          "NSHealthUpdateUsageDescription": "Viva may write limited health data only if needed to support your treatment experience.",
+          "background": false
         }
       ]
     ],
