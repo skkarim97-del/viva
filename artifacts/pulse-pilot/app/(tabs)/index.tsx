@@ -317,7 +317,17 @@ export default function DashboardScreen() {
           <View style={styles.statusTopRow}>
             <View style={[styles.statusIndicator, { backgroundColor: statusColor + "14" }]}>
               <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-              <Text style={[styles.statusLabel, { color: statusColor }]}>{dailyPlan.statusLabel}</Text>
+              <Text
+                style={[styles.statusLabel, { color: statusColor }]}
+                numberOfLines={2}
+                ellipsizeMode="tail"
+                adjustsFontSizeToFit
+                minimumFontScale={0.85}
+                allowFontScaling
+                maxFontSizeMultiplier={1.3}
+              >
+                {dailyPlan.statusLabel}
+              </Text>
             </View>
           </View>
           <Text style={[styles.headline, { color: c.foreground }]} numberOfLines={2} adjustsFontSizeToFit>{dailyPlan.headline}</Text>
@@ -1445,16 +1455,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 20,
+    maxWidth: "92%",
+    flexShrink: 1,
   },
   statusDot: {
     width: 7,
     height: 7,
     borderRadius: 4,
+    flexShrink: 0,
   },
   statusLabel: {
     fontSize: 13,
+    lineHeight: 16,
     fontFamily: "Montserrat_600SemiBold",
     letterSpacing: 0.3,
+    flexShrink: 1,
+    textAlign: "center",
   },
   headline: {
     fontSize: 20,

@@ -990,72 +990,32 @@ export function generateDailyPlan(
       wearableAvailable && sleepHours >= 7.5 &&
       (typeof metrics.recoveryScore !== "number" || metrics.recoveryScore >= 65);
 
+    // Lead phrases live inside a small pill on the Today card, so they need
+    // to read as a compact status tag (think 2-4 words, ~25 chars max), not
+    // a sentence. The longer warm copy belongs in coachInsight below.
     let pool: string[];
     if (symptomsSevere) {
-      pool = [
-        "Today's plan bends around what you're feeling. Rest, sips, nothing forced.",
-        "Your body is waving a stop sign and we're listening. A gentle day ahead.",
-        "Heavy symptoms today. The plan is soft on purpose.",
-      ];
+      pool = ["Soft day", "Easy mode", "Holding pattern"];
     } else if (digestionSevere) {
-      pool = [
-        "Digestion is struggling today. Bland, slow, and hydrated wins this one.",
-        "Your gut needs a break. Easy foods and small sips today.",
-        "Stomach's off today. We'll keep the plan forgiving.",
-      ];
+      pool = ["Gentle gut day", "Bland and slow", "Gut needs a break"];
     } else if (medicationProfile?.recentTitration) {
-      pool = [
-        "Fresh dose in play. Expect your body to recalibrate, so hydrate early and eat light.",
-        "Titration weeks can be bumpy. Today's plan stays easy on purpose.",
-        "New dose, new rhythm. Take it gentle while your body adjusts.",
-      ];
+      pool = ["Titration week", "New dose, easy day", "Adjust mode"];
     } else if (wearableAvailable && sleepHours < 6) {
-      pool = [
-        "Short night. Let's protect your energy and keep today simple.",
-        "Running on reserves after a short sleep. No heroics today.",
-        "Sleep came up short. We'll match the plan to what you've got.",
-      ];
+      pool = ["Short night", "Low fuel today", "Recover first"];
     } else if (glp1Energy === "depleted" || glp1Energy === "tired" || energy === "low") {
-      pool = [
-        "Energy is running thin. The plan leans toward recovery, not output.",
-        "Today's a low-battery day. Small wins count for a lot.",
-        "You're not at full strength today. We'll meet the day as it is.",
-      ];
+      pool = ["Low battery", "Easy gear", "Low output day"];
     } else if (subjectiveGood && objectiveWeak) {
-      pool = [
-        "You feel good, but the numbers are a little behind. Let's not overcook it.",
-        "Spirit says go, body says ease. We'll split the difference today.",
-        "Mixed signals today. Good mood, tired metrics. Play it smart.",
-      ];
+      pool = ["Mixed signals", "Pace yourself", "Spirit ahead of body"];
     } else if (!subjectiveGood && objectiveStrong && symptomsModerate) {
-      pool = [
-        "Recovery looks solid even if you're not feeling it yet. Keep it steady.",
-        "Numbers are ahead of the mood today. The basics will carry you through.",
-      ];
+      pool = ["Body is ready", "Steady underneath", "Numbers look good"];
     } else if (dailyState === "push") {
-      pool = [
-        "Your signals line up. Today's a green-light day.",
-        "You're in a strong rhythm. Lean into it today.",
-        "Everything points to a steady, capable day. Use it well.",
-      ];
+      pool = ["Green light day", "Strong rhythm", "All signals go"];
     } else if (dailyState === "build") {
-      pool = [
-        "Today's solid with a couple of small tweaks to make it better.",
-        "You're steady. A few small moves will sharpen the day.",
-        "Mostly green with a nudge or two. Nothing dramatic.",
-      ];
+      pool = ["Mostly green", "Small tweaks", "Steady with nudges"];
     } else if (dailyState === "maintain") {
-      pool = [
-        "Today calls for an easier gear. Keep the basics, skip the strain.",
-        "Simplify today. You'll feel steadier by tonight.",
-        "Not a push day. An easy-does-it day.",
-      ];
+      pool = ["Easy gear today", "Simplify today", "Steady state day"];
     } else {
-      pool = [
-        "Recovery first today. Everything else can wait.",
-        "Your body is asking for a softer day. We're listening.",
-        "Today is for repair. Go easy and trust the process.",
-      ];
+      pool = ["Recovery first", "Repair mode", "Soft day ahead"];
     }
 
     // Deterministic day-to-day rotation so the phrase is stable within a
