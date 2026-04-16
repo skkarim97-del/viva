@@ -29,7 +29,7 @@ const GOAL_LABELS: Record<string, string> = {
 
 export default function SettingsScreen() {
   const c = useColors();
-  const { profile, updateProfile, integrations, toggleIntegration } = useApp();
+  const { profile, updateProfile, integrations, toggleIntegration, availableMetricTypes } = useApp();
 
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -256,7 +256,7 @@ export default function SettingsScreen() {
       <View style={[styles.section, { backgroundColor: c.card, padding: 16 }]}>
         <Text style={{ color: c.foreground, fontFamily: "Montserrat_700Bold", fontSize: 13, marginBottom: 10 }}>HealthKit Debug</Text>
         <Text style={{ color: c.mutedForeground, fontFamily: "Montserrat_500Medium", fontSize: 11, lineHeight: 18 }}>
-          {`buttonPressed: ${debugInfo.buttonPressed}\nusingDefaultExport: ${debugInfo.usingDefaultExport ?? "n/a"}\ninitFunctionExists: ${debugInfo.initFunctionExists}\ninitCalled: ${debugInfo.initCalled}\ncallbackReached: ${debugInfo.callbackReached}\ninitSucceeded: ${debugInfo.initSucceeded ?? "n/a"}\nrawErrorText: ${debugInfo.rawErrorText ?? "none"}\n---\nfetchCalled: ${debugInfo.fetchCalled}\nfetchSucceeded: ${debugInfo.fetchSucceeded ?? "n/a"}\nsampleCounts: ${debugInfo.sampleCounts || "(empty)"}\nfetchErrorText: ${debugInfo.fetchErrorText ?? "none"}`}
+          {`buttonPressed: ${debugInfo.buttonPressed}\nusingDefaultExport: ${debugInfo.usingDefaultExport ?? "n/a"}\ninitFunctionExists: ${debugInfo.initFunctionExists}\ninitCalled: ${debugInfo.initCalled}\ncallbackReached: ${debugInfo.callbackReached}\ninitSucceeded: ${debugInfo.initSucceeded ?? "n/a"}\nrawErrorText: ${debugInfo.rawErrorText ?? "none"}\n---\nfetchCalled: ${debugInfo.fetchCalled}\nfetchSucceeded: ${debugInfo.fetchSucceeded ?? "n/a"}\nsampleCounts: ${debugInfo.sampleCounts || "(empty)"}\nfetchErrorText: ${debugInfo.fetchErrorText ?? "none"}\navailableMetricTypes: ${availableMetricTypes.length > 0 ? availableMetricTypes.join(", ") : "(none)"}`}
         </Text>
       </View>
 
