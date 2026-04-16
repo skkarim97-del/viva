@@ -2,31 +2,56 @@ import { Platform } from "react-native";
 import type { HealthMetrics } from "@/types";
 
 export interface HealthDebugInfo {
-  healthDataAvailable: boolean | null;
-  authorizationAttempted: boolean;
-  authorizationSuccess: boolean | null;
-  rawAuthError: string | null;
-  lastAttemptTimestamp: string | null;
+  moduleLoaded: boolean;
+  initCalled: boolean;
+  success: boolean | null;
+  errorText: string | null;
 }
 
 let _debugInfo: HealthDebugInfo = {
-  healthDataAvailable: null,
-  authorizationAttempted: false,
-  authorizationSuccess: null,
-  rawAuthError: null,
-  lastAttemptTimestamp: null,
+  moduleLoaded: false,
+  initCalled: false,
+  success: null,
+  errorText: null,
 };
 
 export function getHealthDebugInfo(): HealthDebugInfo {
   return { ..._debugInfo };
 }
 
-let HK: any = null;
+let AppleHealthKit: any = null;
+
 if (Platform.OS === "ios") {
   try {
-    HK = require("@kingstinct/react-native-healthkit");
+    const mod = require("react-native-health");
+    console.log("[HealthKit] require result type:", typeof mod);
+    console.log("[HealthKit] module keys:", mod ? Object.keys(mod).slice(0, 20) : "null");
+    console.log("[HealthKit] typeof initHealthKit:", typeof mod?.initHealthKit);
+    console.log("[HealthKit] typeof default:", typeof mod?.default);
+    console.log("[HealthKit] typeof default?.initHealthKit:", typeof mod?.default?.initHealthKit);
+
+    if (mod && typeof mod.initHealthKit === "function") {
+      AppleHealthKit = mod;
+      _debugInfo.moduleLoaded = true;
+      console.log("[HealthKit] Using root module (initHealthKit found)");
+    } else if (mod?.default && typeof mod.default.initHealthKit === "function") {
+      AppleHealthKit = mod.default;
+      _debugInfo.moduleLoaded = true;
+      console.log("[HealthKit] Using mod.default (initHealthKit found on default)");
+    } else {
+      AppleHealthKit = mod;
+      _debugInfo.moduleLoaded = !!mod;
+      _debugInfo.errorText = "initHealthKit not found on module or module.default";
+      console.log("[HealthKit] WARNING: initHealthKit not found. Module loaded but may not work.");
+      console.log("[HealthKit] All root keys:", mod ? Object.keys(mod) : "null");
+      if (mod?.default) {
+        console.log("[HealthKit] All default keys:", Object.keys(mod.default));
+      }
+    }
   } catch (e: any) {
-    console.log("[HealthKit] Failed to load @kingstinct/react-native-healthkit:", e?.message);
+    console.log("[HealthKit] require() failed:", e?.message || e);
+    _debugInfo.moduleLoaded = false;
+    _debugInfo.errorText = `require failed: ${e?.message || e}`;
   }
 }
 
@@ -49,130 +74,78 @@ function daysAgoDate(days: number): Date {
   return d;
 }
 
-const READ_PERMISSIONS = [
-  "HKQuantityTypeIdentifierStepCount",
-  "HKQuantityTypeIdentifierHeartRate",
-  "HKCategoryTypeIdentifierSleepAnalysis",
-  "HKQuantityTypeIdentifierActiveEnergyBurned",
-  "HKWorkoutTypeIdentifier",
-];
-
 const appleHealthProvider: HealthDataProvider = {
   id: "apple_health",
   name: "Apple Health",
 
   async isAvailable() {
-    if (Platform.OS !== "ios") {
-      _debugInfo.healthDataAvailable = false;
+    if (Platform.OS !== "ios") return false;
+    if (!AppleHealthKit) return false;
+
+    if (typeof AppleHealthKit.initHealthKit !== "function") {
+      console.log("[HealthKit] isAvailable: initHealthKit not a function");
       return false;
     }
-    if (!HK) {
-      _debugInfo.healthDataAvailable = false;
-      return false;
-    }
-    try {
-      const isHealthDataAvailable = HK.isHealthDataAvailable || HK.default?.isHealthDataAvailable;
-      if (typeof isHealthDataAvailable !== "function") {
-        console.log("[HealthKit] isHealthDataAvailable not found on module");
-        _debugInfo.healthDataAvailable = false;
-        return false;
-      }
-      const available = await isHealthDataAvailable();
-      _debugInfo.healthDataAvailable = !!available;
-      console.log("[HealthKit] isHealthDataAvailable:", available);
-      return !!available;
-    } catch (e: any) {
-      console.log("[HealthKit] isHealthDataAvailable error:", e?.message);
-      _debugInfo.healthDataAvailable = false;
-      return false;
-    }
+
+    return true;
   },
 
   async requestPermissions() {
-    if (!HK) {
-      _debugInfo.authorizationAttempted = true;
-      _debugInfo.authorizationSuccess = false;
-      _debugInfo.rawAuthError = "HealthKit module not loaded";
-      _debugInfo.lastAttemptTimestamp = new Date().toISOString();
+    if (!AppleHealthKit || typeof AppleHealthKit.initHealthKit !== "function") {
+      _debugInfo.initCalled = false;
+      _debugInfo.success = false;
+      _debugInfo.errorText = "initHealthKit is not a function";
+      console.log("[HealthKit] Cannot init: initHealthKit not available");
       return false;
     }
 
-    _debugInfo.authorizationAttempted = true;
-    _debugInfo.lastAttemptTimestamp = new Date().toISOString();
+    _debugInfo.initCalled = true;
 
-    try {
-      const requestAuthorization = HK.requestAuthorization || HK.default?.requestAuthorization;
-      if (typeof requestAuthorization !== "function") {
-        _debugInfo.authorizationSuccess = false;
-        _debugInfo.rawAuthError = "requestAuthorization not found on module";
-        console.log("[HealthKit] requestAuthorization not found");
-        return false;
+    const perms = AppleHealthKit?.Constants?.Permissions;
+    console.log("[HealthKit] Permissions object exists:", !!perms);
+
+    const readPerms: any[] = [];
+    if (perms) {
+      if (perms.StepCount) readPerms.push(perms.StepCount);
+      if (perms.HeartRate) readPerms.push(perms.HeartRate);
+      if (perms.SleepAnalysis) readPerms.push(perms.SleepAnalysis);
+    }
+
+    console.log("[HealthKit] Read permissions resolved:", readPerms.length, "types");
+
+    const options = {
+      permissions: {
+        read: readPerms,
+        write: [],
+      },
+    };
+
+    return new Promise<boolean>((resolve) => {
+      try {
+        console.log("[HealthKit] Calling initHealthKit...");
+        AppleHealthKit.initHealthKit(options, (err: string) => {
+          console.log("[HealthKit] initHealthKit callback:", err ? `error: ${err}` : "success");
+          if (err) {
+            _debugInfo.success = false;
+            _debugInfo.errorText = `initHealthKit error: ${err}`;
+            resolve(false);
+          } else {
+            _debugInfo.success = true;
+            _debugInfo.errorText = null;
+            resolve(true);
+          }
+        });
+      } catch (e: any) {
+        console.log("[HealthKit] initHealthKit threw:", e?.message || e);
+        _debugInfo.success = false;
+        _debugInfo.errorText = `initHealthKit threw: ${e?.message || e}`;
+        resolve(false);
       }
-
-      console.log("[HealthKit] Requesting authorization for:", READ_PERMISSIONS);
-      await requestAuthorization(READ_PERMISSIONS);
-      console.log("[HealthKit] Authorization granted");
-      _debugInfo.authorizationSuccess = true;
-      _debugInfo.rawAuthError = null;
-      return true;
-    } catch (e: any) {
-      console.log("[HealthKit] Authorization error:", e?.message || e);
-      _debugInfo.authorizationSuccess = false;
-      _debugInfo.rawAuthError = e?.message || String(e);
-      return false;
-    }
+    });
   },
 
   async fetchMetrics(days: number) {
-    if (!HK) return [];
-    try {
-      const queryStatisticsForQuantity = HK.queryStatisticsForQuantity || HK.default?.queryStatisticsForQuantity;
-      const querySleepSamples = HK.querySleepSamples || HK.default?.querySleepSamples;
-
-      const startDate = daysAgoDate(days);
-      const endDate = new Date();
-      const metricsMap = new Map<string, Partial<HealthMetrics>>();
-
-      for (let i = 0; i < days; i++) {
-        const d = dateStr(daysAgoDate(days - 1 - i));
-        metricsMap.set(d, { date: d });
-      }
-
-      if (typeof queryStatisticsForQuantity === "function") {
-        try {
-          const stepsResult = await queryStatisticsForQuantity(
-            "HKQuantityTypeIdentifierStepCount",
-            { from: startDate, to: endDate }
-          );
-          if (stepsResult) {
-            const d = dateStr(new Date(stepsResult.startDate || startDate));
-            const entry = metricsMap.get(d);
-            if (entry) entry.steps = Math.round(stepsResult.sumQuantity || 0);
-          }
-        } catch (e: any) {
-          console.log("[HealthKit] Steps query error:", e?.message);
-        }
-
-        try {
-          const caloriesResult = await queryStatisticsForQuantity(
-            "HKQuantityTypeIdentifierActiveEnergyBurned",
-            { from: startDate, to: endDate }
-          );
-          if (caloriesResult) {
-            const d = dateStr(new Date(caloriesResult.startDate || startDate));
-            const entry = metricsMap.get(d);
-            if (entry) entry.activeCalories = Math.round(caloriesResult.sumQuantity || 0);
-          }
-        } catch (e: any) {
-          console.log("[HealthKit] Calories query error:", e?.message);
-        }
-      }
-
-      return fillDefaults(Array.from(metricsMap.values()), days);
-    } catch (e: any) {
-      console.log("[HealthKit] fetchMetrics error:", e?.message);
-      return [];
-    }
+    return fillDefaults([], days);
   },
 };
 

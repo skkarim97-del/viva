@@ -41,5 +41,3 @@ onlyBuiltDependencies:
   - msw
   - unrs-resolver
 
-patchedDependencies:
-  '@kingstinct/react-native-healthkit@14.0.0': patches/@kingstinct__react-native-healthkit@14.0.0.patch

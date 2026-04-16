@@ -62,7 +62,6 @@
   },
   "dependencies": {
     "@expo-google-fonts/montserrat": "^0.4.2",
-    "@kingstinct/react-native-healthkit": "^14.0.0",
-    "react-native-nitro-modules": "^0.35.4"
+    "react-native-health": "^1.19.0"
   }
 }

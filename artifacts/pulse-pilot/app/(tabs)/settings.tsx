@@ -242,7 +242,7 @@ export default function SettingsScreen() {
           <View style={[styles.section, { backgroundColor: c.card, padding: 16 }]}>
             <Text style={{ color: c.foreground, fontFamily: "Montserrat_700Bold", fontSize: 13, marginBottom: 10 }}>HealthKit Debug</Text>
             <Text style={{ color: c.mutedForeground, fontFamily: "Montserrat_500Medium", fontSize: 12, lineHeight: 20 }}>
-              {`health data available: ${dbg.healthDataAvailable ?? "not checked"}\nauthorization attempted: ${dbg.authorizationAttempted}\nauthorization success: ${dbg.authorizationSuccess ?? "n/a"}\nraw error: ${dbg.rawAuthError ?? "none"}\nlast attempt: ${dbg.lastAttemptTimestamp ?? "never"}`}
+              {`module loaded: ${dbg.moduleLoaded}\ninit called: ${dbg.initCalled}\nsuccess: ${dbg.success ?? "n/a"}\nerror: ${dbg.errorText ?? "none"}`}
             </Text>
           </View>
         );
