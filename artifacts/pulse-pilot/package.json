@@ -11,7 +11,9 @@
     "eas:build:dev": "eas build --profile development --platform ios",
     "eas:build:preview": "eas build --profile preview --platform ios",
     "eas:build:prod": "eas build --profile production --platform ios",
-    "eas:submit": "eas submit --platform ios --latest"
+    "eas:submit": "eas submit --platform ios --latest",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
@@ -62,6 +64,9 @@
   },
   "dependencies": {
     "@expo-google-fonts/montserrat": "^0.4.2",
-    "react-native-health": "^1.19.0"
+    "react-native-health": "^1.19.0",
+    "expo": "~54.0.33",
+    "react": "19.1.0",
+    "react-native": "0.81.5"
   }
 }
