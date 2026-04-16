@@ -13,11 +13,25 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { AppProvider } from "@/context/AppContext";
+import { AppProvider, useApp } from "@/context/AppContext";
 
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const queryClient = new QueryClient();
+
+function SplashGate({ fontsReady, children }: { fontsReady: boolean; children: React.ReactNode }) {
+  const { isLoading } = useApp();
+  const ready = fontsReady && !isLoading;
+
+  useEffect(() => {
+    if (ready) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [ready]);
+
+  if (!ready) return null;
+  return <>{children}</>;
+}
 
 function RootLayoutNav() {
   return (
@@ -38,22 +52,18 @@ export default function RootLayout() {
     Montserrat_700Bold,
   });
 
-  useEffect(() => {
-    if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync();
-    }
-  }, [fontsLoaded, fontError]);
-
-  if (!fontsLoaded && !fontError) return null;
+  const fontsReady = fontsLoaded || !!fontError;
 
   return (
     <SafeAreaProvider>
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <GestureHandlerRootView>
-              <AppProvider>
+            <AppProvider>
+              <SplashGate fontsReady={fontsReady}>
                 <RootLayoutNav />
-              </AppProvider>
+              </SplashGate>
+            </AppProvider>
           </GestureHandlerRootView>
         </QueryClientProvider>
       </ErrorBoundary>
