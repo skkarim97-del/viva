@@ -15,6 +15,13 @@ export interface DataSufficiency {
   baselineDays: number;
 }
 
+export interface DataFreshness {
+  hasFreshSleep: boolean;
+  hasFreshSteps: boolean;
+  hasFreshRhr: boolean;
+  hasFreshHrv: boolean;
+}
+
 export interface Baselines {
   sleep7dAvg: number | null;
   rhr14dBaseline: number | null;
@@ -32,9 +39,18 @@ export interface BaselineDeviations {
 export interface TierContext {
   tier: DataTier;
   sufficiency: DataSufficiency;
+  freshness: DataFreshness;
   baselines: Baselines;
   deviations: BaselineDeviations;
   hasSubjectiveInputs: boolean;
+  // Composite gates: sufficiency AND freshness. Use these to decide whether a metric is
+  // safe to drive a recommendation right now.
+  usableSleep: boolean;
+  usableSteps: boolean;
+  usableRhr: boolean;
+  usableHrv: boolean;
+  // Reflects available raw metric keys, exposed for downstream consumers (coach, UI).
+  availableMetricTypes: string[];
 }
 
 const RECENT_WINDOW = 7;
@@ -45,7 +61,11 @@ const MIN_STEPS_HISTORY = 3;
 const MIN_RECOVERY_HISTORY = 3;
 
 const PHONE_ONLY_KEYS = new Set(["sleep", "steps", "distance", "activeCalories", "totalCalories", "calories"]);
-const WEARABLE_KEYS = new Set(["hrv", "restingHeartRate", "recovery"]);
+// Tier classification uses ONLY raw observed wearable metrics. `recovery` is intentionally
+// excluded because in this app it is either app-derived or only present on Whoop-style
+// providers that also surface HRV/RHR; we never want a synthesized score to push someone
+// into the wearable tier.
+const WEARABLE_KEYS = new Set(["hrv", "restingHeartRate"]);
 
 /**
  * Classify a user into a data tier based on which metrics actually have signal in their history.
@@ -141,23 +161,103 @@ export function computeDeviations(today: HealthMetrics, baselines: Baselines): B
   return { sleepVsAvg, rhrVsBaseline, hrvVsBaselinePct, stepsVsBaseline };
 }
 
+const HOURS = 60 * 60 * 1000;
+const FRESH_PHONE_WINDOW_MS = 36 * HOURS;
+const FRESH_WEARABLE_WINDOW_MS = 72 * HOURS;
+
+/**
+ * Find the most recent timestamp at which a given metric had a real (non-null, non-zero
+ * where applicable) value. We use the metric's `date` field and treat noon as the sample
+ * time so day-aligned metrics (Apple Health daily aggregates) don't get rejected by an
+ * exact-now comparison.
+ */
+function lastSeenMs(metrics: HealthMetrics[], picker: (m: HealthMetrics) => boolean): number | null {
+  for (let i = metrics.length - 1; i >= 0; i--) {
+    if (picker(metrics[i])) {
+      const t = new Date(metrics[i].date + "T12:00:00Z").getTime();
+      return Number.isFinite(t) ? t : null;
+    }
+  }
+  return null;
+}
+
+export function assessDataFreshness(metrics: HealthMetrics[], nowMs: number = Date.now()): DataFreshness {
+  const sleepLast = lastSeenMs(metrics, m => typeof m.sleepDuration === "number" && m.sleepDuration > 0);
+  const stepsLast = lastSeenMs(metrics, m => typeof m.steps === "number" && m.steps > 0);
+  const rhrLast = lastSeenMs(metrics, m => typeof m.restingHeartRate === "number");
+  const hrvLast = lastSeenMs(metrics, m => typeof m.hrv === "number");
+  return {
+    hasFreshSleep: sleepLast !== null && nowMs - sleepLast <= FRESH_PHONE_WINDOW_MS,
+    hasFreshSteps: stepsLast !== null && nowMs - stepsLast <= FRESH_PHONE_WINDOW_MS,
+    hasFreshRhr: rhrLast !== null && nowMs - rhrLast <= FRESH_WEARABLE_WINDOW_MS,
+    hasFreshHrv: hrvLast !== null && nowMs - hrvLast <= FRESH_WEARABLE_WINDOW_MS,
+  };
+}
+
 /**
  * Roll up a tier context for a user given their metrics, available types, and whether they
- * have subjective inputs today. Use this once per recommendation cycle.
+ * have subjective inputs today. Use this once per recommendation cycle. `nowMs` is injected
+ * for testability and to allow callers to pin "now" to the latest metric's day.
  */
 export function buildTierContext(
   metrics: HealthMetrics[],
   todayMetric: HealthMetrics | null,
   availableMetricTypes: string[],
   hasSubjectiveInputs: boolean,
+  nowMs: number = Date.now(),
 ): TierContext {
   const tier = classifyDataTier(availableMetricTypes);
   const sufficiency = assessDataSufficiency(metrics, availableMetricTypes, hasSubjectiveInputs);
+  const freshness = assessDataFreshness(metrics, nowMs);
   const baselines = computeBaselines(metrics);
   const deviations = todayMetric
     ? computeDeviations(todayMetric, baselines)
     : { sleepVsAvg: null, rhrVsBaseline: null, hrvVsBaselinePct: null, stepsVsBaseline: null };
-  return { tier, sufficiency, baselines, deviations, hasSubjectiveInputs };
+  // Composite usability: a metric must pass both history sufficiency and freshness before
+  // it can drive a daily recommendation.
+  const usableSleep = sufficiency.hasSleepHistory && freshness.hasFreshSleep;
+  const usableSteps = sufficiency.hasStepsHistory && freshness.hasFreshSteps;
+  const usableRhr = sufficiency.hasRhrBaseline && freshness.hasFreshRhr;
+  const usableHrv = sufficiency.hasHrvBaseline && freshness.hasFreshHrv;
+  return {
+    tier,
+    sufficiency,
+    freshness,
+    baselines,
+    deviations,
+    hasSubjectiveInputs,
+    usableSleep,
+    usableSteps,
+    usableRhr,
+    usableHrv,
+    availableMetricTypes: [...availableMetricTypes],
+  };
+}
+
+/**
+ * Compact summary intended for the coach context. Tells the coach what the user actually has
+ * and what they don't, so the model can avoid making physiological claims it can't support.
+ */
+export function summarizeTierForCoach(ctx: TierContext) {
+  const wearableMissing: string[] = [];
+  if (!ctx.usableHrv) wearableMissing.push("hrv");
+  if (!ctx.usableRhr) wearableMissing.push("restingHeartRate");
+  return {
+    dataTier: ctx.tier,
+    availableMetricTypes: ctx.availableMetricTypes,
+    validBaselines: {
+      sleep7d: ctx.baselines.sleep7dAvg !== null,
+      rhr14d: ctx.baselines.rhr14dBaseline !== null,
+      hrv14d: ctx.baselines.hrv14dBaseline !== null,
+      stepsWeekly: ctx.baselines.stepsWeeklyBaseline !== null,
+    },
+    freshness: ctx.freshness,
+    unavailableWearableMetrics: wearableMissing,
+    basedOn:
+      ctx.tier === "self_report" ? "self_report_only"
+      : ctx.tier === "phone_health" ? "phone_health"
+      : "wearable_enhanced",
+  };
 }
 
 /**

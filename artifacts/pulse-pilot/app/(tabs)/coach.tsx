@@ -31,7 +31,7 @@ import { API_BASE } from "@/lib/apiConfig";
 export default function CoachScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
-  const { chatMessages, addChatMessage, todayMetrics, profile, trends, dailyPlan, insights, feeling, energy, stress, hydration, trainingIntent, completionHistory, weeklyConsistency, streakDays, glp1Energy, appetite, nausea, digestion, medicationLog, hasHealthData } = useApp();
+  const { chatMessages, addChatMessage, todayMetrics, metrics, profile, trends, dailyPlan, insights, feeling, energy, stress, hydration, trainingIntent, completionHistory, weeklyConsistency, streakDays, glp1Energy, appetite, nausea, digestion, medicationLog, hasHealthData, availableMetricTypes } = useApp();
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [streamingText, setStreamingText] = useState("");
@@ -49,19 +49,40 @@ export default function CoachScreen() {
       ? Math.round((todayRecord.actions.filter(a => a.completed).length / todayRecord.actions.length) * 100)
       : 0;
 
+    // Tier-gate the biometric block so the coach only sees metrics that are actually
+    // backed by data the user has. Wearable-only metrics (HRV/RHR/recovery/strain) are
+    // suppressed unless the wearable tier is active and the metric is usable; phone-only
+    // metrics are suppressed when their freshness gate fails.
+    const tier: "self_report" | "phone_health" | "wearable" =
+      dailyPlan?.dataTier ?? (
+        availableMetricTypes.some(t => t === "hrv" || t === "restingHeartRate") ? "wearable"
+        : availableMetricTypes.some(t => t === "sleep" || t === "steps") ? "phone_health"
+        : "self_report"
+      );
+    const wearableUsable = tier === "wearable" && hasHealthData;
+    const phoneUsable = tier !== "self_report" && hasHealthData;
+    const unavailableWearable: string[] = [];
+    if (typeof todayMetrics.hrv !== "number") unavailableWearable.push("hrv");
+    if (typeof todayMetrics.restingHeartRate !== "number") unavailableWearable.push("restingHeartRate");
+
     return {
       todayMetrics: hasHealthData ? {
-        hrv: todayMetrics.hrv,
-        restingHeartRate: todayMetrics.restingHeartRate,
-        sleepDuration: todayMetrics.sleepDuration,
-        sleepQuality: todayMetrics.sleepQuality,
-        steps: todayMetrics.steps,
-        recoveryScore: todayMetrics.recoveryScore,
+        hrv: wearableUsable ? todayMetrics.hrv : null,
+        restingHeartRate: wearableUsable ? todayMetrics.restingHeartRate : null,
+        sleepDuration: phoneUsable ? todayMetrics.sleepDuration : 0,
+        sleepQuality: wearableUsable ? todayMetrics.sleepQuality : null,
+        steps: phoneUsable ? todayMetrics.steps : 0,
+        recoveryScore: wearableUsable ? todayMetrics.recoveryScore : null,
         weight: todayMetrics.weight,
-        strain: todayMetrics.strain,
-        caloriesBurned: todayMetrics.caloriesBurned,
-        activeCalories: todayMetrics.activeCalories,
+        strain: wearableUsable ? todayMetrics.strain : null,
+        caloriesBurned: phoneUsable ? todayMetrics.caloriesBurned : 0,
+        activeCalories: phoneUsable ? todayMetrics.activeCalories : 0,
       } : undefined,
+      dataTier: tier,
+      recommendationConfidence: dailyPlan?.recommendationConfidence,
+      availableMetricTypes,
+      unavailableWearableMetrics: tier === "wearable" ? unavailableWearable : ["hrv", "restingHeartRate"],
+      basedOn: tier === "self_report" ? "self_report_only" as const : tier === "phone_health" ? "phone_health" as const : "wearable_enhanced" as const,
       profile: {
         age: profile.age,
         sex: profile.sex,
@@ -112,7 +133,7 @@ export default function CoachScreen() {
       medicationProfile: profile.medicationProfile || undefined,
       recentDoseLog: medicationLog.slice(-5).map(e => ({ date: e.date, status: e.status, doseValue: e.doseValue, doseUnit: e.doseUnit })),
     };
-  }, [todayMetrics, profile, trends, dailyPlan, insights, feeling, energy, stress, hydration, trainingIntent, completionHistory, streakDays, weeklyConsistency, glp1Energy, appetite, nausea, digestion, medicationLog, profile.medicationProfile, hasHealthData]);
+  }, [todayMetrics, metrics, profile, trends, dailyPlan, insights, feeling, energy, stress, hydration, trainingIntent, completionHistory, streakDays, weeklyConsistency, glp1Energy, appetite, nausea, digestion, medicationLog, profile.medicationProfile, hasHealthData, availableMetricTypes]);
 
   const sendMessage = useCallback(async (text: string) => {
     const trimmed = text.trim();

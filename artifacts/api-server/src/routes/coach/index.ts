@@ -68,17 +68,24 @@ interface ChatRequestBody {
   message: string;
   healthContext?: {
     todayMetrics?: {
-      hrv: number;
-      restingHeartRate: number;
+      hrv: number | null;
+      restingHeartRate: number | null;
       sleepDuration: number;
-      sleepQuality: number;
+      sleepQuality: number | null;
       steps: number;
-      recoveryScore: number;
-      weight: number;
-      strain: number;
+      recoveryScore: number | null;
+      weight: number | null;
+      strain: number | null;
       caloriesBurned: number;
       activeCalories: number;
     };
+    dataTier?: "self_report" | "phone_health" | "wearable";
+    recommendationConfidence?: "low" | "moderate" | "high";
+    availableMetricTypes?: string[];
+    validBaselines?: { sleep7d: boolean; rhr14d: boolean; hrv14d: boolean; stepsWeekly: boolean };
+    freshness?: { hasFreshSleep: boolean; hasFreshSteps: boolean; hasFreshRhr: boolean; hasFreshHrv: boolean };
+    unavailableWearableMetrics?: string[];
+    basedOn?: "self_report_only" | "phone_health" | "wearable_enhanced";
     profile?: {
       name?: string;
       age: number;
@@ -168,17 +175,40 @@ router.post("/chat", async (req: Request, res: Response) => {
 
       if (healthContext.todayMetrics) {
         const m = healthContext.todayMetrics;
-        parts.push(
-          `TODAY'S BIOMETRIC DATA:`,
-          `- HRV: ${m.hrv} ms${healthContext.hrvBaseline ? ` (14-day baseline: ${healthContext.hrvBaseline} ms, ${healthContext.hrvDeviation && healthContext.hrvDeviation > 0 ? "+" : ""}${healthContext.hrvDeviation || 0}ms deviation)` : ""}`,
-          `- Resting Heart Rate: ${m.restingHeartRate} bpm`,
-          `- Sleep: ${m.sleepDuration.toFixed(1)} hours (${m.sleepQuality}% quality)${healthContext.sleepDebt ? `, sleep debt: ${healthContext.sleepDebt} hours this week` : ""}`,
-          `- Steps: ${m.steps.toLocaleString()}`,
-          `- Recovery Score: ${m.recoveryScore}%${healthContext.recoveryTrend ? ` (trend: ${healthContext.recoveryTrend})` : ""}`,
-          `- Weight: ${m.weight} lbs`,
-          `- Strain: ${m.strain}`,
-          `- Calories Burned: ${m.caloriesBurned} (${m.activeCalories} active)`,
-        );
+        const metricLines: string[] = [`TODAY'S BIOMETRIC DATA:`];
+        // Only render a metric line when the value is real. Null/zero (for counter-style
+        // metrics) means the client suppressed it because the data tier or freshness gate
+        // failed; we MUST NOT make the model invent a number.
+        if (typeof m.hrv === "number") {
+          metricLines.push(
+            `- HRV: ${m.hrv} ms${healthContext.hrvBaseline ? ` (14-day baseline: ${healthContext.hrvBaseline} ms, ${healthContext.hrvDeviation && healthContext.hrvDeviation > 0 ? "+" : ""}${healthContext.hrvDeviation || 0}ms deviation)` : ""}`
+          );
+        }
+        if (typeof m.restingHeartRate === "number") {
+          metricLines.push(`- Resting Heart Rate: ${m.restingHeartRate} bpm`);
+        }
+        if (m.sleepDuration > 0) {
+          const quality = typeof m.sleepQuality === "number" ? ` (${m.sleepQuality}% quality)` : "";
+          metricLines.push(`- Sleep: ${m.sleepDuration.toFixed(1)} hours${quality}${healthContext.sleepDebt ? `, sleep debt: ${healthContext.sleepDebt} hours this week` : ""}`);
+        }
+        if (m.steps > 0) {
+          metricLines.push(`- Steps: ${m.steps.toLocaleString()}`);
+        }
+        if (typeof m.recoveryScore === "number") {
+          metricLines.push(`- Recovery Score: ${m.recoveryScore}%${healthContext.recoveryTrend ? ` (trend: ${healthContext.recoveryTrend})` : ""}`);
+        }
+        if (typeof m.weight === "number" && m.weight > 0) {
+          metricLines.push(`- Weight: ${m.weight} lbs`);
+        }
+        if (typeof m.strain === "number") {
+          metricLines.push(`- Strain: ${m.strain}`);
+        }
+        if (m.caloriesBurned > 0 || m.activeCalories > 0) {
+          metricLines.push(`- Calories Burned: ${m.caloriesBurned} (${m.activeCalories} active)`);
+        }
+        if (metricLines.length > 1) {
+          parts.push(...metricLines);
+        }
       }
 
       if (healthContext.readinessScore !== undefined) {
@@ -299,6 +329,41 @@ router.post("/chat", async (req: Request, res: Response) => {
         role: "system",
         content: `This is what you know about this person right now. Use it naturally. Don't list their stats back to them. Instead, interpret what the data means and talk to them like you understand their situation. Keep it human.${nameNote}\n\n${contextBlock}`,
       });
+
+      // Tier-aware guardrail: tell the model exactly what kind of data this user has so it
+      // does not invent physiological claims it cannot back up.
+      if (healthContext?.dataTier) {
+        const tier = healthContext.dataTier;
+        const conf = healthContext.recommendationConfidence ?? "moderate";
+        const missing = healthContext.unavailableWearableMetrics ?? [];
+        const validBaselines = healthContext.validBaselines;
+        const tierLines: string[] = [
+          `DATA TIER: ${tier} (basis: ${healthContext.basedOn ?? tier}). Internal recommendation confidence: ${conf}.`,
+        ];
+        if (healthContext.availableMetricTypes && healthContext.availableMetricTypes.length > 0) {
+          tierLines.push(`Available raw metrics: ${healthContext.availableMetricTypes.join(", ")}.`);
+        }
+        if (missing.length > 0) {
+          tierLines.push(`Wearable metrics NOT available: ${missing.join(", ")}. Do not reference these.`);
+        }
+        if (validBaselines) {
+          const validList = Object.entries(validBaselines).filter(([, v]) => v).map(([k]) => k);
+          tierLines.push(validList.length > 0 ? `Valid baselines: ${validList.join(", ")}.` : `No personal baselines are valid yet.`);
+        }
+        tierLines.push(
+          tier === "self_report"
+            ? `RULE: This person has no passive health data. Do not make HRV, resting heart rate, recovery score, or sleep-quality claims. Lean on what they reported (energy, appetite, nausea, digestion, stress, hydration) and treatment context.`
+            : tier === "phone_health"
+              ? `RULE: This person has phone-derived metrics only. You may reference sleep duration and steps when present. Do NOT make HRV, resting heart rate, recovery score, or strain claims. No physiological stress or recovery interpretations.`
+              : `RULE: Wearable-enhanced data is available. You may reference HRV/RHR/recovery only when they appear above and only relative to baseline when the matching baseline is marked valid.`
+        );
+        if (conf === "low") {
+          tierLines.push(`CONFIDENCE: low. Soften language. Frame suggestions as "based on what you've shared" rather than absolutes.`);
+        } else if (conf === "moderate") {
+          tierLines.push(`CONFIDENCE: moderate. Stay practical and avoid strong physiological claims.`);
+        }
+        messages.push({ role: "system", content: tierLines.join("\n") });
+      }
     }
 
     if (conversationHistory && conversationHistory.length > 0) {

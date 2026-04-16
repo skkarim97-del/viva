@@ -16,6 +16,7 @@ import type {
 } from "@/types";
 import type { DailyInsights } from "@/data/insights";
 import { buildTitrationContext } from "./titrationHelper";
+import { buildTierContext, summarizeTierForCoach, type DataTier, type Confidence } from "./dataTier";
 
 export interface CoachContext {
   todayMetrics: {
@@ -81,6 +82,15 @@ export interface CoachContext {
     recentPattern: string;
     planAdjustment: string;
   };
+  // Tier-aware fields. The coach uses these to decide which physiological claims it can
+  // make. If a metric is missing/unusable, do not reference it in the response.
+  dataTier?: DataTier;
+  recommendationConfidence?: Confidence;
+  availableMetricTypes?: string[];
+  validBaselines?: { sleep7d: boolean; rhr14d: boolean; hrv14d: boolean; stepsWeekly: boolean };
+  freshness?: { hasFreshSleep: boolean; hasFreshSteps: boolean; hasFreshRhr: boolean; hasFreshHrv: boolean };
+  unavailableWearableMetrics?: string[];
+  basedOn?: "self_report_only" | "phone_health" | "wearable_enhanced";
 }
 
 export function computeHrvBaseline(metrics: HealthMetrics[]): number | undefined {
@@ -130,19 +140,32 @@ export function buildCoachContext(
   todayCompletionRate: number,
   patientSummary?: PatientSummary | null,
   adaptiveState?: { currentState: string; recentPattern: string; planAdjustment: string } | null,
+  availableMetricTypes: string[] = [],
 ): CoachContext {
+  // Build the same tier context the planEngine uses, so the coach sees exactly the same
+  // view of data adequacy. We then strip any metric we can't trust from todayMetrics so the
+  // model can never reference it back to the user.
+  const hasSubjectiveInputs = !!(wellnessInputs.feeling || wellnessInputs.energy || wellnessInputs.stress || wellnessInputs.trainingIntent || glp1Inputs);
+  const tierCtx = buildTierContext(metrics, todayMetrics, availableMetricTypes, hasSubjectiveInputs, Date.now());
+  const summary = summarizeTierForCoach(tierCtx);
+  const tier = tierCtx.tier;
+
   return {
     todayMetrics: {
-      hrv: todayMetrics.hrv,
-      restingHeartRate: todayMetrics.restingHeartRate,
-      sleepDuration: todayMetrics.sleepDuration,
-      sleepQuality: todayMetrics.sleepQuality,
-      steps: todayMetrics.steps,
-      recoveryScore: todayMetrics.recoveryScore,
+      // Wearable metrics: only forward when the metric is genuinely usable. Otherwise null
+      // so the API server can suppress the line entirely.
+      hrv: tier === "wearable" && tierCtx.usableHrv ? todayMetrics.hrv : null,
+      restingHeartRate: tier === "wearable" && tierCtx.usableRhr ? todayMetrics.restingHeartRate : null,
+      // Phone/wearable shared:
+      sleepDuration: tierCtx.usableSleep ? todayMetrics.sleepDuration : 0,
+      sleepQuality: tier === "wearable" ? todayMetrics.sleepQuality : null,
+      steps: tierCtx.usableSteps ? todayMetrics.steps : 0,
+      // Derived/synthesized scores: only forward on wearable tier when usable; else null.
+      recoveryScore: tier === "wearable" && (tierCtx.usableHrv || tierCtx.usableRhr) ? todayMetrics.recoveryScore : null,
       weight: todayMetrics.weight,
-      strain: todayMetrics.strain,
-      caloriesBurned: todayMetrics.caloriesBurned,
-      activeCalories: todayMetrics.activeCalories,
+      strain: tier === "wearable" ? todayMetrics.strain : null,
+      caloriesBurned: tierCtx.usableSteps ? todayMetrics.caloriesBurned : 0,
+      activeCalories: tierCtx.usableSteps ? todayMetrics.activeCalories : 0,
     },
     profile: {
       name: profile.name || undefined,
@@ -189,5 +212,12 @@ export function buildCoachContext(
     todayCompletionRate,
     patientSummary: patientSummary ?? undefined,
     adaptiveState: adaptiveState ?? undefined,
+    dataTier: dailyPlan?.dataTier ?? tier,
+    recommendationConfidence: dailyPlan?.recommendationConfidence,
+    availableMetricTypes: summary.availableMetricTypes,
+    validBaselines: summary.validBaselines,
+    freshness: summary.freshness,
+    unavailableWearableMetrics: summary.unavailableWearableMetrics,
+    basedOn: summary.basedOn as "self_report_only" | "phone_health" | "wearable_enhanced",
   };
 }

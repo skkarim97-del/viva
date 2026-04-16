@@ -400,21 +400,24 @@ export function generateDailyPlan(
   const trainingIntent = inputs?.trainingIntent ?? null;
 
   // Build the tier context once. We use this to gate which signals can fire and which
-  // baseline-relative claims we can make.
+  // baseline-relative claims we can make. We pin "now" to today's metric date so freshness
+  // gates degrade gracefully when the user hasn't synced for a while.
   const hasSubjectiveInputs = !!(feeling || energy || stress || trainingIntent || glp1Inputs);
+  const nowMs = Date.now();
   const tierCtx: TierContext = buildTierContext(
     recentMetrics ?? [],
     metrics,
     availableMetricTypes ?? [],
     hasSubjectiveInputs,
+    nowMs,
   );
   const tier: DataTier = tierCtx.tier;
 
   // Backwards-compat: existing code paths use `wearableAvailable` to gate physiological
   // claims. We treat phone_health as "wearable not available" so phone-tier users never
-  // get HRV/recovery copy, but we still allow sleep/steps history to drive recommendations
-  // via the new sufficiency checks below.
-  const wearableAvailable = tier === "wearable" && hasHealthData !== false;
+  // get HRV/recovery copy. Wearable tier additionally requires at least one usable wearable
+  // metric (HRV or RHR passing both sufficiency AND freshness) to fire physiological logic.
+  const wearableAvailable = tier === "wearable" && hasHealthData !== false && (tierCtx.usableHrv || tierCtx.usableRhr);
 
   const last7 = recentMetrics?.slice(-7) ?? [];
   const last3 = last7.slice(-3);
@@ -980,6 +983,32 @@ export function generateDailyPlan(
     : hasSubjectiveInputs ? "moderate" : "low";
   const order: Record<Confidence, number> = { low: 0, moderate: 1, high: 2 };
   const recommendationConfidence: Confidence = order[localConfidence] < order[tierCap] ? localConfidence : tierCap;
+
+  // Dev-only debug log so we can see how the tier system is shaping recommendations
+  // without ever surfacing it in patient UI. Gated on __DEV__ so production bundles drop it.
+  if (typeof __DEV__ !== "undefined" && __DEV__) {
+    const firedSignals: string[] = [];
+    if (sleepCritical) firedSignals.push("sleepCritical");
+    if (sleepLow) firedSignals.push("sleepLow");
+    if (consecutivePoorRecovery) firedSignals.push("consecutivePoorRecovery");
+    if (hrvDeclining5) firedSignals.push("hrvDeclining5");
+    if (rhrElevated) firedSignals.push("rhrElevated");
+    if (symptomsHeavy) firedSignals.push("symptomsHeavy");
+    if (appetiteLow) firedSignals.push("appetiteLow");
+    if (digestiveDistress) firedSignals.push("digestiveDistress");
+    if (stressOverride) firedSignals.push("stressOverride");
+    // eslint-disable-next-line no-console
+    console.log("[planEngine] tier", {
+      dataTier: tier,
+      recommendationConfidence,
+      sufficiency: tierCtx.sufficiency,
+      freshness: tierCtx.freshness,
+      usable: { sleep: tierCtx.usableSleep, steps: tierCtx.usableSteps, rhr: tierCtx.usableRhr, hrv: tierCtx.usableHrv },
+      firedSignals,
+      readinessScore,
+      dailyState,
+    });
+  }
 
   return {
     date: metrics.date,
