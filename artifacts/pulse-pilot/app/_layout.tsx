@@ -8,7 +8,7 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useCallback } from "react";
+import React, { useEffect, useRef } from "react";
 import { View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -36,34 +36,62 @@ const queryClient = new QueryClient();
 function SplashGate({ fontsReady, children }: { fontsReady: boolean; children: React.ReactNode }) {
   const { isLoading } = useApp();
   const ready = fontsReady && !isLoading;
+  const hiddenRef = useRef(false);
 
-  // Two stacked rAFs ensure hideAsync fires AFTER React has actually
-  // committed and painted the first frame of the children. onLayout alone
-  // fires when the wrapper is measured, which can be one tick before the
-  // child screen's pixels reach the GPU; that one-tick gap was the residual
-  // "flash" surface even after the earlier onLayout fix.
-  const onRootLayout = useCallback(() => {
-    if (!ready) return;
-    requestAnimationFrame(() => {
+  const hideOnce = (reason: string) => {
+    if (hiddenRef.current) return;
+    hiddenRef.current = true;
+    if (__DEV__) console.log("[SplashGate] hideAsync ->", reason);
+    SplashScreen.hideAsync().catch(() => {});
+  };
+
+  // Defensive timeout: no matter what readiness signals do (or fail to do),
+  // the native splash MUST come down within 3s of mount. This guarantees the
+  // app can never deadlock on the Viva logo even if hydration hangs, fonts
+  // fail to resolve, or the rAF chain below is starved.
+  useEffect(() => {
+    const t = setTimeout(() => hideOnce("timeout-3s"), 3000);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Hide the splash AFTER React has actually committed and painted the first
+  // frame of the children. useEffect runs after commit; two stacked rAFs
+  // wait for the next paint cycle so the splash dissolves into real pixels,
+  // not a layout gap.
+  //
+  // IMPORTANT: this MUST be a useEffect keyed on `ready`, not an onLayout on
+  // a shared wrapper View. The previous onLayout approach reused the same
+  // <View> instance across the !ready/ready transition, so onLayout never
+  // re-fired when the children mounted -- the splash stayed up forever.
+  useEffect(() => {
+    if (!ready) {
+      if (__DEV__) console.log("[SplashGate] waiting", { fontsReady, isLoading });
+      return;
+    }
+    let cancelled = false;
+    const raf1 = requestAnimationFrame(() => {
+      if (cancelled) return;
       requestAnimationFrame(() => {
-        SplashScreen.hideAsync().catch(() => {});
+        if (cancelled) return;
+        hideOnce("ready+2raf");
       });
     });
-  }, [ready]);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf1);
+    };
+  }, [ready, fontsReady, isLoading]);
 
-  // While we wait for fonts + persisted profile to hydrate, mount a solid
-  // View painted in the splash background instead of returning null. The
-  // native splash is still up at this moment so the user does not see this
-  // View directly -- but if the OS hides the splash before we call
-  // hideAsync (rare but possible on slow cold starts), the user sees the
-  // same dark color underneath, NOT the iOS root window's default white.
-  // This is what kills the residual "white flash + ghost logo" feel.
+  // While not ready, paint a solid splash-colored View so any moment the OS
+  // peeks behind the native splash shows the same dark color, not white.
+  // Children are intentionally NOT mounted here -- they require hydrated
+  // profile data (initialRouteName depends on profile.onboardingComplete).
   if (!ready) {
     return <View style={{ flex: 1, backgroundColor: LAUNCH_BG }} />;
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: LAUNCH_BG }} onLayout={onRootLayout}>
+    <View style={{ flex: 1, backgroundColor: LAUNCH_BG }}>
       {children}
     </View>
   );

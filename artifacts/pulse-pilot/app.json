@@ -18,7 +18,7 @@
       "icon": "./assets/icon.png",
       "supportsTablet": false,
       "bundleIdentifier": "com.sullyk97.vivaai",
-      "buildNumber": "35",
+      "buildNumber": "36",
       "config": {
         "usesNonExemptEncryption": false
       },
