@@ -23,35 +23,24 @@ let AppleHealthKit: any = null;
 
 if (Platform.OS === "ios") {
   try {
-    const mod = require("react-native-health");
-    console.log("[HealthKit] require result type:", typeof mod);
-    console.log("[HealthKit] module keys:", mod ? Object.keys(mod).slice(0, 20) : "null");
-    console.log("[HealthKit] typeof initHealthKit:", typeof mod?.initHealthKit);
-    console.log("[HealthKit] typeof default:", typeof mod?.default);
-    console.log("[HealthKit] typeof default?.initHealthKit:", typeof mod?.default?.initHealthKit);
+    AppleHealthKit = require("react-native-health");
+    console.log("[HealthKit] module keys:", AppleHealthKit ? Object.keys(AppleHealthKit).slice(0, 20) : "null");
+    console.log("[HealthKit] typeof initHealthKit:", typeof AppleHealthKit?.initHealthKit);
 
-    if (mod && typeof mod.initHealthKit === "function") {
-      AppleHealthKit = mod;
-      _debugInfo.moduleLoaded = true;
-      console.log("[HealthKit] Using root module (initHealthKit found)");
-    } else if (mod?.default && typeof mod.default.initHealthKit === "function") {
-      AppleHealthKit = mod.default;
-      _debugInfo.moduleLoaded = true;
-      console.log("[HealthKit] Using mod.default (initHealthKit found on default)");
+    if (!AppleHealthKit || typeof AppleHealthKit.initHealthKit !== "function") {
+      _debugInfo.errorText = "initHealthKit is not a function";
+      _debugInfo.moduleLoaded = false;
+      console.log("[HealthKit] FAIL: initHealthKit not a function. Module unusable.");
+      AppleHealthKit = null;
     } else {
-      AppleHealthKit = mod;
-      _debugInfo.moduleLoaded = !!mod;
-      _debugInfo.errorText = "initHealthKit not found on module or module.default";
-      console.log("[HealthKit] WARNING: initHealthKit not found. Module loaded but may not work.");
-      console.log("[HealthKit] All root keys:", mod ? Object.keys(mod) : "null");
-      if (mod?.default) {
-        console.log("[HealthKit] All default keys:", Object.keys(mod.default));
-      }
+      _debugInfo.moduleLoaded = true;
+      console.log("[HealthKit] Module loaded, initHealthKit ready");
     }
   } catch (e: any) {
     console.log("[HealthKit] require() failed:", e?.message || e);
     _debugInfo.moduleLoaded = false;
     _debugInfo.errorText = `require failed: ${e?.message || e}`;
+    AppleHealthKit = null;
   }
 }
 
