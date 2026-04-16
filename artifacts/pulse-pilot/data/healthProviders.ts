@@ -277,17 +277,39 @@ async function fetchAppleHealthMetrics(days: number): Promise<HealthMetrics[]> {
     const activeCalByDate = bucketByDate(activeCalRaw || []);
     const basalCalByDate = bucketByDate(basalCalRaw || []);
 
-    // Sleep: aggregate ASLEEP (or CORE/DEEP/REM) durations per day, keyed by date of startDate.
+    // Sleep aggregation.
+    // Apple Health returns sleep samples with per-stage values. We count CORE+DEEP+REM as actual sleep.
+    // If only ASLEEP is present (older iOS), we count that. We exclude INBED and AWAKE to avoid
+    // double counting (INBED typically overlaps with all stage samples).
+    // Unit: hours (converted from ms via /3_600_000).
     const sleepDurationByDate: Record<string, number> = {};
+    const sleepStageCountsByDate: Record<string, Record<string, number>> = {};
+    let hasStageData = false;
+    for (const s of sleepRaw || []) {
+      const v = typeof s.value === "string" ? s.value.toUpperCase() : "";
+      if (v === "CORE" || v === "DEEP" || v === "REM") { hasStageData = true; break; }
+    }
     for (const s of sleepRaw || []) {
       if (!s.startDate || !s.endDate) continue;
       const v = typeof s.value === "string" ? s.value.toUpperCase() : "";
-      const isAsleep = v === "ASLEEP" || v === "CORE" || v === "DEEP" || v === "REM" || v === "ASLEEPUNSPECIFIED";
-      if (!isAsleep) continue;
       const dayKey = s.startDate.split("T")[0];
+      if (!sleepStageCountsByDate[dayKey]) sleepStageCountsByDate[dayKey] = {};
+      sleepStageCountsByDate[dayKey][v] = (sleepStageCountsByDate[dayKey][v] || 0) + 1;
+
+      const isSleepStage = hasStageData
+        ? (v === "CORE" || v === "DEEP" || v === "REM")
+        : (v === "ASLEEP" || v === "ASLEEPUNSPECIFIED");
+      if (!isSleepStage) continue;
+
       const hours = (new Date(s.endDate).getTime() - new Date(s.startDate).getTime()) / 3_600_000;
       if (hours <= 0 || hours > 16) continue;
       sleepDurationByDate[dayKey] = (sleepDurationByDate[dayKey] || 0) + hours;
+    }
+    console.log("[HealthKit fetch] sleep: hasStageData=", hasStageData, " mode=", hasStageData ? "CORE+DEEP+REM" : "ASLEEP");
+    const sleepDays = Object.keys(sleepDurationByDate).sort();
+    if (sleepDays.length > 0) {
+      const exampleDay = sleepDays[sleepDays.length - 1];
+      console.log("[HealthKit fetch] sleep sample day:", exampleDay, "stages:", sleepStageCountsByDate[exampleDay], "total hours:", sleepDurationByDate[exampleDay]);
     }
 
     const result: HealthMetrics[] = [];
@@ -301,7 +323,8 @@ async function fetchAppleHealthMetrics(days: number): Promise<HealthMetrics[]> {
       const activeCalVal = sum((activeCalByDate[d] || []).map((s) => Number(s.value) || 0));
       const basalCalVal = sum((basalCalByDate[d] || []).map((s) => Number(s.value) || 0));
 
-      const restingHr = restingHrSamples.length > 0 ? avg(restingHrSamples) : hrSamples.length > 0 ? avg(hrSamples) : 0;
+      // Do NOT fall back resting HR to avg HR; if no resting samples, leave as 0 (metric marked unavailable).
+      const restingHr = restingHrSamples.length > 0 ? avg(restingHrSamples) : 0;
 
       result.push({
         date: d,
@@ -309,19 +332,20 @@ async function fetchAppleHealthMetrics(days: number): Promise<HealthMetrics[]> {
         caloriesBurned: Math.round(activeCalVal + basalCalVal),
         activeCalories: Math.round(activeCalVal),
         restingHeartRate: Math.round(restingHr),
-        hrv: Math.round(avg(hrvSamples)),
-        weight: 0,
+        hrv: hrvSamples.length > 0 ? Math.round(avg(hrvSamples)) : 0,
+        weight: 0, // not fetched; availableMetricTypes excludes "weight"
         sleepDuration: Math.round((sleepDurationByDate[d] || 0) * 10) / 10,
-        sleepQuality: 0,
-        recoveryScore: 0,
-        strain: 0,
+        sleepQuality: 0, // derived, not fetched
+        recoveryScore: 0, // derived, not fetched
+        strain: 0, // derived, not fetched
         distance: distanceVal > 0 ? Math.round(distanceVal) : undefined,
       });
     }
 
     _debugInfo.fetchSucceeded = true;
     notifyDebug();
-    console.log("[HealthKit fetch] metrics ready for", days, "days. Last 3:", result.slice(-3));
+    console.log("[HealthKit fetch] units: steps=count, distance=meters, HR=bpm, HRV=ms, calories=kcal, sleep=hours");
+    console.log("[HealthKit fetch] FINAL metrics last 3 days:", JSON.stringify(result.slice(-3), null, 2));
     return result;
   } catch (e: any) {
     _debugInfo.fetchSucceeded = false;

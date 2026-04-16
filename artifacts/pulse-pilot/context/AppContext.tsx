@@ -940,7 +940,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
     try {
       const result = await fetchHealthData(connectedIds, 28);
+      console.log("[AppContext] fetchHealthData returned:", {
+        metricsLength: result.metrics.length,
+        availableTypes: result.availableTypes,
+        source: result.source,
+        last3Days: result.metrics.slice(-3),
+      });
       if (result.metrics.length > 0) {
+        console.log("[AppContext] setMetrics() called with", result.metrics.length, "days, setAvailableMetricTypes=", result.availableTypes);
         setMetrics(result.metrics);
         setHasHealthData(true);
         setAvailableMetricTypes(result.availableTypes);

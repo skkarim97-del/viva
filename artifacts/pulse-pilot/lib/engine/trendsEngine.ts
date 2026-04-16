@@ -143,37 +143,49 @@ export function buildCorrelations(metrics: HealthMetrics[]): TrendCorrelation[] 
   return correlations;
 }
 
-export function detectPatterns(metrics: HealthMetrics[]): string[] {
+export function detectPatterns(metrics: HealthMetrics[], availableMetricTypes: string[] = []): string[] {
   if (metrics.length < 7) return [];
   const recent = metrics.slice(-7);
   const patterns: string[] = [];
+  const hasSleep = availableMetricTypes.includes("sleep");
+  const hasHrv = availableMetricTypes.includes("hrv");
+  const hasRecovery = availableMetricTypes.includes("recovery");
+  const hasSteps = availableMetricTypes.includes("steps");
 
-  const avgSleep = recent.reduce((s, m) => s + m.sleepDuration, 0) / recent.length;
-  const sleepTrend = recent[recent.length - 1].sleepDuration - recent[0].sleepDuration;
-  if (Math.abs(sleepTrend) > 0.5) {
-    patterns.push(
-      sleepTrend > 0
-        ? `Sleep is trending up this week. You averaged ${avgSleep.toFixed(1)} hrs, up from ${recent[0].sleepDuration.toFixed(1)} hrs.`
-        : `Sleep has been declining this week. You dropped from ${recent[0].sleepDuration.toFixed(1)} hrs to ${recent[recent.length - 1].sleepDuration.toFixed(1)} hrs.`
-    );
+  if (hasSleep) {
+    const avgSleep = recent.reduce((s, m) => s + m.sleepDuration, 0) / recent.length;
+    const sleepTrend = recent[recent.length - 1].sleepDuration - recent[0].sleepDuration;
+    if (Math.abs(sleepTrend) > 0.5) {
+      patterns.push(
+        sleepTrend > 0
+          ? `Sleep is trending up this week. You averaged ${avgSleep.toFixed(1)} hrs, up from ${recent[0].sleepDuration.toFixed(1)} hrs.`
+          : `Sleep has been declining this week. You dropped from ${recent[0].sleepDuration.toFixed(1)} hrs to ${recent[recent.length - 1].sleepDuration.toFixed(1)} hrs.`
+      );
+    }
   }
 
-  const avgHrv = recent.reduce((s, m) => s + m.hrv, 0) / recent.length;
-  const hrvStdDev = Math.sqrt(recent.reduce((s, m) => s + Math.pow(m.hrv - avgHrv, 2), 0) / recent.length);
-  if (hrvStdDev > 12) {
-    patterns.push(`HRV variability is high (${hrvStdDev.toFixed(0)} ms std dev). Inconsistent sleep timing or elevated stress may be the driver.`);
-  } else if (hrvStdDev < 5) {
-    patterns.push(`HRV is very stable at ${Math.round(avgHrv)} ms. Your recovery rhythm is consistent, which supports treatment response.`);
+  if (hasHrv) {
+    const avgHrv = recent.reduce((s, m) => s + m.hrv, 0) / recent.length;
+    const hrvStdDev = Math.sqrt(recent.reduce((s, m) => s + Math.pow(m.hrv - avgHrv, 2), 0) / recent.length);
+    if (hrvStdDev > 12) {
+      patterns.push(`HRV variability is high (${hrvStdDev.toFixed(0)} ms std dev). Inconsistent sleep timing or elevated stress may be the driver.`);
+    } else if (hrvStdDev < 5 && avgHrv > 0) {
+      patterns.push(`HRV is very stable at ${Math.round(avgHrv)} ms. Your recovery rhythm is consistent, which supports treatment response.`);
+    }
   }
 
-  const lowRecoveryDays = recent.filter(m => m.recoveryScore < 60).length;
-  if (lowRecoveryDays >= 3) {
-    patterns.push(`${lowRecoveryDays} of the last 7 days had recovery below 60%. Prioritize sleep and hydration. On treatment, low recovery compounds faster.`);
+  if (hasRecovery) {
+    const lowRecoveryDays = recent.filter(m => m.recoveryScore < 60).length;
+    if (lowRecoveryDays >= 3) {
+      patterns.push(`${lowRecoveryDays} of the last 7 days had recovery below 60%. Prioritize sleep and hydration. On treatment, low recovery compounds faster.`);
+    }
   }
 
-  const highStepDays = recent.filter(m => m.steps > 10000).length;
-  if (highStepDays >= 5) {
-    patterns.push(`You hit 10,000+ steps on ${highStepDays} of 7 days. This level of daily movement is one of the best ways to preserve muscle on treatment.`);
+  if (hasSteps) {
+    const highStepDays = recent.filter(m => m.steps > 10000).length;
+    if (highStepDays >= 5) {
+      patterns.push(`You hit 10,000+ steps on ${highStepDays} of 7 days. This level of daily movement is one of the best ways to preserve muscle on treatment.`);
+    }
   }
 
   return patterns;
@@ -356,10 +368,18 @@ export function buildGLP1Insights(
   return insights.slice(0, 5);
 }
 
-export function buildKeyInsights(metrics: HealthMetrics[], habitStats: { weeklyPercent: number; streakDays: number; todayCompleted: number; todayTotal: number; topHabit: string | null; topHabitPercent: number }): string[] {
+export function buildKeyInsights(
+  metrics: HealthMetrics[],
+  habitStats: { weeklyPercent: number; streakDays: number; todayCompleted: number; todayTotal: number; topHabit: string | null; topHabitPercent: number },
+  availableMetricTypes: string[] = []
+): string[] {
   const insights: string[] = [];
   if (metrics.length < 3) return insights;
   const recent = metrics.slice(-7);
+
+  const hasSleep = availableMetricTypes.includes("sleep");
+  const hasRecovery = availableMetricTypes.includes("recovery");
+  const hasSteps = availableMetricTypes.includes("steps");
 
   const avgSleep = recent.reduce((s, m) => s + m.sleepDuration, 0) / recent.length;
   const avgRecovery = Math.round(recent.reduce((s, m) => s + m.recoveryScore, 0) / recent.length);
@@ -381,22 +401,28 @@ export function buildKeyInsights(metrics: HealthMetrics[], habitStats: { weeklyP
     insights.push(`Streak was broken. Today is a fresh start. One completed action gets you back on track.`);
   }
 
-  if (avgSleep < 6.5) {
-    insights.push(`Sleep averaged ${avgSleep.toFixed(1)} hrs this week. Under 7 hrs makes side effects feel heavier and recovery slower.`);
-  } else if (avgSleep >= 7.5) {
-    insights.push(`Sleep averaged ${avgSleep.toFixed(1)} hrs this week. This is a strong foundation for recovery and treatment response.`);
+  if (hasSleep) {
+    if (avgSleep < 6.5) {
+      insights.push(`Sleep averaged ${avgSleep.toFixed(1)} hrs this week. Under 7 hrs makes side effects feel heavier and recovery slower.`);
+    } else if (avgSleep >= 7.5) {
+      insights.push(`Sleep averaged ${avgSleep.toFixed(1)} hrs this week. This is a strong foundation for recovery and treatment response.`);
+    }
   }
 
-  if (avgRecovery < 55) {
-    insights.push(`Recovery averaged ${avgRecovery}% this week. Prioritize sleep, hydration, and lighter activity days.`);
-  } else if (avgRecovery >= 75) {
-    insights.push(`Recovery averaged ${avgRecovery}% this week. Your body is handling treatment well.`);
+  if (hasRecovery) {
+    if (avgRecovery < 55) {
+      insights.push(`Recovery averaged ${avgRecovery}% this week. Prioritize sleep, hydration, and lighter activity days.`);
+    } else if (avgRecovery >= 75) {
+      insights.push(`Recovery averaged ${avgRecovery}% this week. Your body is handling treatment well.`);
+    }
   }
 
-  if (avgSteps >= 10000) {
-    insights.push(`Averaging ${avgSteps.toLocaleString()} daily steps. This level of movement is excellent for muscle preservation on treatment.`);
-  } else if (avgSteps < 5000) {
-    insights.push(`Steps averaged ${avgSteps.toLocaleString()} this week. A 10-minute walk after meals can boost digestion and energy.`);
+  if (hasSteps) {
+    if (avgSteps >= 10000) {
+      insights.push(`Averaging ${avgSteps.toLocaleString()} daily steps. This level of movement is excellent for muscle preservation on treatment.`);
+    } else if (avgSteps < 5000) {
+      insights.push(`Steps averaged ${avgSteps.toLocaleString()} this week. A 10-minute walk after meals can boost digestion and energy.`);
+    }
   }
 
   return insights.slice(0, 5);
