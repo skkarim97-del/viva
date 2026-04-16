@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -16,7 +16,7 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
 import { getDoseOptions, type MedicationBrand } from "@/data/medicationData";
-import { getHealthDebugInfo } from "@/data/healthProviders";
+import { getHealthDebugInfo, onDebugUpdate, connectAppleHealth } from "@/data/healthProviders";
 
 const GOAL_LABELS: Record<string, string> = {
   fat_loss: "Weight Loss",
@@ -33,6 +33,23 @@ export default function SettingsScreen() {
 
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [debugInfo, setDebugInfo] = useState(getHealthDebugInfo());
+  const [connecting, setConnecting] = useState(false);
+
+  useEffect(() => {
+    return onDebugUpdate(() => setDebugInfo(getHealthDebugInfo()));
+  }, []);
+
+  const handleConnectHealth = useCallback(async () => {
+    console.log("[Settings] Connect Apple Health button pressed");
+    setConnecting(true);
+    const result = await connectAppleHealth();
+    setConnecting(false);
+    console.log("[Settings] connectAppleHealth result:", result);
+    if (result.success) {
+      toggleIntegration("apple_health");
+    }
+  }, [toggleIntegration]);
 
   const tierLabel =
     profile.tier === "premium_plus"
@@ -188,11 +205,11 @@ export default function SettingsScreen() {
           return (
           <React.Fragment key={integration.id}>
             <Pressable
-              onPress={() => !isUnavailable && toggleIntegration(integration.id)}
+              onPress={() => integration.id === "apple_health" ? handleConnectHealth() : toggleIntegration(integration.id)}
               style={({ pressed }) => [
                 styles.settingRow,
                 i < integrations.length - 1 && !isSyncFailed && [styles.settingRowBorder, { borderBottomColor: c.background }],
-                { opacity: isUnavailable ? 0.5 : pressed ? 0.8 : 1 },
+                { opacity: connecting ? 0.5 : pressed ? 0.8 : 1 },
               ]}
             >
               <View style={[styles.settingIcon, { backgroundColor: c.accent + "10" }]}>
@@ -236,17 +253,12 @@ export default function SettingsScreen() {
         })}
       </View>
 
-      {Platform.OS === "ios" && (() => {
-        const dbg = getHealthDebugInfo();
-        return (
-          <View style={[styles.section, { backgroundColor: c.card, padding: 16 }]}>
-            <Text style={{ color: c.foreground, fontFamily: "Montserrat_700Bold", fontSize: 13, marginBottom: 10 }}>HealthKit Debug</Text>
-            <Text style={{ color: c.mutedForeground, fontFamily: "Montserrat_500Medium", fontSize: 12, lineHeight: 20 }}>
-              {`module loaded: ${dbg.moduleLoaded}\ninit called: ${dbg.initCalled}\nsuccess: ${dbg.success ?? "n/a"}\nerror: ${dbg.errorText ?? "none"}`}
-            </Text>
-          </View>
-        );
-      })()}
+      <View style={[styles.section, { backgroundColor: c.card, padding: 16 }]}>
+        <Text style={{ color: c.foreground, fontFamily: "Montserrat_700Bold", fontSize: 13, marginBottom: 10 }}>HealthKit Debug</Text>
+        <Text style={{ color: c.mutedForeground, fontFamily: "Montserrat_500Medium", fontSize: 12, lineHeight: 20 }}>
+          {`buttonPressed: ${debugInfo.buttonPressed}\nmoduleLoaded: ${debugInfo.moduleLoaded}\ninitFunctionExists: ${debugInfo.initFunctionExists}\ninitCalled: ${debugInfo.initCalled}\ncallbackReached: ${debugInfo.callbackReached}\ninitSucceeded: ${debugInfo.initSucceeded ?? "n/a"}\nrawErrorText: ${debugInfo.rawErrorText ?? "none"}`}
+        </Text>
+      </View>
 
       <Pressable onPress={handleUpgrade} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}>
         <View style={[styles.upgradeCard, { backgroundColor: c.primary }]}>
