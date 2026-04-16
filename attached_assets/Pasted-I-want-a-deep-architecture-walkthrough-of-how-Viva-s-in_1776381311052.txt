@@ -1,0 +1,115 @@
+I want a deep architecture walkthrough of how Viva’s intelligence layer works today. This is not a UI task. I want you to inspect the actual codebase and explain the end-to-end backend/app intelligence flow in plain English, grounded in the real implementation.
+
+Goal
+Help me understand exactly how data is collected, transformed, synthesized, and turned into:
+- daily recommendations
+- weekly plan recommendations
+- coach context / coach replies
+- top summary / status copy on the Today screen
+- trends / metric insights
+
+I want a real system walkthrough based on the current code, not a hypothetical answer.
+
+Please do the following:
+
+1. Trace the full intelligence pipeline
+Starting from raw data sources, map the flow step by step:
+- onboarding/profile data
+- treatment / medication data
+- daily user inputs / check-ins
+- Apple Health / HealthKit data
+- derived metrics / baselines / deviations
+- tier classification
+- sufficiency / freshness checks
+- daily plan generation
+- weekly plan generation / sync
+- coach context creation
+- status / summary copy generation
+- trends / metric-detail generation
+
+2. Identify the main files and responsibilities
+For each important part of the intelligence system, tell me:
+- file name
+- what it does
+- what inputs it consumes
+- what outputs it produces
+
+I especially want you to inspect and explain modules like:
+- AppContext
+- planEngine
+- today/status generation
+- coachClient / coach context builder
+- data tier / sufficiency / freshness logic
+- metric detail / trends logic
+- medication / profile state handling
+- any shared models/types that drive the logic
+
+3. Explain the intelligence in plain English
+I want a simple narrative like:
+- “When a user logs nausea + low energy, this goes here…”
+- “Apple Health sleep/steps are normalized here…”
+- “Then tier logic checks whether wearable metrics are usable…”
+- “Then the engine decides the daily state / confidence / recommendations…”
+- “That output is reused by Today / Plan / Coach / Trends in these ways…”
+
+Make it understandable, not overly technical.
+
+4. Show where the actual “decision-making” lives
+I want clarity on:
+- where the app is actually deciding what today’s recommendation should be
+- where weekly plan logic comes from
+- whether weekly plan is generated independently or patched/synced from daily plan
+- where symptom severity influences recommendations
+- where coach summaries / lead phrases are chosen
+- where claim restrictions or coach guardrails happen
+
+5. Explain how the different surfaces connect
+I want to understand how the same intelligence feeds:
+- Today tab
+- Plan tab
+- Trends tab
+- metric detail screens
+- coach chat
+- top summary / headline / status label
+
+Please call out where they share logic versus where they diverge.
+
+6. Highlight any architecture weaknesses or duplication
+As you inspect the code, tell me honestly:
+- where logic is clean and centralized
+- where logic is duplicated
+- where UI is still doing intelligence work it should not do
+- where coach logic and plan logic may drift
+- where daily and weekly logic may still be too loosely coupled
+- any areas that are fragile or confusing
+
+7. Give me a recommended target architecture
+After explaining how it works today, propose a cleaner target architecture in the format:
+- raw data layer
+- feature/normalization layer
+- decision/intelligence layer
+- language/presentation layer
+- UI layer
+
+Then tell me:
+- what already matches this model
+- what still needs to be refactored
+
+8. Output format
+Please give me the final answer in this structure:
+
+A. Executive summary
+B. End-to-end intelligence flow
+C. File-by-file architecture map
+D. Where the real decision-making lives
+E. How Today / Plan / Trends / Coach connect
+F. Current weaknesses / duplication / technical debt
+G. Recommended target architecture
+H. Concrete next refactors I should prioritize
+
+Important instructions
+- Base this on the actual code
+- Do not give generic architecture advice without tying it to files/functions
+- If something is unclear in the code, say so
+- Be honest about where the logic is clean versus messy
+- I want understanding first, refactor ideas second
