@@ -27,7 +27,7 @@ import { sendCoachMessage, CoachRequestError, describeCoachError } from "@/lib/a
 import { summarizeCoachThread } from "@/lib/coachSummary";
 import { useColors } from "@/hooks/useColors";
 import { CATEGORY_OPTIONS } from "@/types";
-import type { MetricKey, FeelingType, ChatMessage, DailyStatusLabel, ActionCategory, AppetiteLevel, NauseaLevel, DigestionStatus, EnergyDaily, MedicationLogEntry, MentalState } from "@/types";
+import type { MetricKey, FeelingType, ChatMessage, DailyState, ActionCategory, AppetiteLevel, NauseaLevel, DigestionStatus, EnergyDaily, MedicationLogEntry, MentalState } from "@/types";
 
 const TINT_GREEN = "#34C759";
 const TINT_BLUE = "#38B6FF";
@@ -63,11 +63,14 @@ const DIGESTION_OPTIONS: { key: NonNullable<DigestionStatus>; label: string; tin
   { key: "diarrhea", label: "Diarrhea", tint: TINT_RED },
 ];
 
-const STATUS_COLOR_MAP: Record<DailyStatusLabel, (c: ReturnType<typeof useColors>) => string> = {
-  "You're in a good place today": (c) => c.success,
-  "A few small adjustments will help today": (c) => c.accent,
-  "Let's make today a bit easier": (c) => c.warning,
-  "Your body may need more support today": (c) => c.destructive,
+// statusLabel is now free-form copy produced by the context-aware selector
+// in planEngine. Color must derive from the structural dailyState instead,
+// otherwise any new phrase would miss the map and crash the Today tab.
+const STATUS_COLOR_FOR_STATE: Record<DailyState, (c: ReturnType<typeof useColors>) => string> = {
+  push: (c) => c.success,
+  build: (c) => c.accent,
+  maintain: (c) => c.warning,
+  recover: (c) => c.destructive,
 };
 
 export default function DashboardScreen() {
@@ -253,7 +256,7 @@ export default function DashboardScreen() {
   ];
   const metricItems = allMetricItems.filter(item => availableMetricTypes.includes(item.requiredType as any));
 
-  const statusColor = STATUS_COLOR_MAP[dailyPlan.statusLabel](c);
+  const statusColor = (STATUS_COLOR_FOR_STATE[dailyPlan.dailyState] ?? ((cc) => cc.accent))(c);
 
   const hasMedProfile = !!profile.medicationProfile;
   const ACTION_META: Record<string, { label: string; icon: keyof typeof Feather.glyphMap; color: string }> = {
@@ -722,17 +725,34 @@ export default function DashboardScreen() {
         </View>
 
         <View style={[styles.askCard, { backgroundColor: c.card }]}>
-          {coachInsight ? (
-            <View style={{ gap: 6 }}>
-              <View style={styles.insightsHeader}>
-                <Feather name="message-circle" size={14} color={c.accent} />
-                <Text style={[styles.insightsTitle, { color: c.foreground }]}>Your Coach</Text>
+          {/* Always-on section header so the chat bar below never floats
+              without context. Order: header → short dynamic coach summary
+              → optional prior-conversation preview → chat input. */}
+          <View style={styles.insightsHeader}>
+            <Feather name="message-circle" size={14} color={c.accent} />
+            <Text style={[styles.insightsTitle, { color: c.foreground }]}>Your Coach</Text>
+          </View>
+
+          {(() => {
+            // Short dynamic coach summary. Prefer the context-aware lead
+            // phrase from planEngine (statusLabel) as the single-line
+            // opener, then optionally the richer coachInsight paragraph
+            // underneath when HealthKit data is available. Avoids the
+            // bubble appearing empty when coachInsight has no signal.
+            const lead = dailyPlan?.statusLabel?.trim();
+            const detail = coachInsight?.trim();
+            if (!lead && !detail) return null;
+            return (
+              <View style={{ gap: 6 }}>
+                {lead ? (
+                  <Text style={[styles.coachLeadText, { color: c.foreground }]}>{lead}</Text>
+                ) : null}
+                {detail && detail !== lead ? (
+                  <Text style={[styles.coachInsightText, { color: c.mutedForeground }]}>{detail}</Text>
+                ) : null}
               </View>
-              <Text style={[styles.coachInsightText, { color: c.foreground }]}>
-                {coachInsight}
-              </Text>
-            </View>
-          ) : null}
+            );
+          })()}
 
           {chatMessages.length > 0 && !showChat && (() => {
             const summary = summarizeCoachThread(chatMessages);
@@ -1740,6 +1760,15 @@ const styles = StyleSheet.create({
     fontFamily: "Montserrat_400Regular",
     lineHeight: 22,
     letterSpacing: -0.1,
+  },
+  // Lead phrase sits under the "Your Coach" header and acts as the one-line
+  // dynamic coach summary. Slightly heavier weight + tighter tracking than
+  // the detail paragraph to read as the primary line.
+  coachLeadText: {
+    fontSize: 15,
+    fontFamily: "Montserrat_600SemiBold",
+    lineHeight: 22,
+    letterSpacing: -0.2,
   },
   chatViewAll: {
     fontSize: 13,

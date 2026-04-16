@@ -34,7 +34,6 @@ const metricKeyMap: Record<string, MetricKey> = {
   "Resting HR": "restingHR",
   Sleep: "sleep",
   Steps: "steps",
-  Recovery: "recovery",
 };
 
 interface SparkMetric {

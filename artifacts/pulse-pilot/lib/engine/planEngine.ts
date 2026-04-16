@@ -969,11 +969,101 @@ export function generateDailyPlan(
     recoverySummary = "Recovery is low. Rest and hydration are the priority.";
   }
 
-  const statusLabel: import("@/types").DailyStatusLabel =
-    dailyState === "push" ? "You're in a good place today"
-    : dailyState === "build" ? "A few small adjustments will help today"
-    : dailyState === "maintain" ? "Let's make today a bit easier"
-    : "Your body may need more support today";
+  // Tailored, context-aware lead phrase. Selects a pool based on the
+  // strongest signal present (severe symptoms beat titration beats short
+  // sleep beats low energy beats mixed-signal beats dailyState tier),
+  // then picks a variant deterministically by date so the same day
+  // always gets the same phrase. 10+ distinct variants across buckets,
+  // warm and grounded rather than clinical.
+  const statusLabel: import("@/types").DailyStatusLabel = (() => {
+    // Note: `energy` (WellnessInputs) uses "low|medium|high|excellent",
+    // while glp1Inputs?.energy (EnergyDaily) uses "great|good|tired|
+    // depleted". We read each through its correct type so TS is happy and
+    // the conditions actually line up with real user inputs.
+    const glp1Energy = glp1Inputs?.energy ?? null;
+    const subjectiveGood =
+      feeling === "great" || energy === "excellent" || glp1Energy === "great";
+    const objectiveWeak =
+      (wearableAvailable && sleepHours < 7) ||
+      (typeof metrics.recoveryScore === "number" && metrics.recoveryScore < 55);
+    const objectiveStrong =
+      wearableAvailable && sleepHours >= 7.5 &&
+      (typeof metrics.recoveryScore !== "number" || metrics.recoveryScore >= 65);
+
+    let pool: string[];
+    if (symptomsSevere) {
+      pool = [
+        "Today's plan bends around what you're feeling. Rest, sips, nothing forced.",
+        "Your body is waving a stop sign and we're listening. A gentle day ahead.",
+        "Heavy symptoms today. The plan is soft on purpose.",
+      ];
+    } else if (digestionSevere) {
+      pool = [
+        "Digestion is struggling today. Bland, slow, and hydrated wins this one.",
+        "Your gut needs a break. Easy foods and small sips today.",
+        "Stomach's off today. We'll keep the plan forgiving.",
+      ];
+    } else if (medicationProfile?.recentTitration) {
+      pool = [
+        "Fresh dose in play. Expect your body to recalibrate, so hydrate early and eat light.",
+        "Titration weeks can be bumpy. Today's plan stays easy on purpose.",
+        "New dose, new rhythm. Take it gentle while your body adjusts.",
+      ];
+    } else if (wearableAvailable && sleepHours < 6) {
+      pool = [
+        "Short night. Let's protect your energy and keep today simple.",
+        "Running on reserves after a short sleep. No heroics today.",
+        "Sleep came up short. We'll match the plan to what you've got.",
+      ];
+    } else if (glp1Energy === "depleted" || glp1Energy === "tired" || energy === "low") {
+      pool = [
+        "Energy is running thin. The plan leans toward recovery, not output.",
+        "Today's a low-battery day. Small wins count for a lot.",
+        "You're not at full strength today. We'll meet the day as it is.",
+      ];
+    } else if (subjectiveGood && objectiveWeak) {
+      pool = [
+        "You feel good, but the numbers are a little behind. Let's not overcook it.",
+        "Spirit says go, body says ease. We'll split the difference today.",
+        "Mixed signals today. Good mood, tired metrics. Play it smart.",
+      ];
+    } else if (!subjectiveGood && objectiveStrong && symptomsModerate) {
+      pool = [
+        "Recovery looks solid even if you're not feeling it yet. Keep it steady.",
+        "Numbers are ahead of the mood today. The basics will carry you through.",
+      ];
+    } else if (dailyState === "push") {
+      pool = [
+        "Your signals line up. Today's a green-light day.",
+        "You're in a strong rhythm. Lean into it today.",
+        "Everything points to a steady, capable day. Use it well.",
+      ];
+    } else if (dailyState === "build") {
+      pool = [
+        "Today's solid with a couple of small tweaks to make it better.",
+        "You're steady. A few small moves will sharpen the day.",
+        "Mostly green with a nudge or two. Nothing dramatic.",
+      ];
+    } else if (dailyState === "maintain") {
+      pool = [
+        "Today calls for an easier gear. Keep the basics, skip the strain.",
+        "Simplify today. You'll feel steadier by tonight.",
+        "Not a push day. An easy-does-it day.",
+      ];
+    } else {
+      pool = [
+        "Recovery first today. Everything else can wait.",
+        "Your body is asking for a softer day. We're listening.",
+        "Today is for repair. Go easy and trust the process.",
+      ];
+    }
+
+    // Deterministic day-to-day rotation so the phrase is stable within a
+    // day but rotates across days without needing any random seed.
+    const d = new Date(metrics.date);
+    const dayKey = d.getFullYear() * 1000 + (d.getMonth() + 1) * 40 + d.getDate();
+    return pool[dayKey % pool.length];
+  })();
 
   const statusDrivers: string[] = [];
 

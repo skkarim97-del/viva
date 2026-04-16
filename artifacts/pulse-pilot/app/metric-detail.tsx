@@ -23,7 +23,6 @@ const METRIC_KEY_TO_TYPE: Record<string, AvailableMetricType> = {
   hrv: "hrv",
   steps: "steps",
   restingHR: "heartRate",
-  recovery: "heartRate",
 };
 
 export default function MetricDetailScreen() {
@@ -54,7 +53,7 @@ export default function MetricDetailScreen() {
             <Feather name="chevron-left" size={24} color={c.foreground} />
           </Pressable>
           <Text style={[styles.headerTitle, { color: c.foreground }]}>
-            {key === "sleep" ? "Sleep" : key === "hrv" ? "HRV" : key === "steps" ? "Steps" : key === "restingHR" ? "Heart Rate" : key === "recovery" ? "Recovery" : "Metric"}
+            {key === "sleep" ? "Sleep" : key === "hrv" ? "HRV" : key === "steps" ? "Steps" : key === "restingHR" ? "Heart Rate" : "Metric"}
           </Text>
           <View style={{ width: 24 }} />
         </View>
@@ -91,7 +90,6 @@ export default function MetricDetailScreen() {
       case "hrv": return todayMetrics.hrv ?? null;
       case "steps": return todayMetrics.steps;
       case "restingHR": return todayMetrics.restingHeartRate;
-      case "recovery": return todayMetrics.recoveryScore ?? null;
       case "weight": return todayMetrics.weight;
       case "activeCalories": return todayMetrics.activeCalories ?? null;
       default: return null;
@@ -105,7 +103,6 @@ export default function MetricDetailScreen() {
       case "sleep": return n.toFixed(1);
       case "hrv":
       case "restingHR":
-      case "recovery":
       case "steps":
       case "activeCalories":
         return Math.round(n).toLocaleString();
@@ -240,7 +237,6 @@ function getInsightForMetric(key: MetricKey, insights: any): string | null {
   switch (key) {
     case "sleep": return insights.sleepDebt.detail;
     case "hrv": return insights.hrvBaseline.detail;
-    case "recovery": return insights.recoveryTrend.detail;
     case "steps": return insights.calorieBalance.detail;
     case "weight": return insights.weightProjection.detail;
     case "restingHR": return insights.trainingLoad?.detail ?? "Resting heart rate reflects how your body is adapting to treatment. Lower values generally indicate better cardiovascular recovery.";

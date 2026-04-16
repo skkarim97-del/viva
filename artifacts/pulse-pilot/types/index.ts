@@ -134,11 +134,11 @@ export interface WorkoutEntry {
 
 export type DailyState = "recover" | "maintain" | "build" | "push";
 
-export type DailyStatusLabel =
-  | "You're in a good place today"
-  | "A few small adjustments will help today"
-  | "Let's make today a bit easier"
-  | "Your body may need more support today";
+// Was a fixed literal union of 4 canned phrases. Now a free-form string so
+// planEngine can surface a tailored, context-aware lead phrase (short sleep,
+// severe nausea, dose titration, mixed signals, green-light day, etc.).
+// Color is driven by plan.dailyState, not by the label text.
+export type DailyStatusLabel = string;
 
 export type ActionCategory = "move" | "fuel" | "recover" | "hydrate" | "consistent";
 
@@ -345,7 +345,10 @@ export const WEEKLY_OPTIONS: Record<ActionCategory, string[]> = Object.fromEntri
   ])
 ) as Record<ActionCategory, string[]>;
 
-export type MetricKey = "sleep" | "hrv" | "steps" | "restingHR" | "recovery" | "weight" | "activeCalories";
+// Recovery is a derived internal score that engines use but is never
+// surfaced to patients as a % in the UI. It is deliberately omitted from
+// MetricKey so no detail view, trend tile, or router path can reach it.
+export type MetricKey = "sleep" | "hrv" | "steps" | "restingHR" | "weight" | "activeCalories";
 
 export interface MetricDetail {
   key: MetricKey;

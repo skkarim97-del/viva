@@ -530,19 +530,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         savedProfileData = { ...savedProfileData, medicationProfile: defaultProfile.medicationProfile };
       }
 
+      // Nullable fields MUST be null when no wearable data exists. Using 0
+      // causes downstream engines, detail views, and correlation cards to
+      // render phantom "recovery is low" / "HRV has been low" copy from a
+      // fake zero. Leave steps / calories / sleepDuration as 0 since those
+      // are non-nullable in the type and 0 is a legitimate reading.
       const neutralMetrics: HealthMetrics = {
         date: todayDate,
         steps: 0,
         caloriesBurned: 0,
         activeCalories: 0,
-        restingHeartRate: 0,
-        hrv: 0,
-        weight: savedProfileData?.weight ?? 0,
+        restingHeartRate: null,
+        hrv: null,
+        weight: savedProfileData?.weight ?? null,
         sleepDuration: 0,
-        sleepQuality: 0,
-        recoveryScore: 0,
-        strain: 0,
-        vo2Max: 0,
+        sleepQuality: null,
+        recoveryScore: null,
+        strain: null,
       };
 
       const today = healthDataFound ? allMetrics[allMetrics.length - 1] : neutralMetrics;

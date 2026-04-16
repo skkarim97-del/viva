@@ -8,6 +8,7 @@ import type {
   NauseaLevel,
   DigestionStatus,
   DailyStatusLabel,
+  DailyState,
   AdaptiveInsight,
 } from "@/types";
 
@@ -31,11 +32,14 @@ export interface TodayViewOutput {
   insights: AdaptiveInsight[];
 }
 
-const STATUS_COLOR_MAP: Record<DailyStatusLabel, TodayStatusOutput["statusColor"]> = {
-  "You're in a good place today": "success",
-  "A few small adjustments will help today": "accent",
-  "Let's make today a bit easier": "warning",
-  "Your body may need more support today": "destructive",
+// Color is now driven by plan.dailyState so that any lead phrase text
+// produced by planEngine's context-aware selector still maps to the right
+// visual tone (green / accent / amber / red).
+const STATUS_COLOR_FOR_STATE: Record<DailyState, TodayStatusOutput["statusColor"]> = {
+  push: "success",
+  build: "accent",
+  maintain: "warning",
+  recover: "destructive",
 };
 
 export function generateGreeting(profile: UserProfile): string {
@@ -90,7 +94,7 @@ export function generateInputSummary(inputs: {
 export function generateTodayStatus(plan: DailyPlan): TodayStatusOutput {
   return {
     statusLabel: plan.statusLabel,
-    statusColor: STATUS_COLOR_MAP[plan.statusLabel] ?? "accent",
+    statusColor: STATUS_COLOR_FOR_STATE[plan.dailyState] ?? "accent",
     statusDrivers: plan.statusDrivers,
     headline: plan.headline,
     summary: plan.summary,

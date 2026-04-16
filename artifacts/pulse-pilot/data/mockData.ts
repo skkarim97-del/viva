@@ -176,13 +176,15 @@ function trendSummary(label: string, values: number[], trend: "up" | "down" | "s
 export function generateTrendDataFromMetrics(metrics: HealthMetrics[]): TrendData[] {
   if (!metrics || metrics.length === 0) return [];
 
+  // Recovery is intentionally omitted from patient-facing trend configs.
+  // It is a derived internal score, not a HealthKit metric, and surfacing
+  // it as a "%" confused users. Engines still use recoveryScore internally.
   const configs: { label: string; extract: (m: HealthMetrics) => number | null; unit: string }[] = [
     { label: "Weight", extract: (m) => m.weight, unit: "lbs" },
     { label: "HRV", extract: (m) => m.hrv, unit: "ms" },
     { label: "Resting HR", extract: (m) => m.restingHeartRate, unit: "bpm" },
     { label: "Sleep", extract: (m) => m.sleepDuration, unit: "hrs" },
     { label: "Steps", extract: (m) => m.steps, unit: "steps" },
-    { label: "Recovery", extract: (m) => m.recoveryScore, unit: "%" },
   ];
 
   return configs.map(({ label, extract, unit }) => {
@@ -209,7 +211,6 @@ export function getMetricDetail(
         case "hrv": value = m.hrv; break;
         case "steps": value = m.steps; break;
         case "restingHR": value = m.restingHeartRate; break;
-        case "recovery": value = m.recoveryScore; break;
         case "weight": value = m.weight; break;
         case "activeCalories": value = m.activeCalories ?? 0; break;
       }
@@ -336,34 +337,6 @@ export function getMetricDetail(
         unit: "bpm",
         secondaryLabel: "Today",
         secondaryValue: hasR ? `${r} bpm` : "--",
-      };
-    })(),
-    recovery: (() => {
-      const rec = todayMetrics.recoveryScore;
-      const hasRec = typeof rec === "number";
-      const avgRec = Math.round(avg28);
-      return {
-        title: "Recovery",
-        headline: avgRec === 0
-          ? "Not enough recovery data yet."
-          : avgRec >= 75
-          ? "Recovery has been strong over the last 4 weeks."
-          : avgRec >= 50
-          ? "Recovery has been moderate over the last 4 weeks."
-          : "Recovery has been low over the last 4 weeks.",
-        explanation: avgRec === 0
-          ? "Recovery is computed from HRV, resting heart rate, and sleep quality. It will appear once those are tracked."
-          : `4-week average: ${avgRec}. Last 7 days: ${Math.round(avg)}.`,
-        whatItMeans: "Recovery shows how prepared your body is for activity. On GLP-1, listening to recovery signals helps you stay consistent.",
-        recommendation: avgRec === 0
-          ? "Wear your device overnight to capture the inputs for recovery."
-          : avgRec < 50
-          ? "Lean into rest, hydration, and protein. Replace intense sessions with walks and stretching for the next week."
-          : "Use recovery to guide effort. Match training intensity to how your body is responding.",
-        currentValue: avgRec === 0 ? "--" : `${avgRec}`,
-        unit: "",
-        secondaryLabel: "Today",
-        secondaryValue: hasRec ? `${rec}` : "--",
       };
     })(),
     activeCalories: (() => {
