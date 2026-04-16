@@ -1,0 +1,68 @@
+Make the following UX, onboarding, and metrics fixes:
+
+1. App launch
+- Remove any extra in-app logo flash after opening the app
+- Keep launch clean and direct
+- Use the native splash transition only and go straight into the app shell
+
+2. Onboarding: time on medication
+Update the onboarding options for “How long have you been on this medication?” to use more cohort-accurate ranges:
+- Less than 1 month
+- 1 to 3 months
+- 3 to 6 months
+- 6 to 9 months
+- 9 to 12 months
+- 1 to 1.5 years
+- 1.5 to 2 years
+- 2+ years
+
+Make sure the saved values are analytics-friendly and consistently typed.
+
+3. Onboarding: reframe “what matters most”
+Rename/reframe this screen away from generic “preferences” language.
+Use language centered on lifestyle and treatment, for example:
+- What matters most during treatment
+or another equivalent treatment-focused framing.
+
+Update the options/copy so the screen feels tied to treatment and lifestyle priorities, not vague preferences.
+
+4. Onboarding validation
+Users must not be able to move to the next onboarding page unless every required response on the current page has been selected or completed.
+- Disable Next until valid
+- Apply this consistently across all onboarding screens
+- Use inline validation or clear disabled-state feedback as needed
+
+5. Today tab: add a clear key metrics section
+Add a header on the Today tab for today-specific metrics, such as:
+- Today’s Key Metrics
+
+Under this section, show today-specific values like:
+- Sleep
+- Steps
+- Active calories
+- other truly current-day metrics that are available
+
+This section should clearly represent today’s values, not averages.
+
+6. Trends tab labeling and metric logic
+Audit the Key Metrics section on Trends.
+Right now it says “4-week averages” but appears to show today’s metrics with a mini chart.
+
+Fix this inconsistency.
+
+Preferred behavior:
+- On the Trends tab, the top metric values should represent rolling 4-week averages or clearly defined trend-context values, not today-only values
+- The mini chart should match the label and time period shown
+- If a metric is today-only, label it explicitly as today and do not place it under a “4-week averages” heading
+
+The goal is to make it very clear that:
+- Today tab = today’s current metrics
+- Trends tab = rolling 4-week averages and multi-week trend context
+
+Please choose the cleanest implementation and make the labeling fully accurate and consistent.
+
+After changes, tell me:
+- whether the Today tab metric numbers are now today values
+- whether the Trends tab metric numbers are now 4-week averages or another clearly defined trend value
+- what time range the mini chart represents on Trends
+- every file changed

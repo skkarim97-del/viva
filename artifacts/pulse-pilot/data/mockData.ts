@@ -322,6 +322,24 @@ export function getMetricDetail(
         unit: "%",
       };
     })(),
+    activeCalories: (() => {
+      const cal = Math.round(todayMetrics.activeCalories || 0);
+      return {
+        title: "Active Calories",
+        headline: cal >= 400
+          ? "Strong activity today."
+          : cal >= 200
+          ? "Moderate activity today."
+          : "Light activity so far.",
+        explanation: `${cal} active calories today. 7-day average: ${Math.round(avg)} kcal.`,
+        whatItMeans: "Active calories reflect movement beyond your resting baseline. Consistent daily activity supports energy, mood, and treatment progress.",
+        recommendation: cal < 200
+          ? "Add a 15 to 20 minute walk this afternoon to lift your activity for the day."
+          : "Nice work. Keep movement consistent across the week.",
+        currentValue: `${cal}`,
+        unit: "kcal",
+      };
+    })(),
     weight: {
       title: "Weight",
       headline: trendDir === "down"

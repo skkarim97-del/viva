@@ -248,8 +248,8 @@ export default function DashboardScreen() {
   const allMetricItems: { key: MetricKey; label: string; value: string; unit: string; requiredType: string }[] = [
     { key: "sleep", label: "Sleep", value: todayMetrics.sleepDuration.toFixed(1), unit: "hrs", requiredType: "sleep" },
     { key: "steps", label: "Steps", value: todayMetrics.steps >= 1000 ? `${(todayMetrics.steps / 1000).toFixed(1)}` : `${todayMetrics.steps}`, unit: todayMetrics.steps >= 1000 ? "k" : "", requiredType: "steps" },
-    { key: "restingHR", label: "Heart Rate", value: `${todayMetrics.restingHeartRate}`, unit: "bpm", requiredType: "heartRate" },
-    { key: "hrv", label: "HRV", value: `${todayMetrics.hrv}`, unit: "ms", requiredType: "hrv" },
+    { key: "activeCalories", label: "Active Cal", value: `${Math.round(todayMetrics.activeCalories || 0)}`, unit: "kcal", requiredType: "calories" },
+    { key: "restingHR", label: "Heart Rate", value: typeof todayMetrics.restingHeartRate === "number" ? `${todayMetrics.restingHeartRate}` : "--", unit: "bpm", requiredType: "heartRate" },
   ];
   const metricItems = allMetricItems.filter(item => availableMetricTypes.includes(item.requiredType as any));
 
@@ -849,7 +849,11 @@ export default function DashboardScreen() {
         )}
 
         {hasHealthData && metricItems.length > 0 ? (
-          <View>
+          <View style={{ gap: 8 }}>
+            <View style={{ gap: 2, marginTop: 4 }}>
+              <Text style={[styles.todayMetricsTitle, { color: c.foreground }]}>Today's Key Metrics</Text>
+              <Text style={[styles.todayMetricsSub, { color: c.mutedForeground }]}>Today's values from Apple Health</Text>
+            </View>
             <View style={styles.metricsRow}>
               {metricItems.map((item) => (
                 <Pressable
@@ -1627,8 +1631,19 @@ const styles = StyleSheet.create({
 
   metricsRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 10,
     marginBottom: 16,
+  },
+  todayMetricsTitle: {
+    fontSize: 18,
+    fontFamily: "Montserrat_600SemiBold",
+    letterSpacing: -0.3,
+  },
+  todayMetricsSub: {
+    fontSize: 12,
+    fontFamily: "Montserrat_400Regular",
+    opacity: 0.7,
   },
   emptyHealthCard: {
     borderRadius: 20,

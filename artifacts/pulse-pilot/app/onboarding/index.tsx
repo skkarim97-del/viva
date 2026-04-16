@@ -107,7 +107,7 @@ export default function OnboardingScreen() {
   const [previousDose, setPreviousDose] = useState<DoseOption | null>(null);
   const [customPreviousDose, setCustomPreviousDose] = useState("");
 
-  const [timeOnMed, setTimeOnMed] = useState<"less_1_month" | "1_3_months" | "3_6_months" | "6_plus_months" | null>(null);
+  const [timeOnMed, setTimeOnMed] = useState<"less_1_month" | "1_3_months" | "3_6_months" | "6_9_months" | "9_12_months" | "1_1_5_years" | "1_5_2_years" | "2_plus_years" | null>(null);
 
   const [telehealthPlatform, setTelehealthPlatform] = useState<string | null>(null);
   const [customPlatform, setCustomPlatform] = useState("");
@@ -275,13 +275,31 @@ export default function OnboardingScreen() {
       case "goals": return selectedGoals.length > 0;
       case "medication": return medBrand !== null;
       case "dose":
-        if (medBrand === "other") return customDose.trim().length > 0;
+        if (medBrand === "other") {
+          return customMedName.trim().length > 0 && customDose.trim().length > 0 && !Number.isNaN(parseFloat(customDose));
+        }
         return selectedDose !== null;
-      case "titration": return recentTitration !== null;
+      case "titration":
+        if (recentTitration === null) return false;
+        if (recentTitration === true && medBrand === "other") {
+          return customPreviousDose.trim().length > 0 && !Number.isNaN(parseFloat(customPreviousDose));
+        }
+        return true;
       case "time_on_med": return timeOnMed !== null;
-      case "telehealth": return true;
+      case "telehealth":
+        if (telehealthPlatform === "Other") return customPlatform.trim().length > 0;
+        return true;
       case "side_effects": return selectedSideEffects.length > 0;
-      case "nutrition": return proteinConf !== null && hydrationConf !== null;
+      case "nutrition": {
+        const meals = parseInt(mealsPerDay, 10);
+        return (
+          proteinConf !== null &&
+          hydrationConf !== null &&
+          underEating !== null &&
+          strengthTraining !== null &&
+          !Number.isNaN(meals) && meals > 0
+        );
+      }
       case "activity": return activityLevel !== null;
       default: return true;
     }
@@ -359,8 +377,8 @@ export default function OnboardingScreen() {
 
           {step === "goals" && (
             <View style={styles.section}>
-              <Text style={[styles.stepTitle, { color: c.foreground }]}>What matters most{"\n"}to you?</Text>
-              <Text style={[styles.stepSub, { color: c.mutedForeground }]}>Select all that apply</Text>
+              <Text style={[styles.stepTitle, { color: c.foreground }]}>What matters most{"\n"}during treatment?</Text>
+              <Text style={[styles.stepSub, { color: c.mutedForeground }]}>Pick the lifestyle and treatment priorities you want Viva to support. Select all that apply.</Text>
               <View style={styles.goalGrid}>
                 {GOAL_OPTIONS.map((goal) => {
                   const selected = selectedGoals.includes(goal.id);

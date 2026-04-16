@@ -123,10 +123,16 @@ export const TELEHEALTH_PLATFORMS = [
 
 export const TIME_ON_MED_OPTIONS = [
   { key: "less_1_month" as const, label: "Less than 1 month" },
-  { key: "1_3_months" as const, label: "1-3 months" },
-  { key: "3_6_months" as const, label: "3-6 months" },
-  { key: "6_plus_months" as const, label: "6+ months" },
+  { key: "1_3_months" as const, label: "1 to 3 months" },
+  { key: "3_6_months" as const, label: "3 to 6 months" },
+  { key: "6_9_months" as const, label: "6 to 9 months" },
+  { key: "9_12_months" as const, label: "9 to 12 months" },
+  { key: "1_1_5_years" as const, label: "1 to 1.5 years" },
+  { key: "1_5_2_years" as const, label: "1.5 to 2 years" },
+  { key: "2_plus_years" as const, label: "2+ years" },
 ];
+
+export type TimeOnMedBucket = (typeof TIME_ON_MED_OPTIONS)[number]["key"];
 
 export function getBrandGeneric(brand: MedicationBrand): string {
   if (brand === "other") return "unknown";

@@ -28,7 +28,7 @@ export interface UserProfile {
 
   glp1Medication?: "semaglutide" | "tirzepatide" | "liraglutide" | "other";
   glp1Reason?: "weight_loss" | "metabolic_health" | "diabetes" | "other";
-  glp1Duration?: "less_1_month" | "1_3_months" | "3_6_months" | "6_plus_months";
+  glp1Duration?: "less_1_month" | "1_3_months" | "3_6_months" | "6_9_months" | "9_12_months" | "1_1_5_years" | "1_5_2_years" | "2_plus_years";
   glp1DoseOptional?: string;
   glp1InjectionDayOptional?: string;
   baselineSideEffects?: SideEffectType[];
@@ -56,7 +56,7 @@ export interface MedicationProfile {
   previousDoseUnit?: string | null;
   previousFrequency?: "weekly" | "daily" | null;
   doseChangeDate?: string | null;
-  timeOnMedicationBucket: "less_1_month" | "1_3_months" | "3_6_months" | "6_plus_months";
+  timeOnMedicationBucket: "less_1_month" | "1_3_months" | "3_6_months" | "6_9_months" | "9_12_months" | "1_1_5_years" | "1_5_2_years" | "2_plus_years";
   telehealthPlatform?: string | null;
   plannedDoseDay?: string | null;
 }
@@ -344,7 +344,7 @@ export const WEEKLY_OPTIONS: Record<ActionCategory, string[]> = Object.fromEntri
   ])
 ) as Record<ActionCategory, string[]>;
 
-export type MetricKey = "sleep" | "hrv" | "steps" | "restingHR" | "recovery" | "weight";
+export type MetricKey = "sleep" | "hrv" | "steps" | "restingHR" | "recovery" | "weight" | "activeCalories";
 
 export interface MetricDetail {
   key: MetricKey;

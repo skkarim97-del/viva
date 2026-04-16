@@ -295,7 +295,7 @@ export default function TrendsScreen() {
 
       <View style={styles.sectionWrap}>
         <Text style={[styles.sectionTitle, { color: c.foreground }]}>Key Metrics</Text>
-        <Text style={[styles.sectionSub, { color: c.mutedForeground }]}>{hasHealthData ? "4-week averages" : "Connect Apple Health for health metrics"}</Text>
+        <Text style={[styles.sectionSub, { color: c.mutedForeground }]}>{hasHealthData ? "Rolling 4-week averages. Mini chart shows weekly averages across the last 4 weeks." : "Connect Apple Health for health metrics"}</Text>
 
         {hasHealthData && (recoveryMetrics.length > 0 || activityMetrics.length > 0) ? (
           <>
