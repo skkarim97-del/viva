@@ -10,6 +10,8 @@ import {
   Modal,
 } from "react-native";
 
+import { router } from "expo-router";
+
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
@@ -316,6 +318,20 @@ export default function SettingsScreen() {
         })}
       </View>
 
+      {__DEV__ && (
+        <Pressable
+          onPress={() => router.push("/dev-qa")}
+          style={({ pressed }) => [
+            styles.devQaButton,
+            { backgroundColor: c.card, borderColor: c.border, opacity: pressed ? 0.7 : 1 },
+          ]}
+        >
+          <Feather name="tool" size={14} color="#FF9500" />
+          <Text style={[styles.devQaText, { color: c.foreground }]}>Dev QA · Tier debug</Text>
+          <Feather name="chevron-right" size={16} color={c.mutedForeground} />
+        </Pressable>
+      )}
+
       <Text style={[styles.disclaimer, { color: c.mutedForeground }]}>
         Viva is for informational purposes only and does not provide medical advice.
       </Text>
@@ -585,6 +601,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Montserrat_600SemiBold",
   },
+  devQaButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginHorizontal: 16,
+    marginBottom: 16,
+  },
+  devQaText: { flex: 1, fontSize: 14, fontWeight: "600" },
   disclaimer: {
     fontSize: 12,
     fontFamily: "Montserrat_400Regular",
