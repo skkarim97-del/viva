@@ -53,78 +53,44 @@ export async function connectAppleHealth(): Promise<{ success: boolean; error?: 
     return { success: false, error: "Apple Health requires an iOS device." };
   }
 
-  let AppleHealthKit: any = null;
-  try {
-    console.log("[HealthKit] Calling require('react-native-health')...");
-    AppleHealthKit = require("react-native-health");
-    _debugInfo.moduleLoaded = !!AppleHealthKit;
-    console.log("[HealthKit] require result:", typeof AppleHealthKit);
-    console.log("[HealthKit] keys:", AppleHealthKit ? Object.keys(AppleHealthKit).slice(0, 25) : "null");
-    notifyDebug();
-  } catch (e: any) {
-    _debugInfo.moduleLoaded = false;
-    _debugInfo.initFunctionExists = false;
-    _debugInfo.rawErrorText = `require failed: ${e?.message || e}`;
-    console.log("[HealthKit] require failed:", e?.message || e);
-    notifyDebug();
-    return { success: false, error: _debugInfo.rawErrorText };
-  }
+  const AppleHealthKit = require("react-native-health");
 
+  _debugInfo.moduleLoaded = !!AppleHealthKit;
   _debugInfo.initFunctionExists = typeof AppleHealthKit?.initHealthKit === "function";
+  console.log("[HealthKit] module keys:", AppleHealthKit ? Object.keys(AppleHealthKit).slice(0, 25) : "null");
   console.log("[HealthKit] typeof initHealthKit:", typeof AppleHealthKit?.initHealthKit);
   notifyDebug();
 
-  if (!_debugInfo.initFunctionExists) {
-    _debugInfo.rawErrorText = `initHealthKit is ${typeof AppleHealthKit?.initHealthKit}, not function. Keys: ${AppleHealthKit ? Object.keys(AppleHealthKit).join(", ") : "null"}`;
-    console.log("[HealthKit] FAIL:", _debugInfo.rawErrorText);
-    notifyDebug();
-    return { success: false, error: _debugInfo.rawErrorText };
-  }
-
-  const perms = AppleHealthKit?.Constants?.Permissions;
-  const readPerms: any[] = [];
-  if (perms) {
-    if (perms.StepCount) readPerms.push(perms.StepCount);
-    if (perms.HeartRate) readPerms.push(perms.HeartRate);
-    if (perms.SleepAnalysis) readPerms.push(perms.SleepAnalysis);
-  }
-  console.log("[HealthKit] Permissions resolved:", readPerms.length, "read types");
-
   const options = {
     permissions: {
-      read: readPerms,
+      read: [
+        AppleHealthKit?.Constants?.Permissions?.StepCount,
+        AppleHealthKit?.Constants?.Permissions?.HeartRate,
+        AppleHealthKit?.Constants?.Permissions?.SleepAnalysis,
+      ].filter(Boolean),
       write: [],
     },
   };
 
   _debugInfo.initCalled = true;
   notifyDebug();
-  console.log("[HealthKit] Calling initHealthKit NOW...");
+  console.log("[HealthKit] Calling initHealthKit NOW with options:", JSON.stringify(options));
 
   return new Promise<{ success: boolean; error?: string }>((resolve) => {
-    try {
-      AppleHealthKit.initHealthKit(options, (err: string) => {
-        _debugInfo.callbackReached = true;
-        console.log("[HealthKit] initHealthKit callback reached. err:", err || "none");
+    AppleHealthKit.initHealthKit(options, (err: string, results: any) => {
+      _debugInfo.callbackReached = true;
+      console.log("[HealthKit] initHealthKit callback. err:", err || "none", "results:", results);
 
-        if (err) {
-          _debugInfo.initSucceeded = false;
-          _debugInfo.rawErrorText = `callback error: ${err}`;
-        } else {
-          _debugInfo.initSucceeded = true;
-          _debugInfo.rawErrorText = null;
-        }
-        notifyDebug();
-        resolve(err ? { success: false, error: `initHealthKit: ${err}` } : { success: true });
-      });
-    } catch (e: any) {
-      _debugInfo.callbackReached = false;
-      _debugInfo.initSucceeded = false;
-      _debugInfo.rawErrorText = `initHealthKit threw: ${e?.message || e}`;
-      console.log("[HealthKit] initHealthKit threw:", e?.message || e);
+      if (err) {
+        _debugInfo.initSucceeded = false;
+        _debugInfo.rawErrorText = `callback error: ${err}`;
+      } else {
+        _debugInfo.initSucceeded = true;
+        _debugInfo.rawErrorText = null;
+      }
       notifyDebug();
-      resolve({ success: false, error: _debugInfo.rawErrorText });
-    }
+      resolve(err ? { success: false, error: `initHealthKit: ${err}` } : { success: true });
+    });
   });
 }
 
