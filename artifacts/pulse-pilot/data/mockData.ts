@@ -211,147 +211,196 @@ export function getMetricDetail(
         case "restingHR": value = m.restingHeartRate; break;
         case "recovery": value = m.recoveryScore; break;
         case "weight": value = m.weight; break;
+        case "activeCalories": value = m.activeCalories ?? 0; break;
       }
       return { date: m.date, value };
     })
     .filter((d): d is { date: string; value: number } => typeof d.value === "number");
 
+  // 28-day rolling average matches the framing on the Trends tab cards.
+  const last28 = trendData.slice(-28);
+  const avg28 = last28.length > 0 ? last28.reduce((s, d) => s + d.value, 0) / last28.length : 0;
+  // 7-day window for short-term comparison and sleep "last night" interpretation.
   const recent = trendData.slice(-7);
   const avg = recent.length > 0 ? recent.reduce((s, d) => s + d.value, 0) / recent.length : 0;
   const current = trendData.length > 0 ? trendData[trendData.length - 1].value : 0;
+  // Trend direction compares the most recent week to the prior 3 weeks so
+  // the arrow reflects multi-week movement, not a single-day blip.
+  const prior21 = last28.slice(0, Math.max(0, last28.length - 7));
+  const prior21Avg = prior21.length > 0 ? prior21.reduce((s, d) => s + d.value, 0) / prior21.length : avg28;
+  const recent7Avg = avg;
   const trendDir: "up" | "down" | "stable" =
-    current > avg * 1.03 ? "up" : current < avg * 0.97 ? "down" : "stable";
+    prior21Avg === 0
+      ? "stable"
+      : recent7Avg > prior21Avg * 1.03 ? "up"
+      : recent7Avg < prior21Avg * 0.97 ? "down"
+      : "stable";
 
+  // Detail pages match the Trends tab framing: the hero number is the
+  // 28-day rolling average, with the latest reading shown as a secondary
+  // stat. Headlines and recommendations describe the recent multi-week
+  // pattern, not a single-day blip.
   const details: Record<MetricKey, Omit<MetricDetail, "key" | "trend">> = {
-    sleep: {
-      title: "Sleep",
-      headline: todayMetrics.sleepDuration >= 7.5
-        ? "You slept well."
-        : todayMetrics.sleepDuration >= 6.5
-        ? "Sleep was okay."
-        : "Sleep was short last night.",
-      explanation: `${todayMetrics.sleepDuration.toFixed(1)} hours last night. 7-day average: ${avg.toFixed(1)} hours.`,
-      whatItMeans: "Sleep is when your body recovers and adjusts to treatment. Consistent sleep supports energy, appetite regulation, and side effect management.",
-      recommendation: todayMetrics.sleepDuration < 7
-        ? "Try winding down 30 minutes earlier tonight. Keep the room cool and dark."
-        : "Keep this up. Consistent sleep supports your treatment.",
-      currentValue: `${todayMetrics.sleepDuration.toFixed(1)}`,
-      unit: "hrs",
-    },
+    sleep: (() => {
+      const tonight = todayMetrics.sleepDuration;
+      return {
+        title: "Sleep",
+        headline: avg28 >= 7.5
+          ? "Sleep is averaging well over the last 4 weeks."
+          : avg28 >= 6.5
+          ? "Sleep is in an okay range across the last 4 weeks."
+          : "Sleep has been short across the last 4 weeks.",
+        explanation: `4-week average: ${avg28.toFixed(1)} hrs. Last 7 days: ${avg.toFixed(1)} hrs. Last night: ${tonight.toFixed(1)} hrs.`,
+        whatItMeans: "Sleep is when your body recovers and adjusts to treatment. Consistent sleep supports energy, appetite regulation, and side effect management.",
+        recommendation: avg28 < 7
+          ? "Aim to add 20 to 30 minutes to your nightly sleep over the next 2 weeks. Keep the room cool and dark and protect a consistent bedtime."
+          : "Strong baseline. Keep your wind-down routine consistent through the week.",
+        currentValue: `${avg28.toFixed(1)}`,
+        unit: "hrs",
+        secondaryLabel: "Last night",
+        secondaryValue: `${tonight.toFixed(1)} hrs`,
+      };
+    })(),
     hrv: (() => {
       const h = todayMetrics.hrv;
       const hasHrv = typeof h === "number";
+      const avgHrv = Math.round(avg28);
       return {
         title: "Heart Rate Variability",
-        headline: !hasHrv
-          ? "No HRV data yet."
-          : h >= 45
-          ? "HRV looks good. Recovery is on track."
-          : h >= 35
-          ? "HRV is slightly below average."
-          : "HRV is low. Your body needs more rest.",
-        explanation: hasHrv ? `${h} ms today. 7-day average: ${Math.round(avg)} ms.` : `No readings for today. Wear your device overnight to capture HRV.`,
+        headline: avgHrv === 0
+          ? "Not enough HRV history yet."
+          : avgHrv >= 45
+          ? "HRV has been strong over the last 4 weeks."
+          : avgHrv >= 35
+          ? "HRV is slightly below average over the last 4 weeks."
+          : "HRV has been low over the last 4 weeks.",
+        explanation: avgHrv === 0
+          ? "HRV will appear here once your device captures readings overnight."
+          : `4-week average: ${avgHrv} ms. Last 7 days: ${Math.round(avg)} ms.`,
         whatItMeans: "HRV reflects how well-recovered your nervous system is. Higher values mean your body is handling stress well.",
-        recommendation: !hasHrv
-          ? "Keep your device on overnight for a reading."
-          : h < 38
-          ? "Take it easy. Focus on hydration, gentle movement, and rest."
-          : "HRV supports activity today. Listen to your body.",
-        currentValue: hasHrv ? `${h}` : "--",
+        recommendation: avgHrv === 0
+          ? "Keep your device on overnight to begin tracking HRV."
+          : avgHrv < 38
+          ? "Prioritize hydration, sleep, and gentle movement over the next 2 weeks. Pull back on intense effort on lower-HRV days."
+          : "Use HRV as a cue. Train harder on stronger days, ease back when it dips.",
+        currentValue: avgHrv === 0 ? "--" : `${avgHrv}`,
         unit: "ms",
+        secondaryLabel: "Today",
+        secondaryValue: hasHrv ? `${h} ms` : "--",
       };
     })(),
-    steps: {
-      title: "Daily Steps",
-      headline: todayMetrics.steps >= 7000
-        ? "Good movement today."
-        : todayMetrics.steps >= 4000
-        ? "Partway to your movement goal."
-        : "Movement has been light today.",
-      explanation: `${todayMetrics.steps.toLocaleString()} steps. 7-day average: ${Math.round(avg).toLocaleString()}.`,
-      whatItMeans: "Gentle daily movement supports digestion, energy, and treatment effectiveness. Walking after meals can help with nausea.",
-      recommendation: todayMetrics.steps < 5000
-        ? "A 15-minute walk after your next meal can help with energy and digestion."
-        : "On track. Keep moving throughout the day.",
-      currentValue: todayMetrics.steps.toLocaleString(),
-      unit: "steps",
-    },
+    steps: (() => {
+      const today = todayMetrics.steps;
+      const avgRounded = Math.round(avg28);
+      return {
+        title: "Daily Steps",
+        headline: avgRounded >= 7000
+          ? "Movement has been consistent over the last 4 weeks."
+          : avgRounded >= 4000
+          ? "Movement is moderate over the last 4 weeks."
+          : "Movement has been light over the last 4 weeks.",
+        explanation: `4-week average: ${avgRounded.toLocaleString()} steps/day. Last 7 days: ${Math.round(avg).toLocaleString()}.`,
+        whatItMeans: "Gentle daily movement supports digestion, energy, and treatment effectiveness. Walking after meals can help with nausea.",
+        recommendation: avgRounded < 5000
+          ? "Add a 15 to 20 minute walk after one meal each day. Small, repeatable steps compound over weeks on treatment."
+          : "Strong movement baseline. Keep walks daily and add a longer one once or twice a week.",
+        currentValue: avgRounded.toLocaleString(),
+        unit: "/day",
+        secondaryLabel: "Today",
+        secondaryValue: today.toLocaleString(),
+      };
+    })(),
     restingHR: (() => {
       const r = todayMetrics.restingHeartRate;
       const hasR = typeof r === "number";
+      const avgRHR = Math.round(avg28);
       return {
         title: "Resting Heart Rate",
-        headline: !hasR
-          ? "No resting HR yet."
-          : r <= 60
-          ? "Resting heart rate is excellent."
-          : r <= 68
-          ? "Resting heart rate is normal."
-          : "Resting heart rate is elevated.",
-        explanation: hasR ? `${r} bpm today. 7-day average: ${Math.round(avg)} bpm.` : "No resting HR captured today. This is measured during sleep.",
+        headline: avgRHR === 0
+          ? "Not enough resting HR data yet."
+          : avgRHR <= 60
+          ? "Resting heart rate has been excellent over the last 4 weeks."
+          : avgRHR <= 68
+          ? "Resting heart rate has been in a normal range."
+          : "Resting heart rate has been elevated over the last 4 weeks.",
+        explanation: avgRHR === 0
+          ? "Resting HR is captured during sleep. Wear your device overnight to begin tracking."
+          : `4-week average: ${avgRHR} bpm. Last 7 days: ${Math.round(avg)} bpm.`,
         whatItMeans: "Resting heart rate reflects overall cardiovascular health and recovery status.",
-        recommendation: !hasR
+        recommendation: avgRHR === 0
           ? "Wear your device overnight to capture resting HR."
-          : r > 66
-          ? "Elevated resting HR may mean more recovery or hydration is needed."
+          : avgRHR > 66
+          ? "Elevated baseline can reflect under-recovery or under-hydration. Focus on sleep, fluids, and easy aerobic movement."
           : "In a healthy range. Keep up your routine.",
-        currentValue: hasR ? `${r}` : "--",
+        currentValue: avgRHR === 0 ? "--" : `${avgRHR}`,
         unit: "bpm",
+        secondaryLabel: "Today",
+        secondaryValue: hasR ? `${r} bpm` : "--",
       };
     })(),
     recovery: (() => {
       const rec = todayMetrics.recoveryScore;
       const hasRec = typeof rec === "number";
+      const avgRec = Math.round(avg28);
       return {
         title: "Recovery",
-        headline: !hasRec
-          ? "No recovery score yet."
-          : rec >= 75
-          ? "Recovery is strong."
-          : rec >= 50
-          ? "Recovery is moderate."
-          : "Recovery is low. Take it easy.",
-        explanation: hasRec ? `Recovery is at ${rec}%. Based on HRV, resting heart rate, and sleep quality.` : "Recovery score will appear once HRV and sleep data are available.",
+        headline: avgRec === 0
+          ? "Not enough recovery data yet."
+          : avgRec >= 75
+          ? "Recovery has been strong over the last 4 weeks."
+          : avgRec >= 50
+          ? "Recovery has been moderate over the last 4 weeks."
+          : "Recovery has been low over the last 4 weeks.",
+        explanation: avgRec === 0
+          ? "Recovery is computed from HRV, resting heart rate, and sleep quality. It will appear once those are tracked."
+          : `4-week average: ${avgRec}. Last 7 days: ${Math.round(avg)}.`,
         whatItMeans: "Recovery shows how prepared your body is for activity. On GLP-1, listening to recovery signals helps you stay consistent.",
-        recommendation: !hasRec
+        recommendation: avgRec === 0
           ? "Wear your device overnight to capture the inputs for recovery."
-          : rec < 50
-          ? "Focus on rest, hydration, and protein today. Skip intense activity."
-          : "Recovery supports activity today. Match effort to how you feel.",
-        currentValue: hasRec ? `${rec}` : "--",
-        unit: "%",
+          : avgRec < 50
+          ? "Lean into rest, hydration, and protein. Replace intense sessions with walks and stretching for the next week."
+          : "Use recovery to guide effort. Match training intensity to how your body is responding.",
+        currentValue: avgRec === 0 ? "--" : `${avgRec}`,
+        unit: "",
+        secondaryLabel: "Today",
+        secondaryValue: hasRec ? `${rec}` : "--",
       };
     })(),
     activeCalories: (() => {
-      const cal = Math.round(todayMetrics.activeCalories || 0);
+      const today = Math.round(todayMetrics.activeCalories || 0);
+      const avgCal = Math.round(avg28);
       return {
         title: "Active Calories",
-        headline: cal >= 400
-          ? "Strong activity today."
-          : cal >= 200
-          ? "Moderate activity today."
-          : "Light activity so far.",
-        explanation: `${cal} active calories today. 7-day average: ${Math.round(avg)} kcal.`,
+        headline: avgCal >= 400
+          ? "Activity has been strong over the last 4 weeks."
+          : avgCal >= 200
+          ? "Activity has been moderate over the last 4 weeks."
+          : "Activity has been light over the last 4 weeks.",
+        explanation: `4-week average: ${avgCal} kcal/day. Last 7 days: ${Math.round(avg)} kcal/day.`,
         whatItMeans: "Active calories reflect movement beyond your resting baseline. Consistent daily activity supports energy, mood, and treatment progress.",
-        recommendation: cal < 200
-          ? "Add a 15 to 20 minute walk this afternoon to lift your activity for the day."
-          : "Nice work. Keep movement consistent across the week.",
-        currentValue: `${cal}`,
-        unit: "kcal",
+        recommendation: avgCal < 200
+          ? "Build the habit by adding one short walk each day. Aim for 200 to 300 active calories on most days."
+          : "Solid baseline. Keep movement consistent across the week.",
+        currentValue: `${avgCal}`,
+        unit: "kcal/day",
+        secondaryLabel: "Today",
+        secondaryValue: `${today} kcal`,
       };
     })(),
     weight: {
       title: "Weight",
       headline: trendDir === "down"
-        ? "Weight is trending down."
+        ? "Weight is trending down over the last 4 weeks."
         : trendDir === "up"
-        ? "Weight has been trending up."
-        : "Weight is stable.",
-      explanation: `${todayMetrics.weight} lbs today. 7-day average: ${avg.toFixed(1)} lbs.`,
+        ? "Weight has been trending up over the last 4 weeks."
+        : "Weight has been stable over the last 4 weeks.",
+      explanation: `4-week average: ${avg28.toFixed(1)} lbs. Last 7 days: ${avg.toFixed(1)} lbs.`,
       whatItMeans: "Weight changes on GLP-1 are expected. Focus on the weekly trend, not daily fluctuations. Preserving muscle matters as much as the number.",
       recommendation: "Weigh yourself at the same time each day. Focus on protein and strength training to preserve muscle.",
-      currentValue: `${todayMetrics.weight}`,
+      currentValue: `${avg28.toFixed(1)}`,
       unit: "lbs",
+      secondaryLabel: "Today",
+      secondaryValue: `${todayMetrics.weight} lbs`,
     },
   };
 

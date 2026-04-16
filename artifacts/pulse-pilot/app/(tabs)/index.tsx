@@ -849,8 +849,8 @@ export default function DashboardScreen() {
         )}
 
         {hasHealthData && metricItems.length > 0 ? (
-          <View style={{ gap: 8 }}>
-            <View style={{ gap: 2, marginTop: 4 }}>
+          <View style={{ gap: 10, marginTop: 8 }}>
+            <View style={{ gap: 4 }}>
               <Text style={[styles.todayMetricsTitle, { color: c.foreground }]}>Today's Key Metrics</Text>
               <Text style={[styles.todayMetricsSub, { color: c.mutedForeground }]}>Today's values from Apple Health</Text>
             </View>
@@ -1641,8 +1641,9 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   todayMetricsSub: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: "Montserrat_400Regular",
+    marginBottom: 2,
     opacity: 0.7,
   },
   emptyHealthCard: {

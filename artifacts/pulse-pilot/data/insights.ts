@@ -370,8 +370,14 @@ export interface HabitStats {
 export function computeHabitStats(history: CompletionRecord[]): HabitStats {
   const todayDate = new Date().toISOString().split("T")[0];
   const todayRecord = history.find(r => r.date === todayDate);
-  const todayCompleted = todayRecord ? todayRecord.actions.filter(a => a.completed).length : 0;
-  const todayTotal = todayRecord ? todayRecord.actions.length : 5;
+  // Only count actionable items. The "consistent" category is a passive
+  // streak marker and is intentionally hidden from the Today checklist,
+  // so it must not inflate the "X of Y actions" count on Trends.
+  const todayActions = todayRecord
+    ? todayRecord.actions.filter(a => a.category !== "consistent")
+    : [];
+  const todayCompleted = todayActions.filter(a => a.completed).length;
+  const todayTotal = todayActions.length || (todayRecord ? 0 : 4);
 
   const last7 = history.filter(r => {
     const d = new Date(r.date);

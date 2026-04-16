@@ -20,6 +20,7 @@ import {
   MEDICATION_DATABASE,
   getDoseOptions,
   getMedicationFrequency,
+  normalizeBrand,
   type MedicationBrand,
 } from "@/data/medicationData";
 import type { MedicationProfile } from "@/types";
@@ -39,7 +40,18 @@ type MedDraft = {
   doseValue: number;
   doseUnit: string;
   frequency: "weekly" | "daily";
+  plannedDoseDay: string | null;
 };
+
+const DOSE_DAY_OPTIONS: { key: string; label: string }[] = [
+  { key: "monday", label: "Mon" },
+  { key: "tuesday", label: "Tue" },
+  { key: "wednesday", label: "Wed" },
+  { key: "thursday", label: "Thu" },
+  { key: "friday", label: "Fri" },
+  { key: "saturday", label: "Sat" },
+  { key: "sunday", label: "Sun" },
+];
 
 export default function SettingsScreen() {
   const c = useColors();
@@ -81,23 +93,34 @@ export default function SettingsScreen() {
   };
 
   const openMedEditor = () => {
-    const mp = profile.medicationProfile;
-    if (mp) {
-      setMedDraft({
-        brand: mp.medicationBrand as MedicationBrand,
-        doseValue: mp.doseValue,
-        doseUnit: mp.doseUnit,
-        frequency: (mp.frequency as "weekly" | "daily") || "weekly",
-      });
-    } else {
-      setMedDraft({
-        brand: "wegovy",
-        doseValue: 0.25,
-        doseUnit: "mg",
-        frequency: "weekly",
-      });
+    try {
+      const mp = profile.medicationProfile;
+      if (mp) {
+        // Brand may have been stored as a display name ("Mounjaro") by an
+        // earlier seed/build. Normalize to a known MedicationBrand key so
+        // dose options and chip selection work safely.
+        setMedDraft({
+          brand: normalizeBrand(mp.medicationBrand),
+          doseValue: typeof mp.doseValue === "number" ? mp.doseValue : 0.25,
+          doseUnit: mp.doseUnit || "mg",
+          frequency: (mp.frequency === "daily" ? "daily" : "weekly"),
+          plannedDoseDay: mp.plannedDoseDay ?? null,
+        });
+      } else {
+        setMedDraft({
+          brand: "wegovy",
+          doseValue: 0.25,
+          doseUnit: "mg",
+          frequency: "weekly",
+          plannedDoseDay: null,
+        });
+      }
+      setMedModalOpen(true);
+    } catch (e: any) {
+      if (typeof __DEV__ !== "undefined" && __DEV__) console.log("[Settings] openMedEditor failed:", e);
+      setMedDraft({ brand: "wegovy", doseValue: 0.25, doseUnit: "mg", frequency: "weekly", plannedDoseDay: null });
+      setMedModalOpen(true);
     }
-    setMedModalOpen(true);
   };
 
   const saveMedDraft = () => {
@@ -129,7 +152,7 @@ export default function SettingsScreen() {
         previousFrequency: existing?.previousFrequency ?? null,
         doseChangeDate: existing?.doseChangeDate ?? null,
         telehealthPlatform: existing?.telehealthPlatform ?? null,
-        plannedDoseDay: existing?.plannedDoseDay ?? null,
+        plannedDoseDay: medDraft.frequency === "weekly" ? medDraft.plannedDoseDay : null,
       };
       updateProfile({ medicationProfile: next });
       setMedModalOpen(false);
@@ -149,6 +172,7 @@ export default function SettingsScreen() {
         doseValue: medDraft.doseValue,
         doseUnit: medDraft.doseUnit,
         frequency: medDraft.frequency,
+        plannedDoseDay: medDraft.plannedDoseDay,
       });
       return;
     }
@@ -160,6 +184,7 @@ export default function SettingsScreen() {
       doseValue: first?.value ?? medDraft.doseValue,
       doseUnit: first?.unit ?? medDraft.doseUnit,
       frequency: freq,
+      plannedDoseDay: freq === "weekly" ? medDraft.plannedDoseDay : null,
     });
   };
 
@@ -482,7 +507,11 @@ export default function SettingsScreen() {
                 return (
                   <Pressable
                     key={f}
-                    onPress={() => medDraft && setMedDraft({ ...medDraft, frequency: f })}
+                    onPress={() => medDraft && setMedDraft({
+                      ...medDraft,
+                      frequency: f,
+                      plannedDoseDay: f === "weekly" ? medDraft.plannedDoseDay : null,
+                    })}
                     style={({ pressed }) => [
                       styles.chip,
                       { backgroundColor: selected ? c.accent : c.background, opacity: pressed ? 0.8 : 1 },
@@ -495,6 +524,32 @@ export default function SettingsScreen() {
                 );
               })}
             </View>
+
+            {medDraft?.frequency === "weekly" && (
+              <>
+                <Text style={[styles.fieldLabel, { color: c.mutedForeground }]}>Dose day</Text>
+                <View style={styles.chipRow}>
+                  {DOSE_DAY_OPTIONS.map(opt => {
+                    const selected = medDraft.plannedDoseDay === opt.key;
+                    return (
+                      <Pressable
+                        key={opt.key}
+                        onPress={() => setMedDraft({
+                          ...medDraft,
+                          plannedDoseDay: selected ? null : opt.key,
+                        })}
+                        style={({ pressed }) => [
+                          styles.chip,
+                          { backgroundColor: selected ? c.accent : c.background, opacity: pressed ? 0.8 : 1 },
+                        ]}
+                      >
+                        <Text style={[styles.chipText, { color: selected ? "#fff" : c.foreground }]}>{opt.label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </>
+            )}
 
             <View style={styles.modalButtons}>
               <Pressable onPress={() => setMedModalOpen(false)} style={[styles.modalButton, { backgroundColor: c.background }]}>

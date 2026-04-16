@@ -144,14 +144,25 @@ export function getBrandDisplayName(brand: MedicationBrand): string {
   return MEDICATION_DATABASE[brand].displayName;
 }
 
-export function getDoseOptions(brand: MedicationBrand): DoseOption[] {
-  if (brand === "other") return [];
-  return MEDICATION_DATABASE[brand].doses;
+export function getDoseOptions(brand: MedicationBrand | string): DoseOption[] {
+  if (!brand || brand === "other") return [];
+  const key = String(brand).toLowerCase() as Exclude<MedicationBrand, "other">;
+  const info = MEDICATION_DATABASE[key];
+  return info ? info.doses : [];
 }
 
-export function getMedicationFrequency(brand: MedicationBrand): "weekly" | "daily" {
-  if (brand === "other") return "weekly";
-  return MEDICATION_DATABASE[brand].frequency;
+export function getMedicationFrequency(brand: MedicationBrand | string): "weekly" | "daily" {
+  if (!brand || brand === "other") return "weekly";
+  const key = String(brand).toLowerCase() as Exclude<MedicationBrand, "other">;
+  const info = MEDICATION_DATABASE[key];
+  return info ? info.frequency : "weekly";
+}
+
+export function normalizeBrand(brand: string | undefined | null): MedicationBrand {
+  if (!brand) return "other";
+  const key = String(brand).toLowerCase();
+  if (key === "other") return "other";
+  return (key in MEDICATION_DATABASE) ? (key as MedicationBrand) : "other";
 }
 
 export function getDoseTier(brand: MedicationBrand | string, doseValue: number): "low" | "mid" | "high" {

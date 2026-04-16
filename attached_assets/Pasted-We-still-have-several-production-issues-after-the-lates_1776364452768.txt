@@ -1,0 +1,84 @@
+We still have several production issues after the latest build. Please fix the following carefully.
+
+1. Trends metric detail consistency
+Current problem:
+- On Trends, the top-level Key Metrics section says values are rolling 4-week averages and the mini chart shows weekly averages across the last 4 weeks
+- But when tapping a metric like Sleep, the detail screen switches to a today-focused value (for example 4.9 hours today), compares to a 7-day average, and shows a 30-day trend
+- This feels inconsistent with the top-level Trends framing
+
+Required fix:
+- Make Trends metric drill-down pages consistent with the Trends tab framing
+- If the top-level metric is a rolling 4-week average, the detail view should primarily reflect that same trend-based context
+- The detail screen should not unexpectedly pivot to today-first framing unless clearly separated and labeled as a secondary section
+
+Preferred implementation:
+For each Trends metric detail page:
+- primary number = rolling 4-week average or the same metric definition used on the Trends card
+- supporting chart = trend-consistent time range that matches the card framing
+- interpretation = based on recent multi-week pattern
+- if you also want to show the latest/today value, show it only as a secondary clearly labeled stat such as “Latest value” or “Today”
+
+Apply this consistently for Sleep, Steps, Active Calories, and other drill-down metrics.
+
+2. Trends “4 of 5 actions” bug still exists
+Current issue:
+- Under Trends / What We’re Noticing it still says “4 of 5 actions done today”
+- We only have 4 actions, so it must say 4 of 4
+
+Please find the stale count source and fix it fully.
+
+3. Today tab spacing / formatting cleanup
+Current issue:
+- The spacing between “Today’s Key Metrics” and “Today’s values from Apple Health” on the Today tab does not look as polished as the spacing/layout on the Trends tab
+- Trends spacing looks cleaner and more balanced
+
+Please adjust the Today tab spacing, padding, and text layout so it visually matches the cleaner Trends formatting.
+
+4. Coach still not working in production
+Current issue:
+- Coach now shows a more explicit message saying it cannot reach the deployed /api endpoint and that the network request failed
+- So the error handling improved, but the feature still does not work
+
+Please debug the exact production client-side failure again and find the true root cause.
+Required:
+- verify the exact production URL being used on device
+- verify request method, headers, and payload
+- verify whether the request is leaving the device
+- verify whether this is a transport issue, ATS/HTTPS issue, route mismatch, timeout, or payload serialization problem
+- compare the full coach screen and Today coach card again to ensure they use the exact same shared client
+- return the exact root cause, not a guess
+
+5. Keyboard dismissal still not fully fixed
+Current issue:
+- after leaving the coach section, the keyboard can still remain visible
+
+Please ensure keyboard dismissal happens reliably on:
+- navigation away from coach
+- collapse/close of coach surface
+- transition from coach preview to other tabs/screens where relevant
+
+6. Settings medication/dosage editing still broken
+Current issue:
+- clicking Medication or Dosage in Settings still causes “Something went wrong. Please reload the app to continue.”
+
+Please fully fix this production bug.
+Requirements:
+- treatment editing in Settings must work like the weight editing flow
+- reuse onboarding medication option sets and cadence logic
+- support both daily and weekly GLP-1 flows
+- ensure the saved treatment object matches the exact schema required downstream
+- identify the true root cause of the crash if it is still happening in practice
+
+Please test specifically:
+- Wegovy / weekly
+- Saxenda / daily
+- changing dose only
+- changing medication entirely
+- “other” medication path if supported
+
+After fixes, report back with:
+1. exact root cause of the current coach production failure
+2. exact root cause of the Settings treatment-edit crash
+3. how Trends metric drill-downs are now defined
+4. confirmation that the action count now shows 4 of 4
+5. files changed

@@ -29,6 +29,7 @@ export interface UserProfile {
   glp1Medication?: "semaglutide" | "tirzepatide" | "liraglutide" | "other";
   glp1Reason?: "weight_loss" | "metabolic_health" | "diabetes" | "other";
   glp1Duration?: "less_1_month" | "1_3_months" | "3_6_months" | "6_9_months" | "9_12_months" | "1_1_5_years" | "1_5_2_years" | "2_plus_years";
+
   glp1DoseOptional?: string;
   glp1InjectionDayOptional?: string;
   baselineSideEffects?: SideEffectType[];
@@ -355,6 +356,10 @@ export interface MetricDetail {
   recommendation: string;
   currentValue: string;
   unit: string;
+  // Optional secondary stat shown beneath the hero (e.g. "Today: 9,234 steps"
+  // when the hero shows the 28-day average).
+  secondaryLabel?: string;
+  secondaryValue?: string;
   trend: TrendData;
 }
 

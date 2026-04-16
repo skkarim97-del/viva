@@ -113,11 +113,20 @@ export default function MetricDetailScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.heroSection}>
+          <Text style={[styles.heroLabel, { color: c.mutedForeground }]}>4-week average</Text>
           <View style={styles.heroValueRow}>
             <Text style={[styles.heroValue, { color: c.foreground }]}>{detail.currentValue}</Text>
-            <Text style={[styles.heroUnit, { color: c.mutedForeground }]}>{detail.unit}</Text>
+            {detail.unit ? (
+              <Text style={[styles.heroUnit, { color: c.mutedForeground }]}>{detail.unit}</Text>
+            ) : null}
             <Text style={[styles.heroTrend, { color: trendColor }]}>{trendArrow}</Text>
           </View>
+          {detail.secondaryLabel && detail.secondaryValue ? (
+            <View style={[styles.secondaryStat, { backgroundColor: c.muted }]}>
+              <Text style={[styles.secondaryStatLabel, { color: c.mutedForeground }]}>{detail.secondaryLabel}</Text>
+              <Text style={[styles.secondaryStatValue, { color: c.foreground }]}>{detail.secondaryValue}</Text>
+            </View>
+          ) : null}
           <Text style={[styles.heroHeadline, { color: c.foreground }]}>{detail.headline}</Text>
         </View>
 
@@ -192,6 +201,29 @@ const styles = StyleSheet.create({
   heroSection: {
     paddingVertical: 16,
     gap: 10,
+  },
+  heroLabel: {
+    fontSize: 12,
+    fontFamily: "Montserrat_600SemiBold",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  secondaryStat: {
+    flexDirection: "row",
+    alignSelf: "flex-start",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+  },
+  secondaryStatLabel: {
+    fontSize: 12,
+    fontFamily: "Montserrat_500Medium",
+  },
+  secondaryStatValue: {
+    fontSize: 13,
+    fontFamily: "Montserrat_600SemiBold",
   },
   heroValueRow: {
     flexDirection: "row",
