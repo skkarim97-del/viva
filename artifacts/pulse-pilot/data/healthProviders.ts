@@ -323,21 +323,19 @@ async function fetchAppleHealthMetrics(days: number): Promise<HealthMetrics[]> {
       const activeCalVal = sum((activeCalByDate[d] || []).map((s) => Number(s.value) || 0));
       const basalCalVal = sum((basalCalByDate[d] || []).map((s) => Number(s.value) || 0));
 
-      // Do NOT fall back resting HR to avg HR; if no resting samples, leave as 0 (metric marked unavailable).
-      const restingHr = restingHrSamples.length > 0 ? avg(restingHrSamples) : 0;
-
+      // Null = metric not measured that day. Never fall back resting HR to avg HR.
       result.push({
         date: d,
         steps: Math.round(stepsVal),
         caloriesBurned: Math.round(activeCalVal + basalCalVal),
         activeCalories: Math.round(activeCalVal),
-        restingHeartRate: Math.round(restingHr),
-        hrv: hrvSamples.length > 0 ? Math.round(avg(hrvSamples)) : 0,
-        weight: 0, // not fetched; availableMetricTypes excludes "weight"
         sleepDuration: Math.round((sleepDurationByDate[d] || 0) * 10) / 10,
-        sleepQuality: 0, // derived, not fetched
-        recoveryScore: 0, // derived, not fetched
-        strain: 0, // derived, not fetched
+        restingHeartRate: restingHrSamples.length > 0 ? Math.round(avg(restingHrSamples)) : null,
+        hrv: hrvSamples.length > 0 ? Math.round(avg(hrvSamples)) : null,
+        weight: null, // not yet fetched from HealthKit
+        sleepQuality: null, // derived, not computed
+        recoveryScore: null, // derived, not computed
+        strain: null, // derived, not computed
         distance: distanceVal > 0 ? Math.round(distanceVal) : undefined,
       });
     }
@@ -346,6 +344,23 @@ async function fetchAppleHealthMetrics(days: number): Promise<HealthMetrics[]> {
     notifyDebug();
     console.log("[HealthKit fetch] units: steps=count, distance=meters, HR=bpm, HRV=ms, calories=kcal, sleep=hours");
     console.log("[HealthKit fetch] FINAL metrics last 3 days:", JSON.stringify(result.slice(-3), null, 2));
+    if (result.length > 0) {
+      const example = result[result.length - 1];
+      console.log("[HealthKit fetch] NORMALIZED SCHEMA example day", example.date, ":", {
+        date: `"${example.date}" (string, YYYY-MM-DD)`,
+        steps: `${example.steps} (number, count)`,
+        caloriesBurned: `${example.caloriesBurned} (number, kcal)`,
+        activeCalories: `${example.activeCalories} (number, kcal)`,
+        sleepDuration: `${example.sleepDuration} (number, hours)`,
+        restingHeartRate: `${example.restingHeartRate} (number|null, bpm)`,
+        hrv: `${example.hrv} (number|null, ms)`,
+        weight: `${example.weight} (number|null, lbs)`,
+        sleepQuality: `${example.sleepQuality} (number|null, 0-100)`,
+        recoveryScore: `${example.recoveryScore} (number|null, 0-100)`,
+        strain: `${example.strain} (number|null, 0-21)`,
+        distance: `${example.distance} (number|undefined, meters)`,
+      });
+    }
     return result;
   } catch (e: any) {
     _debugInfo.fetchSucceeded = false;
@@ -391,7 +406,18 @@ export async function connectProvider(
   return { success: false, error: "Provider not supported." };
 }
 
-export type AvailableMetricType = "steps" | "heartRate" | "hrv" | "sleep" | "calories" | "weight" | "distance";
+export type AvailableMetricType =
+  | "steps"
+  | "heartRate"
+  | "restingHeartRate"
+  | "hrv"
+  | "sleep"
+  | "activeCalories"
+  | "totalCalories"
+  | "distance"
+  | "weight"
+  | "calories"
+  | "recovery";
 
 export async function fetchHealthData(
   connectedProviders: string[],
@@ -415,13 +441,34 @@ export async function fetchHealthData(
 
 function detectAvailableTypes(metrics: HealthMetrics[]): AvailableMetricType[] {
   const types: AvailableMetricType[] = [];
-  const hasRealData = (vals: number[]) => vals.some((v) => v > 0);
-  if (hasRealData(metrics.map((m) => m.steps))) types.push("steps");
-  if (hasRealData(metrics.map((m) => m.restingHeartRate))) types.push("heartRate");
-  if (hasRealData(metrics.map((m) => m.hrv))) types.push("hrv");
-  if (hasRealData(metrics.map((m) => m.sleepDuration))) types.push("sleep");
-  if (hasRealData(metrics.map((m) => m.activeCalories))) types.push("calories");
-  if (hasRealData(metrics.map((m) => m.weight))) types.push("weight");
-  if (hasRealData(metrics.map((m) => m.distance ?? 0))) types.push("distance");
+  // Each metric has its own availability key. null means "not measured"; 0 is only counted for
+  // counters where 0 is a legitimate value (steps, calories, sleep — a real 0-step day exists).
+  const anyPositive = (vals: (number | null | undefined)[]) =>
+    vals.some((v) => typeof v === "number" && v > 0);
+  const anyNonNull = (vals: (number | null | undefined)[]) =>
+    vals.some((v) => typeof v === "number");
+
+  if (anyPositive(metrics.map((m) => m.steps))) types.push("steps");
+  if (anyNonNull(metrics.map((m) => m.restingHeartRate))) types.push("restingHeartRate");
+  // "heartRate" is reserved for avg HR availability; we do not currently persist avg HR per day,
+  // but we keep the key for consumers that want to check it separately from resting HR.
+  if (anyNonNull(metrics.map((m) => m.hrv))) types.push("hrv");
+  if (anyPositive(metrics.map((m) => m.sleepDuration))) types.push("sleep");
+  if (anyPositive(metrics.map((m) => m.activeCalories))) types.push("activeCalories");
+  if (anyPositive(metrics.map((m) => m.caloriesBurned))) types.push("totalCalories");
+  if (anyPositive(metrics.map((m) => m.distance ?? 0))) types.push("distance");
+  if (anyNonNull(metrics.map((m) => m.weight))) types.push("weight");
+  if (anyNonNull(metrics.map((m) => m.recoveryScore))) types.push("recovery");
+  // Legacy alias kept for back-compat with any code still checking "calories".
+  if (anyPositive(metrics.map((m) => m.activeCalories))) types.push("calories");
   return types;
+}
+
+// Null-safe helpers for downstream engines.
+export function filterNonNull(vals: (number | null | undefined)[]): number[] {
+  return vals.filter((v): v is number => typeof v === "number");
+}
+export function avgNonNull(vals: (number | null | undefined)[]): number {
+  const f = filterNonNull(vals);
+  return f.length === 0 ? 0 : f.reduce((s, v) => s + v, 0) / f.length;
 }

@@ -19,14 +19,14 @@ import { buildTitrationContext } from "./titrationHelper";
 
 export interface CoachContext {
   todayMetrics: {
-    hrv: number;
-    restingHeartRate: number;
+    hrv: number | null;
+    restingHeartRate: number | null;
     sleepDuration: number;
-    sleepQuality: number;
+    sleepQuality: number | null;
     steps: number;
-    recoveryScore: number;
-    weight: number;
-    strain: number;
+    recoveryScore: number | null;
+    weight: number | null;
+    strain: number | null;
     caloriesBurned: number;
     activeCalories: number;
   };
@@ -85,7 +85,9 @@ export interface CoachContext {
 
 export function computeHrvBaseline(metrics: HealthMetrics[]): number | undefined {
   if (metrics.length < 7) return undefined;
-  return Math.round(metrics.slice(-7).reduce((s, m) => s + m.hrv, 0) / Math.min(metrics.length, 7));
+  const hrvVals = metrics.slice(-7).map(m => m.hrv).filter((v): v is number => typeof v === "number");
+  if (hrvVals.length === 0) return undefined;
+  return Math.round(hrvVals.reduce((s, v) => s + v, 0) / hrvVals.length);
 }
 
 export function computeSleepDebt(metrics: HealthMetrics[]): number | undefined {
@@ -95,7 +97,8 @@ export function computeSleepDebt(metrics: HealthMetrics[]): number | undefined {
 
 export function computeRecoveryTrend(metrics: HealthMetrics[]): "improving" | "declining" | "stable" | undefined {
   if (metrics.length < 3) return undefined;
-  const scores = metrics.slice(-3).map(m => m.recoveryScore);
+  const scores = metrics.slice(-3).map(m => m.recoveryScore).filter((v): v is number => typeof v === "number");
+  if (scores.length < 2) return undefined;
   const diff = scores[scores.length - 1] - scores[0];
   if (diff > 5) return "improving";
   if (diff < -5) return "declining";

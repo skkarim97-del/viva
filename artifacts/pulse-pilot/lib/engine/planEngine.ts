@@ -401,27 +401,30 @@ export function generateDailyPlan(
   const last3 = last7.slice(-3);
   const last5 = recentMetrics?.slice(-5) ?? [];
 
-  const avg7Hrv = wearableAvailable && last7.length >= 7 ? last7.reduce((s, m) => s + m.hrv, 0) / last7.length : 0;
+  const avg7Hrv = wearableAvailable && last7.length >= 7 ? last7.reduce((s, m) => s + (m.hrv ?? 0), 0) / last7.length : 0;
   const avg7Sleep = wearableAvailable && last7.length >= 3 ? last7.reduce((s, m) => s + m.sleepDuration, 0) / last7.length : 0;
-  const avg7Rhr = wearableAvailable && last7.length >= 3 ? last7.reduce((s, m) => s + m.restingHeartRate, 0) / last7.length : 0;
+  const avg7Rhr = wearableAvailable && last7.length >= 3 ? last7.reduce((s, m) => s + (m.restingHeartRate ?? 0), 0) / last7.length : 0;
 
-  const hrvDeviation = wearableAvailable && avg7Hrv > 0 ? ((metrics.hrv - avg7Hrv) / avg7Hrv) * 100 : 0;
-  const rhrElevated = wearableAvailable && avg7Rhr > 0 && metrics.restingHeartRate > avg7Rhr + 5;
+  const hrvDeviation = wearableAvailable && avg7Hrv > 0 && typeof metrics.hrv === "number" ? ((metrics.hrv - avg7Hrv) / avg7Hrv) * 100 : 0;
+  const rhrElevated = wearableAvailable && avg7Rhr > 0 && typeof metrics.restingHeartRate === "number" && metrics.restingHeartRate > avg7Rhr + 5;
 
   const sleepDeclining3 = wearableAvailable && last3.length >= 3 && last3.every((m, i) => i === 0 || m.sleepDuration < last3[i - 1].sleepDuration);
-  const hrvDeclining5 = wearableAvailable && last5.length >= 5 && last5[last5.length - 1].hrv < last5[0].hrv - 5 && last5.every((m, i) => i === 0 || m.hrv <= last5[i - 1].hrv + 2);
+  const hrvDeclining5 = wearableAvailable && last5.length >= 5
+    && last5.every(m => typeof m.hrv === "number")
+    && (last5[last5.length - 1].hrv as number) < (last5[0].hrv as number) - 5
+    && last5.every((m, i) => i === 0 || (m.hrv as number) <= (last5[i - 1].hrv as number) + 2);
 
   const yesterdayStrain = wearableAvailable && last7.length >= 2 ? last7[last7.length - 2]?.strain ?? 0 : 0;
-  const avgStrain = wearableAvailable && last7.length >= 3 ? last7.reduce((s, m) => s + m.strain, 0) / last7.length : 5;
-  const consecutivePoorRecovery = wearableAvailable && last3.length >= 3 && last3.every(m => m.recoveryScore < 50);
+  const avgStrain = wearableAvailable && last7.length >= 3 ? last7.reduce((s, m) => s + (m.strain ?? 0), 0) / last7.length : 5;
+  const consecutivePoorRecovery = wearableAvailable && last3.length >= 3 && last3.every(m => typeof m.recoveryScore === "number" && m.recoveryScore < 50);
 
   let readinessScore: number;
   if (wearableAvailable) {
     readinessScore = Math.round(
-      metrics.recoveryScore * 0.3 +
-      metrics.sleepQuality * 0.3 +
-      (metrics.hrv / 60) * 100 * 0.2 +
-      (1 - Math.min(metrics.restingHeartRate, 80) / 80) * 100 * 0.2
+      (metrics.recoveryScore ?? 0) * 0.3 +
+      (metrics.sleepQuality ?? 0) * 0.3 +
+      ((metrics.hrv ?? 0) / 60) * 100 * 0.2 +
+      (1 - Math.min(metrics.restingHeartRate ?? 80, 80) / 80) * 100 * 0.2
     );
   } else {
     readinessScore = 70;
@@ -629,7 +632,7 @@ export function generateDailyPlan(
     workoutDuration = 20;
     workoutDesc = "Easy walk or gentle movement. Focus energy on eating well.";
     optional = "Protein shakes or smoothies are a good option when appetite is low.";
-  } else if (stressOverride || stress === "very_high") {
+  } else if (stressOverride || (stress as string) === "very_high") {
     dailyState = "recover";
     headline = "Stress is elevated. A simpler day will help.";
     summary = "High stress raises cortisol, which can blunt treatment benefits and disrupt sleep and appetite. Keep today low-pressure.";
@@ -802,7 +805,7 @@ export function generateDailyPlan(
 
   const consistentReason = consistentData.reason;
 
-  const actionReasons: Record<string, string> = { move: moveReason, fuel: fuelReason, hydrate: hydrateReason, recover: recoverReason, consistent: consistentReason };
+  const actionReasons: { move: string; fuel: string; hydrate: string; recover: string; consistent: string } = { move: moveReason, fuel: fuelReason, hydrate: hydrateReason, recover: recoverReason, consistent: consistentReason };
 
   if (patterns && patterns.overallConfidence !== "low") {
     for (const override of patterns.adaptiveOverrides) {
@@ -835,14 +838,15 @@ export function generateDailyPlan(
   }
 
   let recoverySummary = "";
-  if (!wearableAvailable) {
+  const recoveryScoreVal = metrics.recoveryScore;
+  if (!wearableAvailable || typeof recoveryScoreVal !== "number") {
     recoverySummary = "";
-  } else if (metrics.recoveryScore >= 75) {
-    recoverySummary = `Recovery is strong at ${metrics.recoveryScore}%.`;
-  } else if (metrics.recoveryScore >= 50) {
-    recoverySummary = `Recovery is moderate at ${metrics.recoveryScore}%.`;
+  } else if (recoveryScoreVal >= 75) {
+    recoverySummary = `Recovery is strong at ${recoveryScoreVal}%.`;
+  } else if (recoveryScoreVal >= 50) {
+    recoverySummary = `Recovery is moderate at ${recoveryScoreVal}%.`;
   } else {
-    recoverySummary = `Recovery is low at ${metrics.recoveryScore}%. Rest and hydration are the priority.`;
+    recoverySummary = `Recovery is low at ${recoveryScoreVal}%. Rest and hydration are the priority.`;
   }
 
   const statusLabel: import("@/types").DailyStatusLabel =
@@ -853,7 +857,7 @@ export function generateDailyPlan(
 
   const statusDrivers: string[] = [];
 
-  if (!wearableAvailable) {
+  if (!wearableAvailable || typeof metrics.recoveryScore !== "number") {
   } else if (metrics.recoveryScore >= 70) statusDrivers.push("Recovery is solid");
   else if (metrics.recoveryScore >= 50) statusDrivers.push("Recovery is moderate");
   else statusDrivers.push("Recovery needs attention");
@@ -914,7 +918,7 @@ export function generateDailyPlan(
     nutritionTarget: {
       calories: readinessScore >= 65 ? 1800 : 1600,
       protein: 120,
-      carbs: workoutIntensity === "high" ? 180 : readinessScore >= 65 ? 160 : 140,
+      carbs: (workoutIntensity as string) === "high" ? 180 : readinessScore >= 65 ? 160 : 140,
       fat: 55,
       hydration: isDehydrated ? 112 : 96,
       note: appetiteLow

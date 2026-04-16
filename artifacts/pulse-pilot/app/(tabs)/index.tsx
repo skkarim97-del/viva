@@ -653,7 +653,7 @@ export default function DashboardScreen() {
                     ]}>
                       {msg.role === "assistant" && msg.content.includes("\n") ? (
                         <View style={{ gap: 8 }}>
-                          {msg.content.split(/\n\n+/).map((para, pi) => (
+                          {msg.content.split(/\n\n+/).map((para: string, pi: number) => (
                             <Text key={pi} style={[styles.askMsgText, { color: c.foreground }]}>
                               {para}
                             </Text>

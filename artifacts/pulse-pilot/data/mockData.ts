@@ -176,7 +176,7 @@ function trendSummary(label: string, values: number[], trend: "up" | "down" | "s
 export function generateTrendDataFromMetrics(metrics: HealthMetrics[]): TrendData[] {
   if (!metrics || metrics.length === 0) return [];
 
-  const configs: { label: string; extract: (m: HealthMetrics) => number; unit: string }[] = [
+  const configs: { label: string; extract: (m: HealthMetrics) => number | null; unit: string }[] = [
     { label: "Weight", extract: (m) => m.weight, unit: "lbs" },
     { label: "HRV", extract: (m) => m.hrv, unit: "ms" },
     { label: "Resting HR", extract: (m) => m.restingHeartRate, unit: "bpm" },
@@ -186,7 +186,9 @@ export function generateTrendDataFromMetrics(metrics: HealthMetrics[]): TrendDat
   ];
 
   return configs.map(({ label, extract, unit }) => {
-    const data = metrics.map((m) => ({ date: m.date, value: extract(m) }));
+    const data = metrics
+      .map((m) => ({ date: m.date, value: extract(m) }))
+      .filter((d): d is { date: string; value: number } => typeof d.value === "number");
     const values = data.map((d) => d.value);
     const trend = computeTrend(values);
     const summary = trendSummary(label, values, trend, unit);
@@ -199,22 +201,24 @@ export function getMetricDetail(
   todayMetrics: HealthMetrics,
   allMetrics: HealthMetrics[]
 ): MetricDetail {
-  const trendData = allMetrics.map((m) => {
-    let value = 0;
-    switch (key) {
-      case "sleep": value = m.sleepDuration; break;
-      case "hrv": value = m.hrv; break;
-      case "steps": value = m.steps; break;
-      case "restingHR": value = m.restingHeartRate; break;
-      case "recovery": value = m.recoveryScore; break;
-      case "weight": value = m.weight; break;
-    }
-    return { date: m.date, value };
-  });
+  const trendData = allMetrics
+    .map((m) => {
+      let value: number | null = 0;
+      switch (key) {
+        case "sleep": value = m.sleepDuration; break;
+        case "hrv": value = m.hrv; break;
+        case "steps": value = m.steps; break;
+        case "restingHR": value = m.restingHeartRate; break;
+        case "recovery": value = m.recoveryScore; break;
+        case "weight": value = m.weight; break;
+      }
+      return { date: m.date, value };
+    })
+    .filter((d): d is { date: string; value: number } => typeof d.value === "number");
 
   const recent = trendData.slice(-7);
-  const avg = recent.reduce((s, d) => s + d.value, 0) / recent.length;
-  const current = trendData[trendData.length - 1].value;
+  const avg = recent.length > 0 ? recent.reduce((s, d) => s + d.value, 0) / recent.length : 0;
+  const current = trendData.length > 0 ? trendData[trendData.length - 1].value : 0;
   const trendDir: "up" | "down" | "stable" =
     current > avg * 1.03 ? "up" : current < avg * 0.97 ? "down" : "stable";
 
@@ -234,21 +238,29 @@ export function getMetricDetail(
       currentValue: `${todayMetrics.sleepDuration.toFixed(1)}`,
       unit: "hrs",
     },
-    hrv: {
-      title: "Heart Rate Variability",
-      headline: todayMetrics.hrv >= 45
-        ? "HRV looks good. Recovery is on track."
-        : todayMetrics.hrv >= 35
-        ? "HRV is slightly below average."
-        : "HRV is low. Your body needs more rest.",
-      explanation: `${todayMetrics.hrv} ms today. 7-day average: ${Math.round(avg)} ms.`,
-      whatItMeans: "HRV reflects how well-recovered your nervous system is. Higher values mean your body is handling stress well.",
-      recommendation: todayMetrics.hrv < 38
-        ? "Take it easy. Focus on hydration, gentle movement, and rest."
-        : "HRV supports activity today. Listen to your body.",
-      currentValue: `${todayMetrics.hrv}`,
-      unit: "ms",
-    },
+    hrv: (() => {
+      const h = todayMetrics.hrv;
+      const hasHrv = typeof h === "number";
+      return {
+        title: "Heart Rate Variability",
+        headline: !hasHrv
+          ? "No HRV data yet."
+          : h >= 45
+          ? "HRV looks good. Recovery is on track."
+          : h >= 35
+          ? "HRV is slightly below average."
+          : "HRV is low. Your body needs more rest.",
+        explanation: hasHrv ? `${h} ms today. 7-day average: ${Math.round(avg)} ms.` : `No readings for today. Wear your device overnight to capture HRV.`,
+        whatItMeans: "HRV reflects how well-recovered your nervous system is. Higher values mean your body is handling stress well.",
+        recommendation: !hasHrv
+          ? "Keep your device on overnight for a reading."
+          : h < 38
+          ? "Take it easy. Focus on hydration, gentle movement, and rest."
+          : "HRV supports activity today. Listen to your body.",
+        currentValue: hasHrv ? `${h}` : "--",
+        unit: "ms",
+      };
+    })(),
     steps: {
       title: "Daily Steps",
       headline: todayMetrics.steps >= 7000
@@ -264,36 +276,52 @@ export function getMetricDetail(
       currentValue: todayMetrics.steps.toLocaleString(),
       unit: "steps",
     },
-    restingHR: {
-      title: "Resting Heart Rate",
-      headline: todayMetrics.restingHeartRate <= 60
-        ? "Resting heart rate is excellent."
-        : todayMetrics.restingHeartRate <= 68
-        ? "Resting heart rate is normal."
-        : "Resting heart rate is elevated.",
-      explanation: `${todayMetrics.restingHeartRate} bpm today. 7-day average: ${Math.round(avg)} bpm.`,
-      whatItMeans: "Resting heart rate reflects overall cardiovascular health and recovery status.",
-      recommendation: todayMetrics.restingHeartRate > 66
-        ? "Elevated resting HR may mean more recovery or hydration is needed."
-        : "In a healthy range. Keep up your routine.",
-      currentValue: `${todayMetrics.restingHeartRate}`,
-      unit: "bpm",
-    },
-    recovery: {
-      title: "Recovery",
-      headline: todayMetrics.recoveryScore >= 75
-        ? "Recovery is strong."
-        : todayMetrics.recoveryScore >= 50
-        ? "Recovery is moderate."
-        : "Recovery is low. Take it easy.",
-      explanation: `Recovery is at ${todayMetrics.recoveryScore}%. Based on HRV, resting heart rate, and sleep quality.`,
-      whatItMeans: "Recovery shows how prepared your body is for activity. On GLP-1, listening to recovery signals helps you stay consistent.",
-      recommendation: todayMetrics.recoveryScore < 50
-        ? "Focus on rest, hydration, and protein today. Skip intense activity."
-        : "Recovery supports activity today. Match effort to how you feel.",
-      currentValue: `${todayMetrics.recoveryScore}`,
-      unit: "%",
-    },
+    restingHR: (() => {
+      const r = todayMetrics.restingHeartRate;
+      const hasR = typeof r === "number";
+      return {
+        title: "Resting Heart Rate",
+        headline: !hasR
+          ? "No resting HR yet."
+          : r <= 60
+          ? "Resting heart rate is excellent."
+          : r <= 68
+          ? "Resting heart rate is normal."
+          : "Resting heart rate is elevated.",
+        explanation: hasR ? `${r} bpm today. 7-day average: ${Math.round(avg)} bpm.` : "No resting HR captured today. This is measured during sleep.",
+        whatItMeans: "Resting heart rate reflects overall cardiovascular health and recovery status.",
+        recommendation: !hasR
+          ? "Wear your device overnight to capture resting HR."
+          : r > 66
+          ? "Elevated resting HR may mean more recovery or hydration is needed."
+          : "In a healthy range. Keep up your routine.",
+        currentValue: hasR ? `${r}` : "--",
+        unit: "bpm",
+      };
+    })(),
+    recovery: (() => {
+      const rec = todayMetrics.recoveryScore;
+      const hasRec = typeof rec === "number";
+      return {
+        title: "Recovery",
+        headline: !hasRec
+          ? "No recovery score yet."
+          : rec >= 75
+          ? "Recovery is strong."
+          : rec >= 50
+          ? "Recovery is moderate."
+          : "Recovery is low. Take it easy.",
+        explanation: hasRec ? `Recovery is at ${rec}%. Based on HRV, resting heart rate, and sleep quality.` : "Recovery score will appear once HRV and sleep data are available.",
+        whatItMeans: "Recovery shows how prepared your body is for activity. On GLP-1, listening to recovery signals helps you stay consistent.",
+        recommendation: !hasRec
+          ? "Wear your device overnight to capture the inputs for recovery."
+          : rec < 50
+          ? "Focus on rest, hydration, and protein today. Skip intense activity."
+          : "Recovery supports activity today. Match effort to how you feel.",
+        currentValue: hasRec ? `${rec}` : "--",
+        unit: "%",
+      };
+    })(),
     weight: {
       title: "Weight",
       headline: trendDir === "down"

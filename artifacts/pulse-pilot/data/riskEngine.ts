@@ -17,9 +17,10 @@ interface RiskEngineInput {
   medicationProfile?: MedicationProfile;
 }
 
-function computeBaseline(values: number[]): number {
-  if (values.length === 0) return 0;
-  return values.reduce((s, v) => s + v, 0) / values.length;
+function computeBaseline(values: (number | null | undefined)[]): number {
+  const filtered = values.filter((v): v is number => typeof v === "number");
+  if (filtered.length === 0) return 0;
+  return filtered.reduce((s, v) => s + v, 0) / filtered.length;
 }
 
 function checkRecoveryBreakdown(metrics: HealthMetrics[]): RiskDriver | null {

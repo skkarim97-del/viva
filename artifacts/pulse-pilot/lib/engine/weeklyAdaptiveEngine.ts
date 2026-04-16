@@ -93,7 +93,8 @@ export function computeInternalSeverity(input: SeverityInput): SeverityResult {
   if (wearableAvailable && recentMetrics.length >= 3) {
     const recent3 = recentMetrics.slice(-3);
     const avgSleep = recent3.reduce((s, m) => s + m.sleepDuration, 0) / recent3.length;
-    const avgRecovery = recent3.reduce((s, m) => s + m.recoveryScore, 0) / recent3.length;
+    const recoveryVals = recent3.map(m => m.recoveryScore).filter((v): v is number => typeof v === "number");
+    const avgRecovery = recoveryVals.length ? recoveryVals.reduce((s, v) => s + v, 0) / recoveryVals.length : 0;
     if (avgSleep < 5.5) {
       compositeScore += 3;
       drivers.push("sleep_low");

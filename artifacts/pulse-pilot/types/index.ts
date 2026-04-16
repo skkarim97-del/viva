@@ -101,16 +101,20 @@ export type SubscriptionTier = "free" | "premium" | "premium_plus";
 
 export interface HealthMetrics {
   date: string;
+  // Fetched, 0 is a legitimate value (not a fake default).
   steps: number;
   caloriesBurned: number;
   activeCalories: number;
-  restingHeartRate: number;
-  hrv: number;
-  weight: number;
   sleepDuration: number;
-  sleepQuality: number;
-  recoveryScore: number;
-  strain: number;
+  // Fetched but may be unavailable. null means "not measured that day" — never treat as 0.
+  restingHeartRate: number | null;
+  hrv: number | null;
+  weight: number | null;
+  // Not yet fetched from HealthKit. Currently always null. Consumers must gate via availableMetricTypes.
+  sleepQuality: number | null;
+  recoveryScore: number | null;
+  strain: number | null;
+  // Optional extras.
   vo2Max?: number;
   distance?: number;
   pace?: number;

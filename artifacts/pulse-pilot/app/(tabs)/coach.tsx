@@ -100,7 +100,7 @@ export default function CoachScreen() {
         ? `${insights.sleepDebt.hours.toFixed(1)} hours of sleep debt this week. ${insights.sleepDebt.detail}`
         : undefined,
       hrvBaseline: hasHealthData ? insights?.hrvBaseline?.baseline : undefined,
-      hrvDeviation: hasHealthData && insights?.hrvBaseline && insights.hrvBaseline.baseline > 0
+      hrvDeviation: hasHealthData && insights?.hrvBaseline && insights.hrvBaseline.baseline > 0 && typeof todayMetrics.hrv === "number"
         ? Math.round(((todayMetrics.hrv - insights.hrvBaseline.baseline) / insights.hrvBaseline.baseline) * 100)
         : undefined,
       sleepDebt: hasHealthData ? insights?.sleepDebt?.hours : undefined,

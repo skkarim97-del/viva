@@ -96,10 +96,14 @@ export default function TrendsScreen() {
 
   const last28 = metrics.slice(-28);
   const avg = (arr: number[]) => arr.length > 0 ? arr.reduce((s, v) => s + v, 0) / arr.length : 0;
+  const avgNullable = (arr: (number | null | undefined)[]) => {
+    const f = arr.filter((v): v is number => typeof v === "number");
+    return f.length > 0 ? f.reduce((s, v) => s + v, 0) / f.length : 0;
+  };
 
   const avgSleep = +(avg(last28.map(m => m.sleepDuration))).toFixed(1);
-  const avgHrv = Math.round(avg(last28.map(m => m.hrv)));
-  const avgRHR = Math.round(avg(last28.map(m => m.restingHeartRate)));
+  const avgHrv = Math.round(avgNullable(last28.map(m => m.hrv)));
+  const avgRHR = Math.round(avgNullable(last28.map(m => m.restingHeartRate)));
   const avgSteps = Math.round(avg(last28.map(m => m.steps)));
   const avgActiveCalories = Math.round(avg(last28.map(m => m.activeCalories || 0)));
   const activeDays = last28.filter(m => (m.activeCalories || 0) > 200 || m.steps > 8000).length;
@@ -235,7 +239,7 @@ export default function TrendsScreen() {
           {glp1Insights.map((insight, i) => (
             <View key={i} style={[styles.glp1InsightCard, { backgroundColor: c.card }]}>
               <View style={[styles.glp1InsightIcon, { backgroundColor: insight.color + "14" }]}>
-                <Feather name={insight.icon} size={14} color={insight.color} />
+                <Feather name={insight.icon as any} size={14} color={insight.color} />
               </View>
               <Text style={[styles.glp1InsightText, { color: c.foreground }]}>{insight.text}</Text>
             </View>
@@ -251,7 +255,7 @@ export default function TrendsScreen() {
             <View key={i} style={[styles.corrCard, { backgroundColor: c.card }]}>
               <View style={styles.corrHeader}>
                 <View style={[styles.corrIconWrap, { backgroundColor: corr.color + "14" }]}>
-                  <Feather name={corr.icon} size={16} color={corr.color} />
+                  <Feather name={corr.icon as any} size={16} color={corr.color} />
                 </View>
                 <View style={styles.corrMeta}>
                   <Text style={[styles.corrTitle, { color: c.foreground }]}>{corr.title}</Text>

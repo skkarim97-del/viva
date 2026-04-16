@@ -15,7 +15,7 @@ export interface DailyInsights {
   recoveryTrend: { direction: "improving" | "declining" | "stable"; streak: number; detail: string };
   weightProjection: { weeksToGoal: number | null; rate: number; detail: string; onTrack: boolean };
   calorieBalance: { net: number; label: string; detail: string };
-  hrvBaseline: { current: number; baseline: number; deviation: number; detail: string };
+  hrvBaseline: { current: number | null; baseline: number; deviation: number; detail: string };
   consistencyScore: { score: number; label: string; detail: string };
   riskFlags: { flags: string[]; severity: "none" | "low" | "medium" | "high" };
   topPriority: string;
@@ -99,9 +99,9 @@ function computeTrainingLoad(last14: HealthMetrics[], workouts: WorkoutEntry[]) 
     return sum + w.duration * (intensityMap[w.intensity] || 2);
   }, 0);
 
-  const avgStrain = last14.reduce((s, m) => s + m.strain, 0) / last14.length;
-  const recentStrain = last14.slice(-7).reduce((s, m) => s + m.strain, 0) / Math.min(7, last14.slice(-7).length);
-  const olderStrain = last14.slice(0, 7).reduce((s, m) => s + m.strain, 0) / Math.min(7, last14.slice(0, 7).length);
+  const avgStrain = last14.reduce((s, m) => s + (m.strain ?? 0), 0) / last14.length;
+  const recentStrain = last14.slice(-7).reduce((s, m) => s + (m.strain ?? 0), 0) / Math.min(7, last14.slice(-7).length);
+  const olderStrain = last14.slice(0, 7).reduce((s, m) => s + (m.strain ?? 0), 0) / Math.min(7, last14.slice(0, 7).length);
 
   const trend: "rising" | "falling" | "stable" =
     recentStrain > olderStrain * 1.15 ? "rising" : recentStrain < olderStrain * 0.85 ? "falling" : "stable";
@@ -128,19 +128,23 @@ function computeRecoveryTrend(last7: HealthMetrics[]) {
   let declining = 0;
 
   for (let i = 1; i < last7.length; i++) {
-    if (last7[i].recoveryScore > last7[i - 1].recoveryScore) improving++;
-    else if (last7[i].recoveryScore < last7[i - 1].recoveryScore) declining++;
+    const cur = last7[i].recoveryScore ?? 0;
+    const prev = last7[i - 1].recoveryScore ?? 0;
+    if (cur > prev) improving++;
+    else if (cur < prev) declining++;
   }
 
   const direction: "improving" | "declining" | "stable" =
     improving >= declining + 2 ? "improving" : declining >= improving + 2 ? "declining" : "stable";
 
-  const avg = last7.reduce((s, m) => s + m.recoveryScore, 0) / last7.length;
+  const avg = last7.reduce((s, m) => s + (m.recoveryScore ?? 0), 0) / last7.length;
 
   let streak = 0;
   for (let i = last7.length - 1; i > 0; i--) {
-    if (direction === "improving" && last7[i].recoveryScore >= last7[i - 1].recoveryScore) streak++;
-    else if (direction === "declining" && last7[i].recoveryScore <= last7[i - 1].recoveryScore) streak++;
+    const cur = last7[i].recoveryScore ?? 0;
+    const prev = last7[i - 1].recoveryScore ?? 0;
+    if (direction === "improving" && cur >= prev) streak++;
+    else if (direction === "declining" && cur <= prev) streak++;
     else break;
   }
 
@@ -159,8 +163,8 @@ function computeWeightProjection(last30: HealthMetrics[], profile: UserProfile) 
     return { weeksToGoal: null, rate: 0, detail: "Not enough data to project weight trends yet.", onTrack: false };
   }
 
-  const first7Avg = last30.slice(0, 7).reduce((s, m) => s + m.weight, 0) / 7;
-  const last7Avg = last30.slice(-7).reduce((s, m) => s + m.weight, 0) / 7;
+  const first7Avg = last30.slice(0, 7).reduce((s, m) => s + (m.weight ?? 0), 0) / 7;
+  const last7Avg = last30.slice(-7).reduce((s, m) => s + (m.weight ?? 0), 0) / 7;
   const weeklyRate = ((last7Avg - first7Avg) / (last30.length / 7));
   const remaining = last7Avg - profile.goalWeight;
 
@@ -214,8 +218,8 @@ function computeCalorieBalance(last7: HealthMetrics[], today: HealthMetrics) {
 }
 
 function computeHRVBaseline(last14: HealthMetrics[], today: HealthMetrics) {
-  const baseline = last14.reduce((s, m) => s + m.hrv, 0) / last14.length;
-  const deviation = today.hrv - baseline;
+  const baseline = last14.reduce((s, m) => s + (m.hrv ?? 0), 0) / last14.length;
+  const deviation = (today.hrv ?? 0) - baseline;
   const deviationPct = (deviation / baseline) * 100;
 
   let detail = "";
@@ -271,11 +275,11 @@ function computeRiskFlags(
 
   if (sleepDebt.hours > 7) flags.push(`High sleep debt (${sleepDebt.hours.toFixed(1)} hrs). Recovery, appetite, and energy are all affected.`);
   if (hrv.deviation < -8) flags.push(`HRV is ${Math.abs(hrv.deviation)} ms below your baseline. This suggests accumulated stress or incomplete recovery.`);
-  if (today.restingHeartRate > 70) flags.push(`Resting heart rate is elevated at ${today.restingHeartRate} bpm. Stress, dehydration, or poor sleep may be a factor.`);
+  if (today.restingHeartRate !== null && today.restingHeartRate > 70) flags.push(`Resting heart rate is elevated at ${today.restingHeartRate} bpm. Stress, dehydration, or poor sleep may be a factor.`);
   if (load.trend === "rising" && hrv.deviation < -3) flags.push("Activity is increasing while recovery is dropping. A lighter day would help your body catch up.");
   if (today.sleepDuration < 6) flags.push(`Slept ${today.sleepDuration.toFixed(1)} hours. Energy, appetite, and recovery will all be affected today.`);
 
-  const consecutivePoorRecovery = last7.slice(-3).every((m) => m.recoveryScore < 50);
+  const consecutivePoorRecovery = last7.slice(-3).every((m) => typeof m.recoveryScore === "number" && m.recoveryScore < 50);
   if (consecutivePoorRecovery) flags.push("Three consecutive days of recovery below 50%. A rest day is strongly recommended.");
 
   let severity: "none" | "low" | "medium" | "high" = "none";
@@ -393,7 +397,7 @@ function generateWeekSummary(
 ) {
   const avgSleep = last7.reduce((s, m) => s + m.sleepDuration, 0) / last7.length;
   const avgSteps = Math.round(last7.reduce((s, m) => s + m.steps, 0) / last7.length);
-  const avgRecovery = Math.round(last7.reduce((s, m) => s + m.recoveryScore, 0) / last7.length);
+  const avgRecovery = Math.round(last7.reduce((s, m) => s + (m.recoveryScore ?? 0), 0) / last7.length);
   const recentWorkouts = workouts.filter((w) => {
     const wDate = new Date(w.date).getTime();
     const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
@@ -428,7 +432,7 @@ function generateWeekSummary(
     parts.push("Activity was light this week. Even small increases like a daily walk or gentle stretching can make a noticeable difference in energy and how your body handles treatment.");
   }
 
-  const avgSleepQuality = last7.reduce((s, m) => s + m.sleepQuality, 0) / last7.length;
+  const avgSleepQuality = last7.reduce((s, m) => s + (m.sleepQuality ?? 0), 0) / last7.length;
   if (avgSleepQuality >= 80 && avgSleep >= 7) {
     parts.push("Sleep quality has been strong. Good rest is one of the most powerful things supporting your treatment right now.");
   } else if (avgSleepQuality < 60) {
@@ -491,8 +495,8 @@ function computeSleepIntelligence(last14: HealthMetrics[], last7: HealthMetrics[
   if (recentAvg > olderAvg + 0.2) sleepTrend = "improving";
   else if (recentAvg < olderAvg - 0.2) sleepTrend = "declining";
 
-  const recentQualityAvg = last7.reduce((s, m) => s + m.sleepQuality, 0) / last7.length;
-  const olderQualityAvg = last14.slice(0, 7).reduce((s, m) => s + m.sleepQuality, 0) / Math.min(7, last14.slice(0, 7).length);
+  const recentQualityAvg = last7.reduce((s, m) => s + (m.sleepQuality ?? 0), 0) / last7.length;
+  const olderQualityAvg = last14.slice(0, 7).reduce((s, m) => s + (m.sleepQuality ?? 0), 0) / Math.min(7, last14.slice(0, 7).length);
   const qualityTrending = recentQualityAvg < olderQualityAvg - 5 ? "declining" : recentQualityAvg > olderQualityAvg + 5 ? "improving" : "stable";
 
   let insight = "";
@@ -572,26 +576,30 @@ function buildSignalProfile(
   const sleepVariance = last7.reduce((s, m) => s + Math.abs(m.sleepDuration - avgSleep7), 0) / last7.length;
   const sleepConsistent = sleepVariance < 0.6;
 
-  const hrvBaseline = last14.reduce((s, m) => s + m.hrv, 0) / last14.length;
-  const hrvDev = ((todayMetrics.hrv - hrvBaseline) / hrvBaseline) * 100;
+  const hrvBaseline = last14.reduce((s, m) => s + (m.hrv ?? 0), 0) / last14.length;
+  const todayHrv = todayMetrics.hrv ?? 0;
+  const hrvDev = hrvBaseline > 0 ? ((todayHrv - hrvBaseline) / hrvBaseline) * 100 : 0;
 
+  const todayRecovery = todayMetrics.recoveryScore ?? 0;
   const recoveryLevel: "strong" | "moderate" | "low" =
-    todayMetrics.recoveryScore >= 70 ? "strong" : todayMetrics.recoveryScore >= 50 ? "moderate" : "low";
+    todayRecovery >= 70 ? "strong" : todayRecovery >= 50 ? "moderate" : "low";
 
-  const avgRecovery14 = last14.reduce((s, m) => s + m.recoveryScore, 0) / last14.length;
+  const avgRecovery14 = last14.reduce((s, m) => s + (m.recoveryScore ?? 0), 0) / last14.length;
   const recoveryVsNormal: "above" | "below" | "normal" =
-    todayMetrics.recoveryScore > avgRecovery14 + 8 ? "above" :
-    todayMetrics.recoveryScore < avgRecovery14 - 8 ? "below" : "normal";
+    todayRecovery > avgRecovery14 + 8 ? "above" :
+    todayRecovery < avgRecovery14 - 8 ? "below" : "normal";
 
   let recoveryStreak = 0;
   let recoveryStreakDir: "improving" | "declining" | "stable" = "stable";
   for (let i = last7.length - 1; i > 0; i--) {
-    if (last7[i].recoveryScore > last7[i - 1].recoveryScore + 3) {
+    const cur = last7[i].recoveryScore ?? 0;
+    const prev = last7[i - 1].recoveryScore ?? 0;
+    if (cur > prev + 3) {
       if (recoveryStreakDir === "stable" || recoveryStreakDir === "improving") {
         recoveryStreakDir = "improving";
         recoveryStreak++;
       } else break;
-    } else if (last7[i].recoveryScore < last7[i - 1].recoveryScore - 3) {
+    } else if (cur < prev - 3) {
       if (recoveryStreakDir === "stable" || recoveryStreakDir === "declining") {
         recoveryStreakDir = "declining";
         recoveryStreak++;

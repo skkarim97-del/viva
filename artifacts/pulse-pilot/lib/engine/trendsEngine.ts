@@ -55,22 +55,36 @@ export function getCorrelationStrength(r: number): "strong" | "moderate" | "weak
   return "weak";
 }
 
+function pairwiseNonNull(a: (number | null | undefined)[], b: (number | null | undefined)[]): { a: number[]; b: number[] } {
+  const resA: number[] = [];
+  const resB: number[] = [];
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n; i++) {
+    if (typeof a[i] === "number" && typeof b[i] === "number") {
+      resA.push(a[i] as number);
+      resB.push(b[i] as number);
+    }
+  }
+  return { a: resA, b: resB };
+}
+
 export function buildCorrelations(metrics: HealthMetrics[]): TrendCorrelation[] {
   if (metrics.length < 5) return [];
   const recent = metrics.slice(-14);
   const sleep = recent.map(m => m.sleepDuration);
-  const hrv = recent.map(m => m.hrv);
-  const recovery = recent.map(m => m.recoveryScore);
+  const hrvRaw = recent.map(m => m.hrv);
+  const recoveryRaw = recent.map(m => m.recoveryScore);
   const steps = recent.map(m => m.steps);
-  const rhr = recent.map(m => m.restingHeartRate);
+  const rhrRaw = recent.map(m => m.restingHeartRate);
 
   const correlations: TrendCorrelation[] = [];
 
-  const sleepHrv = computeCorrelation(sleep, hrv);
+  const sleepHrvPair = pairwiseNonNull(sleep, hrvRaw);
+  const sleepHrv = computeCorrelation(sleepHrvPair.a, sleepHrvPair.b);
   const sleepHrvStrength = getCorrelationStrength(sleepHrv);
-  if (sleepHrvStrength !== "weak") {
-    const avgSleep = +(sleep.reduce((s, v) => s + v, 0) / sleep.length).toFixed(1);
-    const avgHrv = Math.round(hrv.reduce((s, v) => s + v, 0) / hrv.length);
+  if (sleepHrvStrength !== "weak" && sleepHrvPair.a.length > 0) {
+    const avgSleep = +(sleepHrvPair.a.reduce((s, v) => s + v, 0) / sleepHrvPair.a.length).toFixed(1);
+    const avgHrv = Math.round(sleepHrvPair.b.reduce((s, v) => s + v, 0) / sleepHrvPair.b.length);
     correlations.push({
       title: "Sleep vs HRV",
       icon: "moon",
@@ -83,7 +97,8 @@ export function buildCorrelations(metrics: HealthMetrics[]): TrendCorrelation[] 
     });
   }
 
-  const sleepRecovery = computeCorrelation(sleep, recovery);
+  const sleepRecPair = pairwiseNonNull(sleep, recoveryRaw);
+  const sleepRecovery = computeCorrelation(sleepRecPair.a, sleepRecPair.b);
   const sleepRecStrength = getCorrelationStrength(sleepRecovery);
   if (sleepRecStrength !== "weak") {
     correlations.push({
@@ -98,10 +113,11 @@ export function buildCorrelations(metrics: HealthMetrics[]): TrendCorrelation[] 
     });
   }
 
-  const stepsRecovery = computeCorrelation(steps, recovery);
+  const stepsRecPair = pairwiseNonNull(steps, recoveryRaw);
+  const stepsRecovery = computeCorrelation(stepsRecPair.a, stepsRecPair.b);
   const stepsRecStrength = getCorrelationStrength(stepsRecovery);
-  if (stepsRecStrength !== "weak") {
-    const avgSteps = Math.round(steps.reduce((s, v) => s + v, 0) / steps.length);
+  if (stepsRecStrength !== "weak" && stepsRecPair.a.length > 0) {
+    const avgSteps = Math.round(stepsRecPair.a.reduce((s, v) => s + v, 0) / stepsRecPair.a.length);
     correlations.push({
       title: "Activity vs Recovery",
       icon: "activity",
@@ -114,7 +130,8 @@ export function buildCorrelations(metrics: HealthMetrics[]): TrendCorrelation[] 
     });
   }
 
-  const rhrRecovery = computeCorrelation(rhr, recovery);
+  const rhrRecPair = pairwiseNonNull(rhrRaw, recoveryRaw);
+  const rhrRecovery = computeCorrelation(rhrRecPair.a, rhrRecPair.b);
   const rhrRecStrength = getCorrelationStrength(rhrRecovery);
   if (rhrRecStrength !== "weak") {
     correlations.push({
@@ -165,17 +182,20 @@ export function detectPatterns(metrics: HealthMetrics[], availableMetricTypes: s
   }
 
   if (hasHrv) {
-    const avgHrv = recent.reduce((s, m) => s + m.hrv, 0) / recent.length;
-    const hrvStdDev = Math.sqrt(recent.reduce((s, m) => s + Math.pow(m.hrv - avgHrv, 2), 0) / recent.length);
-    if (hrvStdDev > 12) {
-      patterns.push(`HRV variability is high (${hrvStdDev.toFixed(0)} ms std dev). Inconsistent sleep timing or elevated stress may be the driver.`);
-    } else if (hrvStdDev < 5 && avgHrv > 0) {
-      patterns.push(`HRV is very stable at ${Math.round(avgHrv)} ms. Your recovery rhythm is consistent, which supports treatment response.`);
+    const hrvVals = recent.map(m => m.hrv).filter((v): v is number => typeof v === "number");
+    if (hrvVals.length >= 3) {
+      const avgHrv = hrvVals.reduce((s, v) => s + v, 0) / hrvVals.length;
+      const hrvStdDev = Math.sqrt(hrvVals.reduce((s, v) => s + Math.pow(v - avgHrv, 2), 0) / hrvVals.length);
+      if (hrvStdDev > 12) {
+        patterns.push(`HRV variability is high (${hrvStdDev.toFixed(0)} ms std dev). Inconsistent sleep timing or elevated stress may be the driver.`);
+      } else if (hrvStdDev < 5 && avgHrv > 0) {
+        patterns.push(`HRV is very stable at ${Math.round(avgHrv)} ms. Your recovery rhythm is consistent, which supports treatment response.`);
+      }
     }
   }
 
   if (hasRecovery) {
-    const lowRecoveryDays = recent.filter(m => m.recoveryScore < 60).length;
+    const lowRecoveryDays = recent.filter(m => typeof m.recoveryScore === "number" && m.recoveryScore < 60).length;
     if (lowRecoveryDays >= 3) {
       patterns.push(`${lowRecoveryDays} of the last 7 days had recovery below 60%. Prioritize sleep and hydration. On treatment, low recovery compounds faster.`);
     }
@@ -212,6 +232,7 @@ export function buildGLP1Insights(
     let farDoseRecovery: number[] = [];
     for (const m of recent14) {
       const closestDoseDist = Math.min(...doseDates.map(dd => Math.abs(Math.floor((new Date(m.date).getTime() - new Date(dd).getTime()) / 86400000))));
+      if (typeof m.recoveryScore !== "number") continue;
       if (closestDoseDist <= 2) nearDoseRecovery.push(m.recoveryScore);
       else farDoseRecovery.push(m.recoveryScore);
     }
@@ -264,8 +285,8 @@ export function buildGLP1Insights(
     const firstHalf = recent14.slice(0, Math.floor(recent14.length / 2));
     const secondHalf = recent14.slice(Math.floor(recent14.length / 2));
     if (firstHalf.length >= 2 && secondHalf.length >= 2) {
-      const avgRecFirst = firstHalf.reduce((s, m) => s + m.recoveryScore, 0) / firstHalf.length;
-      const avgRecSecond = secondHalf.reduce((s, m) => s + m.recoveryScore, 0) / secondHalf.length;
+      const avgRecFirst = firstHalf.reduce((s, m) => s + (m.recoveryScore ?? 0), 0) / firstHalf.length;
+      const avgRecSecond = secondHalf.reduce((s, m) => s + (m.recoveryScore ?? 0), 0) / secondHalf.length;
       if (avgRecFirst - avgRecSecond > 5) {
         insights.push({
           text: `Recovery appears to have dipped since your recent dose increase. This may be related to the adjustment period and usually stabilizes within 1-2 weeks.`,
@@ -292,8 +313,8 @@ export function buildGLP1Insights(
   } else if (medicationProfile.recentTitration && recent14.length >= 10) {
     const firstHalf = recent14.slice(0, 7);
     const secondHalf = recent14.slice(7);
-    const avgRecFirst = firstHalf.reduce((s, m) => s + m.recoveryScore, 0) / firstHalf.length;
-    const avgRecSecond = secondHalf.reduce((s, m) => s + m.recoveryScore, 0) / secondHalf.length;
+    const avgRecFirst = firstHalf.reduce((s, m) => s + (m.recoveryScore ?? 0), 0) / firstHalf.length;
+    const avgRecSecond = secondHalf.reduce((s, m) => s + (m.recoveryScore ?? 0), 0) / secondHalf.length;
     if (avgRecFirst - avgRecSecond > 5) {
       insights.push({
         text: `Recovery dropped by ${Math.round(avgRecFirst - avgRecSecond)}% since your recent dose increase. This usually stabilizes within 1-2 weeks as your body adjusts.`,
@@ -311,9 +332,9 @@ export function buildGLP1Insights(
 
   const recent7Sleep = recent7.reduce((s, m) => s + m.sleepDuration, 0) / recent7.length;
   const lowSleepDays = recent7.filter(m => m.sleepDuration < 6.5);
-  const lowSleepRecovery = lowSleepDays.length > 0 ? lowSleepDays.reduce((s, m) => s + m.recoveryScore, 0) / lowSleepDays.length : 0;
+  const lowSleepRecovery = lowSleepDays.length > 0 ? lowSleepDays.reduce((s, m) => s + (m.recoveryScore ?? 0), 0) / lowSleepDays.length : 0;
   const goodSleepDays = recent7.filter(m => m.sleepDuration >= 7);
-  const goodSleepRecovery = goodSleepDays.length > 0 ? goodSleepDays.reduce((s, m) => s + m.recoveryScore, 0) / goodSleepDays.length : 0;
+  const goodSleepRecovery = goodSleepDays.length > 0 ? goodSleepDays.reduce((s, m) => s + (m.recoveryScore ?? 0), 0) / goodSleepDays.length : 0;
   if (lowSleepDays.length >= 2 && goodSleepDays.length >= 2 && goodSleepRecovery - lowSleepRecovery > 8) {
     insights.push({
       text: `Nights under 6.5 hrs drop your recovery by ${Math.round(goodSleepRecovery - lowSleepRecovery)}% compared to 7+ hr nights. On treatment, sleep is one of your strongest levers.`,
@@ -332,7 +353,7 @@ export function buildGLP1Insights(
     for (let i = 0; i < recent7.length - 1; i++) {
       const todayRate = completionMap.get(recent7[i].date.slice(0, 10));
       if (todayRate === undefined) continue;
-      const nextDayRecovery = recent7[i + 1].recoveryScore;
+      const nextDayRecovery = recent7[i + 1].recoveryScore ?? 0;
       if (todayRate >= 80) highCompNextDayRecovery.push(nextDayRecovery);
       else if (todayRate < 50) lowCompNextDayRecovery.push(nextDayRecovery);
     }
@@ -381,9 +402,12 @@ export function buildKeyInsights(
   const hasRecovery = availableMetricTypes.includes("recovery");
   const hasSteps = availableMetricTypes.includes("steps");
 
-  const avgSleep = recent.reduce((s, m) => s + m.sleepDuration, 0) / recent.length;
-  const avgRecovery = Math.round(recent.reduce((s, m) => s + m.recoveryScore, 0) / recent.length);
-  const avgSteps = Math.round(recent.reduce((s, m) => s + m.steps, 0) / recent.length);
+  const sleepVals = recent.map(m => m.sleepDuration).filter((v): v is number => typeof v === "number");
+  const recoveryVals = recent.map(m => m.recoveryScore).filter((v): v is number => typeof v === "number");
+  const stepsVals = recent.map(m => m.steps).filter((v): v is number => typeof v === "number");
+  const avgSleep = sleepVals.length ? sleepVals.reduce((s, v) => s + v, 0) / sleepVals.length : 0;
+  const avgRecovery = recoveryVals.length ? Math.round(recoveryVals.reduce((s, v) => s + v, 0) / recoveryVals.length) : 0;
+  const avgSteps = stepsVals.length ? Math.round(stepsVals.reduce((s, v) => s + v, 0) / stepsVals.length) : 0;
 
   if (habitStats.todayCompleted > 0) {
     insights.push(`${habitStats.todayCompleted} of ${habitStats.todayTotal} actions done today.`);
@@ -428,12 +452,13 @@ export function buildKeyInsights(
   return insights.slice(0, 5);
 }
 
-export function weeklyAverages(daily: number[], weeks: number = 4): number[] {
+export function weeklyAverages(daily: (number | null | undefined)[], weeks: number = 4): number[] {
   const result: number[] = [];
   for (let w = 0; w < weeks; w++) {
     const start = daily.length - (weeks - w) * 7;
     const end = start + 7;
-    const slice = daily.slice(Math.max(0, start), Math.max(0, end));
+    const slice = daily.slice(Math.max(0, start), Math.max(0, end))
+      .filter((v): v is number => typeof v === "number");
     if (slice.length > 0) {
       result.push(slice.reduce((s, v) => s + v, 0) / slice.length);
     }
@@ -478,8 +503,8 @@ export function generateTrendsView(
 ): TrendsViewOutput {
   return {
     correlations: buildCorrelations(metrics),
-    patterns: detectPatterns(metrics),
-    keyInsights: buildKeyInsights(metrics, habitStats),
+    patterns: detectPatterns(metrics, []),
+    keyInsights: buildKeyInsights(metrics, habitStats, []),
     glp1Insights: buildGLP1Insights(metrics, medicationProfile, medicationLog, completionHistory),
     sparkData: {
       sleepWeekly: weeklyAverages(metrics.map(m => m.sleepDuration)),
