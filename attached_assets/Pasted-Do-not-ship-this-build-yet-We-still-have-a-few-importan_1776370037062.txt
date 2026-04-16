@@ -1,0 +1,49 @@
+Do not ship this build yet. We still have a few important issues to fix before the next TestFlight build.
+
+Priority order:
+
+1. Fix the silent chat/device failure
+- The deployed endpoint works, so this is a device-side/client-side issue
+- Trace the exact runtime request path on device
+- Identify the exact failure point
+- Do not stop at “endpoint works”
+- Return the exact root cause
+
+2. Increase recommendation sensitivity to severe symptoms
+- Severe nausea and other severe symptoms must materially change the daily recommendation
+- Rebalance weighting so severe subjective symptoms strongly influence plan intensity and guidance
+
+3. Sync Today and Plan
+- The Today check-in, recommendation, and that same day in the Plan tab must come from the same underlying daily state
+- Eliminate drift between those surfaces
+
+4. Today metric detail should be today-first
+- For metrics tapped from Today’s Key Metrics:
+  - primary stat = today’s value
+  - secondary = 7-day average
+  - tertiary = 4-week average
+  - include trend chart
+- Keep this distinct from Trends, which remains trend-first
+
+5. Fix large-font wrapping / accessibility
+- Improve layout for larger text sizes so onboarding cards and labels do not break awkwardly
+
+6. The Viva logo still flashes on app launch
+- The Viva logo is still briefly showing when I first open the app
+- Fully audit the launch path again, including:
+  - native splash config
+  - expo splash behavior
+  - app/_layout.tsx splash gating
+  - any onboarding or initial screen render that could briefly show branding
+  - any shared header/component that might render before the first real screen settles
+- Fix the startup flow so the app transitions directly from the native splash into the correct first screen with no extra branded flash
+- Return the exact root cause of the remaining logo flash
+
+After that, report:
+- exact root cause of the device-side chat failure
+- how severe symptom weighting changed
+- how Today and Plan are now synced
+- how Today metric detail is structured
+- what accessibility fixes were made
+- exact root cause of the remaining logo flash
+- files changed

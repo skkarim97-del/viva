@@ -359,7 +359,7 @@ export default function OnboardingScreen() {
 
           {step === "name" && (
             <View style={styles.section}>
-              <Text style={[styles.stepTitle, { color: c.foreground }]}>What should we{"\n"}call you?</Text>
+              <Text style={[styles.stepTitle, { color: c.foreground }]}>What should we call you?</Text>
               <Text style={[styles.stepSub, { color: c.mutedForeground }]}>Your first name is fine</Text>
               <TextInput
                 style={[styles.nameInput, { color: c.foreground, backgroundColor: c.card, borderColor: userName.trim() ? c.accent : c.muted }]}
@@ -377,7 +377,7 @@ export default function OnboardingScreen() {
 
           {step === "goals" && (
             <View style={styles.section}>
-              <Text style={[styles.stepTitle, { color: c.foreground }]}>What matters most{"\n"}during treatment?</Text>
+              <Text style={[styles.stepTitle, { color: c.foreground }]}>What matters most during treatment?</Text>
               <Text style={[styles.stepSub, { color: c.mutedForeground }]}>Pick the lifestyle and treatment priorities you want Viva to support. Select all that apply.</Text>
               <View style={styles.goalGrid}>
                 {GOAL_OPTIONS.map((goal) => {
@@ -415,7 +415,7 @@ export default function OnboardingScreen() {
 
           {step === "medication" && (
             <View style={styles.section}>
-              <Text style={[styles.stepTitle, { color: c.foreground }]}>Which medication are{"\n"}you taking?</Text>
+              <Text style={[styles.stepTitle, { color: c.foreground }]}>Which medication are you taking?</Text>
               <Text style={[styles.stepSub, { color: c.mutedForeground }]}>This helps us personalize your support</Text>
               <View style={styles.optionList}>
                 {BRAND_OPTIONS.map((opt) => (
@@ -453,7 +453,7 @@ export default function OnboardingScreen() {
 
           {step === "dose" && (
             <View style={styles.section}>
-              <Text style={[styles.stepTitle, { color: c.foreground }]}>What dose are{"\n"}you on?</Text>
+              <Text style={[styles.stepTitle, { color: c.foreground }]}>What dose are you on?</Text>
               <Text style={[styles.stepSub, { color: c.mutedForeground }]}>Your dose helps us calibrate support</Text>
 
               {medBrand !== "other" ? (
@@ -547,7 +547,7 @@ export default function OnboardingScreen() {
 
           {step === "titration" && (
             <View style={styles.section}>
-              <Text style={[styles.stepTitle, { color: c.foreground }]}>Did your dose change{"\n"}in the last 14 days?</Text>
+              <Text style={[styles.stepTitle, { color: c.foreground }]}>Did your dose change in the last 14 days?</Text>
               <Text style={[styles.stepSub, { color: c.mutedForeground }]}>Recent changes affect how we support you</Text>
               <View style={styles.segmentRow}>
                 <Pressable
@@ -607,7 +607,7 @@ export default function OnboardingScreen() {
 
           {step === "time_on_med" && (
             <View style={styles.section}>
-              <Text style={[styles.stepTitle, { color: c.foreground }]}>How long have you{"\n"}been on this medication?</Text>
+              <Text style={[styles.stepTitle, { color: c.foreground }]}>How long have you been on this medication?</Text>
               <View style={styles.optionList}>
                 {TIME_ON_MED_OPTIONS.map((opt) => (
                   <Pressable
@@ -637,7 +637,7 @@ export default function OnboardingScreen() {
 
           {step === "telehealth" && (
             <View style={styles.section}>
-              <Text style={[styles.stepTitle, { color: c.foreground }]}>Where are you{"\n"}getting treatment?</Text>
+              <Text style={[styles.stepTitle, { color: c.foreground }]}>Where are you getting treatment?</Text>
               <Text style={[styles.stepSub, { color: c.mutedForeground }]}>Optional. Helps us understand your setup.</Text>
 
               <TextInput
@@ -685,7 +685,7 @@ export default function OnboardingScreen() {
 
           {step === "side_effects" && (
             <View style={styles.section}>
-              <Text style={[styles.stepTitle, { color: c.foreground }]}>Any side effects{"\n"}you typically get?</Text>
+              <Text style={[styles.stepTitle, { color: c.foreground }]}>Any side effects you typically get?</Text>
               <Text style={[styles.stepSub, { color: c.mutedForeground }]}>Select all that apply. This helps us support you better.</Text>
               <View style={styles.goalGrid}>
                 {SIDE_EFFECT_OPTIONS.map((opt) => {
@@ -722,7 +722,7 @@ export default function OnboardingScreen() {
 
           {step === "nutrition" && (
             <View style={styles.section}>
-              <Text style={[styles.stepTitle, { color: c.foreground }]}>Nutrition and{"\n"}recovery baseline</Text>
+              <Text style={[styles.stepTitle, { color: c.foreground }]}>Nutrition and recovery baseline</Text>
               <Text style={[styles.stepSub, { color: c.mutedForeground }]}>No right or wrong answers. This helps us meet you where you are.</Text>
 
               <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>Protein confidence</Text>
@@ -795,7 +795,7 @@ export default function OnboardingScreen() {
 
           {step === "activity" && (
             <View style={styles.section}>
-              <Text style={[styles.stepTitle, { color: c.foreground }]}>How active are you{"\n"}right now?</Text>
+              <Text style={[styles.stepTitle, { color: c.foreground }]}>How active are you right now?</Text>
               <View style={styles.optionList}>
                 {ACTIVITY_OPTIONS.map((opt) => (
                   <Pressable
@@ -828,7 +828,7 @@ export default function OnboardingScreen() {
 
           {step === "integrations" && (
             <View style={styles.section}>
-              <Text style={[styles.stepTitle, { color: c.foreground }]}>Connect{"\n"}Apple Health</Text>
+              <Text style={[styles.stepTitle, { color: c.foreground }]}>Connect Apple Health</Text>
               <Text style={[styles.stepSub, { color: c.mutedForeground }]}>
                 Viva uses your sleep, activity, heart rate, and recovery data from Apple Health for more personalized daily support.
               </Text>
@@ -955,9 +955,9 @@ const styles = StyleSheet.create({
   nameInput: { fontSize: 18, fontFamily: "Montserrat_500Medium", paddingVertical: 16, paddingHorizontal: 18, borderRadius: 16, borderWidth: 1.5, marginTop: 8 },
   sectionLabel: { fontSize: 12, fontFamily: "Montserrat_600SemiBold", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 },
   goalGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 4 },
-  goalCard: { width: "47%", flexGrow: 1, flexDirection: "row", alignItems: "center", paddingVertical: 14, paddingHorizontal: 14, borderRadius: 16, gap: 10 },
-  goalIconWrap: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  goalLabel: { fontSize: 14, fontFamily: "Montserrat_600SemiBold", flex: 1 },
+  goalCard: { minWidth: "47%", flexBasis: "47%", flexGrow: 1, flexShrink: 1, flexDirection: "row", alignItems: "center", paddingVertical: 14, paddingHorizontal: 14, borderRadius: 16, gap: 10 },
+  goalIconWrap: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  goalLabel: { fontSize: 14, fontFamily: "Montserrat_600SemiBold", flex: 1, flexShrink: 1 },
   goalCheck: { width: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center" },
   optionList: { gap: 8 },
   optionCard: { flexDirection: "row", alignItems: "center", paddingVertical: 16, paddingHorizontal: 16, borderRadius: 16, gap: 12 },

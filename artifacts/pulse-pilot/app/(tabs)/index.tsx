@@ -152,7 +152,7 @@ export default function DashboardScreen() {
 
   const openMetric = (key: MetricKey) => {
     haptic();
-    router.push({ pathname: "/metric-detail", params: { key } });
+    router.push({ pathname: "/metric-detail", params: { key, source: "today" } });
   };
 
   const selectAppetite = (a: NonNullable<AppetiteLevel>) => {

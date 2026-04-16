@@ -40,9 +40,10 @@ export class CoachRequestError extends Error {
 }
 
 function dlog(...args: unknown[]) {
-  if (typeof __DEV__ !== "undefined" && __DEV__) {
-    console.log("[CoachClient]", ...args);
-  }
+  // Always log in both dev and production. On TestFlight/App Store builds these
+  // are visible in Xcode's Console app or the device's system logs, which is
+  // essential for diagnosing coach failures that never reach the server.
+  console.log("[CoachClient]", ...args);
 }
 
 /**
@@ -165,28 +166,47 @@ export async function sendCoachMessage(args: CoachRequestArgs): Promise<{ conten
   }
 }
 
+function diagSuffix(err: CoachRequestError): string {
+  // Append a compact diagnostic tag so production users can screenshot the
+  // error bubble and we can see exactly which URL/kind/status was involved.
+  const parts: string[] = [];
+  parts.push(`kind=${err.kind}`);
+  if (typeof err.status === "number") parts.push(`status=${err.status}`);
+  if (err.url) parts.push(`url=${err.url}`);
+  return `\n\n[${parts.join(" ")}]`;
+}
+
 export function describeCoachError(err: CoachRequestError): string {
+  let body: string;
   switch (err.kind) {
     case "config":
-      return err.message;
+      body = err.message;
+      break;
     case "timeout":
-      return `${err.message} The server may be slow or unreachable. Tap retry below.`;
+      body = `${err.message} The server may be slow or unreachable. Tap retry below.`;
+      break;
     case "network":
-      return `${err.message} Check your connection or confirm the API server is deployed. Tap retry below.`;
+      body = `${err.message} Check your connection or confirm the API server is deployed. Tap retry below.`;
+      break;
     case "http": {
-      if (err.status === 404) return `Coach endpoint not found at ${err.url}. The API server may not be deployed yet.`;
-      if (err.status === 401 || err.status === 403) return "AI service is not configured (auth error). Check the OpenAI key on the server.";
-      if (err.status === 429) return "Rate limited. Wait a moment and try again.";
-      if (err.status === 500) return `Server error. ${err.body || "The AI service may be temporarily unavailable."} Tap retry below.`;
-      return `Server returned ${err.status}. ${err.body || ""} Tap retry below.`;
+      if (err.status === 404) body = `Coach endpoint not found at ${err.url}. The API server may not be deployed yet.`;
+      else if (err.status === 401 || err.status === 403) body = "AI service is not configured (auth error). Check the OpenAI key on the server.";
+      else if (err.status === 429) body = "Rate limited. Wait a moment and try again.";
+      else if (err.status === 500) body = `Server error. ${err.body || "The AI service may be temporarily unavailable."} Tap retry below.`;
+      else body = `Server returned ${err.status}. ${err.body || ""} Tap retry below.`;
+      break;
     }
     case "parse":
-      return "Got a response but couldn't read it. Tap retry below.";
+      body = "Got a response but couldn't read it. Tap retry below.";
+      break;
     case "empty":
-      return "The coach didn't send a reply. Tap retry below.";
+      body = "The coach didn't send a reply. Tap retry below.";
+      break;
     case "serialize":
-      return `Could not prepare the request: ${err.message}`;
+      body = `Could not prepare the request: ${err.message}`;
+      break;
     default:
-      return err.message || "Something went wrong. Try again in a moment.";
+      body = err.message || "Something went wrong. Try again in a moment.";
   }
+  return `${body}${diagSuffix(err)}`;
 }

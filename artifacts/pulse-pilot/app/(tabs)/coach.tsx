@@ -179,26 +179,50 @@ export default function CoachScreen() {
     try {
       healthContext = buildHealthContext();
     } catch (e: any) {
-      if (typeof __DEV__ !== "undefined" && __DEV__) console.log("[Coach] buildHealthContext threw:", e);
+      console.log("[Coach] buildHealthContext threw:", e?.message || String(e));
       healthContext = undefined;
     }
 
-    try {
-      const { content } = await sendCoachMessage({
+    // Single attempt, then on failure retry once without the health context.
+    // Some failures (serialize, unexpected server 4xx from the context payload)
+    // can succeed with a plain message, so we fall back transparently before
+    // surfacing an error to the user.
+    const attempt = async (withContext: boolean) => {
+      return sendCoachMessage({
         message: trimmed,
-        healthContext,
+        healthContext: withContext ? healthContext : undefined,
         conversationHistory,
       });
+    };
+
+    try {
+      let result;
+      try {
+        result = await attempt(true);
+      } catch (firstErr: any) {
+        const kind = firstErr?.kind;
+        const retryable = kind === "serialize" || kind === "http" || kind === "parse" || kind === "empty" || kind === "unknown";
+        console.log("[Coach] first attempt failed:", { kind, status: firstErr?.status, message: firstErr?.message, retryable });
+        if (retryable && healthContext !== undefined) {
+          console.log("[Coach] retrying without healthContext");
+          try {
+            result = await attempt(false);
+          } catch (secondErr: any) {
+            console.log("[Coach] retry failed:", { kind: secondErr?.kind, status: secondErr?.status, message: secondErr?.message });
+            throw secondErr;
+          }
+        } else {
+          throw firstErr;
+        }
+      }
       addChatMessage({
         id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
         role: "assistant",
-        content,
+        content: result.content,
         timestamp: Date.now(),
       });
     } catch (err: any) {
-      if (typeof __DEV__ !== "undefined" && __DEV__) {
-        console.log("[Coach] error:", { kind: err?.kind, status: err?.status, message: err?.message, body: err?.body });
-      }
+      console.log("[Coach] final error:", { kind: err?.kind, status: err?.status, message: err?.message, body: err?.body, url: err?.url });
       const userMessage = err instanceof CoachRequestError
         ? describeCoachError(err)
         : `Something went wrong. ${err?.message || ""}`.trim();

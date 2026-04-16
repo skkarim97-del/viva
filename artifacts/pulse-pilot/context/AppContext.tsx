@@ -167,6 +167,51 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [adaptiveInsights, setAdaptiveInsights] = useState<AdaptiveInsight[]>([]);
   const baselineWeeklyPlanRef = useRef<WeeklyPlan | null>(null);
 
+  // Keep the weekly plan's "today" day in sync with the actual daily plan.
+  // generateWeeklyPlan() uses a static rotation that is disconnected from
+  // the live daily check-in, so without this patch the Plan tab shows
+  // stale guidance for today while the Today tab shows the real state.
+  useEffect(() => {
+    if (!dailyPlan) return;
+    const todayDate = new Date().toISOString().split("T")[0];
+    setWeeklyPlan(prev => {
+      if (!prev) return prev;
+      const idx = prev.days.findIndex(d => d.date === todayDate);
+      if (idx === -1) return prev;
+      const existing = prev.days[idx];
+      const liveActions: WeeklyDayAction[] = dailyPlan.actions
+        .filter(a => a.category !== "consistent")
+        .map(a => ({
+          category: a.category,
+          recommended: a.recommended,
+          chosen: a.text !== a.recommended ? a.text : a.recommended,
+          completed: a.completed,
+        }));
+      const nextFocus = dailyPlan.dailyFocus || existing.focusArea;
+      const nextAdaptive = dailyPlan.headline;
+      const sameFocus = existing.focusArea === nextFocus;
+      const sameNote = existing.adaptiveNote === nextAdaptive;
+      const sameActions = existing.actions.length === liveActions.length &&
+        existing.actions.every((a, i) =>
+          a.category === liveActions[i].category &&
+          a.recommended === liveActions[i].recommended &&
+          a.chosen === liveActions[i].chosen &&
+          a.completed === liveActions[i].completed,
+        );
+      if (sameFocus && sameNote && sameActions) return prev;
+      const newDay: WeeklyPlanDay = {
+        ...existing,
+        focusArea: nextFocus,
+        actions: liveActions,
+        adaptiveNote: nextAdaptive,
+        isAdapted: true,
+      };
+      const newDays = prev.days.slice();
+      newDays[idx] = newDay;
+      return { ...prev, days: newDays };
+    });
+  }, [dailyPlan]);
+
   const setBaselineAndAdapt = useCallback((
     basePlan: WeeklyPlan,
     inputHistory: GLP1DailyInputs[],

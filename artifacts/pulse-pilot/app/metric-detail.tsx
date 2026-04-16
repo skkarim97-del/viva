@@ -29,7 +29,8 @@ const METRIC_KEY_TO_TYPE: Record<string, AvailableMetricType> = {
 export default function MetricDetailScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
-  const { key } = useLocalSearchParams<{ key: MetricKey }>();
+  const { key, source } = useLocalSearchParams<{ key: MetricKey; source?: string }>();
+  const todayFirst = source === "today";
   const { todayMetrics, metrics, insights, hasHealthData, availableMetricTypes } = useApp();
   const topPad = Platform.OS === "web" ? 60 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -112,23 +113,55 @@ export default function MetricDetailScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: bottomPad + 24 }]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.heroSection}>
-          <Text style={[styles.heroLabel, { color: c.mutedForeground }]}>4-week average</Text>
-          <View style={styles.heroValueRow}>
-            <Text style={[styles.heroValue, { color: c.foreground }]}>{detail.currentValue}</Text>
-            {detail.unit ? (
-              <Text style={[styles.heroUnit, { color: c.mutedForeground }]}>{detail.unit}</Text>
-            ) : null}
-            <Text style={[styles.heroTrend, { color: trendColor }]}>{trendArrow}</Text>
-          </View>
-          {detail.secondaryLabel && detail.secondaryValue ? (
-            <View style={[styles.secondaryStat, { backgroundColor: c.muted }]}>
-              <Text style={[styles.secondaryStatLabel, { color: c.mutedForeground }]}>{detail.secondaryLabel}</Text>
-              <Text style={[styles.secondaryStatValue, { color: c.foreground }]}>{detail.secondaryValue}</Text>
+        {todayFirst && detail.secondaryLabel && detail.secondaryValue ? (
+          // Arriving from the Today tab: lead with the current/latest reading
+          // and relegate the 4-week average to the secondary chip, because
+          // the user just tapped a "today" metric card and expects today's
+          // number to be the hero.
+          (() => {
+            const heroRaw = detail.secondaryValue;
+            const spaceIdx = heroRaw.indexOf(" ");
+            const heroValue = spaceIdx === -1 ? heroRaw : heroRaw.slice(0, spaceIdx);
+            const heroUnit = spaceIdx === -1 ? detail.unit : heroRaw.slice(spaceIdx + 1);
+            return (
+              <View style={styles.heroSection}>
+                <Text style={[styles.heroLabel, { color: c.mutedForeground }]}>{detail.secondaryLabel}</Text>
+                <View style={styles.heroValueRow}>
+                  <Text style={[styles.heroValue, { color: c.foreground }]}>{heroValue}</Text>
+                  {heroUnit ? (
+                    <Text style={[styles.heroUnit, { color: c.mutedForeground }]}>{heroUnit}</Text>
+                  ) : null}
+                  <Text style={[styles.heroTrend, { color: trendColor }]}>{trendArrow}</Text>
+                </View>
+                <View style={[styles.secondaryStat, { backgroundColor: c.muted }]}>
+                  <Text style={[styles.secondaryStatLabel, { color: c.mutedForeground }]}>4-week average</Text>
+                  <Text style={[styles.secondaryStatValue, { color: c.foreground }]}>
+                    {detail.currentValue}{detail.unit ? ` ${detail.unit}` : ""}
+                  </Text>
+                </View>
+                <Text style={[styles.heroHeadline, { color: c.foreground }]}>{detail.headline}</Text>
+              </View>
+            );
+          })()
+        ) : (
+          <View style={styles.heroSection}>
+            <Text style={[styles.heroLabel, { color: c.mutedForeground }]}>4-week average</Text>
+            <View style={styles.heroValueRow}>
+              <Text style={[styles.heroValue, { color: c.foreground }]}>{detail.currentValue}</Text>
+              {detail.unit ? (
+                <Text style={[styles.heroUnit, { color: c.mutedForeground }]}>{detail.unit}</Text>
+              ) : null}
+              <Text style={[styles.heroTrend, { color: trendColor }]}>{trendArrow}</Text>
             </View>
-          ) : null}
-          <Text style={[styles.heroHeadline, { color: c.foreground }]}>{detail.headline}</Text>
-        </View>
+            {detail.secondaryLabel && detail.secondaryValue ? (
+              <View style={[styles.secondaryStat, { backgroundColor: c.muted }]}>
+                <Text style={[styles.secondaryStatLabel, { color: c.mutedForeground }]}>{detail.secondaryLabel}</Text>
+                <Text style={[styles.secondaryStatValue, { color: c.foreground }]}>{detail.secondaryValue}</Text>
+              </View>
+            ) : null}
+            <Text style={[styles.heroHeadline, { color: c.foreground }]}>{detail.headline}</Text>
+          </View>
+        )}
 
         <View style={[styles.section, { backgroundColor: c.card }]}>
           <Text style={[styles.sectionBody, { color: c.mutedForeground }]}>{detail.explanation}</Text>

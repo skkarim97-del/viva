@@ -622,7 +622,10 @@ export function generateDailyPlan(
   const sleepLow = wearableAvailable && metrics.sleepDuration > 0 && metrics.sleepDuration < 6.5;
   const sleepCritical = wearableAvailable && metrics.sleepDuration > 0 && metrics.sleepDuration < 6 && hrvDeviation < -10;
   const sleepGoodHrvGood = wearableAvailable && metrics.sleepDuration > 7.5 && hrvDeviation >= 0;
-  const symptomsHeavy = glp1Inputs?.nausea === "severe" || glp1Inputs?.nausea === "moderate";
+  const symptomsSevere = glp1Inputs?.nausea === "severe";
+  const symptomsModerate = glp1Inputs?.nausea === "moderate";
+  const symptomsHeavy = symptomsSevere || symptomsModerate;
+  const digestionSevere = glp1Inputs?.digestion === "diarrhea";
   const digestiveDistress = glp1Inputs?.digestion === "diarrhea" || glp1Inputs?.digestion === "constipated";
   const appetiteLow = glp1Inputs?.appetite === "very_low" || glp1Inputs?.appetite === "low";
 
@@ -641,24 +644,59 @@ export function generateDailyPlan(
   const isNewToMed = medicationProfile?.timeOnMedicationBucket === "less_1_month";
   const isHighDose = medicationProfile ? getDoseTier(medicationProfile.medicationBrand, medicationProfile.doseValue) === "high" : false;
 
-  if (sleepCritical || (glp1Inputs?.nausea === "severe" && glp1Inputs?.energy === "depleted")) {
+  if (sleepCritical || (symptomsSevere && glp1Inputs?.energy === "depleted")) {
     dailyState = "recover";
     headline = isTitrated
       ? "Your body is adjusting to the new dose. Keep today simple."
       : "Recovery is the priority today.";
-    summary = symptomsHeavy
-      ? "Nausea is heavy and energy is very low. Rest, hydration, and small meals are enough for today."
-      : wearableAvailable && metrics.sleepDuration > 0
-        ? `Sleep was ${metrics.sleepDuration.toFixed(1)} hrs and your body is showing it. Rest and hydration come first.`
-        : "Your inputs suggest your body needs rest today. Hydration and small meals come first.";
+    summary = symptomsSevere
+      ? "Severe nausea and very low energy mean today is about rest, hydration, and the smallest meals you can tolerate. Skip workouts."
+      : symptomsModerate
+        ? "Nausea is heavy and energy is very low. Rest, hydration, and small meals are enough for today."
+        : wearableAvailable && metrics.sleepDuration > 0
+          ? `Sleep was ${metrics.sleepDuration.toFixed(1)} hrs and your body is showing it. Rest and hydration come first.`
+          : "Your inputs suggest your body needs rest today. Hydration and small meals come first.";
     dailyFocus = "Rest and recover";
     whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, wearableAvailable, trigger: sleepCritical ? "sleep_critical" : "symptoms_severe" });
     workoutType = "Rest";
     workoutIntensity = "low";
     workoutDuration = 0;
-    workoutDesc = "Full rest or a very gentle walk if you feel up to it.";
-    optional = "A short walk after a meal can help with nausea and digestion.";
-  } else if (symptomsHeavy) {
+    workoutDesc = symptomsSevere
+      ? "Full rest today. Skip workouts while nausea is severe."
+      : "Full rest or a very gentle walk if you feel up to it.";
+    optional = symptomsSevere
+      ? "Sip electrolytes slowly. If vomiting, cannot keep fluids down, or symptoms worsen, contact your prescriber."
+      : "A short walk after a meal can help with nausea and digestion.";
+  } else if (symptomsSevere) {
+    // Severe nausea without "depleted" energy still warrants recover mode
+    // with firmer guardrails than moderate nausea.
+    dailyState = "recover";
+    headline = isTitrated
+      ? "Severe nausea after the dose change. Pull back hard today."
+      : "Severe nausea today. Rest, fluids, and the smallest meals you can tolerate.";
+    summary = isHighDose
+      ? "At higher doses severe nausea can escalate quickly. Focus on sipping fluids, electrolytes, and tiny protein-forward bites. No workout today."
+      : "Severe nausea is a stop-signal from your body. Prioritize fluids, electrolytes, and very small meals. No workout today.";
+    dailyFocus = "Rest and recover";
+    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, wearableAvailable, trigger: "symptoms_severe" });
+    workoutType = "Rest";
+    workoutIntensity = "low";
+    workoutDuration = 0;
+    workoutDesc = "Full rest. Skip all training while nausea is severe.";
+    optional = "If you cannot keep fluids down, are vomiting, or symptoms worsen through the day, contact your prescriber.";
+  } else if (digestionSevere && (symptomsModerate || glp1Inputs?.energy === "depleted")) {
+    // Diarrhea stacked on other strain also warrants recover framing.
+    dailyState = "recover";
+    headline = "Digestion is off and your body is strained. Keep today very light.";
+    summary = "Diarrhea plus other symptoms can drain fluids and electrolytes fast. Focus on rehydration and easy foods before anything else.";
+    dailyFocus = "Rehydrate and rest";
+    whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, wearableAvailable, trigger: "symptoms_severe" });
+    workoutType = "Rest";
+    workoutIntensity = "low";
+    workoutDuration = 0;
+    workoutDesc = "Rest. Resume light movement once digestion settles.";
+    optional = "Oral rehydration drinks or broth help replace what you are losing.";
+  } else if (symptomsModerate) {
     dailyState = "recover";
     headline = isTitrated
       ? "Nausea from the dose change is showing. Simplify today."
