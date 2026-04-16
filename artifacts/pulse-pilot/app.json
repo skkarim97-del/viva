@@ -43,12 +43,6 @@
       "expo-font",
       "expo-web-browser",
       [
-        "react-native-health-connect",
-        {
-          "requestPermissionsBackCompat": true
-        }
-      ],
-      [
         "react-native-health",
         {
           "isClinicalDataEnabled": false
