@@ -630,7 +630,7 @@ export default function DashboardScreen() {
               <Pressable onPress={() => setShowChat(false)} hitSlop={12}>
                 <Feather name="chevron-down" size={24} color={c.foreground} />
               </Pressable>
-              <Text style={[styles.chatHeaderTitle, { color: c.foreground }]}>Your VIVA Coach</Text>
+              <Text style={[styles.chatHeaderTitle, { color: c.foreground }]}>Your viva Coach</Text>
               <View style={{ width: 24 }} />
             </View>
 

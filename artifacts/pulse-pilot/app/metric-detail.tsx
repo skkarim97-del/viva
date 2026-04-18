@@ -196,9 +196,11 @@ export default function MetricDetailScreen() {
           ))}
         </View>
 
-        <View style={[styles.section, { backgroundColor: c.card }]}>
-          <Text style={[styles.sectionBody, { color: c.mutedForeground }]}>{detail.explanation}</Text>
-        </View>
+        {/* The benchmark card above already enumerates last night /
+            7-day / 4-week, so an inline explanation card that repeats
+            the same numbers ("4-week average: X. Last 7 days: Y...")
+            is dropped. The "What this means" section below carries the
+            interpretive copy on its own. */}
 
         <View style={[styles.section, { backgroundColor: c.card }]}>
           <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>30-day trend</Text>

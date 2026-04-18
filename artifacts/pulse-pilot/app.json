@@ -18,8 +18,10 @@
       "icon": "./assets/icon.png",
       "supportsTablet": false,
       "bundleIdentifier": "com.sullyk97.vivaai",
-      "buildNumber": "38",
-      "associatedDomains": ["applinks:viva-ai.replit.app"],
+      "buildNumber": "39",
+      "associatedDomains": [
+        "applinks:viva-ai.replit.app"
+      ],
       "config": {
         "usesNonExemptEncryption": false
       },
@@ -41,7 +43,10 @@
               "pathPrefix": "/invite/"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },

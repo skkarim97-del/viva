@@ -88,7 +88,7 @@ export default function ConnectScreen() {
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.brand}>VIVA</Text>
+          <Text style={styles.brand}>viva</Text>
           <Text style={styles.title}>
             {mode === "activate"
               ? "Connect to your clinician"
