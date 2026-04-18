@@ -180,17 +180,16 @@ export function SymptomTipCard(props: SymptomTipCardProps) {
           <View
             style={[
               styles.urgencyPill,
-              { backgroundColor: warning + "1F", borderColor: warning + "55" },
+              // Solid (not tinted) amber so the pill clearly reads as
+              // a status flag rather than blending in with the factor
+              // chips that share a pill shape further down the card.
+              { backgroundColor: warning },
             ]}
             accessible
             accessibilityLabel="Act now: high urgency"
           >
-            <View
-              style={[styles.urgencyPillDot, { backgroundColor: warning }]}
-            />
-            <Text style={[styles.urgencyPillText, { color: warning }]}>
-              Act now
-            </Text>
+            <Feather name="alert-triangle" size={11} color="#FFFFFF" />
+            <Text style={styles.urgencyPillText}>Act now</Text>
           </View>
         )}
         {mode === "ack" && isPrimary && tip.severity === 2 && (
@@ -456,21 +455,17 @@ const styles = StyleSheet.create({
   urgencyPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    gap: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
     borderRadius: 999,
-    borderWidth: 1,
-  },
-  urgencyPillDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
   },
   urgencyPillText: {
-    fontFamily: "Montserrat_600SemiBold",
-    fontSize: 10.5,
-    letterSpacing: 0.2,
+    fontFamily: "Montserrat_700Bold",
+    fontSize: 11,
+    letterSpacing: 0.4,
+    color: "#FFFFFF",
+    textTransform: "uppercase",
   },
   urgencyDot: {
     width: 8,
