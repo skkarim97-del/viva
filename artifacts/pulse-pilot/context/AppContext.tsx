@@ -54,6 +54,7 @@ import type {
 } from "@/types";
 
 import { API_BASE } from "@/lib/apiConfig";
+import { sessionApi } from "@/lib/api/sessionClient";
 
 interface AppContextType {
   profile: UserProfile;
@@ -1161,6 +1162,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const updated = [...checkInHistory.filter(c => c.date !== checkIn.date), checkIn].slice(-30);
     setCheckInHistory(updated);
     await AsyncStorage.setItem(CHECKIN_KEY, JSON.stringify(updated));
+
+    // Mirror to the shared backend so the doctor dashboard sees this
+    // patient's daily state. Fire-and-forget: a network failure here
+    // must not break the local UX. The /me/checkins endpoint upserts
+    // by (patient_user_id, date), so re-saving a day is idempotent.
+    // We only mirror when energy + nausea are populated since the
+    // backend rejects nulls -- if the patient saved a check-in
+    // without filling those they'll be sent on the next save.
+    if (checkIn.energy && checkIn.nausea) {
+      const moodMap: Record<string, number> = {
+        focused: 5, good: 4, low: 2, burnt_out: 1,
+      };
+      const mood = checkIn.mentalState ? moodMap[checkIn.mentalState] ?? 3 : 3;
+      sessionApi
+        .submitCheckin({
+          date: checkIn.date,
+          energy: checkIn.energy,
+          nausea: checkIn.nausea,
+          mood,
+          notes: null,
+        })
+        .catch(() => {
+          // Silent failure: stored locally, will retry on next save.
+        });
+    }
 
     if (metricsRef) {
       const todayDate = new Date().toISOString().split("T")[0];

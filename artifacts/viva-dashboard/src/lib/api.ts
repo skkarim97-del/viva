@@ -36,6 +36,12 @@ export interface PatientRow {
   riskBand: "low" | "medium" | "high";
   // Workflow state computed server-side: needs_followup / monitor / stable.
   action: Action;
+  // Lifecycle state independent of risk:
+  //   invited     -> doctor sent the link, app not yet claimed
+  //   activated   -> patient claimed the account, no check-ins yet
+  //   monitoring  -> at least one check-in received
+  // Used to give the pending bucket cards distinct copy.
+  status: "invited" | "activated" | "monitoring";
   // Up to two short, scannable signals for this patient, primary first.
   // Empty array when no rules fired. The UI joins these with " · " so
   // two patients with the same primary signal don't read as identical.

@@ -80,7 +80,16 @@ Express 5 + Drizzle + Postgres. Session auth via `connect-pg-simple` with manual
 -   **Validation**: Zod (`zod/v4`), `drizzle-zod`
 -   **API Codegen**: Orval
 -   **Mobile Development**: Expo (React Native)
--   **AI Integration**: OpenAI (`gpt-4o-mini` for coaching chat)
 -   **Health Data**: Apple Health / HealthKit (`react-native-health`)
--   **Persistence**: AsyncStorage
+-   **Persistence**: AsyncStorage (local state + bearer token)
 -   **Charting**: `react-native-svg`
+
+## Mobile <-> Backend Auth (April 2026)
+
+The patient mobile app and the doctor dashboard share the same API server.
+- Doctors use cookie sessions (express-session).
+- Patients use long-lived bearer tokens stored in `api_tokens` (issued by `/auth/activate` and `/auth/login`).
+- `requireAuth` middleware checks the `Authorization: Bearer <token>` header FIRST and only falls back to the session cookie if no header is present. A header that doesn't match a token fails closed with 401.
+- Mobile gate: no token -> `/connect` (paste invite link OR sign in); token + no local profile -> `/onboarding`; token + profile -> `(tabs)`.
+- `saveDailyCheckIn` mirrors to `POST /me/checkins` fire-and-forget; failures stay local and re-sync on the next save (the endpoint upserts by patient+date).
+- `mentalState` enum -> mood int mapping: focused=5, good=4, low=2, burnt_out=1, null=3.

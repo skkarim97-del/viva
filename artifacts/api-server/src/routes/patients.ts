@@ -103,6 +103,7 @@ router.get("/", async (req, res: Response) => {
         riskScore: 0,
         riskBand: "low" as const,
         action: "pending" as const,
+        status: "invited" as const,
         signals: [] as string[],
         lastNoteAt: lastNoteByPatient.get(p.id) ?? null,
         pending: true,
@@ -115,6 +116,29 @@ router.get("/", async (req, res: Response) => {
       cks.length > 0
         ? cks.reduce((acc, c) => (c.date > acc ? c.date : acc), cks[0]!.date)
         : null;
+    // Activated but no check-ins yet -> still belongs in the pending
+    // bucket from the doctor's POV (nothing to score), but flagged
+    // separately so the card can read "Connected, awaiting first
+    // check-in" instead of "Awaiting account activation".
+    if (cks.length === 0) {
+      return {
+        id: p.id,
+        name: p.name,
+        email: p.email,
+        glp1Drug: p.glp1Drug,
+        dose: p.dose,
+        startedOn: p.startedOn,
+        lastCheckin: null,
+        riskScore: 0,
+        riskBand: "low" as const,
+        action: "pending" as const,
+        status: "activated" as const,
+        signals: [] as string[],
+        lastNoteAt: lastNoteByPatient.get(p.id) ?? null,
+        pending: true,
+        activationToken: null as string | null,
+      };
+    }
     return {
       id: p.id,
       name: p.name,
@@ -126,6 +150,7 @@ router.get("/", async (req, res: Response) => {
       riskScore: risk.score,
       riskBand: risk.band,
       action: deriveAction(risk.score, risk.rules, lastCheckin),
+      status: "monitoring" as const,
       signals: deriveSignals(risk.rules, lastCheckin),
       lastNoteAt: lastNoteByPatient.get(p.id) ?? null,
       pending: false,

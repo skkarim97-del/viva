@@ -15,6 +15,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppProvider, useApp } from "@/context/AppContext";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 // Fade the native splash out so it cross-fades into the JS screen instead of
@@ -35,7 +36,8 @@ const queryClient = new QueryClient();
 
 function SplashGate({ fontsReady, children }: { fontsReady: boolean; children: React.ReactNode }) {
   const { isLoading } = useApp();
-  const ready = fontsReady && !isLoading;
+  const { loading: authLoading } = useAuth();
+  const ready = fontsReady && !isLoading && !authLoading;
   const hiddenRef = useRef(false);
 
   const hideOnce = (reason: string) => {
@@ -99,13 +101,19 @@ function SplashGate({ fontsReady, children }: { fontsReady: boolean; children: R
 
 function RootLayoutNav() {
   const { profile } = useApp();
-  // Decide the initial route ONCE, before the Stack mounts. Previously the
-  // app always mounted (tabs) first and then (tabs)/_layout did
-  // <Redirect href="/onboarding" /> for fresh users -- that briefly mounted
-  // and painted the tabs background before kicking back to onboarding,
-  // producing a visible second jump. With initialRouteName the correct
-  // first screen is the very first thing Expo Router renders.
-  const initialRouteName = profile.onboardingComplete ? "(tabs)" : "onboarding/index";
+  const { user } = useAuth();
+  // Auth gate decided ONCE at first render, same pattern as before:
+  //   no session         -> /connect (paste invite or sign in)
+  //   session, no profile-> /onboarding (local profile wizard)
+  //   session + profile  -> (tabs)
+  // The session token also unlocks the API: every check-in saved in
+  // (tabs) mirrors to the backend so the doctor dashboard sees real
+  // data instead of the patient's local-only AsyncStorage.
+  const initialRouteName = !user
+    ? "connect"
+    : profile.onboardingComplete
+      ? "(tabs)"
+      : "onboarding/index";
   return (
     <Stack
       screenOptions={{
@@ -116,6 +124,7 @@ function RootLayoutNav() {
     >
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="onboarding/index" options={{ gestureEnabled: false }} />
+      <Stack.Screen name="connect" options={{ gestureEnabled: false }} />
       <Stack.Screen name="metric-detail" />
     </Stack>
   );
@@ -136,11 +145,13 @@ export default function RootLayout() {
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <GestureHandlerRootView>
-            <AppProvider>
-              <SplashGate fontsReady={fontsReady}>
-                <RootLayoutNav />
-              </SplashGate>
-            </AppProvider>
+            <AuthProvider>
+              <AppProvider>
+                <SplashGate fontsReady={fontsReady}>
+                  <RootLayoutNav />
+                </SplashGate>
+              </AppProvider>
+            </AuthProvider>
           </GestureHandlerRootView>
         </QueryClientProvider>
       </ErrorBoundary>

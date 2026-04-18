@@ -286,6 +286,15 @@ function PendingCard({ p }: { p: PatientRow }) {
       /* clipboard blocked */
     }
   }
+  // Two distinct sub-states of "pending": the doctor needs to know
+  // whether the patient still hasn't installed the app vs. has the
+  // app but hasn't logged a check-in yet. The first is solved by
+  // resending the invite; the second is solved by nudging the patient
+  // to open the app, so the controls below the divider differ too.
+  const isInvited = p.status === "invited";
+  const subtitle = isInvited
+    ? "Awaiting account activation. Resend the link if needed."
+    : "Connected. Awaiting first check-in.";
   return (
     <div className="bg-card rounded-[20px] p-5 opacity-95">
       <div className="flex items-start justify-between gap-4">
@@ -297,35 +306,37 @@ function PendingCard({ p }: { p: PatientRow }) {
             {p.email}
           </div>
           <div className="text-xs text-muted-foreground mt-1 font-medium">
-            Awaiting first check-in. No monitoring data yet.
+            {subtitle}
           </div>
         </div>
         <ActionBadge action="pending" />
       </div>
-      <div className="mt-4 pt-4 border-t border-border flex items-stretch gap-2">
-        <input
-          readOnly
-          value={link ?? "Generating..."}
-          onFocus={(e) => e.currentTarget.select()}
-          className="flex-1 px-3 py-2 rounded-lg bg-background text-foreground text-xs font-mono focus:outline-none focus:ring-2 focus:ring-accent"
-        />
-        <button
-          type="button"
-          onClick={copy}
-          disabled={!link}
-          className="px-3 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 disabled:opacity-60"
-        >
-          {copied ? "Copied" : "Copy link"}
-        </button>
-        <button
-          type="button"
-          onClick={() => resend.mutate()}
-          disabled={resend.isPending}
-          className="px-3 py-2 rounded-lg bg-background text-foreground text-xs font-semibold hover:opacity-80 disabled:opacity-60"
-        >
-          {resend.isPending ? "..." : "Resend"}
-        </button>
-      </div>
+      {isInvited && (
+        <div className="mt-4 pt-4 border-t border-border flex items-stretch gap-2">
+          <input
+            readOnly
+            value={link ?? "Generating..."}
+            onFocus={(e) => e.currentTarget.select()}
+            className="flex-1 px-3 py-2 rounded-lg bg-background text-foreground text-xs font-mono focus:outline-none focus:ring-2 focus:ring-accent"
+          />
+          <button
+            type="button"
+            onClick={copy}
+            disabled={!link}
+            className="px-3 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 disabled:opacity-60"
+          >
+            {copied ? "Copied" : "Copy link"}
+          </button>
+          <button
+            type="button"
+            onClick={() => resend.mutate()}
+            disabled={resend.isPending}
+            className="px-3 py-2 rounded-lg bg-background text-foreground text-xs font-semibold hover:opacity-80 disabled:opacity-60"
+          >
+            {resend.isPending ? "..." : "Resend"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

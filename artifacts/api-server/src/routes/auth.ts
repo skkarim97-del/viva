@@ -1,8 +1,26 @@
 import { Router, type Request, type Response } from "express";
 import bcrypt from "bcryptjs";
-import { eq } from "drizzle-orm";
-import { db, usersTable, patientsTable } from "@workspace/db";
+import { randomBytes } from "node:crypto";
+import { and, eq, isNull } from "drizzle-orm";
+import {
+  db,
+  usersTable,
+  patientsTable,
+  apiTokensTable,
+} from "@workspace/db";
 import { z } from "zod";
+
+// Issue a long-lived bearer token for the patient mobile app. Cookies
+// are not reliable on RN, so the app stores this in AsyncStorage and
+// sends it on every request via Authorization: Bearer <token>.
+async function issueApiToken(
+  userId: number,
+  role: "doctor" | "patient",
+): Promise<string> {
+  const token = randomBytes(32).toString("base64url");
+  await db.insert(apiTokensTable).values({ token, userId, role });
+  return token;
+}
 
 const router: Router = Router();
 
@@ -76,6 +94,73 @@ router.post("/signup", async (req: Request, res: Response) => {
   });
 });
 
+// POST /auth/activate -- patient claims a pending account using the
+// invite token the doctor sent them. Sets the real password, stamps
+// activatedAt (so the dashboard moves them out of "Pending"), and
+// returns a bearer token for the mobile app.
+const activateSchema = z.object({
+  token: z.string().min(8).max(200),
+  password: z.string().min(8).max(200),
+});
+router.post("/activate", async (req: Request, res: Response) => {
+  const parsed = activateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_input" });
+    return;
+  }
+  const [patient] = await db
+    .select({
+      userId: patientsTable.userId,
+      activatedAt: patientsTable.activatedAt,
+    })
+    .from(patientsTable)
+    .where(eq(patientsTable.activationToken, parsed.data.token))
+    .limit(1);
+  if (!patient) {
+    res.status(404).json({ error: "invalid_token" });
+    return;
+  }
+  if (patient.activatedAt) {
+    // Token was already burned. Fail closed -- the patient should
+    // sign in with their email + password instead.
+    res.status(409).json({ error: "already_activated" });
+    return;
+  }
+  const passwordHash = await bcrypt.hash(parsed.data.password, 10);
+  await db
+    .update(usersTable)
+    .set({ passwordHash })
+    .where(eq(usersTable.id, patient.userId));
+  await db
+    .update(patientsTable)
+    .set({ activatedAt: new Date(), activationToken: null })
+    .where(
+      and(
+        eq(patientsTable.userId, patient.userId),
+        isNull(patientsTable.activatedAt),
+      ),
+    );
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, patient.userId))
+    .limit(1);
+  if (!user) {
+    res.status(500).json({ error: "activation_failed" });
+    return;
+  }
+  const token = await issueApiToken(user.id, user.role);
+  res.status(200).json({
+    token,
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+    },
+  });
+});
+
 router.post("/login", async (req: Request, res: Response) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -120,6 +205,10 @@ router.post("/login", async (req: Request, res: Response) => {
         user.role === "doctor"
           ? !user.clinicName || (await countDoctorPatients(user.id)) === 0
           : false;
+      // Always issue a bearer token. The dashboard ignores it (uses
+      // its session cookie); the mobile patient app stores it in
+      // AsyncStorage so it can authenticate subsequent requests.
+      const token = await issueApiToken(user.id, user.role);
       res.json({
         id: user.id,
         email: user.email,
@@ -127,6 +216,7 @@ router.post("/login", async (req: Request, res: Response) => {
         role: user.role,
         clinicName: user.clinicName,
         needsOnboarding,
+        token,
       });
     });
   });
