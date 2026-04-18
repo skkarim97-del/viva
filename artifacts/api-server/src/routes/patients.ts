@@ -1,5 +1,5 @@
 import { Router, type Response } from "express";
-import { and, eq, desc, gte } from "drizzle-orm";
+import { and, eq, desc, gte, inArray, max } from "drizzle-orm";
 import { z } from "zod";
 import {
   db,
@@ -9,7 +9,12 @@ import {
   doctorNotesTable,
 } from "@workspace/db";
 import { requireDoctor, type AuthedRequest } from "../middlewares/auth";
-import { computeRisk, deriveAction, deriveSuggestedAction } from "../lib/risk";
+import {
+  computeRisk,
+  deriveAction,
+  deriveSignals,
+  deriveSuggestedAction,
+} from "../lib/risk";
 
 const router: Router = Router();
 
@@ -56,6 +61,26 @@ router.get("/", async (req, res: Response) => {
     byPatient.set(c.patientUserId, arr);
   }
 
+  // Pull the most recent note timestamp per patient in a single grouped
+  // query so the list view can show "Last note: 2d ago" without an
+  // extra round trip. Surfacing this on the queue is what stops two
+  // doctors from re-calling the same patient.
+  const lastNoteRows =
+    patientIds.length === 0
+      ? []
+      : await db
+          .select({
+            patientUserId: doctorNotesTable.patientUserId,
+            last: max(doctorNotesTable.createdAt),
+          })
+          .from(doctorNotesTable)
+          .where(inArray(doctorNotesTable.patientUserId, patientIds))
+          .groupBy(doctorNotesTable.patientUserId);
+  const lastNoteByPatient = new Map<number, string>();
+  for (const r of lastNoteRows) {
+    if (r.last) lastNoteByPatient.set(r.patientUserId, r.last as string);
+  }
+
   const result = rows.map((p) => {
     const cks = byPatient.get(p.id) ?? [];
     const risk = computeRisk(cks);
@@ -72,32 +97,19 @@ router.get("/", async (req, res: Response) => {
       // Computed server-side so the list and detail views agree and so
       // the dashboard can sort the queue without re-deriving the rule.
       action: deriveAction(risk.score, risk.rules, lastCheckin),
-      // The single most-actionable signal for this patient. The list view
-      // renders this as a short tagline under the name so a doctor can
-      // triage without clicking in. Customised for silence so the row
-      // shows the actual gap rather than a generic phrase.
-      topSignal: deriveTopSignal(risk.rules, lastCheckin),
+      // Up to two signals (primary + secondary) so two patients with
+      // identical urgent signals don't read as visually identical.
+      // E.g. ["No check-in for 3d", "Low energy trend (7d)"].
+      signals: deriveSignals(risk.rules, lastCheckin),
+      // ISO timestamp of the most recent care-team note, or null if
+      // nobody has logged anything yet. The UI turns this into
+      // "Last note: 2d ago" / "No recent action".
+      lastNoteAt: lastNoteByPatient.get(p.id) ?? null,
     };
   });
 
   res.json(result);
 });
-
-function deriveTopSignal(
-  rules: ReturnType<typeof computeRisk>["rules"],
-  lastCheckin: string | null,
-): string | null {
-  if (rules.length === 0) return null;
-  const top = rules[0]!; // computeRisk returns rules in firing order; silence is checked first
-  if (top.code === "silence_3d" && lastCheckin) {
-    const days = Math.floor(
-      (Date.now() - new Date(lastCheckin).getTime()) / (1000 * 60 * 60 * 24),
-    );
-    return `No check-in for ${days}d`;
-  }
-  if (top.code === "silence_3d") return "Never checked in";
-  return top.label;
-}
 
 // Helper: ensure a patient belongs to the calling doctor; throws 403 if not.
 async function loadOwnedPatient(

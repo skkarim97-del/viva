@@ -17,3 +17,9 @@ id = "JhpvfBCW68ke3GLgPfAsg"
 uri = "file://artifacts/viva-dashboard-patient-list-top.png"
 type = "image"
 title = "VIVA Dashboard — Triage queue with 40 patients"
+
+[[outputs]]
+id = "PjjQ6D6noN6WRPT-KOeei"
+uri = "file://artifacts/viva-dashboard-queue.png"
+type = "image"
+title = "VIVA Dashboard — Grouped triage queue"

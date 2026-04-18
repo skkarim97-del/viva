@@ -27,9 +27,14 @@ export interface PatientRow {
   riskBand: "low" | "medium" | "high";
   // Workflow state computed server-side: needs_followup / monitor / stable.
   action: Action;
-  // Short, scannable headline of the patient's most-actionable signal,
-  // e.g. "No check-in for 5d". Null when nothing is firing.
-  topSignal: string | null;
+  // Up to two short, scannable signals for this patient, primary first.
+  // Empty array when no rules fired. The UI joins these with " · " so
+  // two patients with the same primary signal don't read as identical.
+  signals: string[];
+  // ISO timestamp of the most recent care-team note for this patient,
+  // or null if nobody has logged an action yet. Used to render
+  // "Last note: 2d ago" on the queue so doctors don't double-up calls.
+  lastNoteAt: string | null;
 }
 
 export interface PatientDetail {

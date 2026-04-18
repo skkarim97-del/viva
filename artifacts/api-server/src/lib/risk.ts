@@ -148,6 +148,36 @@ export function deriveAction(
  * the doctor can act on. Mirrors deriveTopSignal but speaks in verbs
  * instead of describing the signal.
  */
+/**
+ * Up to two short, scannable signal labels for the patient list view.
+ * The first slot follows the same logic as the detail page (silence
+ * customised to show the actual gap), the second slot adds the next
+ * fired rule so two patients with identical primary signals don't read
+ * as visually identical.
+ */
+export function deriveSignals(
+  rules: FiredRule[],
+  lastCheckin: string | null,
+  now: Date = new Date(),
+): string[] {
+  if (rules.length === 0) return [];
+  const out: string[] = [];
+  const first = rules[0]!;
+  if (first.code === "silence_3d") {
+    if (lastCheckin) {
+      const days = daysBetween(now, new Date(lastCheckin));
+      out.push(`No check-in for ${days}d`);
+    } else {
+      out.push("Never checked in");
+    }
+  } else {
+    out.push(first.label);
+  }
+  const second = rules.find((r) => r.code !== first.code);
+  if (second) out.push(second.label);
+  return out;
+}
+
 export function deriveSuggestedAction(
   rules: FiredRule[],
   lastCheckin: string | null,
