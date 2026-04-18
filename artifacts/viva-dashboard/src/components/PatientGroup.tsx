@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { forwardRef, type ReactNode } from "react";
 import type { Action } from "@/lib/api";
 
 /**
@@ -6,12 +6,16 @@ import type { Action } from "@/lib/api";
  * "Stable") gets its own group with a count chip in the header so the
  * 40-patient queue is mentally segmented instead of reading as one
  * uninterrupted scroll.
+ *
+ * Open state is fully controlled by the parent so the summary bar can
+ * focus a section (open + scroll) by name from outside the group.
  */
 
 interface Props {
   action: Action;
   count: number;
-  defaultOpen?: boolean;
+  open: boolean;
+  onToggle: () => void;
   children: ReactNode;
 }
 
@@ -21,19 +25,16 @@ const HEADER: Record<Action, { label: string; dot: string }> = {
   stable: { label: "Stable", dot: "#34C759" },
 };
 
-export function PatientGroup({
-  action,
-  count,
-  defaultOpen = true,
-  children,
-}: Props) {
-  const [open, setOpen] = useState(defaultOpen);
+export const PatientGroup = forwardRef<HTMLElement, Props>(function PatientGroup(
+  { action, count, open, onToggle, children },
+  ref,
+) {
   const h = HEADER[action];
   return (
-    <section>
+    <section ref={ref} data-group={action} className="scroll-mt-6">
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={onToggle}
         className="w-full flex items-center gap-3 px-1 py-2 mb-2 group"
       >
         <span
@@ -59,4 +60,4 @@ export function PatientGroup({
       {open && <div className="space-y-3 mb-6">{children}</div>}
     </section>
   );
-}
+});

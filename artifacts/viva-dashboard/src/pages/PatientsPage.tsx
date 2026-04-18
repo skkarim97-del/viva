@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { api, type Action, type PatientRow } from "@/lib/api";
@@ -6,6 +6,7 @@ import { RiskBadge } from "@/components/RiskBadge";
 import { ActionBadge } from "@/components/ActionBadge";
 import { PatientGroup } from "@/components/PatientGroup";
 import { AddNoteModal } from "@/components/AddNoteModal";
+import { SummaryBar } from "@/components/SummaryBar";
 import { relativeTime } from "@/lib/relativeTime";
 
 // The queue is grouped by action so a 40-patient list reads as three
@@ -93,6 +94,46 @@ export function PatientsPage() {
 
   const [noteTarget, setNoteTarget] = useState<NoteTarget | null>(null);
 
+  // Group open-state lifted into the page so the SummaryBar can focus
+  // a section (force-open + scroll) when a stat card is clicked.
+  // Defaults match the focus-mode brief: only Needs follow-up open.
+  const [openGroups, setOpenGroups] = useState<Record<Action, boolean>>({
+    needs_followup: true,
+    monitor: false,
+    stable: false,
+  });
+  const groupRefs = useRef<Record<Action, HTMLElement | null>>({
+    needs_followup: null,
+    monitor: null,
+    stable: null,
+  });
+  const focusGroup = (action: Action) => {
+    setOpenGroups((g) => ({ ...g, [action]: true }));
+    // Defer scroll until after expansion paints so the section's full
+    // height is in the layout when we measure.
+    requestAnimationFrame(() => {
+      groupRefs.current[action]?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  };
+
+  // Silence stat counts patients whose last check-in is 3+ days old
+  // OR who never checked in. Computed client-side from the queue
+  // payload so we don't need a second round trip.
+  const silentCount = useMemo(() => {
+    if (!q.data) return 0;
+    const now = Date.now();
+    return q.data.filter((p) => {
+      if (!p.lastCheckin) return true;
+      const days = Math.floor(
+        (now - new Date(p.lastCheckin).getTime()) / (1000 * 60 * 60 * 24),
+      );
+      return days >= 3;
+    }).length;
+  }, [q.data]);
+
   return (
     <div>
       <div className="flex items-end justify-between mb-7">
@@ -130,20 +171,32 @@ export function PatientsPage() {
         </div>
       )}
 
+      {q.data && q.data.length > 0 && (
+        <SummaryBar
+          needsFollowupCount={grouped.needs_followup.length}
+          silentCount={silentCount}
+          totalPatients={q.data.length}
+          onFocusNeedsFollowup={() => focusGroup("needs_followup")}
+          onFocusSilent={() => focusGroup("needs_followup")}
+        />
+      )}
+
       {q.data && q.data.length > 0 &&
         ACTION_ORDER.map((action) => {
           const rows = grouped[action];
           if (rows.length === 0) return null;
-          // Focus mode: at scale, only Needs follow-up should be open by
-          // default. Monitor and Stable collapse so the queue is one
-          // tight column of "act on this now".
-          const defaultOpen = action === "needs_followup";
           return (
             <PatientGroup
               key={action}
               action={action}
               count={rows.length}
-              defaultOpen={defaultOpen}
+              open={openGroups[action]}
+              onToggle={() =>
+                setOpenGroups((g) => ({ ...g, [action]: !g[action] }))
+              }
+              ref={(el) => {
+                groupRefs.current[action] = el;
+              }}
             >
               {rows.map((p) => (
                 <PatientCard

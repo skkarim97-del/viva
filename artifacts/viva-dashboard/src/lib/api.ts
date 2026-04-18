@@ -125,6 +125,8 @@ export const api = {
 
   // doctor
   patients: () => request<PatientRow[]>("GET", "/patients"),
+  doctorStats: () =>
+    request<{ actionsToday: number }>("GET", "/patients/stats"),
   patient: (id: number) => request<PatientDetail>("GET", `/patients/${id}`),
   patientCheckins: (id: number) =>
     request<Checkin[]>("GET", `/patients/${id}/checkins`),

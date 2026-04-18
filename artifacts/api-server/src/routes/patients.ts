@@ -111,6 +111,29 @@ router.get("/", async (req, res: Response) => {
   res.json(result);
 });
 
+// GET /patients/stats -- one-shot panel-health snapshot for the
+// dashboard summary bar. We only need the metric the queue itself
+// can't compute client-side: how many notes the doctor wrote today.
+// (The other three summary numbers -- needs-follow-up count, 3+ day
+// silence count, total patients -- are derived from /patients on the
+// client to avoid a duplicate query.) Defined BEFORE /:id so Express
+// doesn't route "stats" through the param handler.
+router.get("/stats", async (req, res: Response) => {
+  const doctorId = (req as AuthedRequest).auth.userId;
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const todays = await db
+    .select({ id: doctorNotesTable.id })
+    .from(doctorNotesTable)
+    .where(
+      and(
+        eq(doctorNotesTable.doctorUserId, doctorId),
+        gte(doctorNotesTable.createdAt, startOfToday),
+      ),
+    );
+  res.json({ actionsToday: todays.length });
+});
+
 // Helper: ensure a patient belongs to the calling doctor; throws 403 if not.
 async function loadOwnedPatient(
   doctorId: number,

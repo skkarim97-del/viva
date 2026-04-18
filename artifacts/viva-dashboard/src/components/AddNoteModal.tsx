@@ -46,6 +46,8 @@ export function AddNoteModal({ patientId, patientName, onClose }: Props) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["patients"] });
       qc.invalidateQueries({ queryKey: ["patient", patientId, "notes"] });
+      // Bump the dashboard summary bar's "Actions taken today" counter.
+      qc.invalidateQueries({ queryKey: ["doctor-stats"] });
       onClose();
     },
     onError: () => {

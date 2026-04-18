@@ -29,3 +29,9 @@ id = "91crpb_OJRkumEF5ewzRR"
 uri = "file://artifacts/viva-dashboard-focus-mode.png"
 type = "image"
 title = "VIVA Dashboard — Focus mode + urgency tiers + outcome capture"
+
+[[outputs]]
+id = "cTitCPC0M9O9AvDEjcVuI"
+uri = "file://artifacts/viva-dashboard-summary-bar.png"
+type = "image"
+title = "VIVA Dashboard — Panel-health summary bar"

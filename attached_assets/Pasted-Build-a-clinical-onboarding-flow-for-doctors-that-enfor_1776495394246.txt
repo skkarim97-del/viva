@@ -1,0 +1,109 @@
+Build a clinical onboarding flow for doctors that enforces patient participation and positions Viva as a monitoring platform, not a consumer wellness app.
+
+Goal
+
+Ensure doctors understand that:
+
+the platform depends on patient app usage
+patients must be invited and activated
+monitoring begins only after patient check-ins
+Step 1: Account creation
+
+Page with:
+
+name
+email
+password
+CTA: “Create account”
+
+Use professional, clinical tone. No mention of AI or coaching.
+
+Step 2: Patient onboarding (core step)
+Page title:
+
+“Set up your patient panel”
+
+Subtitle:
+
+“Patients must connect to Viva to enable monitoring”
+
+Section 1:
+
+Clinic name input (simple)
+
+Section 2:
+
+Patient input form:
+
+name
+email (required)
+medication
+dose
+
+Allow adding multiple patients
+
+Add helper text:
+
+“Patients will receive an invite to download the Viva app and begin daily check-ins.”
+
+On submit:
+create patient record
+generate invite link
+mark patient as “pending activation”
+Show confirmation:
+
+“Invite sent”
+
+Optional:
+
+resend invite
+copy link
+Step 3: Dashboard behavior
+
+If no patients:
+
+show empty state:
+“Add and invite patients to begin monitoring”
+
+If patients exist but not activated:
+
+show “Pending activation” status
+do not show risk scores yet
+
+If patient has activated:
+
+show risk, trends, and monitoring data
+Add top banner:
+
+“Monitoring begins once patients complete their first check-in in the Viva app”
+
+Design constraints
+clean, minimal, professional UI
+no consumer wellness language
+no AI references
+no demo-first experience
+no complex setup flows
+no unnecessary fields
+My pushback (important)
+
+This is the right move strategically.
+
+You are:
+
+increasing friction slightly upfront
+BUT
+massively increasing product integrity and real usage
+
+If doctors can use this without patients:
+→ it becomes a toy
+
+If they need patients:
+→ it becomes infrastructure
+
+Bottom line
+
+Your onboarding should communicate one thing clearly:
+
+“This system works when your patients are active. Invite them first.”
+
+That’s what makes Viva real.
