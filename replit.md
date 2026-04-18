@@ -64,6 +64,14 @@ The system is a pnpm workspace monorepo using Node.js 24 and TypeScript 5.9. The
 -   **State Management**: Context-based state management (AppContext) for GLP-1 specific fields and logging.
 -   **Navigation**: Tab bar for Today, Plan, Trends, Settings, with modals for subscription and stack navigation for onboarding.
 
+## Doctor Dashboard (artifacts/viva-dashboard)
+
+A standalone React + Vite web app at `/viva-dashboard/` for the care team. Built lean (no design subagent), wouter for routing, tanstack-query for data, same-origin fetch with `credentials: "include"`. Pages: Login (demo creds prefilled), Patients list (table with risk badge), Patient detail (risk explanation, recent check-ins, care team notes CRUD). VIVA navy/accent palette, Montserrat + Inter.
+
+## Backend MVP (artifacts/api-server)
+
+Express 5 + Drizzle + Postgres. Session auth via `connect-pg-simple` with manually-provisioned `session` table (createTableIfMissing breaks under esbuild bundling). Login regenerates session ID and waits on `req.session.save()` before responding. CORS with credentials, sameSite=lax, `trust proxy: 1`. Schema: users (doctor|patient), patients, patient_checkins, doctor_notes. Rules-based risk engine in `src/lib/risk.ts` (silence +30, low energy +20, severe nausea +15, mood decline +10; bands low/medium/high). Endpoints: `/api/auth/{login,logout,me}`, `/api/patients`, `/api/patients/:id/{checkins,risk,notes}`, `/api/me/{checkins,risk}`. Demo creds: `doctor@vivaai.demo` / `viva-demo-2026`. Seed script in `scripts/seed.ts` creates 1 doctor + 4 varied patients with 25-29 days of check-ins; idempotent.
+
 ## External Dependencies
 
 -   **API Framework**: Express 5

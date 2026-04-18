@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/viva-dashboard/"
+title = "VIVA Doctor Dashboard"
+version = "1.0.0"
+id = "artifacts/viva-dashboard"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/viva-dashboard/" ]
+localPort = 18616
+
+[services.development]
+run = "pnpm --filter @workspace/viva-dashboard run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/viva-dashboard", "run", "build" ]
+publicDir = "artifacts/viva-dashboard/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18616"
+BASE_PATH = "/viva-dashboard/"
