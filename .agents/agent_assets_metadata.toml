@@ -41,3 +41,9 @@ id = "tVHxI_7LEOh0qWZYdZUOB"
 uri = "file://artifacts/viva-dashboard-checkin-update.jpg"
 type = "image"
 title = "Doctor dashboard after new patient check-in"
+
+[[outputs]]
+id = "5I43FNLAGxfS0OpLZyBht"
+uri = "file://artifacts/viva-dashboard-onboarding-phone.jpg"
+type = "image"
+title = "New onboarding flow result"

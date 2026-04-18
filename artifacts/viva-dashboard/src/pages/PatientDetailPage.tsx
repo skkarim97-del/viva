@@ -105,7 +105,7 @@ export function PatientDetailPage({ id }: { id: number }) {
               {p.name}
             </h1>
             <div className="text-muted-foreground text-sm mt-1.5 font-medium break-all">
-              {p.email}
+              {p.phone ?? p.email}
             </div>
             <div className="text-foreground text-sm mt-5 font-medium">
               {p.glp1Drug ?? "No drug recorded"}

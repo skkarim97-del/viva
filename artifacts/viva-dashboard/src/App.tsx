@@ -75,11 +75,12 @@ function Gate() {
       // cannot use the dashboard yet -- the product only works when
       // patients are connected. Push them to the wizard.
       setLocation("/onboarding");
-    } else if (!me.needsOnboarding && isOnboarding) {
-      // And once onboarding is complete, the wizard is no longer the
-      // canonical destination.
-      setLocation("/");
     }
+    // Note: we deliberately do NOT auto-redirect AWAY from /onboarding
+    // when needsOnboarding flips to false. The wizard refreshes `me`
+    // after the first invite is sent so the gate stops bouncing the
+    // doctor back, but the doctor stays on the page to copy/resend
+    // invite links and clicks "Go to dashboard" themselves when ready.
   }, [me, loading, location, isPublic, isOnboarding, setLocation]);
 
   if (loading) {

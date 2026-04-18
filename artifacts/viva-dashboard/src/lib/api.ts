@@ -28,6 +28,7 @@ export interface PatientRow {
   id: number;
   name: string;
   email: string;
+  phone: string | null;
   glp1Drug: string | null;
   dose: string | null;
   startedOn: string | null;
@@ -63,6 +64,7 @@ export interface PatientDetail {
   id: number;
   name: string;
   email: string;
+  phone: string | null;
   glp1Drug: string | null;
   dose: string | null;
   startedOn: string | null;
@@ -141,7 +143,7 @@ async function request<T>(
 export interface InviteResult {
   id: number;
   name: string;
-  email: string;
+  phone: string | null;
   inviteLink: string;
 }
 
@@ -161,7 +163,7 @@ export const api = {
     }),
   invitePatient: (input: {
     name: string;
-    email: string;
+    phone: string;
     glp1Drug?: string | null;
     dose?: string | null;
   }) => request<InviteResult>("POST", "/patients/invite", input),

@@ -6,45 +6,50 @@ import { api, HttpError, type InviteResult } from "@/lib/api";
 import { Logo } from "@/components/Logo";
 
 /**
- * Step 2 of doctor onboarding: build the patient panel. This is the
- * critical step strategically -- the platform only becomes useful once
- * patients are actively checking in, so we make patient invites a
- * prerequisite to entering the dashboard rather than an optional task.
+ * Step 2 of doctor onboarding: build the patient panel.
  *
- * The form intentionally stays minimal: clinic name once, then a
- * repeatable name/email/medication/dose row per patient. Email is the
- * only required patient field because it's the channel for the invite.
+ * The form is intentionally minimal -- practice name once, then a
+ * repeating row per patient. Only name + phone are required so the
+ * doctor can finish onboarding in under a minute. Empty rows are
+ * silently ignored on submit so the doctor never has to manually
+ * delete the trailing blank row that auto-add creates.
  */
 
 interface Draft {
   name: string;
-  email: string;
+  phone: string;
   glp1Drug: string;
   dose: string;
 }
 
-const EMPTY: Draft = { name: "", email: "", glp1Drug: "", dose: "" };
+const EMPTY: Draft = { name: "", phone: "", glp1Drug: "", dose: "" };
+
+function isFilled(d: Draft): boolean {
+  return d.name.trim().length > 0 || d.phone.trim().length > 0;
+}
 
 export function OnboardingPage() {
   const { me, setMe } = useAuth();
   const qc = useQueryClient();
   const [, setLocation] = useLocation();
 
-  const [clinic, setClinic] = useState(me?.clinicName ?? "");
+  const [practice, setPractice] = useState(me?.clinicName ?? "");
   const [drafts, setDrafts] = useState<Draft[]>([{ ...EMPTY }]);
-  // Successful invites accumulate here so the doctor can copy each
-  // link without losing context. Keyed by index so resend can update
-  // a specific row in place.
   const [sent, setSent] = useState<InviteResult[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState<number | null>(null);
 
   function updateDraft(i: number, patch: Partial<Draft>) {
-    setDrafts((rows) => rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
-  }
-  function addRow() {
-    setDrafts((rows) => [...rows, { ...EMPTY }]);
+    setDrafts((rows) => {
+      const next = rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r));
+      // Auto-append a fresh blank row whenever the doctor starts
+      // filling the last one. Keeps the form feeling lightweight --
+      // they don't have to hunt for an "Add patient" button.
+      const last = next[next.length - 1]!;
+      if (isFilled(last)) next.push({ ...EMPTY });
+      return next;
+    });
   }
   function removeRow(i: number) {
     setDrafts((rows) => (rows.length === 1 ? rows : rows.filter((_, idx) => idx !== i)));
@@ -74,51 +79,47 @@ export function OnboardingPage() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
-    const cleanClinic = clinic.trim();
-    if (!cleanClinic) {
-      setErr("Please enter your clinic name.");
+    const cleanPractice = practice.trim();
+    if (!cleanPractice) {
+      setErr("Please enter your practice name.");
       return;
     }
-    // Filter to rows the doctor actually filled in. Empty rows are
-    // ignored so they don't have to manually delete blank lines.
     const ready = drafts
       .map((d) => ({
         name: d.name.trim(),
-        email: d.email.trim().toLowerCase(),
+        phone: d.phone.trim(),
         glp1Drug: d.glp1Drug.trim(),
         dose: d.dose.trim(),
       }))
-      .filter((d) => d.email.length > 0);
+      .filter(isFilled);
     if (ready.length === 0) {
       setErr("Add at least one patient to enable monitoring.");
       return;
     }
     for (const d of ready) {
-      if (!d.name) {
-        setErr("Each patient needs a name.");
+      if (!d.name || !d.phone) {
+        setErr("Each patient needs a name and phone number.");
         return;
       }
     }
     setBusy(true);
     try {
-      // Persist the clinic name first so it's saved even if a patient
-      // invite later collides on email and the doctor has to retry.
-      if (cleanClinic !== me?.clinicName) {
-        await api.setClinic(cleanClinic);
+      if (cleanPractice !== me?.clinicName) {
+        await api.setClinic(cleanPractice);
       }
       const results: InviteResult[] = [];
       for (const d of ready) {
         try {
           const r = await api.invitePatient({
             name: d.name,
-            email: d.email,
+            phone: d.phone,
             glp1Drug: d.glp1Drug || null,
             dose: d.dose || null,
           });
           results.push(r);
         } catch (e2) {
           if (e2 instanceof HttpError && e2.status === 409) {
-            setErr(`${d.email} is already on the platform. Skipping.`);
+            setErr(`${d.phone} is already on the platform. Skipping.`);
           } else {
             throw e2;
           }
@@ -126,20 +127,18 @@ export function OnboardingPage() {
       }
       setSent((s) => [...s, ...results]);
       setDrafts([{ ...EMPTY }]);
-      // Refresh the cached identity so needsOnboarding flips to false
-      // and the Gate stops bouncing the doctor back here.
-      const fresh = await api.me();
-      setMe(fresh);
       qc.invalidateQueries({ queryKey: ["patients"] });
+      // We deliberately do NOT refresh `me` here. The auth context's
+      // needsOnboarding flag is what keeps the OnboardingPage mounted;
+      // refreshing it now would unmount this page mid-flow and the
+      // doctor would never see the "Invites sent" confirmation. We
+      // refresh in finish() instead, when the doctor explicitly
+      // navigates to the dashboard.
     } catch {
       setErr("Something went wrong sending invites. Please try again.");
     } finally {
       setBusy(false);
     }
-  }
-
-  function finish() {
-    setLocation("/");
   }
 
   const hasSent = sent.length > 0;
@@ -159,21 +158,21 @@ export function OnboardingPage() {
             Set up your patient panel
           </h1>
           <p className="text-muted-foreground text-sm mt-1.5 font-medium">
-            Patients must connect to Viva to enable monitoring.
+            Patients will receive a link to download the Viva app and begin check-ins.
           </p>
         </div>
 
         <form onSubmit={submit} className="space-y-6">
           <section className="bg-card rounded-[20px] p-6">
             <h2 className="font-display text-[15px] font-bold text-foreground mb-3">
-              Clinic
+              Practice name
             </h2>
             <input
               type="text"
               required
-              value={clinic}
-              onChange={(e) => setClinic(e.target.value)}
-              placeholder="Clinic or practice name"
+              value={practice}
+              onChange={(e) => setPractice(e.target.value)}
+              placeholder="e.g. Cedar Endocrinology"
               className={inputClass}
             />
           </section>
@@ -184,16 +183,11 @@ export function OnboardingPage() {
                 Invite patients
               </h2>
               <span className="text-xs text-muted-foreground font-medium">
-                Email is required
+                Name and phone required
               </span>
             </div>
-            <p className="text-xs text-muted-foreground font-medium mb-4 leading-relaxed">
-              Patients will receive an invite to download the Viva app and begin
-              daily check-ins. Monitoring data appears here only after their
-              first check-in.
-            </p>
 
-            <div className="space-y-4">
+            <div className="space-y-3">
               {drafts.map((d, i) => (
                 <div
                   key={i}
@@ -207,10 +201,12 @@ export function OnboardingPage() {
                     className={inputClass}
                   />
                   <input
-                    type="email"
-                    value={d.email}
-                    onChange={(e) => updateDraft(i, { email: e.target.value })}
-                    placeholder="patient@email.com"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="off"
+                    value={d.phone}
+                    onChange={(e) => updateDraft(i, { phone: e.target.value })}
+                    placeholder="Phone number"
                     className={inputClass}
                   />
                   <input
@@ -219,14 +215,14 @@ export function OnboardingPage() {
                     onChange={(e) =>
                       updateDraft(i, { glp1Drug: e.target.value })
                     }
-                    placeholder="Medication (e.g. semaglutide)"
+                    placeholder="Medication (optional)"
                     className={inputClass}
                   />
                   <input
                     type="text"
                     value={d.dose}
                     onChange={(e) => updateDraft(i, { dose: e.target.value })}
-                    placeholder="Dose (e.g. 1mg weekly)"
+                    placeholder="Dose (optional)"
                     className={inputClass}
                   />
                   {drafts.length > 1 && (
@@ -242,14 +238,6 @@ export function OnboardingPage() {
                 </div>
               ))}
             </div>
-
-            <button
-              type="button"
-              onClick={addRow}
-              className="mt-3 text-sm font-semibold text-accent hover:opacity-80"
-            >
-              + Add another patient
-            </button>
           </section>
 
           {err && (
@@ -268,7 +256,18 @@ export function OnboardingPage() {
             {hasSent && (
               <button
                 type="button"
-                onClick={finish}
+                onClick={async () => {
+                  // Refresh `me` here so needsOnboarding flips to
+                  // false BEFORE we route, otherwise the Gate would
+                  // immediately bounce us back to /onboarding.
+                  try {
+                    const fresh = await api.me();
+                    setMe(fresh);
+                  } catch {
+                    /* fall through; the gate will resolve on next load */
+                  }
+                  setLocation("/");
+                }}
                 className="text-sm font-semibold text-muted-foreground hover:text-foreground"
               >
                 Go to dashboard →
@@ -279,20 +278,16 @@ export function OnboardingPage() {
               disabled={busy}
               className="ml-auto bg-primary text-primary-foreground font-semibold px-6 py-3 rounded-2xl hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-60"
             >
-              {busy ? "Sending invites..." : "Send invites"}
+              {busy ? "Sending invites..." : "Send invites & continue"}
             </button>
           </div>
         </form>
 
         {hasSent && (
           <section className="mt-8 bg-card rounded-[20px] p-6">
-            <h2 className="font-display text-[15px] font-bold text-foreground mb-1">
+            <h2 className="font-display text-[15px] font-bold text-foreground mb-4">
               Invites sent
             </h2>
-            <p className="text-xs text-muted-foreground font-medium mb-4">
-              Share each link directly with the patient if email isn't reaching
-              them. Each link can be used once.
-            </p>
             <ul className="space-y-3">
               {sent.map((row, idx) => (
                 <li
@@ -305,14 +300,17 @@ export function OnboardingPage() {
                         {row.name}
                       </div>
                       <div className="text-xs text-muted-foreground font-medium truncate">
-                        {row.email}
+                        {row.phone ?? ""}
                       </div>
                     </div>
                     <span
                       className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full"
-                      style={{ color: "#B8650A", backgroundColor: "rgba(255,159,10,0.14)" }}
+                      style={{
+                        color: "#1E7A3C",
+                        backgroundColor: "rgba(48,209,88,0.14)",
+                      }}
                     >
-                      Pending activation
+                      Invite sent
                     </span>
                   </div>
                   <div className="flex items-stretch gap-2">

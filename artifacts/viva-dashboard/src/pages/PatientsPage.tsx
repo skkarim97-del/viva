@@ -303,7 +303,7 @@ function PendingCard({ p }: { p: PatientRow }) {
             {p.name}
           </div>
           <div className="text-xs text-muted-foreground mt-1 font-medium truncate">
-            {p.email}
+            {p.phone ?? p.email}
           </div>
           <div className="text-xs text-muted-foreground mt-1 font-medium">
             {subtitle}
@@ -414,7 +414,7 @@ function PatientCard({ p, onAddNote }: CardProps) {
           </div>
           {signalNode ?? (
             <div className="text-xs text-muted-foreground mt-1 font-medium truncate">
-              {p.email}
+              {p.phone ?? p.email}
             </div>
           )}
           <div className="text-xs text-muted-foreground mt-1 font-medium truncate">

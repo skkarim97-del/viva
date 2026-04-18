@@ -32,6 +32,7 @@ router.get("/", async (req, res: Response) => {
       id: usersTable.id,
       name: usersTable.name,
       email: usersTable.email,
+      phone: usersTable.phone,
       glp1Drug: patientsTable.glp1Drug,
       dose: patientsTable.dose,
       startedOn: patientsTable.startedOn,
@@ -96,6 +97,7 @@ router.get("/", async (req, res: Response) => {
         id: p.id,
         name: p.name,
         email: p.email,
+        phone: p.phone,
         glp1Drug: p.glp1Drug,
         dose: p.dose,
         startedOn: p.startedOn,
@@ -125,6 +127,7 @@ router.get("/", async (req, res: Response) => {
         id: p.id,
         name: p.name,
         email: p.email,
+        phone: p.phone,
         glp1Drug: p.glp1Drug,
         dose: p.dose,
         startedOn: p.startedOn,
@@ -143,6 +146,7 @@ router.get("/", async (req, res: Response) => {
       id: p.id,
       name: p.name,
       email: p.email,
+      phone: p.phone,
       glp1Drug: p.glp1Drug,
       dose: p.dose,
       startedOn: p.startedOn,
@@ -207,10 +211,19 @@ router.put("/clinic", async (req, res: Response) => {
 // token for a real session on first launch (out of scope for this MVP).
 const inviteSchema = z.object({
   name: z.string().min(1).max(120),
-  email: z.string().email(),
+  // Phone is the primary patient contact field. We don't run any SMS
+  // infrastructure yet, so this is purely stored on the user record and
+  // surfaced back to the doctor; the activation channel is the copyable
+  // invite link the doctor shares manually.
+  phone: z.string().min(4).max(40),
   glp1Drug: z.string().max(80).optional().nullable(),
   dose: z.string().max(80).optional().nullable(),
 });
+// Normalize a free-form phone string to digits only so collisions are
+// detected regardless of formatting (spaces, dashes, parens, +country).
+function normalizePhone(raw: string): string {
+  return raw.replace(/\D+/g, "");
+}
 function buildInviteLink(req: AuthedRequest, token: string): string {
   // Prefer the public host the dashboard is served on so the link the
   // doctor copies actually opens in their patient's browser.
@@ -225,16 +238,25 @@ router.post("/invite", async (req, res: Response) => {
     res.status(400).json({ error: "invalid_input" });
     return;
   }
-  const email = parsed.data.email.toLowerCase();
+  const phone = normalizePhone(parsed.data.phone);
+  if (phone.length < 4) {
+    res.status(400).json({ error: "invalid_phone" });
+    return;
+  }
   const [existing] = await db
     .select({ id: usersTable.id })
     .from(usersTable)
-    .where(eq(usersTable.email, email))
+    .where(eq(usersTable.phone, phone))
     .limit(1);
   if (existing) {
-    res.status(409).json({ error: "email_in_use" });
+    res.status(409).json({ error: "phone_in_use" });
     return;
   }
+  // Synthesize a unique placeholder email so the legacy notNull/unique
+  // email column is satisfied. The patient never sees this; they sign in
+  // with a password they choose during activation, against the bearer
+  // token issued from the invite link.
+  const placeholderEmail = `invite-${phone}-${randomBytes(4).toString("hex")}@invite.viva.local`;
   // Random unguessable hash so a stolen invite token can't double as a
   // password. The patient sets a real password during activation.
   const placeholderHash = await bcrypt.hash(randomBytes(24).toString("hex"), 10);
@@ -242,10 +264,11 @@ router.post("/invite", async (req, res: Response) => {
   const [user] = await db
     .insert(usersTable)
     .values({
-      email,
+      email: placeholderEmail,
       passwordHash: placeholderHash,
       role: "patient",
       name: parsed.data.name.trim(),
+      phone,
     })
     .returning();
   if (!user) {
@@ -262,7 +285,7 @@ router.post("/invite", async (req, res: Response) => {
   res.status(201).json({
     id: user.id,
     name: user.name,
-    email: user.email,
+    phone: user.phone,
     inviteLink: buildInviteLink(req as AuthedRequest, token),
   });
 });
@@ -314,6 +337,7 @@ async function loadOwnedPatient(
   id: number;
   name: string;
   email: string;
+  phone: string | null;
   glp1Drug: string | null;
   dose: string | null;
   startedOn: string | null;
@@ -323,6 +347,7 @@ async function loadOwnedPatient(
       id: usersTable.id,
       name: usersTable.name,
       email: usersTable.email,
+      phone: usersTable.phone,
       glp1Drug: patientsTable.glp1Drug,
       dose: patientsTable.dose,
       startedOn: patientsTable.startedOn,
@@ -337,6 +362,7 @@ async function loadOwnedPatient(
     id: row.id,
     name: row.name,
     email: row.email,
+    phone: row.phone,
     glp1Drug: row.glp1Drug,
     dose: row.dose,
     startedOn: row.startedOn,
