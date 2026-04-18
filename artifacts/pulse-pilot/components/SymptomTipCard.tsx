@@ -57,10 +57,12 @@ interface SymptomTipCardProps {
   onRequestClinician: (symptom: SymptomKind) => void;
 }
 
-// Brief delay (ms) between the patient tapping the CTA and the card
-// being dismissed by the parent -- long enough to read the "Nice --
-// logged" microcopy, short enough to not feel like a stuck state.
-const COMPLETION_HOLD_MS = 1400;
+// Delay (ms) between the patient tapping the CTA and the card being
+// dismissed by the parent. Tuned to ~6s so a quick "tap-without-doing"
+// still has to sit with the confirmation for a moment (a small dose
+// of friction that nudges actually-doing-the-thing) -- but short
+// enough not to feel sticky or broken.
+const COMPLETION_HOLD_MS = 6000;
 
 export function SymptomTipCard(props: SymptomTipCardProps) {
   const {
@@ -155,8 +157,8 @@ export function SymptomTipCard(props: SymptomTipCardProps) {
             styles.title,
             {
               color: navy,
-              fontSize: isPrimary ? 16 : 14,
-              lineHeight: isPrimary ? 20 : 18,
+              fontSize: isPrimary ? 17 : 14,
+              lineHeight: isPrimary ? 22 : 18,
             },
           ]}
           numberOfLines={2}
@@ -224,29 +226,54 @@ export function SymptomTipCard(props: SymptomTipCardProps) {
           })}
         </View>
       ) : completed ? (
-        <View style={[styles.completedRow, { backgroundColor: background }]}>
-          <View
-            style={[styles.completedCheck, { backgroundColor: accent + "22" }]}
-          >
-            <Feather name="check" size={13} color={accent} />
+        <View>
+          <View style={[styles.completedRow, { backgroundColor: background }]}>
+            <View
+              style={[
+                styles.completedCheck,
+                { backgroundColor: accent + "22" },
+              ]}
+            >
+              <Feather name="check" size={13} color={accent} />
+            </View>
+            <Text style={[styles.completedText, { color: navy }]}>
+              {tip.ctaCompleted}
+            </Text>
           </View>
-          <Text style={[styles.completedText, { color: navy }]}>
-            {tip.ctaCompleted}
+          {/* Subtle accountability line on completion -- "shared
+              care" framing, never surveillance. */}
+          <Text style={[styles.accountabilityText, { color: mutedForeground }]}>
+            Your clinician can see this.
           </Text>
         </View>
       ) : isPrimary ? (
-        <Pressable
-          onPress={handleCtaPress}
-          accessibilityRole="button"
-          accessibilityLabel={`${tip.cta}, mark as done`}
-          style={({ pressed }) => [
-            styles.ctaPrimary,
-            { backgroundColor: navy, opacity: pressed ? 0.85 : 1 },
-          ]}
-        >
-          <Feather name="check-circle" size={14} color="#FFFFFF" />
-          <Text style={styles.ctaPrimaryText}>{tip.cta}</Text>
-        </Pressable>
+        <View>
+          <Pressable
+            onPress={handleCtaPress}
+            accessibilityRole="button"
+            accessibilityLabel={`${tip.cta}, mark as done`}
+            style={({ pressed }) => [
+              styles.ctaPrimary,
+              {
+                backgroundColor: navy,
+                paddingHorizontal: 18,
+                paddingVertical: 11,
+                opacity: pressed ? 0.85 : 1,
+              },
+            ]}
+          >
+            <Feather name="check-circle" size={15} color="#FFFFFF" />
+            <Text style={[styles.ctaPrimaryText, { fontSize: 14 }]}>
+              {tip.cta}
+            </Text>
+          </Pressable>
+          {/* Quiet accountability subtext under the primary CTA only.
+              Reinforces that completion is visible to the care team
+              without crowding secondary cards. */}
+          <Text style={[styles.accountabilityText, { color: mutedForeground }]}>
+            Your clinician can see when you complete this.
+          </Text>
+        </View>
       ) : (
         <Pressable
           onPress={handleCtaPress}
@@ -384,6 +411,12 @@ const styles = StyleSheet.create({
   completedText: {
     fontFamily: "Montserrat_600SemiBold",
     fontSize: 12,
+  },
+  accountabilityText: {
+    fontFamily: "Montserrat_500Medium",
+    fontSize: 11,
+    lineHeight: 14,
+    marginTop: 6,
   },
   trendRow: {
     flexDirection: "row",

@@ -11,10 +11,11 @@
 // handles; bringing it client-side would mean shipping the same logic
 // in two places without a reason.
 //
-// Tone rules: short, supportive, practical, non-alarmist, not overly
-// medical. Each tip is one urgency line + ONE concrete CTA the patient
-// can tap to mark "done". Multiple suggestions in one card historically
-// lowered follow-through -- a single verb-led CTA is the lever.
+// Tone rules: calm, clinical, reassuring -- but the urgency line and
+// CTA are deliberately written to push the patient to act in the next
+// minute. Each tip carries exactly ONE concrete physical action so a
+// single decision stays in front of the patient (multiple suggestions
+// in one card historically lowered follow-through).
 
 import type {
   AppetiteLevel,
@@ -29,15 +30,16 @@ export interface SymptomTip {
   symptom: SymptomKind;
   // State-based title: reflects the current condition + an "(active)"
   // marker so the patient understands this is responding to what they
-  // logged today, not a generic education card.
+  // logged today, not generic education content.
   title: string;
-  // One-line, time-sensitive nudge ("Do this now ...", "Best to do
-  // this within the next hour"). Replaces the previous multi-suggestion
-  // body to drive a single decision.
+  // Time-sensitive, outcome-oriented nudge
+  // ("Do this now to ease nausea faster"). Replaced the previous
+  // multi-suggestion body so a single decision stays in front of the
+  // patient.
   urgency: string;
-  // Verb-led CTA that maps to a concrete physical action the patient
-  // can complete in <10 minutes. Tapping it marks the symptom action
-  // as done for the day.
+  // Highly specific, immediate verb-led CTA the patient can finish in
+  // <2 minutes ("Drink 5 sips now"). Tapping marks the symptom action
+  // as done for the day and mirrors the choice to the server.
   cta: string;
   // Microcopy shown after the CTA is tapped, before the card is
   // dismissed. Warm, not gamified.
@@ -74,12 +76,12 @@ export function deriveSymptomTips(input: SymptomInputs): SymptomTip[] {
     tips.push({
       symptom: "nausea",
       title: severe
-        ? "Easing severe nausea (active)"
-        : "Easing nausea (active)",
+        ? "Settle severe nausea (active)"
+        : "Ease nausea now (active)",
       urgency: severe
-        ? "Do this in the next 15 min to help settle the wave."
-        : "Do this now -- small, steady sips ease the wave fastest.",
-      cta: severe ? "Sip water + nibble a cracker" : "Sip water now",
+        ? "Do this in the next 15 minutes to settle your stomach."
+        : "Do this now to ease nausea faster.",
+      cta: severe ? "Sip water + cracker now" : "Drink 5 sips now",
       ctaCompleted: severe ? "Nice -- sips + cracker logged" : "Nice -- sips logged",
       factors,
     });
@@ -98,8 +100,8 @@ export function deriveSymptomTips(input: SymptomInputs): SymptomTip[] {
     tips.push({
       symptom: "constipation",
       title: "Get things moving (active)",
-      urgency: "Best to do this within the next hour.",
-      cta: "Take a 10-min walk",
+      urgency: "Do this within the next hour to help things move.",
+      cta: "Walk 10 minutes now",
       ctaCompleted: "Nice -- walk logged",
       factors,
     });
@@ -114,10 +116,10 @@ export function deriveSymptomTips(input: SymptomInputs): SymptomTip[] {
     if (lowHydration(input.hydration)) factors.push("Low hydration");
     tips.push({
       symptom: "low_appetite",
-      title: "Low appetite support (active)",
-      urgency: "Best to do this within the next hour to keep energy steady.",
-      cta: "Eat 2 tbsp of protein",
-      ctaCompleted: "Nice -- protein logged",
+      title: "Steady your appetite (active)",
+      urgency: "Do this now to support your energy today.",
+      cta: "Eat 2 tbsp yogurt or nuts now",
+      ctaCompleted: "Nice -- snack logged",
       factors,
     });
   }

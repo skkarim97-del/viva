@@ -1,0 +1,195 @@
+Tighten the symptom action cards so they feel more urgent, more specific, and more likely to drive immediate follow-through. Keep the UI clean and minimal. Do not add clutter or extra screens.
+
+Goal
+
+The cards should no longer feel like general advice. They should feel like:
+
+do this now
+this will help you feel better today
+your clinician can see whether you acted
+
+I want the cards to push immediate action without feeling alarmist or messy.
+
+Part 1: Make the CTA copy more specific and immediate
+
+Right now the CTAs are better than before, but still a bit soft and generic.
+
+Update them to be:
+
+more concrete
+more immediate
+more directive
+easier to act on right away
+Examples
+
+Instead of:
+
+Sip water now
+Use:
+Drink 5 sips now
+
+Instead of:
+
+Take a 10-min walk
+Use:
+Walk 10 minutes now
+
+Instead of:
+
+Eat 2 tbsp of protein
+Use:
+Eat 2 tbsp protein now
+
+For nausea + food:
+
+Sip water + cracker now
+
+For low appetite:
+
+Eat 2 tbsp yogurt or nuts now if that is cleaner / more actionable than generic “protein”
+
+The goal is that the user knows exactly what to do in the next minute.
+
+Part 2: Make the urgency copy stronger
+
+The urgency text should feel more time-sensitive and outcome-oriented.
+
+Right now phrases like:
+
+“Best to do this within the next hour”
+
+are okay, but still too passive.
+
+Rewrite them to feel more urgent and tied to symptom relief.
+
+Direction
+
+Use copy like:
+
+Do this now to ease nausea faster
+Do this in the next 15 minutes to settle your stomach
+Do this within the next hour to prevent fatigue later
+Do this now to support your energy today
+Act now to help your body settle
+Important
+
+Keep the tone:
+
+calm
+clinical
+reassuring
+
+Do not make it scary or dramatic.
+Just make it clearly feel like something the user should do ASAP.
+
+Part 3: Add stronger accountability language
+
+Right now the cards still feel like optional suggestions.
+
+I want a subtle accountability layer that increases follow-through.
+
+Update the UI copy
+
+Instead of only:
+
+Let my clinician know
+
+Test a stronger but still clean wording such as:
+
+Mark done — your clinician can see this
+or keep the current structure but add subtext:
+Your clinician can see when you complete this
+
+The goal is to create a small amount of social accountability.
+
+Important
+
+Do not make this feel invasive or threatening.
+It should feel like:
+
+shared care
+not surveillance
+Part 4: Do not dismiss completed cards too quickly
+
+Right now the card completes and disappears pretty fast.
+
+That may be too forgiving and may encourage “tap without actually doing.”
+
+Change completion behavior
+
+When user taps the CTA:
+
+immediately show completed state
+show checkmark + confirmation microcopy
+keep the completed card visible a bit longer before dismissing
+
+Preferred behavior:
+
+keep it visible for 5–8 seconds
+or until the user scrolls away / refreshes / next render naturally clears it
+
+Do not make it feel sticky or broken.
+I just do not want it to vanish so fast that the user mindlessly taps through it.
+
+Part 5: Make the primary card feel even more like the one to do now
+
+The top active recommendation should visually feel like the most important immediate action.
+
+Requirements
+
+Keep:
+
+one primary card
+others secondary
+
+But tighten the primary card so it feels more urgent:
+
+slightly stronger title
+clearer urgency line
+more forceful CTA wording
+slightly stronger visual prominence if possible without clutter
+
+Do not redesign the whole system.
+This should still feel elegant and minimal.
+
+Part 6: Apply this to all major symptom action cards
+
+Please update the major card types so they follow this higher-conversion behavioral style, including at least:
+
+nausea
+severe nausea
+constipation / digestion
+low appetite
+low energy if applicable
+
+Make sure each one has:
+
+state-based title
+stronger urgency text
+more specific CTA
+subtle accountability
+Constraints
+keep the UI minimal and aesthetic
+no new screens
+no heavy gamification
+no aggressive warning colors
+no overengineering
+do not change backend architecture unless required for the completion timing / accountability copy
+Output I want
+
+Show me:
+
+the updated copy for each major symptom card
+the updated CTA wording
+the updated urgency language
+how the completion timing now works
+how the accountability / clinician-visible wording appears in the UI
+Core objective
+
+Make the recommendations feel like:
+
+do this now
+this will help today
+someone on your care team can see whether you acted
+
+without making the experience feel cluttered or harsh.
