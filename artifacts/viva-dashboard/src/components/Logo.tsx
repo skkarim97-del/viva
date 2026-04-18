@@ -13,8 +13,8 @@ const SIZES: Record<NonNullable<Props["size"]>, number> = {
 // brand presentation stays exact across surfaces.
 export function Logo({ size = "md" }: Props) {
   const width = SIZES[size];
-  // Source asset is 318x106 -> preserve that aspect ratio.
-  const height = Math.round(width * (106 / 318));
+  // Source asset is 2318x1068 -> preserve that aspect ratio.
+  const height = Math.round(width * (1068 / 2318));
   const src = `${import.meta.env.BASE_URL}viva-logo.png`;
   return (
     <img

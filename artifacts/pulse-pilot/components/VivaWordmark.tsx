@@ -10,7 +10,7 @@ const logoSource = require("@/assets/viva-logo-cropped.png");
 
 export function VivaWordmark({ size = "small" }: VivaWordmarkProps) {
   const width = size === "large" ? 200 : size === "medium" ? 120 : 80;
-  const height = Math.round(width * (106 / 318));
+  const height = Math.round(width * (1068 / 2318));
 
   return (
     <View style={styles.container}>
