@@ -64,6 +64,24 @@ export const patientCheckinsTable = pgTable(
     guidanceShown: jsonb("guidance_shown")
       .$type<{ nausea?: boolean; constipation?: boolean; low_appetite?: boolean }>()
       .default({}),
+    // Patient's response to "is this getting better, the same, or worse?"
+    // shown the day AFTER guidance was acknowledged. The escalation
+    // engine treats "worse" (and persistent "same" despite guidance)
+    // as a strong reason to flag the doctor.
+    trendResponse: jsonb("trend_response")
+      .$type<{
+        nausea?: "better" | "same" | "worse";
+        constipation?: "better" | "same" | "worse";
+        low_appetite?: "better" | "same" | "worse";
+      }>()
+      .default({}),
+    // Patient explicitly tapped "Let my clinician know" on the symptom
+    // guidance card. Sticky across the symptom's lookback window so a
+    // single tap promotes the case to needs_followup until the symptom
+    // resolves.
+    clinicianRequested: jsonb("clinician_requested")
+      .$type<{ nausea?: boolean; constipation?: boolean; low_appetite?: boolean }>()
+      .default({}),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => ({

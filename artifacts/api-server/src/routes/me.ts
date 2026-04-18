@@ -145,6 +145,82 @@ router.patch("/checkins/guidance", async (req, res: Response) => {
   res.json({ ok: true, guidanceShown: merged });
 });
 
+// PATCH /me/checkins/trend -- patient answers the day-after follow-up
+// "is this getting better, the same, or worse?" for one symptom.
+// Returns 404 (silently ignorable) when there's no check-in row for
+// the date, same as the guidance ack endpoint.
+const trendSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  symptom: z.enum(["nausea", "constipation", "low_appetite"]),
+  response: z.enum(["better", "same", "worse"]),
+});
+router.patch("/checkins/trend", async (req, res: Response) => {
+  const userId = (req as AuthedRequest).auth.userId;
+  const parsed = trendSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_input" });
+    return;
+  }
+  const { date, symptom, response } = parsed.data;
+  const [existing] = await db
+    .select()
+    .from(patientCheckinsTable)
+    .where(
+      and(
+        eq(patientCheckinsTable.patientUserId, userId),
+        eq(patientCheckinsTable.date, date),
+      ),
+    )
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "no_checkin_today" });
+    return;
+  }
+  const merged = { ...(existing.trendResponse ?? {}), [symptom]: response };
+  await db
+    .update(patientCheckinsTable)
+    .set({ trendResponse: merged })
+    .where(eq(patientCheckinsTable.id, existing.id));
+  res.json({ ok: true, trendResponse: merged });
+});
+
+// PATCH /me/checkins/escalate -- patient explicitly asked the
+// clinician to be aware of this symptom. Sticky: the doctor sees
+// "Patient requested clinician" until the symptom resolves.
+const escalateSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  symptom: z.enum(["nausea", "constipation", "low_appetite"]),
+});
+router.patch("/checkins/escalate", async (req, res: Response) => {
+  const userId = (req as AuthedRequest).auth.userId;
+  const parsed = escalateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_input" });
+    return;
+  }
+  const { date, symptom } = parsed.data;
+  const [existing] = await db
+    .select()
+    .from(patientCheckinsTable)
+    .where(
+      and(
+        eq(patientCheckinsTable.patientUserId, userId),
+        eq(patientCheckinsTable.date, date),
+      ),
+    )
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "no_checkin_today" });
+    return;
+  }
+  const merged = { ...(existing.clinicianRequested ?? {}), [symptom]: true };
+  await db
+    .update(patientCheckinsTable)
+    .set({ clinicianRequested: merged })
+    .where(eq(patientCheckinsTable.id, existing.id));
+  res.json({ ok: true, clinicianRequested: merged });
+});
+
 router.get("/risk", async (req, res: Response) => {
   const userId = (req as AuthedRequest).auth.userId;
   const cks = await db

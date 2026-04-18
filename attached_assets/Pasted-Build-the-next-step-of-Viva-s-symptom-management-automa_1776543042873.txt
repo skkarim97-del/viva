@@ -1,0 +1,78 @@
+Build the next step of Viva’s symptom-management automation so the app can help patients manage common GLP-1 side effects first, then escalate to the doctor when self-management does not appear to be working.
+
+Goal
+
+Create a simple closed-loop symptom support system:
+
+1. detect symptom
+2. provide behavioral guidance
+3. capture whether symptoms improved
+4. escalate to clinician if symptoms persist, worsen, or do not improve after guidance
+
+Add these improvements:
+
+1. Symptom response follow-up
+
+When a patient had symptom guidance shown on the prior day and reports the same symptom again, ask a short follow-up:
+
+* Better
+* Same
+* Worse
+
+Start with:
+
+* nausea
+* constipation
+* low appetite
+
+2. Use follow-up in escalation logic
+
+Update symptom escalation so the doctor is flagged not only for severe / persistent symptoms, but also when:
+
+* the symptom is not improving after guidance
+* the patient reports “worse”
+* the issue persists multiple days despite guidance
+
+3. Add patient escalation option
+
+Add a small patient-facing option under the symptom guidance card:
+
+* “This is getting worse”
+* or “Let my clinician know”
+
+Use whichever wording fits the current UX best.
+If tapped, mark the symptom for doctor follow-up.
+
+4. Doctor dashboard
+
+Update symptom flags so doctors can see:
+
+* guidance shown
+* guidance acknowledged
+* symptom trend response (better / same / worse)
+* whether patient explicitly requested clinician awareness
+* suggested follow-up
+
+Constraints
+
+* keep this rules-based
+* no chatbot
+* no medical diagnosis language
+* keep guidance short and structured
+* start only with nausea, constipation, and low appetite
+
+Goal for MVP
+
+Make Viva feel like it is actively helping patients manage symptoms between visits, while escalating clinicians when self-management is not enough.
+
+⸻
+
+Bottom line
+
+The unlock is not just “give advice.”
+
+The unlock is:
+
+Did the advice work, and if not, should the clinician step in?
+
+That’s what makes the app feel intelligent and clinically useful.

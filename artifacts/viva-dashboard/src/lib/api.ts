@@ -91,6 +91,8 @@ export type SymptomKind = "nausea" | "constipation" | "low_appetite";
 export type SymptomSeverity = "mild" | "moderate" | "severe";
 export type SymptomPersistence = "transient" | "persistent" | "worsening";
 
+export type SymptomTrendResponse = "better" | "same" | "worse";
+
 export interface SymptomFlag {
   symptom: SymptomKind;
   severity: SymptomSeverity;
@@ -99,6 +101,15 @@ export interface SymptomFlag {
   windowDays: number;
   contributors: string[];
   guidanceShown: boolean;
+  // Most recent patient-reported trend response within the lookback
+  // window. null = not asked or not answered.
+  trendResponse: SymptomTrendResponse | null;
+  // Patient explicitly asked the clinician to be aware of this symptom.
+  clinicianRequested: boolean;
+  // Human-readable list of the rules that escalated this case (e.g.
+  // "Patient reports worse", "Not improving after guidance"). Empty
+  // when suggestFollowup is false.
+  escalationReasons: string[];
   suggestFollowup: boolean;
 }
 

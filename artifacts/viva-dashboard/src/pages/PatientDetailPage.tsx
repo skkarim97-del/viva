@@ -265,11 +265,57 @@ export function PatientDetailPage({ id }: { id: number }) {
                       </div>
                     </div>
                   )}
-                  <div className="mt-2.5 text-xs text-muted-foreground font-medium">
-                    {f.guidanceShown
-                      ? "Patient has seen self-management guidance"
-                      : "Patient has not yet acknowledged guidance"}
+                  {/* Closed-loop signals -- these are what convert
+                      "we showed advice" into "is the advice working?". */}
+                  <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs font-medium">
+                    <span className="text-muted-foreground">
+                      {f.guidanceShown
+                        ? "Guidance acknowledged"
+                        : "Guidance not yet acknowledged"}
+                    </span>
+                    {f.trendResponse && (
+                      <span
+                        className="px-2 py-0.5 rounded-md font-semibold"
+                        style={(() => {
+                          if (f.trendResponse === "better") {
+                            return { backgroundColor: "rgba(30,142,62,0.12)", color: "#1E8E3E" };
+                          }
+                          if (f.trendResponse === "worse") {
+                            return { backgroundColor: "rgba(255,59,48,0.12)", color: "#B5251D" };
+                          }
+                          return { backgroundColor: "rgba(20,34,64,0.08)", color: "#142240" };
+                        })()}
+                      >
+                        Patient reports{" "}
+                        {f.trendResponse === "better"
+                          ? "better"
+                          : f.trendResponse === "worse"
+                            ? "worse"
+                            : "same"}
+                      </span>
+                    )}
+                    {f.clinicianRequested && (
+                      <span
+                        className="px-2 py-0.5 rounded-md font-semibold"
+                        style={{
+                          backgroundColor: "rgba(255,149,0,0.14)",
+                          color: "#9A5B00",
+                        }}
+                      >
+                        Patient requested clinician
+                      </span>
+                    )}
                   </div>
+                  {f.suggestFollowup && f.escalationReasons.length > 0 && (
+                    <div className="mt-2 text-[11px] text-muted-foreground font-medium">
+                      <span className="uppercase tracking-wider">
+                        Why escalated:
+                      </span>{" "}
+                      <span className="text-foreground">
+                        {f.escalationReasons.join(" · ")}
+                      </span>
+                    </div>
+                  )}
                 </li>
               );
             })}

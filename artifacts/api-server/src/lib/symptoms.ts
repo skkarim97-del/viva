@@ -29,6 +29,7 @@ import type { PatientCheckin } from "@workspace/db";
 export type Symptom = "nausea" | "constipation" | "low_appetite";
 export type Persistence = "transient" | "persistent" | "worsening";
 export type SymptomSeverity = "mild" | "moderate" | "severe";
+export type TrendResponse = "better" | "same" | "worse";
 
 export interface SymptomFlag {
   symptom: Symptom;
@@ -45,6 +46,17 @@ export interface SymptomFlag {
   // this symptom on the most recent check-in. The dashboard uses this
   // to show "Patient has seen self-management guidance" beside the flag.
   guidanceShown: boolean;
+  // Most recent patient-reported trend response within the window
+  // (better / same / worse), or null if they have not been asked or
+  // have not answered yet. Drives the closed-loop escalation logic.
+  trendResponse: TrendResponse | null;
+  // True when the patient explicitly tapped "Let my clinician know"
+  // for this symptom on any recent check-in. Sticky for the window.
+  clinicianRequested: boolean;
+  // Why this case was escalated, in order of priority. Empty array
+  // when suggestFollowup is false. The dashboard renders these as a
+  // human-readable "Why escalated" line.
+  escalationReasons: string[];
   // True when the case meets escalation criteria. Caller (deriveAction)
   // bumps the workflow state to "needs_followup".
   suggestFollowup: boolean;
@@ -194,6 +206,102 @@ function isWorsening(
   return todayVal >= priorAvg + 1 && todayVal >= 2;
 }
 
+// Closed-loop escalation: given the symptom-specific severity /
+// persistence / trend / patient-request signals, decide whether to
+// flag the doctor AND record human-readable reasons.
+//
+// The reasons array is rendered on the dashboard as "Why escalated"
+// so the doctor can see at a glance why the case crossed the line.
+function decideEscalation(
+  symptom: Symptom,
+  rows: PatientCheckin[],
+  symptomaticDays: number,
+  severity: SymptomSeverity,
+  persistence: Persistence,
+  trendResponse: TrendResponse | null,
+  clinicianRequested: boolean,
+  baseRules: { reason: string; fires: boolean }[],
+): { suggestFollowup: boolean; reasons: string[] } {
+  const reasons: string[] = [];
+  for (const r of baseRules) if (r.fires) reasons.push(r.reason);
+
+  // Did the patient acknowledge guidance on a day BEFORE today AND is
+  // the symptom still present today? That means self-management did
+  // not resolve it -- exactly the trigger the spec calls out.
+  const todayYmd = rows[rows.length - 1]?.date;
+  const guidanceOnPriorDay = rows.some(
+    (r) =>
+      r.date !== todayYmd &&
+      !!r.guidanceShown &&
+      (r.guidanceShown as Record<string, boolean>)[symptom] === true,
+  );
+  const stillActiveToday = rows.some(
+    (r) => r.date === todayYmd && symptomIsActiveOnRow(symptom, r),
+  );
+  if (
+    guidanceOnPriorDay &&
+    stillActiveToday &&
+    symptomaticDays >= 2 &&
+    !reasons.includes("Worsening")
+  ) {
+    reasons.push("Not improving after guidance");
+  }
+
+  if (trendResponse === "worse") reasons.push("Patient reports worse");
+  if (trendResponse === "same" && guidanceOnPriorDay && symptomaticDays >= 3) {
+    reasons.push("No improvement despite guidance");
+  }
+  if (clinicianRequested) reasons.push("Patient requested clinician");
+
+  // Dedupe while preserving order.
+  const seen = new Set<string>();
+  const dedup: string[] = [];
+  for (const r of reasons) if (!seen.has(r)) { seen.add(r); dedup.push(r); }
+
+  return { suggestFollowup: dedup.length > 0, reasons: dedup };
+}
+
+// Cheap per-row "is this symptom active right now?" check used by the
+// closed-loop "still active despite guidance" rule.
+function symptomIsActiveOnRow(symptom: Symptom, r: PatientCheckin): boolean {
+  if (symptom === "nausea") return !!r.nausea && r.nausea !== "none";
+  if (symptom === "low_appetite") {
+    return r.appetite === "low" || r.appetite === "very_low";
+  }
+  // constipation
+  return r.digestion === "constipated" || r.bowelMovement === false;
+}
+
+// Read the most recent in-window trend response for a symptom. We
+// prefer today's response, then walk backwards. Returns null if the
+// patient has never answered the follow-up.
+function latestTrend(
+  rows: PatientCheckin[],
+  symptom: Symptom,
+): TrendResponse | null {
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const tr = rows[i]?.trendResponse as
+      | Record<string, TrendResponse>
+      | null
+      | undefined;
+    const v = tr?.[symptom];
+    if (v === "better" || v === "same" || v === "worse") return v;
+  }
+  return null;
+}
+
+// Sticky across the whole window: any "true" anywhere counts.
+function anyClinicianRequested(
+  rows: PatientCheckin[],
+  symptom: Symptom,
+): boolean {
+  return rows.some(
+    (r) =>
+      !!r.clinicianRequested &&
+      (r.clinicianRequested as Record<string, boolean>)[symptom] === true,
+  );
+}
+
 function nauseaFlag(
   rows: PatientCheckin[],
   ack: PatientCheckin | undefined,
@@ -215,14 +323,31 @@ function nauseaFlag(
   else if (symptomatic.length >= 2) persistence = "persistent";
   else persistence = "transient";
 
-  // Escalation gate per spec: severe, persistent across multiple days,
-  // worsening, or occurring on a dose day.
   const onDoseDay = symptomatic.some((r) => r.doseTakenToday === true);
-  const suggestFollowup =
-    severity === "severe" ||
-    persistence === "worsening" ||
-    (persistence === "persistent" && symptomatic.length >= 3) ||
-    (onDoseDay && symptomatic.length >= 2);
+  const trendResponse = latestTrend(rows, "nausea");
+  const clinicianRequested = anyClinicianRequested(rows, "nausea");
+
+  const { suggestFollowup, reasons } = decideEscalation(
+    "nausea",
+    rows,
+    symptomatic.length,
+    severity,
+    persistence,
+    trendResponse,
+    clinicianRequested,
+    [
+      { reason: "Severe", fires: severity === "severe" },
+      { reason: "Worsening", fires: persistence === "worsening" },
+      {
+        reason: `Persistent ${symptomatic.length}d`,
+        fires: persistence === "persistent" && symptomatic.length >= 3,
+      },
+      {
+        reason: "Nausea on dose day",
+        fires: onDoseDay && symptomatic.length >= 2,
+      },
+    ],
+  );
 
   return {
     symptom: "nausea",
@@ -232,6 +357,9 @@ function nauseaFlag(
     windowDays: rows.length,
     contributors: nauseaContributors(rows),
     guidanceShown: !!ack?.guidanceShown?.nausea,
+    trendResponse,
+    clinicianRequested,
+    escalationReasons: reasons,
     suggestFollowup,
   };
 }
@@ -276,9 +404,24 @@ function constipationFlag(
   const persistence: Persistence =
     daysObserved >= 3 || maxBmStreak >= 3 ? "persistent" : "transient";
 
-  const suggestFollowup =
-    severity === "severe" ||
-    (persistence === "persistent" && daysObserved >= 4);
+  const trendResponse = latestTrend(rows, "constipation");
+  const clinicianRequested = anyClinicianRequested(rows, "constipation");
+  const { suggestFollowup, reasons } = decideEscalation(
+    "constipation",
+    rows,
+    daysObserved,
+    severity,
+    persistence,
+    trendResponse,
+    clinicianRequested,
+    [
+      { reason: "Severe", fires: severity === "severe" },
+      {
+        reason: `Persistent ${daysObserved}d`,
+        fires: persistence === "persistent" && daysObserved >= 4,
+      },
+    ],
+  );
 
   return {
     symptom: "constipation",
@@ -288,6 +431,9 @@ function constipationFlag(
     windowDays: rows.length,
     contributors: constipationContributors(rows),
     guidanceShown: !!ack?.guidanceShown?.constipation,
+    trendResponse,
+    clinicianRequested,
+    escalationReasons: reasons,
     suggestFollowup,
   };
 }
@@ -321,10 +467,25 @@ function lowAppetiteFlag(
   else if (symptomatic.length >= 3) persistence = "persistent";
   else persistence = "transient";
 
-  const suggestFollowup =
-    severity === "severe" ||
-    persistence === "worsening" ||
-    (persistence === "persistent" && symptomatic.length >= 4);
+  const trendResponse = latestTrend(rows, "low_appetite");
+  const clinicianRequested = anyClinicianRequested(rows, "low_appetite");
+  const { suggestFollowup, reasons } = decideEscalation(
+    "low_appetite",
+    rows,
+    symptomatic.length,
+    severity,
+    persistence,
+    trendResponse,
+    clinicianRequested,
+    [
+      { reason: "Severe", fires: severity === "severe" },
+      { reason: "Worsening", fires: persistence === "worsening" },
+      {
+        reason: `Persistent ${symptomatic.length}d`,
+        fires: persistence === "persistent" && symptomatic.length >= 4,
+      },
+    ],
+  );
 
   return {
     symptom: "low_appetite",
@@ -334,6 +495,9 @@ function lowAppetiteFlag(
     windowDays: rows.length,
     contributors: lowAppetiteContributors(rows),
     guidanceShown: !!ack?.guidanceShown?.low_appetite,
+    trendResponse,
+    clinicianRequested,
+    escalationReasons: reasons,
     suggestFollowup,
   };
 }

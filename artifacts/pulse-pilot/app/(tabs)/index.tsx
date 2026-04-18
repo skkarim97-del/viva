@@ -94,6 +94,8 @@ export default function DashboardScreen() {
     streakDays, todayCompletionRate,
     lastCompletionFeedback, clearCompletionFeedback,
     saveDailyCheckIn, todayCheckIn, acknowledgeSymptomTip,
+    recordSymptomTrend, requestClinicianForSymptom,
+    guidanceAckHistory, clinicianRequestedToday,
     appetite, setAppetite,
     nausea, setNausea,
     digestion, setDigestion,
@@ -732,18 +734,47 @@ export default function DashboardScreen() {
             "I logged nausea -> here's the tip". */}
         {symptomTips.length > 0 && (
           <View style={{ marginBottom: 4 }}>
-            {symptomTips.map((tip) => (
-              <SymptomTipCard
-                key={tip.symptom}
-                tip={tip}
-                navy={c.foreground}
-                accent={c.accent}
-                cardBg={c.card}
-                background={c.background}
-                mutedForeground={c.mutedForeground}
-                onAcknowledge={onAckSymptomTip}
-              />
-            ))}
+            {symptomTips.map((tip) => {
+              // Promote the card to "Better/Same/Worse" follow-up
+              // mode ONLY the day immediately after the patient
+              // acknowledged guidance -- per spec the question is
+              // "is this getting better since yesterday?". We do not
+              // re-prompt if guidance was acked 3+ days ago and the
+              // symptom returned: that's a fresh case and gets the
+              // normal "Got it" ack flow instead.
+              const today = new Date();
+              const todayYmd = today.toISOString().split("T")[0]!;
+              const yesterday = new Date(today);
+              yesterday.setDate(yesterday.getDate() - 1);
+              const yesterdayYmd = yesterday.toISOString().split("T")[0]!;
+              const lastAck = guidanceAckHistory[tip.symptom];
+              const isFollowup = lastAck === yesterdayYmd;
+              return (
+                <SymptomTipCard
+                  key={tip.symptom}
+                  tip={tip}
+                  mode={isFollowup ? "followup" : "ack"}
+                  clinicianNotified={!!clinicianRequestedToday[tip.symptom]}
+                  navy={c.foreground}
+                  accent={c.accent}
+                  cardBg={c.card}
+                  background={c.background}
+                  mutedForeground={c.mutedForeground}
+                  onAcknowledge={onAckSymptomTip}
+                  onTrendResponse={(s, r) => {
+                    recordSymptomTrend(s, r);
+                    // Treat answering as also dismissing the card --
+                    // matches the "Got it" flow.
+                    setDismissedTips((prev) => {
+                      const next = new Set(prev);
+                      next.add(s);
+                      return next;
+                    });
+                  }}
+                  onRequestClinician={requestClinicianForSymptom}
+                />
+              );
+            })}
           </View>
         )}
 

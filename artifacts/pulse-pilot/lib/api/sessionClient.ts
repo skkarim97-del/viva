@@ -166,4 +166,26 @@ export const sessionApi = {
       date,
       symptom,
     }),
+
+  // Day-after follow-up: patient says the symptom is better, the
+  // same, or worse than yesterday. Same 404 semantics as
+  // markGuidanceShown.
+  submitSymptomTrend: (
+    date: string,
+    symptom: SymptomKind,
+    response: "better" | "same" | "worse",
+  ) =>
+    request<{ ok: true }>("PATCH", "/me/checkins/trend", {
+      date,
+      symptom,
+      response,
+    }),
+
+  // Patient explicitly asked the clinician to be aware. Server marks
+  // the case sticky-escalated until the symptom resolves.
+  requestClinicianForSymptom: (date: string, symptom: SymptomKind) =>
+    request<{ ok: true }>("PATCH", "/me/checkins/escalate", {
+      date,
+      symptom,
+    }),
 };

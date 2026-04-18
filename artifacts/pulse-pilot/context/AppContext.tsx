@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef, useMemo } from "react";
 
 import {
   defaultProfile,
@@ -103,6 +103,24 @@ interface AppContextType {
   // server when today's check-in row exists; otherwise queues the ack
   // and replays it after the next saveDailyCheckIn.
   acknowledgeSymptomTip: (symptom: import("@/lib/symptomTips").SymptomKind) => void;
+  // Day-after follow-up answer (Better/Same/Worse). Mirrors to the
+  // server and dismisses the tip card locally.
+  recordSymptomTrend: (
+    symptom: import("@/lib/symptomTips").SymptomKind,
+    response: "better" | "same" | "worse",
+  ) => void;
+  // Patient explicitly asked the clinician to be aware. Mirrors to the
+  // server (sticky on the most recent check-in row).
+  requestClinicianForSymptom: (
+    symptom: import("@/lib/symptomTips").SymptomKind,
+  ) => void;
+  // Per-symptom YYYY-MM-DD of the most recent guidance ack. Used by
+  // the Today tab to decide whether to show the day-after follow-up
+  // question when the same symptom recurs.
+  guidanceAckHistory: Partial<Record<import("@/lib/symptomTips").SymptomKind, string>>;
+  // Per-symptom set of "patient asked clinician for awareness today"
+  // -- drives the inline confirmation on the tip card.
+  clinicianRequestedToday: Partial<Record<import("@/lib/symptomTips").SymptomKind, true>>;
   glp1Energy: EnergyDaily;
   setGlp1Energy: (v: EnergyDaily) => void;
   appetite: AppetiteLevel;
@@ -136,6 +154,8 @@ const CHECKIN_KEY = "@viva_checkins";
 const GLP1_INPUTS_KEY = "@viva_glp1_inputs";
 const GLP1_HISTORY_KEY = "@viva_glp1_history";
 const MED_LOG_KEY = "@viva_med_log";
+const GUIDANCE_ACK_HISTORY_KEY = "@viva_guidance_ack_history";
+const CLINICIAN_REQUESTED_DATES_KEY = "@viva_clinician_requested_dates";
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<UserProfile>(defaultProfile);
@@ -182,6 +202,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const pendingGuidanceAcksRef = useRef<Set<import("@/lib/symptomTips").SymptomKind>>(
     new Set(),
   );
+  // Pending closed-loop actions that need a check-in row before the
+  // server will accept them. KEYED BY `${date}|${symptom}` so a
+  // queued event from yesterday is replayed against yesterday's row,
+  // not against whatever day the next saveDailyCheckIn happens to be
+  // for. Drain only items whose date matches the check-in being saved.
+  const pendingTrendResponsesRef = useRef<
+    Map<string, { date: string; symptom: import("@/lib/symptomTips").SymptomKind; response: "better" | "same" | "worse" }>
+  >(new Map());
+  const pendingClinicianRequestsRef = useRef<
+    Map<string, { date: string; symptom: import("@/lib/symptomTips").SymptomKind }>
+  >(new Map());
+
+  // Persisted: per-symptom date of the most recent guidance ack. The
+  // Today tab compares this to today's date to decide whether to
+  // promote the tip card from "Got it" to "Better / Same / Worse".
+  const [guidanceAckHistory, setGuidanceAckHistory] = useState<
+    Partial<Record<import("@/lib/symptomTips").SymptomKind, string>>
+  >({});
+  // Per-symptom YYYY-MM-DD of the most recent "Let my clinician know"
+  // tap. Persisted alongside guidanceAckHistory so the inline
+  // confirmation chip survives a backgrounded app, but day-scoped
+  // (not sticky) so it auto-resets at midnight without leaking the
+  // previous day's escalation prompt into a new day's UX.
+  const [clinicianRequestedDates, setClinicianRequestedDates] = useState<
+    Partial<Record<import("@/lib/symptomTips").SymptomKind, string>>
+  >({});
 
   // Keep the weekly plan's "today" day in sync with the actual daily plan.
   // generateWeeklyPlan() uses a static rotation that is disconnected from
@@ -435,6 +481,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       let currentHydration: HydrationLevel = null;
       let currentTrainingIntent: TrainingIntent = null;
       const savedWellness = await AsyncStorage.getItem(WELLNESS_KEY);
+      // Restore the per-symptom guidance ack history. Used by the
+      // Today tab to flip the tip card into "Better/Same/Worse"
+      // mode the day after the patient acknowledged guidance.
+      try {
+        const savedAckHist = await AsyncStorage.getItem(GUIDANCE_ACK_HISTORY_KEY);
+        if (savedAckHist) setGuidanceAckHistory(JSON.parse(savedAckHist));
+        const savedClinReq = await AsyncStorage.getItem(CLINICIAN_REQUESTED_DATES_KEY);
+        if (savedClinReq) setClinicianRequestedDates(JSON.parse(savedClinReq));
+      } catch { /* ignore corrupt cache */ }
+
       if (savedWellness) {
         const parsed = JSON.parse(savedWellness);
         if (parsed.date === todayDate) {
@@ -1189,6 +1245,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // remove it from the pending set.
       pendingGuidanceAcksRef.current.add(symptom);
       const today = new Date().toISOString().split("T")[0]!;
+      // Persist "the patient acknowledged guidance for this symptom
+      // on this date" so tomorrow we can offer the follow-up question.
+      setGuidanceAckHistory((prev) => {
+        const next = { ...prev, [symptom]: today };
+        AsyncStorage.setItem(GUIDANCE_ACK_HISTORY_KEY, JSON.stringify(next)).catch(() => {});
+        return next;
+      });
       sessionApi
         .markGuidanceShown(today, symptom)
         .then(() => {
@@ -1200,6 +1263,75 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     },
     [],
   );
+
+  // Patient answered the day-after follow-up. Treat as an implicit
+  // ack (so the tip card dismisses), refresh the ack-history date
+  // (don't re-prompt tomorrow), and mirror to the server.
+  const recordSymptomTrend = useCallback(
+    (
+      symptom: import("@/lib/symptomTips").SymptomKind,
+      response: "better" | "same" | "worse",
+    ) => {
+      const today = new Date().toISOString().split("T")[0]!;
+      const key = `${today}|${symptom}`;
+      pendingTrendResponsesRef.current.set(key, { date: today, symptom, response });
+      pendingGuidanceAcksRef.current.add(symptom);
+      setGuidanceAckHistory((prev) => {
+        const next = { ...prev, [symptom]: today };
+        AsyncStorage.setItem(GUIDANCE_ACK_HISTORY_KEY, JSON.stringify(next)).catch(() => {});
+        return next;
+      });
+      sessionApi
+        .submitSymptomTrend(today, symptom, response)
+        .then(() => {
+          pendingTrendResponsesRef.current.delete(key);
+        })
+        .catch(() => { /* will replay on next saveDailyCheckIn */ });
+      // Best-effort guidance ack mirror as well -- harmless if it
+      // fires twice and lets the dashboard show "guidance shown" on
+      // its own.
+      sessionApi
+        .markGuidanceShown(today, symptom)
+        .then(() => {
+          pendingGuidanceAcksRef.current.delete(symptom);
+        })
+        .catch(() => {});
+    },
+    [],
+  );
+
+  const requestClinicianForSymptom = useCallback(
+    (symptom: import("@/lib/symptomTips").SymptomKind) => {
+      const today = new Date().toISOString().split("T")[0]!;
+      const key = `${today}|${symptom}`;
+      pendingClinicianRequestsRef.current.set(key, { date: today, symptom });
+      setClinicianRequestedDates((prev) => {
+        const next = { ...prev, [symptom]: today };
+        AsyncStorage.setItem(CLINICIAN_REQUESTED_DATES_KEY, JSON.stringify(next)).catch(() => {});
+        return next;
+      });
+      sessionApi
+        .requestClinicianForSymptom(today, symptom)
+        .then(() => {
+          pendingClinicianRequestsRef.current.delete(key);
+        })
+        .catch(() => { /* will replay on next saveDailyCheckIn */ });
+    },
+    [],
+  );
+
+  // Day-scoped derived view of "did the patient escalate this
+  // symptom today?", computed fresh each render so a midnight
+  // rollover automatically clears the inline confirmation pill
+  // without us having to listen for date-change events.
+  const clinicianRequestedToday = useMemo(() => {
+    const todayYmd = new Date().toISOString().split("T")[0]!;
+    const out: Partial<Record<import("@/lib/symptomTips").SymptomKind, true>> = {};
+    for (const [k, v] of Object.entries(clinicianRequestedDates)) {
+      if (v === todayYmd) out[k as import("@/lib/symptomTips").SymptomKind] = true;
+    }
+    return out;
+  }, [clinicianRequestedDates]);
 
   const saveDailyCheckIn = useCallback(async (checkIn: DailyCheckIn) => {
     const updated = [...checkInHistory.filter(c => c.date !== checkIn.date), checkIn].slice(-30);
@@ -1245,6 +1377,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               .markGuidanceShown(checkIn.date, symptom)
               .then(() => {
                 pendingGuidanceAcksRef.current.delete(symptom);
+              })
+              .catch(() => {});
+          }
+          // Drain pending trend responses (Better/Same/Worse) only
+          // for items whose ORIGINAL date matches the check-in row
+          // we just persisted. Items keyed for other days stay
+          // queued for the day we next save THAT date.
+          for (const [key, item] of pendingTrendResponsesRef.current) {
+            if (item.date !== checkIn.date) continue;
+            sessionApi
+              .submitSymptomTrend(item.date, item.symptom, item.response)
+              .then(() => {
+                pendingTrendResponsesRef.current.delete(key);
+              })
+              .catch(() => {});
+          }
+          // Drain pending clinician escalation requests with the
+          // same date-attribution discipline.
+          for (const [key, item] of pendingClinicianRequestsRef.current) {
+            if (item.date !== checkIn.date) continue;
+            sessionApi
+              .requestClinicianForSymptom(item.date, item.symptom)
+              .then(() => {
+                pendingClinicianRequestsRef.current.delete(key);
               })
               .catch(() => {});
           }
@@ -1368,6 +1524,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         checkInHistory,
         saveDailyCheckIn,
         acknowledgeSymptomTip,
+        recordSymptomTrend,
+        requestClinicianForSymptom,
+        guidanceAckHistory,
+        clinicianRequestedToday,
         todayCheckIn,
         glp1Energy,
         setGlp1Energy,
