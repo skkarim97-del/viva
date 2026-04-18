@@ -1,0 +1,135 @@
+Part 1: Add a clean urgency symbol / visual cue
+
+Right now the copy is stronger, but the cards still need a small visual signal that says:
+this matters now
+
+Requirements
+
+Add a subtle urgency cue to the primary active symptom card.
+
+Examples of acceptable approaches:
+
+small alert / urgency icon near the title
+small amber indicator dot or symbol
+subtle “Act now” badge
+any clean, minimal urgency marker that fits the existing Viva design system
+Important
+keep it elegant, not scary
+do not use bright red error styling everywhere
+do not make it feel like an emergency alert
+it should communicate seriousness and immediacy, not panic
+Behavior
+stronger urgency marker for severe symptoms
+lighter urgency marker for moderate symptoms
+none or minimal for lower-priority cards
+
+The goal is to visually reinforce:
+
+do this now
+don’t ignore this
+Part 2: Re-trigger symptom action cards when symptoms worsen again
+
+This is important.
+
+If a patient:
+
+logs a symptom
+gets a recommendation
+taps the action / acknowledges it
+then later logs the same symptom again at a worse level
+
+the card should be allowed to reappear.
+
+Goal
+
+The system should not assume “already completed once” means “never show again.”
+
+Desired behavior
+
+Examples:
+
+Example 1
+patient logs moderate nausea
+nausea card appears
+patient completes / acknowledges it
+later patient logs severe nausea
+the nausea action card should reappear, now with the severe symptom version
+Example 2
+patient logs constipation
+completes action
+symptoms improve, then recur several days later
+the action card should be allowed to surface again
+Logic direction
+
+Implement simple re-trigger logic based on symptom state changes / time changes.
+
+For MVP, a clean rule set could be:
+
+if symptom severity worsens compared to the last acknowledged state, allow the card to reappear
+if a meaningful amount of time has passed and the symptom is logged again, allow the card to reappear
+do not permanently suppress a symptom card after one completion
+Important constraint
+
+Keep this lean and deterministic.
+Do not build a huge state machine.
+
+I just need:
+
+acknowledgment / completion does not permanently kill the recommendation
+worsening symptoms can re-trigger the recommendation
+recurrent symptoms after some time can re-trigger the recommendation
+UX
+
+If the card reappears:
+
+it should feel like a fresh relevant action
+not like a bug or duplicate
+
+So make sure the logic only re-surfaces when:
+
+symptoms worsened
+or enough time has passed
+or a clearly new symptom episode is happening
+Part 3: Output I want
+
+Show me:
+
+how the urgency symbol / visual cue looks
+how urgency differs for moderate vs severe symptoms
+the exact re-trigger logic you implemented
+examples of when a completed symptom card can reappear
+confirmation that this still keeps the UI clean and does not flood users with repeated cards
+Constraints
+keep the design minimal and aesthetic
+no aggressive emergency styling
+no overengineered symptom engine
+no unnecessary new screens
+no large backend rewrite unless needed for correct re-trigger behavior
+Core objective
+
+Make symptom recommendations feel:
+
+urgent enough to act on
+smart enough to come back when symptoms worsen again later
+My take on the actual product logic
+
+I’d keep it simple:
+
+moderate symptom acknowledged → suppress for now
+same symptom becomes severe later → resurface immediately
+same symptom reappears next day / after enough hours → resurface
+same exact state within a short window → don’t spam
+
+That’s the right MVP behavior.
+
+One extra suggestion
+
+I would also avoid a giant warning icon. Use something like:
+
+small amber pulse dot
+small “Act now” pill
+subtle exclamation mark in a circle
+
+Enough to raise salience, not enough to feel like an ER app.
+
+This is a good change. It makes the system more adaptive and a lot less fake.

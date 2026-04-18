@@ -28,6 +28,10 @@ export type SymptomKind = "nausea" | "constipation" | "low_appetite";
 
 export interface SymptomTip {
   symptom: SymptomKind;
+  // Numeric severity score driving the urgency cue and the
+  // re-trigger logic in the parent ("did this worsen since the
+  // patient last acked?"). 1 = mild, 2 = moderate, 3 = severe.
+  severity: 1 | 2 | 3;
   // State-based title: reflects the current condition + an "(active)"
   // marker so the patient understands this is responding to what they
   // logged today, not generic education content.
@@ -75,6 +79,7 @@ export function deriveSymptomTips(input: SymptomInputs): SymptomTip[] {
     const severe = input.nausea === "severe";
     tips.push({
       symptom: "nausea",
+      severity: severe ? 3 : input.nausea === "moderate" ? 2 : 1,
       title: severe
         ? "Settle severe nausea (active)"
         : "Ease nausea now (active)",
@@ -99,6 +104,13 @@ export function deriveSymptomTips(input: SymptomInputs): SymptomTip[] {
     if (lowHydration(input.hydration)) factors.push("Low hydration");
     tips.push({
       symptom: "constipation",
+      // Subjective "feels constipated" is treated as moderate;
+      // a missed bowel movement alone (with no subjective signal)
+      // is a milder, earlier signal.
+      severity:
+        input.digestion === "constipated"
+          ? 2
+          : 1,
       title: "Get things moving (active)",
       urgency: "Do this within the next hour to help things move.",
       cta: "Walk 10 minutes now",
@@ -116,6 +128,7 @@ export function deriveSymptomTips(input: SymptomInputs): SymptomTip[] {
     if (lowHydration(input.hydration)) factors.push("Low hydration");
     tips.push({
       symptom: "low_appetite",
+      severity: input.appetite === "very_low" ? 2 : 1,
       title: "Steady your appetite (active)",
       urgency: "Do this now to support your energy today.",
       cta: "Eat 2 tbsp yogurt or nuts now",

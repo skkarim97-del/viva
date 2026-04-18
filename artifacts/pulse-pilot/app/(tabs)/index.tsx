@@ -41,6 +41,14 @@ import type { MetricKey, FeelingType, ChatMessage, DailyState, ActionCategory, A
 // rolling over.
 const WEIGHT_PROMPT_LAST_SHOWN_KEY = "@viva_weight_prompt_lastShownDate";
 
+// How long a symptom tip stays suppressed after the patient acks it,
+// assuming the symptom severity hasn't worsened. Crossing this window
+// while the symptom is still being logged counts as a recurrence and
+// the card is allowed to surface again. Tuned to ~4h so within a
+// single day a patient can still get a second nudge if the issue
+// hasn't resolved, without spam.
+const SUPPRESSION_RETRIGGER_MS = 4 * 60 * 60 * 1000;
+
 function todayLocalDateString(): string {
   const d = new Date();
   const y = d.getFullYear();
@@ -139,13 +147,18 @@ export default function DashboardScreen() {
   const [showWhyPlan, setShowWhyPlan] = useState(false);
   const [showCheckIn, setShowCheckIn] = useState(false);
   const [checkInMental, setCheckInMental] = useState<MentalState>(null);
-  // Per-day "got it" set, keyed by symptom. Resets implicitly the next
-  // day because the symptomTips themselves are derived from today's
-  // inputs only -- if the patient still feels nauseated tomorrow, the
-  // tip re-appears, which is the right behavior.
-  const [dismissedTips, setDismissedTips] = useState<Set<SymptomKind>>(
-    () => new Set(),
-  );
+  // Per-symptom suppression record. We track the severity at the
+  // time the patient acked AND the wall-clock timestamp so the tip
+  // can re-surface when:
+  //   1. The same symptom worsens (current severity > acked severity)
+  //   2. SUPPRESSION_RETRIGGER_MS has passed and the symptom is still
+  //      logged (recurrence after a meaningful gap)
+  // The map is in-component state -- it resets on app restart, which
+  // is the desired "fresh day" behavior since the symptom inputs
+  // themselves are also same-day.
+  const [dismissedTips, setDismissedTips] = useState<
+    Map<SymptomKind, { severity: 1 | 2 | 3; ackedAt: number }>
+  >(() => new Map());
   const [showDoseIncrease, setShowDoseIncrease] = useState(false);
   const [doseIncreaseStep, setDoseIncreaseStep] = useState<"ask" | "details">("ask");
   const [selectedPrevDose, setSelectedPrevDose] = useState<number | null>(null);
@@ -223,26 +236,52 @@ export default function DashboardScreen() {
   }), [glp1Energy, appetite, nausea, digestion]);
   const inputSummary = inputSummaryResult.text || null;
 
-  // Today's active symptom tips, recomputed whenever the patient
-  // changes any of the four input rows above. Filtered against
-  // dismissedTips so a tip stays gone after the patient taps "Got it".
+  // Today's active symptom tips. Filtered against dismissedTips with
+  // re-trigger logic so a card the patient already acked can surface
+  // again when (a) the symptom worsens or (b) enough time has passed
+  // and the symptom is still being logged. See dismissedTips comment.
   const symptomTips = React.useMemo(
-    () =>
-      deriveSymptomTips({
+    () => {
+      const now = Date.now();
+      return deriveSymptomTips({
         nausea,
         appetite,
         digestion,
         hydration,
         bowelMovementToday,
-      }).filter((t) => !dismissedTips.has(t.symptom)),
+      }).filter((t) => {
+        const ack = dismissedTips.get(t.symptom);
+        if (!ack) return true;
+        // Worsened since ack -> resurface immediately as a fresh
+        // (now-more-severe) tip.
+        if (t.severity > ack.severity) return true;
+        // Recurrence after a meaningful gap -> resurface. Same-state
+        // pings inside the window are suppressed to avoid spam.
+        if (now - ack.ackedAt >= SUPPRESSION_RETRIGGER_MS) return true;
+        return false;
+      });
+    },
     [nausea, appetite, digestion, hydration, bowelMovementToday, dismissedTips],
   );
 
   const onAckSymptomTip = React.useCallback(
     (symptom: SymptomKind) => {
+      // Snapshot the current severity at ack time so the re-trigger
+      // logic above can compare against it. We re-derive here (rather
+      // than passing severity in from the card) so the snapshot
+      // always reflects "what was true the moment the patient tapped
+      // the CTA", even if the inputs change before the next render.
+      const currentTip = deriveSymptomTips({
+        nausea,
+        appetite,
+        digestion,
+        hydration,
+        bowelMovementToday,
+      }).find((t) => t.symptom === symptom);
+      const severity: 1 | 2 | 3 = currentTip?.severity ?? 1;
       setDismissedTips((prev) => {
-        const next = new Set(prev);
-        next.add(symptom);
+        const next = new Map(prev);
+        next.set(symptom, { severity, ackedAt: Date.now() });
         return next;
       });
       // Delegate the server mirror (and queued retry on 404) to
@@ -250,7 +289,14 @@ export default function DashboardScreen() {
       // before today's check-in row exists" race.
       acknowledgeSymptomTip(symptom);
     },
-    [acknowledgeSymptomTip],
+    [
+      acknowledgeSymptomTip,
+      nausea,
+      appetite,
+      digestion,
+      hydration,
+      bowelMovementToday,
+    ],
   );
 
   const haptic = () => {
@@ -823,14 +869,20 @@ export default function DashboardScreen() {
                   cardBg={c.card}
                   background={c.background}
                   mutedForeground={c.mutedForeground}
+                  warning={c.warning}
                   onAcknowledge={onAckSymptomTip}
                   onTrendResponse={(s, r) => {
                     recordSymptomTrend(s, r);
                     // Treat answering as also dismissing the card --
-                    // matches the "Got it" flow.
+                    // matches the "Got it" flow. Snapshot current
+                    // severity so the same re-trigger rules apply.
+                    const snap = symptomTips.find((x) => x.symptom === s);
                     setDismissedTips((prev) => {
-                      const next = new Set(prev);
-                      next.add(s);
+                      const next = new Map(prev);
+                      next.set(s, {
+                        severity: snap?.severity ?? 1,
+                        ackedAt: Date.now(),
+                      });
                       return next;
                     });
                   }}

@@ -52,6 +52,10 @@ interface SymptomTipCardProps {
   cardBg: string;
   background: string;
   mutedForeground: string;
+  // Amber/warning hue used for the urgency cue (severity badge / dot).
+  // Passed in from the theme so dark mode and brand tweaks stay
+  // centralized.
+  warning: string;
   onAcknowledge: (symptom: SymptomKind) => void;
   onTrendResponse: (symptom: SymptomKind, response: TrendResponse) => void;
   onRequestClinician: (symptom: SymptomKind) => void;
@@ -75,6 +79,7 @@ export function SymptomTipCard(props: SymptomTipCardProps) {
     cardBg,
     background,
     mutedForeground,
+    warning,
     onAcknowledge,
     onTrendResponse,
     onRequestClinician,
@@ -165,6 +170,36 @@ export function SymptomTipCard(props: SymptomTipCardProps) {
         >
           {mode === "followup" ? followupTitle : tip.title}
         </Text>
+        {/* Urgency cue. Only on the primary ack card so secondaries
+            stay quiet. Severe symptoms get an amber "Act now" pill;
+            moderate symptoms get a single amber dot next to the
+            title. Mild signals stay un-marked (the title + CTA are
+            enough). Calm amber, never red -- this is a nudge, not an
+            ER alert. */}
+        {mode === "ack" && isPrimary && tip.severity >= 3 && (
+          <View
+            style={[
+              styles.urgencyPill,
+              { backgroundColor: warning + "1F", borderColor: warning + "55" },
+            ]}
+            accessible
+            accessibilityLabel="Act now: high urgency"
+          >
+            <View
+              style={[styles.urgencyPillDot, { backgroundColor: warning }]}
+            />
+            <Text style={[styles.urgencyPillText, { color: warning }]}>
+              Act now
+            </Text>
+          </View>
+        )}
+        {mode === "ack" && isPrimary && tip.severity === 2 && (
+          <View
+            style={[styles.urgencyDot, { backgroundColor: warning }]}
+            accessible
+            accessibilityLabel="Moderate urgency"
+          />
+        )}
       </View>
 
       {/* Urgency line -- the "when" that nudges follow-through.
@@ -417,6 +452,30 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 14,
     marginTop: 6,
+  },
+  urgencyPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  urgencyPillDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  urgencyPillText: {
+    fontFamily: "Montserrat_600SemiBold",
+    fontSize: 10.5,
+    letterSpacing: 0.2,
+  },
+  urgencyDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   trendRow: {
     flexDirection: "row",
