@@ -108,13 +108,21 @@ export function PatientsPage() {
                   </span>
                 </div>
               </div>
-              <div className="mt-4 pt-4 border-t border-border grid grid-cols-2 gap-x-6 gap-y-3">
+              <div className="mt-4 pt-4 border-t border-border grid grid-cols-3 gap-x-5 gap-y-3">
                 <div className="min-w-0">
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                    Treatment
+                    Drug
                   </div>
                   <div className="text-sm text-foreground font-medium mt-1 truncate">
                     {p.glp1Drug ?? "--"}
+                  </div>
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                    Dose
+                  </div>
+                  <div className="text-sm text-foreground font-medium mt-1 truncate">
+                    {p.dose ?? "--"}
                   </div>
                 </div>
                 <div className="min-w-0">

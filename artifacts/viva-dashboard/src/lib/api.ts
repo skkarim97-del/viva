@@ -18,6 +18,7 @@ export interface PatientRow {
   name: string;
   email: string;
   glp1Drug: string | null;
+  dose: string | null;
   startedOn: string | null;
   lastCheckin: string | null;
   riskScore: number;
@@ -29,6 +30,7 @@ export interface PatientDetail {
   name: string;
   email: string;
   glp1Drug: string | null;
+  dose: string | null;
   startedOn: string | null;
 }
 

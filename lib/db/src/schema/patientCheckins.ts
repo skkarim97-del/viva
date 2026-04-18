@@ -25,18 +25,7 @@ export const patientCheckinsTable = pgTable(
     nausea: text("nausea", {
       enum: ["none", "mild", "moderate", "severe"],
     }).notNull(),
-    // Digestion / GI tract complaint, captured separately from nausea so we
-    // can score gut-side effects independently of stomach-side effects.
-    digestion: text("digestion", {
-      enum: ["normal", "bloated", "constipated", "diarrhea"],
-    }),
-    appetite: text("appetite", {
-      enum: ["very_low", "low", "normal", "strong"],
-    }),
     mood: integer("mood").notNull(),
-    // 1-5 self-reported drive to stay on plan; distinct from mood since
-    // mood can be fine while motivation collapses (or vice versa).
-    motivation: integer("motivation"),
     notes: text("notes"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },

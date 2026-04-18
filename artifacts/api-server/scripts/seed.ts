@@ -23,6 +23,7 @@ interface PatientSpec {
   email: string;
   name: string;
   glp1Drug: string;
+  dose: string;
   startedDaysAgo: number;
   // tone shapes the random generator: stable patients log great/good/none,
   // struggling patients log tired/depleted/moderate, silent patients have gaps
@@ -35,28 +36,32 @@ const PATIENTS: PatientSpec[] = [
   {
     email: "alex.morgan@vivaai.demo",
     name: "Alex Morgan",
-    glp1Drug: "Semaglutide 0.5mg weekly",
+    glp1Drug: "Semaglutide",
+    dose: "0.5mg weekly",
     startedDaysAgo: 90,
     tone: "stable",
   },
   {
     email: "jamie.chen@vivaai.demo",
     name: "Jamie Chen",
-    glp1Drug: "Tirzepatide 5mg weekly",
+    glp1Drug: "Tirzepatide",
+    dose: "5mg weekly",
     startedDaysAgo: 45,
     tone: "improving",
   },
   {
     email: "priya.patel@vivaai.demo",
     name: "Priya Patel",
-    glp1Drug: "Semaglutide 1mg weekly",
+    glp1Drug: "Semaglutide",
+    dose: "1mg weekly",
     startedDaysAgo: 21,
     tone: "struggling",
   },
   {
     email: "sam.rivera@vivaai.demo",
     name: "Sam Rivera",
-    glp1Drug: "Tirzepatide 7.5mg weekly",
+    glp1Drug: "Tirzepatide",
+    dose: "7.5mg weekly",
     startedDaysAgo: 60,
     tone: "silent",
   },
@@ -176,6 +181,7 @@ async function main(): Promise<void> {
       userId: user!.id,
       doctorId: doctor!.id,
       glp1Drug: p.glp1Drug,
+      dose: p.dose,
       startedOn: startedOn.toISOString().split("T")[0]!,
     });
 

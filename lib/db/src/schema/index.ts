@@ -2,8 +2,3 @@ export * from "./users";
 export * from "./patients";
 export * from "./patientCheckins";
 export * from "./doctorNotes";
-export * from "./medicationEvents";
-export * from "./healthMetrics";
-export * from "./riskSnapshots";
-export * from "./patientFlags";
-export * from "./interventions";

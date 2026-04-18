@@ -26,6 +26,7 @@ router.get("/", async (req, res: Response) => {
       name: usersTable.name,
       email: usersTable.email,
       glp1Drug: patientsTable.glp1Drug,
+      dose: patientsTable.dose,
       startedOn: patientsTable.startedOn,
     })
     .from(patientsTable)
@@ -77,13 +78,21 @@ router.get("/", async (req, res: Response) => {
 async function loadOwnedPatient(
   doctorId: number,
   patientId: number,
-): Promise<{ id: number; name: string; email: string; glp1Drug: string | null; startedOn: string | null } | null> {
+): Promise<{
+  id: number;
+  name: string;
+  email: string;
+  glp1Drug: string | null;
+  dose: string | null;
+  startedOn: string | null;
+} | null> {
   const [row] = await db
     .select({
       id: usersTable.id,
       name: usersTable.name,
       email: usersTable.email,
       glp1Drug: patientsTable.glp1Drug,
+      dose: patientsTable.dose,
       startedOn: patientsTable.startedOn,
       doctorId: patientsTable.doctorId,
     })
@@ -97,6 +106,7 @@ async function loadOwnedPatient(
     name: row.name,
     email: row.email,
     glp1Drug: row.glp1Drug,
+    dose: row.dose,
     startedOn: row.startedOn,
   };
 }

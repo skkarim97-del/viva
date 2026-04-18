@@ -107,6 +107,11 @@ export function PatientDetailPage({ id }: { id: number }) {
             </div>
             <div className="text-foreground text-sm mt-5 font-medium">
               {p.glp1Drug ?? "No drug recorded"}
+              {p.dose && (
+                <span className="text-muted-foreground font-normal">
+                  {" · "}{p.dose}
+                </span>
+              )}
               {p.startedOn && (
                 <span className="text-muted-foreground font-normal">
                   {" · started "}{fmtDate(p.startedOn)}
