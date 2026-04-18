@@ -99,21 +99,41 @@ function esc(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
+// Brand asset is inlined as a data URI so the invite page is a single
+// self-contained HTML response with no cross-artifact asset path. The
+// PNG itself is the same source file the dashboard ships in
+// artifacts/viva-dashboard/public/viva-logo.png; vivaLogo.ts is a
+// build-time base64 of that exact file. Re-encode it from the same
+// source if the dashboard ever ships a new wordmark.
+import { VIVA_LOGO_DATA_URI } from "./vivaLogo";
+const VIVA_LOGO_URL = VIVA_LOGO_DATA_URI;
+
 function renderInvalidPage(): string {
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Invite link expired - Viva</title>
+<title>Invite link no longer valid - Viva</title>
+${HEAD_LINKS}
 <style>${PAGE_CSS}</style>
 </head>
 <body>
-  <main class="card">
-    <div class="brand">VIVA</div>
-    <h1>This invite link is no longer valid</h1>
-    <p class="lede">The link may have expired or already been used. Ask your clinician for a fresh invite.</p>
-    <a class="btn btn-secondary" href="${IOS_APP_STORE_URL}">Already have the app? Open it and sign in</a>
+  <main class="shell">
+    <div class="brand-row">
+      <img class="brand-logo" src="${VIVA_LOGO_URL}" alt="VIVA AI" width="132" height="44" draggable="false" />
+      <p class="brand-caption">Patient activation</p>
+    </div>
+    <section class="card">
+      <h1>This invite link is no longer valid</h1>
+      <p class="lede">
+        The link may have already been used or replaced. Ask your clinician
+        to send you a fresh invite, or open the Viva app and sign in with
+        the email and password you set when you first activated your account.
+      </p>
+      <a class="btn btn-secondary" href="${IOS_APP_STORE_URL}">Open the Viva app</a>
+    </section>
+    <p class="legal">Viva is a clinician-monitored support platform.</p>
   </main>
 </body>
 </html>`;
@@ -121,187 +141,283 @@ function renderInvalidPage(): string {
 
 function renderInvitePage(token: string, preview: InvitePreview): string {
   const safeToken = esc(token);
-  const safePatient = esc(preview.patientName.split(" ")[0] || preview.patientName);
+  const firstName = preview.patientName.split(" ")[0] || preview.patientName;
+  const safePatient = esc(firstName);
   const safeDoctor = esc(preview.doctorName);
   const safeClinic = preview.clinicName ? esc(preview.clinicName) : "";
-  const clinicLine = safeClinic ? `<div class="clinic">${safeClinic}</div>` : "";
+  const clinicMeta = safeClinic
+    ? `<dl class="meta">
+        <div class="meta-row"><dt>Clinician</dt><dd>${safeDoctor}</dd></div>
+        <div class="meta-row"><dt>Practice</dt><dd>${safeClinic}</dd></div>
+      </dl>`
+    : `<dl class="meta">
+        <div class="meta-row"><dt>Clinician</dt><dd>${safeDoctor}</dd></div>
+      </dl>`;
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>You've been invited to Viva</title>
+<title>You're invited to Viva</title>
 <meta name="apple-itunes-app" content="app-id=6762158265, app-argument=viva://invite/${safeToken}" />
+${HEAD_LINKS}
 <style>${PAGE_CSS}</style>
 </head>
 <body>
-  <main class="card">
-    <div class="brand">VIVA</div>
-    <h1>Hi ${safePatient}, you've been invited to join Viva.</h1>
-    <p class="lede">
-      ${safeDoctor} has set up a Viva account for you so you can share daily
-      check-ins from your phone.
-    </p>
-    ${clinicLine}
+  <main class="shell">
+    <div class="brand-row">
+      <img class="brand-logo" src="${VIVA_LOGO_URL}" alt="VIVA AI" width="132" height="44" draggable="false" />
+      <p class="brand-caption">Patient activation</p>
+    </div>
 
-    <a class="btn btn-primary" id="open-app" href="viva://invite/${safeToken}">
-      Open the Viva app
-    </a>
+    <section class="card">
+      <p class="eyebrow">You're invited</p>
+      <h1>Welcome, ${safePatient}.</h1>
+      <p class="lede">
+        Your clinician has set up a Viva account for you. Continue on your
+        phone to choose a password and start submitting daily check-ins.
+      </p>
 
-    <div class="divider"><span>Don't have the app yet?</span></div>
+      ${clinicMeta}
 
-    <a class="btn btn-store btn-ios" href="${IOS_APP_STORE_URL}">
-      Download for iPhone
-    </a>
-    <a class="btn btn-store btn-android" href="${ANDROID_PLAY_STORE_URL}">
-      Download for Android
-    </a>
+      <a class="btn btn-primary" id="open-app" href="viva://invite/${safeToken}">
+        Continue in the Viva app
+      </a>
+      <p class="hint">If the app is installed, this will open it directly.</p>
+    </section>
 
-    <p class="footnote" id="resume-hint">
-      After installing, return to this page and tap "Open the Viva app" to
-      finish setting up your account.
+    <section class="card card-muted">
+      <p class="eyebrow">Don't have the app yet?</p>
+      <p class="lede compact">
+        Install Viva on your phone, then return to this page and tap
+        Continue to finish setting up your account.
+      </p>
+      <div class="store-row">
+        <a class="btn btn-store" href="${IOS_APP_STORE_URL}">
+          <span class="store-platform">iPhone</span>
+          <span class="store-action">App Store</span>
+        </a>
+        <a class="btn btn-store" href="${ANDROID_PLAY_STORE_URL}">
+          <span class="store-platform">Android</span>
+          <span class="store-action">Google Play</span>
+        </a>
+      </div>
+    </section>
+
+    <p class="legal">
+      Viva is a clinician-monitored support platform. Your check-ins are
+      visible only to your care team.
     </p>
   </main>
   <script>
-    // Persist the token so a returning patient (post-install) hits the
-    // same activation flow even if they navigate away briefly.
     try { localStorage.setItem("viva.invite.token", ${JSON.stringify(token)}); } catch (e) {}
 
-    // One-shot auto-redirect into the custom scheme. If the app is
-    // installed, iOS/Android will switch to it; if not, the page stays
-    // put and the user sees the download CTAs. We only fire this once
-    // per page load so refreshes don't loop.
     var fired = sessionStorage.getItem("viva.invite.fired") === "1";
     if (!fired) {
       sessionStorage.setItem("viva.invite.fired", "1");
-      // Small delay so the user perceives the page rendering before the
-      // OS prompt appears. Without this, mobile Safari sometimes shows
-      // the "Open in Viva?" sheet on top of a blank background.
       setTimeout(function () {
         window.location.href = ${JSON.stringify(`viva://invite/${token}`)};
       }, 250);
-    }
-
-    // Manual button: always re-fire the scheme on tap, since the auto
-    // version is gated by sessionStorage.
-    var btn = document.getElementById("open-app");
-    if (btn) {
-      btn.addEventListener("click", function (e) {
-        // The href already does the right thing; we just stop double
-        // navigation if the user double-taps.
-        e.stopPropagation();
-      });
     }
   </script>
 </body>
 </html>`;
 }
 
+// Montserrat is the only typeface used across the dashboard and the
+// patient app. We pull the same weights the React surfaces use so the
+// invite page reads as the same product, not a generic web fallback.
+const HEAD_LINKS = `
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" />
+<link rel="icon" type="image/svg+xml" href="/viva-dashboard/favicon.svg" />`;
+
+// Visual tokens are kept in lockstep with artifacts/viva-dashboard/src/
+// index.css and artifacts/pulse-pilot/constants/colors.ts. If you tweak
+// any value here, mirror it in those files (and vice versa).
 const PAGE_CSS = `
   :root {
     --navy: #142240;
+    --foreground: #142240;
+    --muted-foreground: #6B7A90;
+    --background: #FFFFFF;
+    --card: #F5F6FA;
+    --card-soft: #EEF0F6;
+    --border: #E0E4EB;
     --accent: #38B6FF;
-    --bg: #F6F8FB;
-    --card: #FFFFFF;
-    --muted: #5A6478;
-    --border: #E4E8EE;
+    --radius-md: 16px;
+    --radius-lg: 20px;
+    --radius-xl: 24px;
   }
   * { box-sizing: border-box; }
   html, body {
     margin: 0;
     padding: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    background: var(--bg);
-    color: var(--navy);
+    font-family: "Montserrat", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--background);
+    color: var(--foreground);
+    letter-spacing: -0.005em;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
   body {
     min-height: 100vh;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
-    padding: 24px;
+    padding: 48px 20px 64px;
+  }
+  .shell {
+    width: 100%;
+    max-width: 440px;
+  }
+  .brand-row {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 28px;
+  }
+  .brand-logo {
+    width: 132px;
+    height: auto;
+    display: block;
+  }
+  .brand-caption {
+    margin: 18px 0 0 0;
+    color: var(--muted-foreground);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
   }
   .card {
     background: var(--card);
-    border-radius: 24px;
-    padding: 32px 24px;
-    width: 100%;
-    max-width: 420px;
-    box-shadow: 0 18px 48px rgba(20, 34, 64, 0.08);
+    border-radius: var(--radius-lg);
+    padding: 28px 24px;
+    margin-bottom: 14px;
   }
-  .brand {
+  .card-muted {
+    background: var(--card-soft);
+  }
+  .eyebrow {
+    margin: 0 0 10px 0;
+    font-size: 11px;
     font-weight: 700;
-    letter-spacing: 4px;
-    color: var(--navy);
-    font-size: 14px;
-    margin-bottom: 24px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
   }
   h1 {
-    font-size: 22px;
-    line-height: 1.3;
-    margin: 0 0 12px 0;
+    font-size: 24px;
+    line-height: 1.25;
+    margin: 0 0 10px 0;
     font-weight: 700;
+    letter-spacing: -0.01em;
   }
   .lede {
-    margin: 0 0 4px 0;
-    color: var(--muted);
+    margin: 0;
+    color: var(--muted-foreground);
     font-size: 15px;
-    line-height: 1.5;
+    line-height: 1.55;
+    font-weight: 400;
   }
-  .clinic {
-    color: var(--muted);
+  .lede.compact { font-size: 14px; line-height: 1.5; }
+  .meta {
+    margin: 22px 0 4px 0;
+    padding: 0;
+    border-top: 1px solid var(--border);
+  }
+  .meta-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+    margin: 0;
+  }
+  .meta dt {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+    margin: 0;
+  }
+  .meta dd {
+    margin: 0;
     font-size: 14px;
-    margin-bottom: 20px;
-    font-style: italic;
+    font-weight: 600;
+    color: var(--foreground);
+    text-align: right;
   }
   .btn {
     display: block;
     text-align: center;
     text-decoration: none;
-    padding: 14px 16px;
-    border-radius: 14px;
-    font-weight: 600;
+    font-family: inherit;
     font-size: 15px;
-    margin-top: 12px;
+    font-weight: 600;
+    padding: 14px 18px;
+    border-radius: var(--radius-md);
     transition: opacity 0.15s ease, transform 0.05s ease;
+    border: 1px solid transparent;
   }
   .btn:active { transform: scale(0.98); }
+  .btn:hover { opacity: 0.92; }
   .btn-primary {
     background: var(--navy);
-    color: #fff;
+    color: #FFFFFF;
     margin-top: 24px;
   }
   .btn-secondary {
     background: transparent;
-    color: var(--navy);
-    border: 1px solid var(--border);
+    color: var(--foreground);
+    border-color: var(--border);
     margin-top: 24px;
+  }
+  .hint {
+    margin: 12px 0 0 0;
+    text-align: center;
+    color: var(--muted-foreground);
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .store-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 18px;
   }
   .btn-store {
-    background: #fff;
-    color: var(--navy);
-    border: 1px solid var(--border);
-  }
-  .divider {
+    background: var(--background);
+    color: var(--foreground);
+    border-color: var(--border);
+    padding: 12px 14px;
     display: flex;
-    align-items: center;
-    gap: 12px;
-    margin: 28px 0 4px 0;
-    color: var(--muted);
-    font-size: 13px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    text-align: left;
   }
-  .divider::before, .divider::after {
-    content: "";
-    flex: 1;
-    height: 1px;
-    background: var(--border);
+  .store-platform {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted-foreground);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
   }
-  .footnote {
-    margin-top: 24px;
-    color: var(--muted);
-    font-size: 13px;
-    line-height: 1.5;
+  .store-action {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--foreground);
+  }
+  .legal {
+    margin: 24px 4px 0 4px;
+    color: var(--muted-foreground);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.55;
     text-align: center;
   }
 `;
