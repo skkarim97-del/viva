@@ -19,7 +19,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { InputRow } from "@/components/InputRow";
 import { ScreenHeader } from "@/components/ScreenHeader";
+import { SymptomTipCard } from "@/components/SymptomTipCard";
 import { useApp } from "@/context/AppContext";
+import { deriveSymptomTips, type SymptomKind } from "@/lib/symptomTips";
 import { generateCoachInsight } from "@/data/insights";
 import { formatDoseDisplay, getDoseOptions, type MedicationBrand } from "@/data/medicationData";
 import { generateGreeting, generateInputSummary, buildCoachContext } from "@/lib/engine";
@@ -86,7 +88,7 @@ export default function DashboardScreen() {
     metrics, completionHistory,
     streakDays, todayCompletionRate,
     lastCompletionFeedback, clearCompletionFeedback,
-    saveDailyCheckIn, todayCheckIn,
+    saveDailyCheckIn, todayCheckIn, acknowledgeSymptomTip,
     appetite, setAppetite,
     nausea, setNausea,
     digestion, setDigestion,
@@ -107,6 +109,13 @@ export default function DashboardScreen() {
   const [showWhyPlan, setShowWhyPlan] = useState(false);
   const [showCheckIn, setShowCheckIn] = useState(false);
   const [checkInMental, setCheckInMental] = useState<MentalState>(null);
+  // Per-day "got it" set, keyed by symptom. Resets implicitly the next
+  // day because the symptomTips themselves are derived from today's
+  // inputs only -- if the patient still feels nauseated tomorrow, the
+  // tip re-appears, which is the right behavior.
+  const [dismissedTips, setDismissedTips] = useState<Set<SymptomKind>>(
+    () => new Set(),
+  );
   const [showDoseIncrease, setShowDoseIncrease] = useState(false);
   const [doseIncreaseStep, setDoseIncreaseStep] = useState<"ask" | "details">("ask");
   const [selectedPrevDose, setSelectedPrevDose] = useState<number | null>(null);
@@ -146,6 +155,36 @@ export default function DashboardScreen() {
     energy: glp1Energy, appetite, nausea, digestion,
   }), [glp1Energy, appetite, nausea, digestion]);
   const inputSummary = inputSummaryResult.text || null;
+
+  // Today's active symptom tips, recomputed whenever the patient
+  // changes any of the four input rows above. Filtered against
+  // dismissedTips so a tip stays gone after the patient taps "Got it".
+  const symptomTips = React.useMemo(
+    () =>
+      deriveSymptomTips({
+        nausea,
+        appetite,
+        digestion,
+        hydration,
+        bowelMovementToday: null,
+      }).filter((t) => !dismissedTips.has(t.symptom)),
+    [nausea, appetite, digestion, hydration, dismissedTips],
+  );
+
+  const onAckSymptomTip = React.useCallback(
+    (symptom: SymptomKind) => {
+      setDismissedTips((prev) => {
+        const next = new Set(prev);
+        next.add(symptom);
+        return next;
+      });
+      // Delegate the server mirror (and queued retry on 404) to
+      // AppContext so the ack survives the "patient dismisses tip
+      // before today's check-in row exists" race.
+      acknowledgeSymptomTip(symptom);
+    },
+    [acknowledgeSymptomTip],
+  );
 
   const haptic = () => {
     if (Platform.OS !== "web") {
@@ -666,6 +705,26 @@ export default function DashboardScreen() {
             <InputRow label="Digestion" options={DIGESTION_OPTIONS} selected={digestion} onSelect={selectDigestion} containerBg={c.background} />
           </View>
         </View>
+
+        {/* Symptom-tip cards. Render directly under the inputs the
+            patient just touched so the cause-and-effect is obvious:
+            "I logged nausea -> here's the tip". */}
+        {symptomTips.length > 0 && (
+          <View style={{ marginBottom: 4 }}>
+            {symptomTips.map((tip) => (
+              <SymptomTipCard
+                key={tip.symptom}
+                tip={tip}
+                navy={c.foreground}
+                accent={c.accent}
+                cardBg={c.card}
+                background={c.background}
+                mutedForeground={c.mutedForeground}
+                onAcknowledge={onAckSymptomTip}
+              />
+            ))}
+          </View>
+        )}
 
         <View style={[styles.dayCard, { backgroundColor: c.card }]}>
           <View style={styles.dayHeader}>

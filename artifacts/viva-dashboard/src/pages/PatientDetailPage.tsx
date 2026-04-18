@@ -1,10 +1,36 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type Checkin } from "@/lib/api";
+import { api, type Checkin, type SymptomFlag } from "@/lib/api";
 import { RiskBadge } from "@/components/RiskBadge";
 import { ActionBadge } from "@/components/ActionBadge";
 import { relativeTime, daysSince } from "@/lib/relativeTime";
+
+const SYMPTOM_LABEL: Record<SymptomFlag["symptom"], string> = {
+  nausea: "Nausea",
+  constipation: "Constipation",
+  low_appetite: "Low appetite",
+};
+const SEVERITY_LABEL: Record<SymptomFlag["severity"], string> = {
+  mild: "Mild",
+  moderate: "Moderate",
+  severe: "Severe",
+};
+const PERSISTENCE_LABEL: Record<SymptomFlag["persistence"], string> = {
+  transient: "Transient",
+  persistent: "Persistent",
+  worsening: "Worsening",
+};
+// Severity drives the chip color so the most actionable flag pops
+// visually without us also having to add an icon legend.
+const SEVERITY_STYLE: Record<
+  SymptomFlag["severity"],
+  { bg: string; fg: string }
+> = {
+  mild: { bg: "rgba(56,182,255,0.10)", fg: "#0B6FAA" },
+  moderate: { bg: "rgba(255,149,0,0.12)", fg: "#B8650A" },
+  severe: { bg: "rgba(255,59,48,0.12)", fg: "#B5251D" },
+};
 
 const ENERGY_LABEL: Record<Checkin["energy"], string> = {
   depleted: "Depleted",
@@ -175,6 +201,81 @@ export function PatientDetailPage({ id }: { id: number }) {
           </div>
         );
       })()}
+
+      {/* Symptom flags. Distinct from churn-risk rules: this is the
+          clinical-symptom layer. Surfaced ABOVE the risk explanation
+          because a worsening symptom is more actionable than a
+          7-day energy trend. */}
+      {risk.data && risk.data.symptomFlags.length > 0 && (
+        <section className="bg-card rounded-[20px] p-6">
+          <SectionTitle>Symptom flags</SectionTitle>
+          <ul className="space-y-3">
+            {risk.data.symptomFlags.map((f) => {
+              const sev = SEVERITY_STYLE[f.severity];
+              return (
+                <li
+                  key={f.symptom}
+                  className="bg-background rounded-xl px-4 py-3.5"
+                >
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="min-w-0">
+                      <div className="font-display text-[15px] font-semibold text-foreground">
+                        {SYMPTOM_LABEL[f.symptom]}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-0.5 font-medium">
+                        {PERSISTENCE_LABEL[f.persistence]} ·{" "}
+                        {f.daysObserved} of last {f.windowDays} day
+                        {f.windowDays === 1 ? "" : "s"}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2 justify-end">
+                      <span
+                        className="px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap"
+                        style={{ backgroundColor: sev.bg, color: sev.fg }}
+                      >
+                        {SEVERITY_LABEL[f.severity]}
+                      </span>
+                      {f.suggestFollowup && (
+                        <span
+                          className="px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap"
+                          style={{
+                            backgroundColor: "rgba(255,59,48,0.12)",
+                            color: "#B5251D",
+                          }}
+                        >
+                          Follow up
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {f.contributors.length > 0 && (
+                    <div className="mt-2.5">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">
+                        Likely contributors
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {f.contributors.map((c) => (
+                          <span
+                            key={c}
+                            className="px-2 py-0.5 rounded-md text-xs text-foreground bg-card font-medium"
+                          >
+                            {c}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div className="mt-2.5 text-xs text-muted-foreground font-medium">
+                    {f.guidanceShown
+                      ? "Patient has seen self-management guidance"
+                      : "Patient has not yet acknowledged guidance"}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
 
       <div className="grid lg:grid-cols-2 gap-5">
         {/* Risk explanation */}

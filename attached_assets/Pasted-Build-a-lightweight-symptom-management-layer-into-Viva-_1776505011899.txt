@@ -1,0 +1,99 @@
+Build a lightweight symptom-management layer into Viva that connects common GLP-1 side effects to behavioral / lifestyle drivers and escalates to the doctor when symptoms appear persistent, worsening, or clinically concerning.
+
+Goal
+
+Viva should not just log symptoms. It should:
+
+1. identify likely behavioral contributors
+2. provide simple patient self-management guidance when appropriate
+3. flag the doctor when symptoms are persistent, severe, or worsening
+
+Symptoms to support first
+
+* nausea
+* constipation
+* low appetite
+
+Behavioral / lifestyle inputs to connect
+
+Add or use simple daily inputs for:
+
+* hydration
+* protein intake
+* movement
+* fiber intake if easy
+* bowel movement yes/no if easy
+* dose taken
+* recent dose increase if available
+
+Patient-side logic
+
+For MVP, use lightweight rules-based logic.
+
+Examples:
+
+* nausea + low hydration or long gap without eating → suggest hydration, smaller meals, bland foods, slower eating
+* constipation + low water + low movement → suggest hydration, walking, gradual fiber increase
+* low appetite + low protein intake → suggest prioritizing protein and smaller nutrient-dense meals
+
+Escalation logic
+
+If symptoms are:
+
+* severe
+* persistent across multiple days
+* worsening
+* or occurring after dose increase
+
+then do not just show self-management guidance. Also flag the doctor in the dashboard.
+
+Doctor dashboard output
+
+For flagged patients, show:
+
+* symptom issue
+* persistence / severity
+* likely contributing behavioral factors
+* whether patient has already received basic self-management guidance
+* suggested follow-up indicator
+
+Patient UX
+
+Keep guidance:
+
+* short
+* supportive
+* practical
+* non-alarmist
+* not overly medical
+
+Guardrails
+
+Do not position this as diagnosis or treatment.
+Frame it as common symptom-management support and escalate when symptoms look concerning.
+
+Constraints
+
+* keep this rules-based for MVP
+* no complex AI system yet
+* no overengineering
+* start with nausea, constipation, and low appetite only
+
+My take
+
+This makes Viva much better because now it becomes:
+
+* a retention tool
+* a symptom support layer
+* a triage layer
+
+That is much more compelling than just “we detect churn.”
+
+The only rule is: keep it narrow and safe.
+
+The best version of MVP is not “solve every symptom.”
+It’s:
+
+* help with 3 common issues
+* escalate intelligently
+* keep patients on treatment longer

@@ -39,7 +39,7 @@ export class HttpError extends Error {
 }
 
 async function request<T>(
-  method: "GET" | "POST",
+  method: "GET" | "POST" | "PATCH" | "DELETE",
   path: string,
   body?: unknown,
 ): Promise<T> {
@@ -83,7 +83,16 @@ export interface CheckinPayload {
   nausea: "none" | "mild" | "moderate" | "severe";
   mood: number; // 1..5
   notes?: string | null;
+  // Optional symptom-management fields. The server treats absent values
+  // as "unknown", not "no", so omitting these is safe.
+  appetite?: "strong" | "normal" | "low" | "very_low" | null;
+  digestion?: "fine" | "bloated" | "constipated" | "diarrhea" | null;
+  hydration?: "hydrated" | "good" | "low" | "dehydrated" | null;
+  bowelMovement?: boolean | null;
+  doseTakenToday?: boolean | null;
 }
+
+export type SymptomKind = "nausea" | "constipation" | "low_appetite";
 
 // Pull a token out of an invite link OR accept the bare token string.
 // Doctors paste the full URL most of the time, but it's polite to
@@ -147,4 +156,14 @@ export const sessionApi = {
 
   submitCheckin: (payload: CheckinPayload) =>
     request<{ id: number }>("POST", "/me/checkins", payload),
+
+  // Mark a single symptom's in-app guidance as acknowledged on today's
+  // check-in row. 404 means the patient hasn't submitted a check-in
+  // today yet -- caller should ignore (we'll re-attempt after the
+  // next saveDailyCheckIn).
+  markGuidanceShown: (date: string, symptom: SymptomKind) =>
+    request<{ ok: true }>("PATCH", "/me/checkins/guidance", {
+      date,
+      symptom,
+    }),
 };

@@ -87,6 +87,21 @@ export interface FiredRule {
   weight: number;
 }
 
+export type SymptomKind = "nausea" | "constipation" | "low_appetite";
+export type SymptomSeverity = "mild" | "moderate" | "severe";
+export type SymptomPersistence = "transient" | "persistent" | "worsening";
+
+export interface SymptomFlag {
+  symptom: SymptomKind;
+  severity: SymptomSeverity;
+  persistence: SymptomPersistence;
+  daysObserved: number;
+  windowDays: number;
+  contributors: string[];
+  guidanceShown: boolean;
+  suggestFollowup: boolean;
+}
+
 export interface Risk {
   score: number;
   band: "low" | "medium" | "high";
@@ -96,6 +111,10 @@ export interface Risk {
   // One-line directive derived from the highest-priority rule, e.g.
   // "Follow up on missed check-ins". Null when no rules fired.
   suggestedAction: string | null;
+  // Active symptom-management flags computed by the server's
+  // lib/symptoms module. Empty array when no tracked symptom is
+  // currently active for this patient.
+  symptomFlags: SymptomFlag[];
 }
 
 export interface DoctorNote {

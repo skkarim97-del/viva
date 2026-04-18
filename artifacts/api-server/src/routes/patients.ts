@@ -17,6 +17,10 @@ import {
   deriveSignals,
   deriveSuggestedAction,
 } from "../lib/risk";
+import {
+  computeSymptomFlags,
+  summarizeFlagForList,
+} from "../lib/symptoms";
 
 const router: Router = Router();
 
@@ -114,6 +118,11 @@ router.get("/", async (req, res: Response) => {
     }
     const cks = byPatient.get(p.id) ?? [];
     const risk = computeRisk(cks);
+    // Compute symptom flags on the same window so the queue can render
+    // a single inline summary string (e.g. "Severe nausea") without
+    // requiring the dashboard to round-trip per-patient.
+    const symptomFlags = computeSymptomFlags(cks);
+    const symptomSummary = summarizeFlagForList(symptomFlags);
     const lastCheckin =
       cks.length > 0
         ? cks.reduce((acc, c) => (c.date > acc ? c.date : acc), cks[0]!.date)
@@ -153,12 +162,23 @@ router.get("/", async (req, res: Response) => {
       lastCheckin,
       riskScore: risk.score,
       riskBand: risk.band,
-      action: deriveAction(risk.score, risk.rules, lastCheckin),
+      action: deriveAction(
+        risk.score,
+        risk.rules,
+        lastCheckin,
+        new Date(),
+        symptomFlags,
+      ),
       status: "monitoring" as const,
       signals: deriveSignals(risk.rules, lastCheckin),
       lastNoteAt: lastNoteByPatient.get(p.id) ?? null,
       pending: false,
       activationToken: null as string | null,
+      // Compact symptom indicators for the queue card. The full flag
+      // detail lives on /patients/:id/risk to keep this response light.
+      symptomFlagCount: symptomFlags.length,
+      symptomEscalating: symptomFlags.some((f) => f.suggestFollowup),
+      symptomSummary,
     };
   });
 
@@ -424,14 +444,24 @@ router.get("/:id/risk", async (req, res: Response) => {
     .orderBy(desc(patientCheckinsTable.date))
     .limit(30);
   const risk = computeRisk(cks);
+  const symptomFlags = computeSymptomFlags(cks);
   const lastCheckin = cks[0]?.date ?? null;
   // Send the workflow state and the suggested action alongside the raw
   // risk so the detail page can render a directive without having to
-  // re-derive the rules client-side.
+  // re-derive the rules client-side. symptomFlags is the new
+  // clinically-meaningful payload that powers the "Symptom flags"
+  // section on the patient detail page.
   res.json({
     ...risk,
-    action: deriveAction(risk.score, risk.rules, lastCheckin),
+    action: deriveAction(
+      risk.score,
+      risk.rules,
+      lastCheckin,
+      new Date(),
+      symptomFlags,
+    ),
     suggestedAction: deriveSuggestedAction(risk.rules, lastCheckin),
+    symptomFlags,
   });
 });
 

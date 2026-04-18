@@ -99,6 +99,10 @@ interface AppContextType {
   checkInHistory: DailyCheckIn[];
   saveDailyCheckIn: (checkIn: DailyCheckIn) => void;
   todayCheckIn: DailyCheckIn | null;
+  // Mark a symptom-tip as acknowledged for today. Mirrors to the
+  // server when today's check-in row exists; otherwise queues the ack
+  // and replays it after the next saveDailyCheckIn.
+  acknowledgeSymptomTip: (symptom: import("@/lib/symptomTips").SymptomKind) => void;
   glp1Energy: EnergyDaily;
   setGlp1Energy: (v: EnergyDaily) => void;
   appetite: AppetiteLevel;
@@ -167,6 +171,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [userPatterns, setUserPatterns] = useState<UserPatterns | null>(null);
   const [adaptiveInsights, setAdaptiveInsights] = useState<AdaptiveInsight[]>([]);
   const baselineWeeklyPlanRef = useRef<WeeklyPlan | null>(null);
+  // Set of symptoms whose in-app guidance the patient has tapped
+  // "Got it" on but for which the server hasn't yet recorded the ack
+  // (most commonly because the patient hasn't submitted today's
+  // check-in row yet). Drained inside saveDailyCheckIn after a
+  // successful POST.
+  const pendingGuidanceAcksRef = useRef<Set<import("@/lib/symptomTips").SymptomKind>>(
+    new Set(),
+  );
 
   // Keep the weekly plan's "today" day in sync with the actual daily plan.
   // generateWeeklyPlan() uses a static rotation that is disconnected from
@@ -1158,6 +1170,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setLastCompletionFeedback(null);
   }, []);
 
+  const acknowledgeSymptomTip = useCallback(
+    (symptom: import("@/lib/symptomTips").SymptomKind) => {
+      // Optimistically queue the ack so saveDailyCheckIn can replay
+      // it after the next successful POST. We also fire it now in
+      // case today's check-in row already exists -- on success we
+      // remove it from the pending set.
+      pendingGuidanceAcksRef.current.add(symptom);
+      const today = new Date().toISOString().split("T")[0]!;
+      sessionApi
+        .markGuidanceShown(today, symptom)
+        .then(() => {
+          pendingGuidanceAcksRef.current.delete(symptom);
+        })
+        .catch(() => {
+          // Leave it queued; will retry after next saveDailyCheckIn.
+        });
+    },
+    [],
+  );
+
   const saveDailyCheckIn = useCallback(async (checkIn: DailyCheckIn) => {
     const updated = [...checkInHistory.filter(c => c.date !== checkIn.date), checkIn].slice(-30);
     setCheckInHistory(updated);
@@ -1167,10 +1199,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // patient's daily state. Fire-and-forget: a network failure here
     // must not break the local UX. The /me/checkins endpoint upserts
     // by (patient_user_id, date), so re-saving a day is idempotent.
-    // We only mirror when energy + nausea are populated since the
-    // backend rejects nulls -- if the patient saved a check-in
-    // without filling those they'll be sent on the next save.
-    if (checkIn.energy && checkIn.nausea) {
+    //
+    // The DailyCheckIn struct only carries date + mentalState, so we
+    // pull all symptom-management inputs straight from AppContext
+    // state -- they're the source of truth for "what the patient
+    // selected today". The server requires non-null energy/nausea, so
+    // we skip the mirror when either is missing and try again on the
+    // next save once the patient has filled them in.
+    if (glp1Energy && nausea) {
       const moodMap: Record<string, number> = {
         focused: 5, good: 4, low: 2, burnt_out: 1,
       };
@@ -1178,10 +1214,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       sessionApi
         .submitCheckin({
           date: checkIn.date,
-          energy: checkIn.energy,
-          nausea: checkIn.nausea,
+          energy: glp1Energy,
+          nausea,
           mood,
           notes: null,
+          appetite: appetite ?? null,
+          digestion: digestion ?? null,
+          hydration: hydration ?? null,
+        })
+        .then(() => {
+          // Replay any guidance acks that were dismissed locally
+          // before today's check-in row existed (the server returns
+          // 404 for guidance ack on a missing row). This keeps the
+          // doctor dashboard's "patient has seen guidance" indicator
+          // consistent with what the patient actually did.
+          for (const symptom of pendingGuidanceAcksRef.current) {
+            sessionApi
+              .markGuidanceShown(checkIn.date, symptom)
+              .then(() => {
+                pendingGuidanceAcksRef.current.delete(symptom);
+              })
+              .catch(() => {});
+          }
         })
         .catch(() => {
           // Silent failure: stored locally, will retry on next save.
@@ -1301,6 +1355,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         clearCompletionFeedback,
         checkInHistory,
         saveDailyCheckIn,
+        acknowledgeSymptomTip,
         todayCheckIn,
         glp1Energy,
         setGlp1Energy,

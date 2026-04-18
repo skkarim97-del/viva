@@ -1,4 +1,6 @@
 import type { PatientCheckin } from "@workspace/db";
+import type { SymptomFlag } from "./symptoms";
+import { symptomsRequireFollowup } from "./symptoms";
 
 /**
  * Lightweight rules-based churn-risk scoring. No persisted scores --
@@ -133,12 +135,24 @@ export function deriveAction(
   rules: FiredRule[],
   lastCheckin: string | null,
   now: Date = new Date(),
+  // Optional so existing call sites that haven't yet computed symptom
+  // flags continue to compile. When provided, ANY flag with
+  // suggestFollowup=true escalates the workflow state regardless of
+  // the churn score -- the symptom layer is its own escalation channel.
+  symptomFlags: SymptomFlag[] = [],
 ): Action {
   const days = lastCheckin
     ? daysBetween(now, new Date(lastCheckin))
     : Number.POSITIVE_INFINITY;
   const hasSevereNausea = rules.some((r) => r.code === "severe_nausea_3d");
-  if (score >= 50 || days >= 5 || hasSevereNausea) return "needs_followup";
+  if (
+    score >= 50 ||
+    days >= 5 ||
+    hasSevereNausea ||
+    symptomsRequireFollowup(symptomFlags)
+  ) {
+    return "needs_followup";
+  }
   if (score >= 30) return "monitor";
   return "stable";
 }
