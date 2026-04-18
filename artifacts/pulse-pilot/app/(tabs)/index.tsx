@@ -793,7 +793,7 @@ export default function DashboardScreen() {
             "I logged nausea -> here's the tip". */}
         {symptomTips.length > 0 && (
           <View style={{ marginBottom: 4 }}>
-            {symptomTips.map((tip) => {
+            {symptomTips.map((tip, idx) => {
               // Promote the card to "Better/Same/Worse" follow-up
               // mode ONLY the day immediately after the patient
               // acknowledged guidance -- per spec the question is
@@ -813,6 +813,10 @@ export default function DashboardScreen() {
                   key={tip.symptom}
                   tip={tip}
                   mode={isFollowup ? "followup" : "ack"}
+                  // Top tip gets full emphasis; subsequent tips render
+                  // as quieter secondary cards so attention lands on
+                  // one action at a time.
+                  priority={idx === 0 ? "primary" : "secondary"}
                   clinicianNotified={!!clinicianRequestedToday[tip.symptom]}
                   navy={c.foreground}
                   accent={c.accent}
