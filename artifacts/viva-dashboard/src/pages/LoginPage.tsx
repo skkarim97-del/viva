@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { HttpError } from "@/lib/api";
+import { Logo } from "@/components/Logo";
 
 export function LoginPage() {
   const { login } = useAuth();
@@ -20,7 +21,6 @@ export function LoginPage() {
       if (me.role === "doctor") {
         setLocation("/");
       } else {
-        // patients don't have a UI here -- log them right back out
         setErr(
           "This account is a patient account. Please use the VIVA mobile app.",
         );
@@ -37,23 +37,21 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-mist px-6">
+    <div className="min-h-screen flex items-center justify-center bg-background px-6">
       <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="font-display text-4xl font-bold text-navy">
-            VIVA <span className="text-accent">·</span> Clinic
-          </h1>
-          <p className="mt-2 text-ink-mute text-sm">
+        <div className="flex flex-col items-center mb-8">
+          <Logo size="lg" />
+          <p className="mt-5 text-muted-foreground text-sm font-medium">
             Care team sign in
           </p>
         </div>
 
         <form
           onSubmit={onSubmit}
-          className="bg-white rounded-xl shadow-sm border border-line p-6 space-y-4"
+          className="bg-card rounded-[20px] p-7 space-y-5"
         >
           <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
               Email
             </label>
             <input
@@ -62,11 +60,11 @@ export function LoginPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-md border border-line bg-mist focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+              className="w-full px-4 py-3 rounded-xl bg-background text-foreground font-medium focus:outline-none focus:ring-2 focus:ring-accent placeholder:text-muted-foreground"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-ink mb-1.5">
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
               Password
             </label>
             <input
@@ -75,28 +73,34 @@ export function LoginPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-md border border-line bg-mist focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+              className="w-full px-4 py-3 rounded-xl bg-background text-foreground font-medium focus:outline-none focus:ring-2 focus:ring-accent placeholder:text-muted-foreground"
             />
           </div>
           {err && (
-            <div className="text-sm text-bad bg-bad/10 rounded-md px-3 py-2">
+            <div
+              className="text-sm font-medium rounded-xl px-4 py-3"
+              style={{
+                color: "#B5251D",
+                backgroundColor: "rgba(255,59,48,0.10)",
+              }}
+            >
               {err}
             </div>
           )}
           <button
             type="submit"
             disabled={busy}
-            className="w-full bg-navy text-white font-semibold py-2.5 rounded-md hover:bg-navy-soft transition-colors disabled:opacity-60"
+            className="w-full bg-primary text-primary-foreground font-semibold py-3.5 rounded-2xl hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-60"
           >
             {busy ? "Signing in..." : "Sign in"}
           </button>
-
-          <div className="text-xs text-ink-mute text-center pt-2 border-t border-line">
-            Demo doctor: <span className="font-mono">doctor@vivaai.demo</span>
-            <br />
-            Demo password: <span className="font-mono">viva-demo-2026</span>
-          </div>
         </form>
+
+        <div className="mt-5 text-xs text-muted-foreground text-center leading-relaxed">
+          Demo doctor: <span className="text-foreground font-semibold">doctor@vivaai.demo</span>
+          <br />
+          Demo password: <span className="text-foreground font-semibold">viva-demo-2026</span>
+        </div>
       </div>
     </div>
   );

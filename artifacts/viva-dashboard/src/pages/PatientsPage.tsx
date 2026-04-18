@@ -25,81 +25,85 @@ export function PatientsPage() {
 
   return (
     <div>
-      <div className="flex items-end justify-between mb-6">
+      <div className="flex items-end justify-between mb-7">
         <div>
-          <h1 className="font-display text-3xl font-bold text-navy">
+          <h1 className="font-display text-[28px] font-bold text-foreground leading-tight">
             Your patients
           </h1>
-          <p className="text-ink-mute text-sm mt-1">
+          <p className="text-muted-foreground text-sm mt-1.5 font-medium">
             Live risk band based on the last 14 days of check-ins.
           </p>
         </div>
         {q.data && (
-          <div className="text-sm text-ink-mute">
+          <div className="text-sm text-muted-foreground font-medium">
             {q.data.length} patient{q.data.length === 1 ? "" : "s"}
           </div>
         )}
       </div>
 
       {q.isPending && (
-        <div className="text-ink-mute py-12 text-center">Loading patients...</div>
+        <div className="text-muted-foreground py-12 text-center">
+          Loading patients...
+        </div>
       )}
       {q.isError && (
-        <div className="text-bad bg-bad/10 rounded-md px-4 py-3">
+        <div
+          className="rounded-xl px-4 py-3 font-medium"
+          style={{ color: "#B5251D", backgroundColor: "rgba(255,59,48,0.10)" }}
+        >
           Could not load patients.
         </div>
       )}
       {q.data && q.data.length === 0 && (
-        <div className="text-ink-mute bg-white border border-line rounded-xl p-12 text-center">
+        <div className="text-muted-foreground bg-card rounded-[20px] p-12 text-center font-medium">
           You don't have any patients assigned yet.
         </div>
       )}
 
       {q.data && q.data.length > 0 && (
-        <div className="bg-white rounded-xl border border-line overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-fog text-ink-mute text-xs uppercase tracking-wider">
-              <tr>
-                <th className="text-left px-5 py-3 font-semibold">Patient</th>
-                <th className="text-left px-5 py-3 font-semibold">Treatment</th>
-                <th className="text-left px-5 py-3 font-semibold">
-                  Last check-in
-                </th>
-                <th className="text-left px-5 py-3 font-semibold">Risk</th>
-                <th className="px-5 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {q.data.map((p) => (
-                <tr
-                  key={p.id}
-                  className="hover:bg-mist/60 transition-colors"
-                >
-                  <td className="px-5 py-4">
-                    <div className="font-semibold text-navy">{p.name}</div>
-                    <div className="text-xs text-ink-mute">{p.email}</div>
-                  </td>
-                  <td className="px-5 py-4 text-ink-soft">
-                    {p.glp1Drug ?? <span className="text-ink-mute">--</span>}
-                  </td>
-                  <td className="px-5 py-4 text-ink-soft">
-                    {formatDate(p.lastCheckin)}
-                  </td>
-                  <td className="px-5 py-4">
+        <div className="space-y-3">
+          {q.data.map((p) => (
+            <Link
+              key={p.id}
+              href={`/patients/${p.id}`}
+              className="block bg-card rounded-[20px] p-5 hover:bg-secondary active:scale-[0.995] transition-all"
+            >
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span className="font-semibold text-[17px] text-foreground">
+                      {p.name}
+                    </span>
                     <RiskBadge band={p.riskBand} score={p.riskScore} />
-                  </td>
-                  <td className="px-5 py-4 text-right">
-                    <Link
-                      href={`/patients/${p.id}`}
-                      className="text-accent font-semibold hover:underline"
-                    >
-                      Open →
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1 font-medium">
+                    {p.email}
+                  </div>
+                </div>
+                <div className="flex items-center gap-6">
+                  <div className="text-right">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                      Treatment
+                    </div>
+                    <div className="text-sm text-foreground font-medium mt-0.5">
+                      {p.glp1Drug ?? "--"}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                      Last check-in
+                    </div>
+                    <div className="text-sm text-foreground font-medium mt-0.5">
+                      {formatDate(p.lastCheckin)}
+                    </div>
+                  </div>
+                  <div className="text-accent text-xl font-semibold pl-1">
+                    →
+                  </div>
+                </div>
+              </div>
+            </Link>
+          ))}
         </div>
       )}
     </div>

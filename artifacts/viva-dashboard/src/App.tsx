@@ -19,9 +19,11 @@ const queryClient = new QueryClient({
 
 function NotFound() {
   return (
-    <div className="text-ink-mute py-16 text-center">
-      <h1 className="font-display text-2xl text-navy mb-2">Not found</h1>
-      <p className="text-sm">That page doesn't exist.</p>
+    <div className="text-muted-foreground py-16 text-center">
+      <h1 className="font-display text-[28px] font-bold text-foreground mb-2">
+        Not found
+      </h1>
+      <p className="text-sm font-medium">That page doesn't exist.</p>
     </div>
   );
 }
@@ -59,7 +61,7 @@ function Gate() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-ink-mute">
+      <div className="min-h-screen flex items-center justify-center text-muted-foreground">
         Loading...
       </div>
     );

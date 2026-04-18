@@ -1,29 +1,45 @@
 @import "tailwindcss";
 
+/*
+ * Mobile parity tokens. Mirror artifacts/pulse-pilot/constants/colors.ts
+ * (light theme) so the dashboard reads as the same product as the app.
+ */
 @theme {
-  --color-navy: #142240;
-  --color-navy-deep: #0F1923;
-  --color-navy-soft: #1B2D52;
-  --color-accent: #38B6FF;
-  --color-accent-soft: #6EC8FF;
-  --color-mist: #F5F8FB;
-  --color-fog: #E5ECF3;
-  --color-line: #D8E0EA;
-  --color-ink: #142240;
-  --color-ink-soft: #4A5568;
-  --color-ink-mute: #8392A6;
-  --color-good: #2EB67D;
-  --color-warn: #F2A83B;
-  --color-bad: #E15554;
+  --color-text: #142240;
+  --color-foreground: #142240;
+  --color-background: #ffffff;
 
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-    Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-display: "Montserrat", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --color-card: #f5f6fa;
+  --color-card-foreground: #142240;
 
-  --radius-sm: 0.375rem;
-  --radius-md: 0.625rem;
-  --radius-lg: 1rem;
-  --radius-xl: 1.5rem;
+  --color-primary: #142240;
+  --color-primary-foreground: #ffffff;
+
+  --color-secondary: #e8edf5;
+  --color-secondary-foreground: #142240;
+
+  --color-muted: #eef0f6;
+  --color-muted-foreground: #6b7a90;
+
+  --color-accent: #38b6ff;
+  --color-accent-foreground: #ffffff;
+
+  --color-border: #e0e4eb;
+  --color-input: #dde1e9;
+
+  --color-success: #34c759;
+  --color-warning: #ff9500;
+  --color-destructive: #ff3b30;
+  --color-info: #38b6ff;
+
+  --font-sans: "Montserrat", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Montserrat", ui-sans-serif, system-ui, sans-serif;
+
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
 }
 
 html,
@@ -34,14 +50,11 @@ body,
 
 body {
   margin: 0;
-  background: var(--color-mist);
-  color: var(--color-ink);
+  background: var(--color-background);
+  color: var(--color-foreground);
   font-family: var(--font-sans);
+  font-weight: 400;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
-
-.font-display {
-  font-family: var(--font-display);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.005em;
 }

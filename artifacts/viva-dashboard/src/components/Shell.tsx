@@ -1,43 +1,51 @@
 import { Link, useLocation } from "wouter";
-import { useAuth } from "@/contexts/AuthContext";
 import type { ReactNode } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { Logo } from "@/components/Logo";
 
 export function Shell({ children }: { children: ReactNode }) {
   const { me, logout } = useAuth();
   const [, setLocation] = useLocation();
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <header className="bg-navy text-white">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link
-            href="/"
-            className="font-display text-xl font-bold tracking-tight hover:text-accent transition-colors"
-          >
-            VIVA <span className="text-accent">·</span> Clinic
+    <div className="min-h-screen flex flex-col bg-background">
+      <header className="bg-background">
+        <div className="max-w-6xl mx-auto px-6 pt-8 pb-5 flex items-center justify-between">
+          <Link href="/" aria-label="VIVA Clinic home" className="block">
+            <Logo size="sm" />
           </Link>
-          <div className="flex items-center gap-4 text-sm">
-            <span className="text-white/70 hidden sm:inline">
-              {me?.name} <span className="text-white/40">· {me?.email}</span>
-            </span>
+          <div className="flex items-center gap-3 text-sm">
+            {me && (
+              <div className="hidden sm:flex flex-col items-end leading-tight">
+                <span className="font-semibold text-foreground">
+                  {me.name}
+                </span>
+                <span className="text-muted-foreground text-xs">
+                  Care team
+                </span>
+              </div>
+            )}
             <button
               type="button"
               onClick={async () => {
                 await logout();
                 setLocation("/login");
               }}
-              className="px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/20 transition-colors"
+              className="px-4 py-2 rounded-2xl bg-card text-foreground font-semibold hover:bg-secondary active:scale-[0.97] transition-all"
             >
               Sign out
             </button>
           </div>
         </div>
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="h-px bg-border" />
+        </div>
       </header>
       <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-8">
         {children}
       </main>
-      <footer className="text-center text-xs text-ink-mute pb-6">
-        VIVA Doctor Dashboard · Phase 1 MVP
+      <footer className="text-center text-xs text-muted-foreground pb-8">
+        VIVA Clinic
       </footer>
     </div>
   );

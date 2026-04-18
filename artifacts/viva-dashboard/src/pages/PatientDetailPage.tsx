@@ -27,6 +27,14 @@ function fmtDate(d: string): string {
   });
 }
 
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <h2 className="font-display text-[18px] font-semibold text-foreground mb-4">
+      {children}
+    </h2>
+  );
+}
+
 export function PatientDetailPage({ id }: { id: number }) {
   const qc = useQueryClient();
   const patient = useQuery({
@@ -61,11 +69,16 @@ export function PatientDetailPage({ id }: { id: number }) {
   });
 
   if (patient.isPending) {
-    return <div className="text-ink-mute py-12 text-center">Loading...</div>;
+    return (
+      <div className="text-muted-foreground py-12 text-center">Loading...</div>
+    );
   }
   if (patient.isError || !patient.data) {
     return (
-      <div className="text-bad bg-bad/10 rounded-md px-4 py-3">
+      <div
+        className="rounded-xl px-4 py-3 font-medium"
+        style={{ color: "#B5251D", backgroundColor: "rgba(255,59,48,0.10)" }}
+      >
         Could not load patient.
       </div>
     );
@@ -74,32 +87,36 @@ export function PatientDetailPage({ id }: { id: number }) {
   const p = patient.data;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <Link
         href="/"
-        className="text-sm text-ink-mute hover:text-navy inline-block"
+        className="text-sm text-muted-foreground hover:text-foreground inline-block font-medium transition-colors"
       >
         ← All patients
       </Link>
 
-      {/* Header */}
-      <div className="bg-white rounded-xl border border-line p-6">
+      {/* Header card */}
+      <div className="bg-card rounded-[20px] p-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="font-display text-3xl font-bold text-navy">
+            <h1 className="font-display text-[28px] font-bold text-foreground leading-tight">
               {p.name}
             </h1>
-            <div className="text-ink-mute text-sm mt-1">{p.email}</div>
-            <div className="text-ink-soft text-sm mt-3">
-              <span className="font-semibold">{p.glp1Drug ?? "No drug recorded"}</span>
+            <div className="text-muted-foreground text-sm mt-1 font-medium">
+              {p.email}
+            </div>
+            <div className="text-foreground text-sm mt-4 font-medium">
+              {p.glp1Drug ?? "No drug recorded"}
               {p.startedOn && (
-                <span className="text-ink-mute"> · started {fmtDate(p.startedOn)}</span>
+                <span className="text-muted-foreground font-normal">
+                  {" · started "}{fmtDate(p.startedOn)}
+                </span>
               )}
             </div>
           </div>
           {risk.data && (
             <div className="text-right">
-              <div className="text-xs uppercase tracking-wider text-ink-mute mb-1.5">
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
                 Risk
               </div>
               <RiskBadge band={risk.data.band} score={risk.data.score} size="md" />
@@ -108,70 +125,70 @@ export function PatientDetailPage({ id }: { id: number }) {
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
+      <div className="grid lg:grid-cols-2 gap-5">
         {/* Risk explanation */}
-        <section className="bg-white rounded-xl border border-line p-6">
-          <h2 className="font-display text-lg font-bold text-navy mb-3">
-            Why this risk band
-          </h2>
+        <section className="bg-card rounded-[20px] p-6">
+          <SectionTitle>Why this risk band</SectionTitle>
           {risk.data && risk.data.rules.length === 0 && (
-            <p className="text-ink-soft text-sm">
+            <p className="text-foreground text-sm font-medium">
               No risk signals fired in the recent window.
             </p>
           )}
           {risk.data && risk.data.rules.length > 0 && (
-            <ul className="space-y-2">
+            <ul className="space-y-2.5">
               {risk.data.rules.map((r) => (
                 <li
                   key={r.code}
-                  className="flex items-start gap-3 text-sm bg-mist rounded-md px-3 py-2"
+                  className="flex items-start gap-3 text-sm bg-background rounded-xl px-4 py-3"
                 >
-                  <span className="font-mono text-xs text-ink-mute mt-0.5">
+                  <span className="font-semibold text-xs text-accent mt-0.5 shrink-0 w-7">
                     +{r.weight}
                   </span>
-                  <span className="text-ink-soft">{r.label}</span>
+                  <span className="text-foreground font-medium">
+                    {r.label}
+                  </span>
                 </li>
               ))}
             </ul>
           )}
           {risk.data && (
-            <div className="text-xs text-ink-mute mt-4">
+            <div className="text-xs text-muted-foreground mt-4 font-medium">
               Computed {fmtDate(risk.data.asOf)}
             </div>
           )}
         </section>
 
         {/* Recent check-ins */}
-        <section className="bg-white rounded-xl border border-line p-6">
-          <h2 className="font-display text-lg font-bold text-navy mb-3">
-            Recent check-ins
-          </h2>
+        <section className="bg-card rounded-[20px] p-6">
+          <SectionTitle>Recent check-ins</SectionTitle>
           {checkins.isPending && (
-            <div className="text-ink-mute text-sm">Loading...</div>
+            <div className="text-muted-foreground text-sm">Loading...</div>
           )}
           {checkins.data && checkins.data.length === 0 && (
-            <div className="text-ink-mute text-sm">No check-ins logged yet.</div>
+            <div className="text-muted-foreground text-sm">
+              No check-ins logged yet.
+            </div>
           )}
           {checkins.data && checkins.data.length > 0 && (
-            <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+            <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
               {checkins.data.slice(0, 14).map((c) => (
                 <div
                   key={c.id}
-                  className="flex items-center justify-between bg-mist rounded-md px-3 py-2 text-sm"
+                  className="flex items-center justify-between gap-3 bg-background rounded-xl px-4 py-3 text-sm flex-wrap"
                 >
                   <div>
-                    <div className="font-semibold text-navy">
+                    <div className="font-semibold text-foreground">
                       {fmtDate(c.date)}
                     </div>
-                    <div className="text-xs text-ink-mute">
+                    <div className="text-xs text-muted-foreground mt-0.5 font-medium">
                       Mood {c.mood}/5
                     </div>
                   </div>
-                  <div className="flex gap-3 text-xs">
-                    <span className="px-2 py-0.5 bg-white rounded border border-line text-ink-soft">
-                      Energy: {ENERGY_LABEL[c.energy]}
+                  <div className="flex gap-2 text-xs">
+                    <span className="px-2.5 py-1 bg-card rounded-lg text-foreground font-semibold">
+                      {ENERGY_LABEL[c.energy]}
                     </span>
-                    <span className="px-2 py-0.5 bg-white rounded border border-line text-ink-soft">
+                    <span className="px-2.5 py-1 bg-card rounded-lg text-foreground font-semibold">
                       Nausea: {NAUSEA_LABEL[c.nausea]}
                     </span>
                   </div>
@@ -183,10 +200,8 @@ export function PatientDetailPage({ id }: { id: number }) {
       </div>
 
       {/* Notes */}
-      <section className="bg-white rounded-xl border border-line p-6">
-        <h2 className="font-display text-lg font-bold text-navy mb-3">
-          Care team notes
-        </h2>
+      <section className="bg-card rounded-[20px] p-6">
+        <SectionTitle>Care team notes</SectionTitle>
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -194,46 +209,49 @@ export function PatientDetailPage({ id }: { id: number }) {
             if (v.length === 0) return;
             addNote.mutate(v);
           }}
-          className="mb-4"
+          className="mb-5"
         >
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             rows={3}
             placeholder="Add a note for the care team..."
-            className="w-full px-3 py-2 rounded-md border border-line bg-mist focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-sm"
+            className="w-full px-4 py-3 rounded-xl bg-background text-foreground font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent text-sm resize-y"
           />
-          <div className="mt-2 flex justify-end">
+          <div className="mt-3 flex justify-end">
             <button
               type="submit"
               disabled={addNote.isPending || draft.trim().length === 0}
-              className="px-4 py-2 rounded-md bg-navy text-white font-semibold text-sm hover:bg-navy-soft transition-colors disabled:opacity-60"
+              className="px-5 py-2.5 rounded-2xl bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 active:scale-[0.97] transition-all disabled:opacity-60"
             >
               {addNote.isPending ? "Saving..." : "Save note"}
             </button>
           </div>
         </form>
         {notes.data && notes.data.length === 0 && (
-          <div className="text-ink-mute text-sm">No notes yet.</div>
+          <div className="text-muted-foreground text-sm font-medium">
+            No notes yet.
+          </div>
         )}
         {notes.data && notes.data.length > 0 && (
           <ul className="space-y-3">
             {notes.data.map((n) => (
               <li
                 key={n.id}
-                className="bg-mist rounded-md px-4 py-3 group relative"
+                className="bg-background rounded-xl px-4 py-3.5 group relative"
               >
-                <div className="text-sm text-ink whitespace-pre-wrap">
+                <div className="text-sm text-foreground whitespace-pre-wrap font-medium">
                   {n.body}
                 </div>
-                <div className="text-xs text-ink-mute mt-2 flex items-center justify-between">
+                <div className="text-xs text-muted-foreground mt-2.5 flex items-center justify-between font-medium">
                   <span>{new Date(n.createdAt).toLocaleString()}</span>
                   <button
                     type="button"
                     onClick={() => {
                       if (confirm("Delete this note?")) delNote.mutate(n.id);
                     }}
-                    className="opacity-0 group-hover:opacity-100 text-bad hover:underline transition-opacity"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity font-semibold"
+                    style={{ color: "#B5251D" }}
                   >
                     delete
                   </button>
