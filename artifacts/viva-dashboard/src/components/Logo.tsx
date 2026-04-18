@@ -15,7 +15,10 @@ export function Logo({ size = "md" }: Props) {
   const width = SIZES[size];
   // Source asset is 2318x1068 -> preserve that aspect ratio.
   const height = Math.round(width * (1068 / 2318));
-  const src = `${import.meta.env.BASE_URL}viva-logo.png`;
+  // Cache-bust the asset URL whenever we ship a new wordmark so
+  // browsers (and any CDN edge) cannot serve a stale PNG. Bump the
+  // version suffix any time viva-logo.png is replaced.
+  const src = `${import.meta.env.BASE_URL}viva-logo.png?v=2026041801`;
   return (
     <img
       src={src}
