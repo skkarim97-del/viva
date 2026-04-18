@@ -91,7 +91,7 @@ export function InvitePatientModal({ onClose }: Props) {
     if (!sent) return;
     const firstName =
       (sent.name || "").trim().split(/\s+/)[0] || "there";
-    const body = `Hi ${firstName}, here's your Viva activation link: ${sent.inviteLink}`;
+    const body = `Hi ${firstName}, your clinician invited you to viva. Set up your account here: ${sent.inviteLink}`;
     try {
       await navigator.clipboard.writeText(body);
       setSmsCopied(true);

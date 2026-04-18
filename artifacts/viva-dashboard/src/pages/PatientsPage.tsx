@@ -308,7 +308,7 @@ function PendingCard({ p }: { p: PatientRow }) {
   async function copySms() {
     if (!link) return;
     const firstName = (p.name || "").trim().split(/\s+/)[0] || "there";
-    const body = `Hi ${firstName}, here's your Viva activation link: ${link}`;
+    const body = `Hi ${firstName}, your clinician invited you to viva. Set up your account here: ${link}`;
     try {
       await navigator.clipboard.writeText(body);
       setSmsCopied(true);

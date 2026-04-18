@@ -71,7 +71,7 @@ export function OnboardingPage() {
   // survives carrier 160-char splits with longer patient names.
   async function copySms(name: string, link: string, idx: number) {
     const firstName = (name || "").trim().split(/\s+/)[0] || "there";
-    const body = `Hi ${firstName}, here's your Viva activation link: ${link}`;
+    const body = `Hi ${firstName}, your clinician invited you to viva. Set up your account here: ${link}`;
     try {
       await navigator.clipboard.writeText(body);
       setSmsCopied(idx);

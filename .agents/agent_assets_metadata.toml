@@ -53,9 +53,3 @@ id = "_J4kgGJgPMyUa4vNam0UU"
 uri = "file://attached_assets/screenshots/invite_page_branded.jpg"
 type = "image"
 title = "New invite page (matches Viva system)"
-
-[[outputs]]
-id = "ei0A5x3NQf06t7WBpRES9"
-uri = "file://attached_assets/screenshots/invite_page_invalid.jpg"
-type = "image"
-title = "Invite page — expired/used link state"
