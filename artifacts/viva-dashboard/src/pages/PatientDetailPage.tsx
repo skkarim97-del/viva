@@ -97,15 +97,15 @@ export function PatientDetailPage({ id }: { id: number }) {
 
       {/* Header card */}
       <div className="bg-card rounded-[20px] p-6">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="font-display text-[28px] font-bold text-foreground leading-tight">
+        <div className="flex items-start justify-between gap-6 flex-wrap">
+          <div className="min-w-0 flex-1">
+            <h1 className="font-display text-[28px] font-bold text-foreground leading-tight break-words">
               {p.name}
             </h1>
-            <div className="text-muted-foreground text-sm mt-1 font-medium">
+            <div className="text-muted-foreground text-sm mt-1.5 font-medium break-all">
               {p.email}
             </div>
-            <div className="text-foreground text-sm mt-4 font-medium">
+            <div className="text-foreground text-sm mt-5 font-medium">
               {p.glp1Drug ?? "No drug recorded"}
               {p.startedOn && (
                 <span className="text-muted-foreground font-normal">
@@ -115,7 +115,7 @@ export function PatientDetailPage({ id }: { id: number }) {
             </div>
           </div>
           {risk.data && (
-            <div className="text-right">
+            <div className="text-right shrink-0">
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
                 Risk
               </div>
@@ -174,23 +174,25 @@ export function PatientDetailPage({ id }: { id: number }) {
               {checkins.data.slice(0, 14).map((c) => (
                 <div
                   key={c.id}
-                  className="flex items-center justify-between gap-3 bg-background rounded-xl px-4 py-3 text-sm flex-wrap"
+                  className="bg-background rounded-xl px-4 py-3 text-sm"
                 >
-                  <div>
-                    <div className="font-semibold text-foreground">
-                      {fmtDate(c.date)}
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="min-w-0">
+                      <div className="font-semibold text-foreground">
+                        {fmtDate(c.date)}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-0.5 font-medium">
+                        Mood {c.mood}/5
+                      </div>
                     </div>
-                    <div className="text-xs text-muted-foreground mt-0.5 font-medium">
-                      Mood {c.mood}/5
+                    <div className="flex flex-wrap gap-2 text-xs justify-end">
+                      <span className="px-2.5 py-1 bg-card rounded-lg text-foreground font-semibold whitespace-nowrap">
+                        {ENERGY_LABEL[c.energy]}
+                      </span>
+                      <span className="px-2.5 py-1 bg-card rounded-lg text-foreground font-semibold whitespace-nowrap">
+                        Nausea: {NAUSEA_LABEL[c.nausea]}
+                      </span>
                     </div>
-                  </div>
-                  <div className="flex gap-2 text-xs">
-                    <span className="px-2.5 py-1 bg-card rounded-lg text-foreground font-semibold">
-                      {ENERGY_LABEL[c.energy]}
-                    </span>
-                    <span className="px-2.5 py-1 bg-card rounded-lg text-foreground font-semibold">
-                      Nausea: {NAUSEA_LABEL[c.nausea]}
-                    </span>
                   </div>
                 </div>
               ))}
