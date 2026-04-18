@@ -39,6 +39,7 @@ export function OnboardingPage() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState<number | null>(null);
+  const [smsCopied, setSmsCopied] = useState<number | null>(null);
 
   function updateDraft(i: number, patch: Partial<Draft>) {
     setDrafts((rows) => {
@@ -62,6 +63,21 @@ export function OnboardingPage() {
       window.setTimeout(() => setCopied((c) => (c === idx ? null : c)), 1500);
     } catch {
       /* clipboard blocked -- the link is also visible in the input */
+    }
+  }
+
+  // Copy a SMS-shaped activation message. Doctors paste this into
+  // iMessage / their EHR -- the body must stay short (one line) so it
+  // survives carrier 160-char splits with longer patient names.
+  async function copySms(name: string, link: string, idx: number) {
+    const firstName = (name || "").trim().split(/\s+/)[0] || "there";
+    const body = `Hi ${firstName}, here's your Viva activation link: ${link}`;
+    try {
+      await navigator.clipboard.writeText(body);
+      setSmsCopied(idx);
+      window.setTimeout(() => setSmsCopied((c) => (c === idx ? null : c)), 1500);
+    } catch {
+      /* clipboard blocked */
     }
   }
 
@@ -326,6 +342,14 @@ export function OnboardingPage() {
                       className="px-3 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90"
                     >
                       {copied === idx ? "Copied" : "Copy link"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => copySms(row.name, row.inviteLink, idx)}
+                      className="px-3 py-2 rounded-lg bg-card text-foreground text-xs font-semibold hover:opacity-80"
+                      title="Copy a ready-to-send SMS body with the activation link"
+                    >
+                      {smsCopied === idx ? "Copied" : "Copy SMS"}
                     </button>
                     <button
                       type="button"

@@ -1188,6 +1188,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         });
     }
 
+    // Recompute the local reminder schedule. Today's check-in just
+    // landed, so the noon and 7pm slots should drop off the queue.
+    // Imported lazily so unit-test environments without expo-notifications
+    // continue to load AppContext without pulling the native module.
+    try {
+      const reminders = await import("@/lib/reminders");
+      const enabled = await reminders.getRemindersEnabled();
+      reminders.rescheduleReminders({ enabled, hasCheckedInToday: true }).catch(() => {});
+    } catch {
+      /* reminders module unavailable in this environment */
+    }
+
     if (metricsRef) {
       const todayDate = new Date().toISOString().split("T")[0];
       const currentGlp1: GLP1DailyInputs = {

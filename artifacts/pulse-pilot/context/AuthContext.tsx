@@ -7,6 +7,7 @@ import React, {
   useState,
 } from "react";
 import { sessionApi, type AuthedUser } from "@/lib/api/sessionClient";
+import { clearAllReminders } from "@/lib/reminders";
 
 interface AuthState {
   loading: boolean; // initial bootstrap from AsyncStorage
@@ -63,6 +64,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = useCallback(async () => {
     await sessionApi.logout();
     setUser(null);
+    // Clear any queued local reminders so the next sign-in -- which
+    // might be a different patient on the same device -- doesn't
+    // inherit the previous user's notifications.
+    await clearAllReminders().catch(() => {});
   }, []);
 
   const value = useMemo(

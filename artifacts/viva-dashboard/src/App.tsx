@@ -8,6 +8,7 @@ import { SignUpPage } from "@/pages/SignUpPage";
 import { OnboardingPage } from "@/pages/OnboardingPage";
 import { PatientsPage } from "@/pages/PatientsPage";
 import { PatientDetailPage } from "@/pages/PatientDetailPage";
+import { InternalDashboardPage } from "@/pages/InternalDashboardPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -47,6 +48,15 @@ function ProtectedRoutes() {
 function Gate() {
   const { me, loading } = useAuth();
   const [location, setLocation] = useLocation();
+
+  // /internal is the Viva operator dashboard. It uses its own bearer
+  // key, NOT the clinician session, so it must completely bypass the
+  // auth gate below -- otherwise an unauthenticated visit would get
+  // bounced to /login before the internal page could prompt for the
+  // operator key.
+  if (location === "/internal") {
+    return <InternalDashboardPage />;
+  }
 
   // Routes that don't require an authenticated doctor session.
   const isPublic = location === "/login" || location === "/signup";

@@ -1,0 +1,213 @@
+Build the next MVP-critical features for Viva focused on patient retention, internal activation / retention visibility, and slightly reducing invite friction. Keep this lean, practical, and reliable. Do not overbuild.
+
+Important product boundary
+
+Do not add retention / activation analytics to the clinician dashboard.
+
+The clinician dashboard should remain focused on:
+
+patient monitoring
+triage
+follow-up workflow
+notes
+patient-level status
+
+Clinicians do not need product analytics like activation rate or funnel metrics.
+
+Instead, build a simple internal-only Viva dashboard for activation and retention visibility.
+
+Part 1: Daily reminder notifications in the patient app
+
+Add a simple local reminder system in the patient mobile app to improve daily check-in consistency.
+
+Requirements
+Use local push notifications only for now
+Do not build backend-driven notifications yet
+Use Expo Notifications or the equivalent already supported in the app stack
+Keep this simple and reliable
+Reminder schedule
+
+Add two daily reminder opportunities:
+
+12:00 PM — midday reminder
+7:00 PM — evening reminder
+Reminder logic
+
+This is important:
+
+Send the 12 PM reminder only if the patient has not submitted a check-in yet today
+Send the 7 PM reminder only if the patient still has not submitted a check-in yet today
+If the patient already submitted a check-in before 12 PM, send no reminders
+If the patient submits a check-in after 12 PM, do not send the 7 PM reminder
+Never send more than two reminders per day
+Do not stack or duplicate reminders
+Notification copy
+12 PM reminder
+Title: Viva
+Body: Log your daily check-in
+7 PM reminder
+Title: Viva
+Body: Don’t forget your check-in today
+
+Keep the tone clean, simple, and professional.
+
+UX
+
+Add a reminder section in the patient app settings screen:
+
+toggle: Daily reminders on / off
+show the two reminder times:
+12:00 PM
+7:00 PM
+
+For MVP:
+
+default reminders to ON for new users
+keep the times fixed unless editing them is very easy to implement
+Permissions / edge behavior
+if notification permissions are not granted, show a simple helper prompt to enable them
+if reminders are turned off, do not schedule notifications
+if the user signs out, make sure reminder scheduling does not continue incorrectly for the wrong user
+confirm that reminder logic checks the current day’s real check-in state before sending
+Constraints
+no backend notification service
+no push infrastructure
+no smart timing
+just a simple local system that works reliably
+Part 2: Internal-only Viva dashboard for activation / retention visibility
+
+Create a simple internal-only Viva dashboard for pilot monitoring and retention visibility.
+
+Important
+
+This is not for clinicians.
+This should be internal-facing only for Viva.
+
+Create a protected internal route such as:
+
+/internal
+or /viva-internal
+
+Use whichever fits best with the current app structure, but make sure it is clearly separated from the clinician dashboard.
+
+Goal
+
+Give Viva visibility into:
+
+invite funnel performance
+activation performance
+early retention / engagement
+basic drop-off
+Keep this extremely simple
+no heavy BI dashboard
+no chart library unless already trivial to use
+clean stat blocks and simple counts are enough
+use live database queries
+Metrics to show
+
+At minimum show:
+
+Invites sent
+total number of invited patients
+Activated
+number of patients who activated the app
+Activation rate
+activated / invited
+Completed first check-in
+number of patients with at least one check-in ever
+Checked in during last 7 days
+number of patients with at least one check-in in the last 7 days
+No check-in after invite
+invited or activated patients with zero check-ins
+Drop-off buckets
+number of patients with no check-in in:
+3+ days
+5+ days
+7+ days
+
+If easy, also show:
+8. Average check-ins per active patient
+9. Needs follow-up
+
+current count based on live risk logic
+Output clarity
+
+For each metric, tell me exactly how it is calculated from the live DB.
+
+UI direction
+
+Keep it:
+
+minimal
+internal
+clear
+fast to scan
+consistent with Viva UI language
+
+This is an internal operating view, not a polished client-facing dashboard.
+
+Part 3: Reduce manual invite friction slightly
+
+Keep phone-based invites as primary. Do not build Twilio or an email invite system yet.
+
+Add a “Copy SMS message” helper
+
+In the invite sent state, for each patient, add a button that copies a ready-to-send SMS message.
+
+SMS copy format
+
+Your clinician invited you to Viva. Set up your account here: [invite link]
+
+Requirements
+keep existing Copy link and Resend behavior
+this is only a helper to make manual texting easier
+do not build actual SMS delivery yet
+do not add email invite flow yet
+Important UX note
+
+Because we are collecting phone number but not actually sending SMS automatically, make the UI explicit enough that the doctor understands this is a manual helper.
+
+Add a subtle line like:
+“Invite links can be copied and sent to patients manually.”
+
+Do not imply automatic texting if it does not exist.
+
+Part 4: Keep clinician dashboard focused
+
+Do not add internal product metrics to the clinician dashboard.
+
+The clinician dashboard should remain centered on:
+
+Needs follow-up
+Monitor
+Stable
+patient-level risk
+no-check-in warnings
+symptom trends
+notes / actions
+
+If any retention / activation stat cards were planned for the clinician dashboard, remove them from that surface and place them only in the internal Viva dashboard.
+
+Output I want
+
+After implementing, show me:
+
+the patient app reminder settings UI
+proof that the two-reminder logic works correctly
+the internal-only Viva dashboard
+the updated invite sent state with Copy SMS message
+a brief explanation of what live data is used for each internal metric
+confirmation that clinician-facing views remain workflow-focused and do not include internal activation / retention analytics
+confirmation that reminders stop correctly once a patient has already checked in for the day
+Constraints
+keep this MVP-focused
+no new major architecture
+no Twilio
+no email invite system
+no fancy analytics suite
+no overengineering
+Core goal
+improve patient check-in consistency
+give Viva internal visibility into activation and retention
+slightly reduce manual invite friction
+preserve a clean separation between clinician workflow and Viva internal analytics

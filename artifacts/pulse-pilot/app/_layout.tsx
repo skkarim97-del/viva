@@ -17,8 +17,10 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppProvider, useApp } from "@/context/AppContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import * as Linking from "expo-linking";
+import { AppState, type AppStateStatus } from "react-native";
 import { router } from "expo-router";
 import { extractInviteToken } from "@/lib/api/sessionClient";
+import { getRemindersEnabled, rescheduleReminders } from "@/lib/reminders";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 // Fade the native splash out so it cross-fades into the JS screen instead of
@@ -124,10 +126,56 @@ function useInviteDeepLink() {
   }, []);
 }
 
+// Drives the local check-in reminder schedule. Recomputes whenever the
+// signed-in user changes, today's check-in lands, or the app comes
+// back to the foreground. We re-read `hasCheckedInToday` straight from
+// the AppContext value so the reminder logic and the dashboard "you've
+// checked in" UI can never disagree.
+function useReminderScheduler() {
+  const { user } = useAuth();
+  const { todayCheckIn } = useApp();
+  const hasCheckedInToday = !!todayCheckIn;
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const enabled = await getRemindersEnabled();
+        if (cancelled) return;
+        await rescheduleReminders({ enabled, hasCheckedInToday });
+      } catch {
+        /* notifications unsupported on this platform; no-op */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, hasCheckedInToday]);
+
+  // Refresh the schedule when the app returns to the foreground. This
+  // covers the "patient opened the app the next morning" case where
+  // yesterday's reminders should be replaced with today's window.
+  useEffect(() => {
+    if (!user) return;
+    const sub = AppState.addEventListener("change", async (state: AppStateStatus) => {
+      if (state !== "active") return;
+      try {
+        const enabled = await getRemindersEnabled();
+        await rescheduleReminders({ enabled, hasCheckedInToday });
+      } catch {
+        /* no-op */
+      }
+    });
+    return () => sub.remove();
+  }, [user, hasCheckedInToday]);
+}
+
 function RootLayoutNav() {
   const { profile } = useApp();
   const { user } = useAuth();
   useInviteDeepLink();
+  useReminderScheduler();
   // Auth gate decided ONCE at first render, same pattern as before:
   //   no session         -> /connect (paste invite or sign in)
   //   session, no profile-> /onboarding (local profile wizard)

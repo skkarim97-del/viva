@@ -60,9 +60,10 @@
   },
   "dependencies": {
     "@expo-google-fonts/montserrat": "^0.4.2",
-    "react-native-health": "^1.19.0",
     "expo": "~54.0.33",
+    "expo-notifications": "^0.32.16",
     "react": "19.1.0",
-    "react-native": "0.81.5"
+    "react-native": "0.81.5",
+    "react-native-health": "^1.19.0"
   }
 }

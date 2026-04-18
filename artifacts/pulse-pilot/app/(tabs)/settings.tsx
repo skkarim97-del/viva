@@ -17,6 +17,16 @@ import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import {
+  getPermissionState,
+  getRemindersEnabled,
+  rescheduleReminders,
+  requestPermission,
+  setRemindersEnabled,
+  type PermissionState,
+} from "@/lib/reminders";
+import { useEffect } from "react";
+import { Linking, Platform } from "react-native";
+import {
   BRAND_OPTIONS,
   MEDICATION_DATABASE,
   getDoseOptions,
@@ -563,8 +573,156 @@ export default function SettingsScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+      <RemindersSection />
       <SignOutSection />
     </ScrollView>
+  );
+}
+
+// Daily check-in reminders. Default ON for new installs, but the
+// schedule only actually fires once OS notification permission has
+// been granted. The toggle below mirrors both pieces of state so the
+// patient sees one row and we never present a "enabled but silent"
+// inconsistency.
+function RemindersSection() {
+  const c = useColors();
+  const { todayCheckIn } = useApp();
+  const [enabled, setEnabled] = useState(true);
+  const [perm, setPerm] = useState<PermissionState>("undetermined");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [e, p] = await Promise.all([
+        getRemindersEnabled(),
+        getPermissionState(),
+      ]);
+      if (cancelled) return;
+      setEnabled(e);
+      setPerm(p);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (perm === "unsupported") return null;
+
+  const handleToggle = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const next = !enabled;
+      // If the patient is turning reminders ON for the first time and
+      // we don't yet have permission, ask for it inline. On denial we
+      // still flip the setting on so re-enabling permission later in
+      // OS Settings just works -- but we surface a hint below.
+      if (next && perm !== "granted") {
+        const result = await requestPermission();
+        setPerm(result);
+      }
+      setEnabled(next);
+      await setRemindersEnabled(next);
+      await rescheduleReminders({
+        enabled: next,
+        hasCheckedInToday: !!todayCheckIn,
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const showOpenSettings = enabled && perm === "denied";
+
+  return (
+    <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 8 }}>
+      <Text
+        style={[
+          styles.fieldLabel,
+          { color: c.mutedForeground, marginBottom: 8 },
+        ]}
+      >
+        Reminders
+      </Text>
+      <Pressable
+        onPress={handleToggle}
+        disabled={busy}
+        accessibilityRole="switch"
+        accessibilityLabel="Daily check-in reminders"
+        accessibilityState={{ checked: enabled, disabled: busy }}
+        style={({ pressed }) => ({
+          backgroundColor: c.card,
+          borderRadius: 14,
+          paddingVertical: 14,
+          paddingHorizontal: 16,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          opacity: pressed || busy ? 0.85 : 1,
+        })}
+      >
+        <View style={{ flex: 1, paddingRight: 12 }}>
+          <Text
+            style={{
+              fontFamily: "Montserrat_600SemiBold",
+              fontSize: 15,
+              color: c.foreground,
+            }}
+          >
+            Daily check-in reminders
+          </Text>
+          <Text
+            style={{
+              fontFamily: "Montserrat_500Medium",
+              fontSize: 12,
+              color: c.mutedForeground,
+              marginTop: 4,
+            }}
+          >
+            12:00 PM and 7:00 PM. Skipped automatically once you check in for the day.
+          </Text>
+        </View>
+        <View
+          style={{
+            width: 46,
+            height: 28,
+            borderRadius: 14,
+            backgroundColor: enabled ? c.accent || "#38B6FF" : c.border || "#D6D9E0",
+            justifyContent: "center",
+            paddingHorizontal: 3,
+            alignItems: enabled ? "flex-end" : "flex-start",
+          }}
+        >
+          <View
+            style={{
+              width: 22,
+              height: 22,
+              borderRadius: 11,
+              backgroundColor: "#fff",
+            }}
+          />
+        </View>
+      </Pressable>
+      {showOpenSettings && (
+        <Pressable
+          onPress={() => {
+            Linking.openSettings().catch(() => {});
+          }}
+          style={{ paddingVertical: 8, paddingHorizontal: 4, marginTop: 4 }}
+        >
+          <Text
+            style={{
+              fontFamily: "Montserrat_500Medium",
+              fontSize: 12,
+              color: c.accent || "#38B6FF",
+            }}
+          >
+            Notifications are off in {Platform.OS === "ios" ? "iOS" : "system"} Settings — tap to enable.
+          </Text>
+        </Pressable>
+      )}
+    </View>
   );
 }
 

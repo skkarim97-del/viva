@@ -269,6 +269,7 @@ function PendingCard({ p }: { p: PatientRow }) {
       : null,
   );
   const [copied, setCopied] = useState(false);
+  const [smsCopied, setSmsCopied] = useState(false);
   const resend = useMutation({
     mutationFn: () => api.resendInvite(p.id),
     onSuccess: (r) => {
@@ -282,6 +283,22 @@ function PendingCard({ p }: { p: PatientRow }) {
       await navigator.clipboard.writeText(link);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard blocked */
+    }
+  }
+  // Copy a SMS-shaped message including the patient's first name and
+  // the activation link. Doctors paste this straight into iMessage or
+  // their EHR's SMS dispatcher -- the body must be one short line so
+  // it survives carrier 160-char splits even with longer names.
+  async function copySms() {
+    if (!link) return;
+    const firstName = (p.name || "").trim().split(/\s+/)[0] || "there";
+    const body = `Hi ${firstName}, here's your Viva activation link: ${link}`;
+    try {
+      await navigator.clipboard.writeText(body);
+      setSmsCopied(true);
+      window.setTimeout(() => setSmsCopied(false), 1500);
     } catch {
       /* clipboard blocked */
     }
@@ -326,6 +343,15 @@ function PendingCard({ p }: { p: PatientRow }) {
             className="px-3 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 disabled:opacity-60"
           >
             {copied ? "Copied" : "Copy link"}
+          </button>
+          <button
+            type="button"
+            onClick={copySms}
+            disabled={!link}
+            className="px-3 py-2 rounded-lg bg-background text-foreground text-xs font-semibold hover:opacity-80 disabled:opacity-60"
+            title="Copy a ready-to-send SMS body with the activation link"
+          >
+            {smsCopied ? "Copied" : "Copy SMS"}
           </button>
           <button
             type="button"
