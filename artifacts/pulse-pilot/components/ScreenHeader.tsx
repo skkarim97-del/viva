@@ -19,6 +19,6 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 24,
     paddingBottom: 8,
-    alignItems: "flex-start",
+    alignItems: "center",
   },
 });
