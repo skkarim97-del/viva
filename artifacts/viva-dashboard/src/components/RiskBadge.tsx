@@ -39,14 +39,15 @@ export function RiskBadge({ band, score, size = "sm" }: Props) {
     <span
       className={`inline-flex items-center gap-1.5 rounded-full font-semibold ${padding}`}
       style={{ backgroundColor: s.bg, color: s.text }}
+      title={`${s.label} treatment risk`}
     >
       <span
         className="size-1.5 rounded-full"
         style={{ backgroundColor: s.dot }}
       />
-      {s.label}
+      <span>Patient treatment risk</span>
       {typeof score === "number" && (
-        <span className="opacity-70 font-medium">{score}</span>
+        <span className="font-bold">{score}%</span>
       )}
     </span>
   );
