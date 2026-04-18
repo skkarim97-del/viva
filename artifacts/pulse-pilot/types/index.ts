@@ -515,6 +515,11 @@ export interface RollingAverage {
   trend7d: TrendDirection;
   trend14d: TrendDirection;
   volatility: number;
+  // Number of valid (non-zero) datapoints in the last 14 days. One
+  // check-in per day max, so this also doubles as "days of data".
+  // Used to gate trend insights so we never claim a 2-week pattern
+  // off 3 datapoints.
+  sampleSize14d: number;
 }
 
 export interface PostDosePattern {

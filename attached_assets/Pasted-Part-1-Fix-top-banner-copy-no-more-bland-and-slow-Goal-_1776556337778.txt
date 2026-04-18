@@ -1,0 +1,195 @@
+Part 1 — Fix top banner copy (no more “bland and slow”)
+Goal
+
+Make top messages:
+
+short
+clinical
+friendly
+neutral (not quirky, not consumer wellness-y)
+Rules
+max 6–8 words
+no slang
+no “vibes”
+no casual phrases like “bland and slow”
+should sound like a clinician wrote it, not a lifestyle app
+Replace existing labels
+REMOVE examples like:
+“Bland and slow”
+anything casual / food-blog tone
+ADD structured clinical labels
+
+Use this pattern:
+
+[Context tag] → [Action-oriented summary]
+
+Examples
+Recovery state
+“Recovery phase”
+“Focus on stabilization today”
+Nausea management
+“Nausea management”
+“Keep intake small and steady”
+Appetite low
+“Low appetite support”
+“Prioritize small protein intake”
+Energy low
+“Low energy today”
+“Reduce strain and maintain intake”
+Stable
+“Stable today”
+“Maintain current routine”
+Implementation
+
+Update wherever this is generated (likely Today header / plan summary logic)
+
+Ensure:
+
+tag (orange pill) = short clinical label
+headline = one-line directive
+Part 2 — FIX DAILY INPUT LOGIC (this is critical)
+Problem (you correctly identified)
+
+Right now:
+
+multiple inputs per day → treated as multiple data points
+this pollutes trend logic
+creates fake “patterns”
+
+This is a data integrity bug, not just UX.
+
+Correct behavior
+RULE:
+
+Each day = ONE canonical check-in (latest state)
+
+What should happen
+Scenario
+9am → energy = tired
+2pm → energy = depleted
+System should store:
+only ONE record for today
+energy = depleted
+BUT optionally track:
+previous_value = tired
+Required changes
+Backend (or state layer)
+
+Instead of:
+
+appending new check-ins
+
+You must:
+
+UPSERT daily check-in
+Pseudocode
+
+When saving check-in:
+
+if checkin exists for today:
+    update existing record
+    store previous_value (optional)
+else:
+    create new record
+Data shape
+daily_checkin {
+  patient_id
+  date
+  energy_current
+  energy_previous (optional)
+  appetite_current
+  nausea_current
+  updated_at
+}
+Part 3 — FIX TREND CALCULATION
+Current issue
+
+System is treating:
+
+intra-day updates as separate datapoints
+
+This creates:
+
+fake “steady change over 2 weeks”
+Correct trend logic
+ONLY use:
+1 data point per day (latest state)
+Trend input should be:
+last 14 days → 14 values max
+
+NOT:
+
+every interaction event
+Part 4 — FIX COPY IN “Based on your check-ins”
+Problem
+
+It currently says:
+
+“steadily improving over past two weeks”
+
+Even when:
+
+user just changed input today
+
+That’s misleading.
+
+New logic
+
+Only show “trend” statements IF:
+
+minimum 5–7 days of valid data
+AND directional consistency exists
+Otherwise show:
+Short neutral fallback:
+“Tracking your recent check-ins”
+“Building your baseline”
+“Recent data is still stabilizing”
+Part 5 — OPTIONAL (but high value)
+Show intra-day change properly
+
+Instead of storing multiple datapoints, show:
+
+“Energy worsened today”
+or
+“Energy improved today”
+
+This uses:
+
+previous_value vs current_value
+
+This is WAY more accurate.
+
+Part 6 — Output
+
+Show me:
+
+Updated top banner text examples
+Updated daily check-in storage logic
+Updated trend calculation logic
+Example:
+user changes from tired → depleted
+how it displays
+how it stores
+Example of correct vs incorrect trend messaging
+Bottom line
+
+You just caught a core product integrity issue
+
+If you didn’t fix this:
+
+your insights would feel fake
+clinicians would lose trust immediately
+
+Fixing this:
+
+makes the product feel real
+makes trends credible
+keeps UX clean
+
+If you want next step:
+we should eventually separate:
+
+event stream (raw behavior)
+daily state (used for insights)
+
+But for MVP, your approach above is exactly right.

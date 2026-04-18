@@ -993,29 +993,34 @@ export function generateDailyPlan(
     // Lead phrases live inside a small pill on the Today card, so they need
     // to read as a compact status tag (think 2-4 words, ~25 chars max), not
     // a sentence. The longer warm copy belongs in coachInsight below.
+    // Status labels read as a short clinical tag, not a lifestyle phrase.
+    // Pattern: a 2-4 word context tag a clinician would write in a chart
+    // note ("Recovery phase", "Nausea management"), never slang or food
+    // metaphors. Keep each label ≤ 25 chars; the headline below carries
+    // the action-oriented directive.
     let pool: string[];
     if (symptomsSevere) {
-      pool = ["Soft day", "Easy mode", "Holding pattern"];
+      pool = ["Symptom management", "Recovery phase", "Stabilization day"];
     } else if (digestionSevere) {
-      pool = ["Gentle gut day", "Bland and slow", "Gut needs a break"];
+      pool = ["Digestion management", "GI support", "Gentle nutrition"];
     } else if (medicationProfile?.recentTitration) {
-      pool = ["Titration week", "New dose, easy day", "Adjust mode"];
+      pool = ["Titration week", "Dose adjustment", "Adaptation phase"];
     } else if (wearableAvailable && sleepHours < 6) {
-      pool = ["Short night", "Low fuel today", "Recover first"];
+      pool = ["Sleep recovery", "Recovery priority", "Rest focus"];
     } else if (glp1Energy === "depleted" || glp1Energy === "tired" || energy === "low") {
-      pool = ["Low battery", "Easy gear", "Low output day"];
+      pool = ["Low energy support", "Energy conservation", "Reduced load"];
     } else if (subjectiveGood && objectiveWeak) {
-      pool = ["Mixed signals", "Pace yourself", "Spirit ahead of body"];
+      pool = ["Mixed signals", "Pace yourself", "Measured day"];
     } else if (!subjectiveGood && objectiveStrong && symptomsModerate) {
-      pool = ["Body is ready", "Steady underneath", "Numbers look good"];
+      pool = ["Capacity available", "Steady baseline", "Cleared to engage"];
     } else if (dailyState === "push") {
-      pool = ["Green light day", "Strong rhythm", "All signals go"];
+      pool = ["Active day", "Strong baseline", "Capacity day"];
     } else if (dailyState === "build") {
-      pool = ["Mostly green", "Small tweaks", "Steady with nudges"];
+      pool = ["Build day", "Consistent progress", "Steady gains"];
     } else if (dailyState === "maintain") {
-      pool = ["Easy gear today", "Simplify today", "Steady state day"];
+      pool = ["Stable today", "Maintenance day", "Steady state"];
     } else {
-      pool = ["Recovery first", "Repair mode", "Soft day ahead"];
+      pool = ["Recovery phase", "Repair day", "Stabilization"];
     }
 
     // Deterministic day-to-day rotation so the phrase is stable within a

@@ -57,6 +57,12 @@ export function computeRollingAverages(history: GLP1DailyInputs[]): RollingAvera
       trend7d: computeTrendDirection(values7),
       trend14d: computeTrendDirection(values14),
       volatility: computeVolatility(values14),
+      // Count of days with a valid (non-zero) score for this category
+      // in the last 14 days. history is already upserted to ≤ 1 entry
+      // per day in AppContext.saveGlp1Inputs, so this is "days of data"
+      // and the trend insight gate uses it to require a meaningful
+      // sample before claiming any directional pattern.
+      sampleSize14d: values14.filter(v => v > 0).length,
     };
   });
 }
@@ -445,42 +451,73 @@ export function generateAdaptiveInsights(patterns: UserPatterns): AdaptiveInsigh
     });
   }
 
+  // Trend insights ("steadily improving over the past two weeks") need a
+  // real sample before we make that claim. Each entry in glp1InputHistory
+  // is one day (upserted by date in AppContext), so sampleSize14d is the
+  // count of days the patient actually checked in for this category in
+  // the last 14 days. We require at least 7 days of data before any
+  // trend statement, and we phrase the timeframe based on how much data
+  // we actually have. Anything less only contributes a neutral fallback.
+  const TREND_MIN_DAYS = 7;
+  let anyTrendShown = false;
+  let maxSampleSize = 0;
+
   for (const rolling of patterns.rollingAverages) {
     if (rolling.avg7d === 0) continue;
+    if (rolling.sampleSize14d > maxSampleSize) maxSampleSize = rolling.sampleSize14d;
 
-    if (rolling.trend7d === "up" && rolling.trend14d === "up" && rolling.avg7d >= 3) {
+    const hasEnoughData = rolling.sampleSize14d >= TREND_MIN_DAYS;
+    const directionConsistent =
+      rolling.trend7d === "up" && rolling.trend14d === "up" && rolling.avg7d >= 3;
+
+    if (hasEnoughData && directionConsistent) {
+      anyTrendShown = true;
+      // Only claim "two weeks" once we genuinely have ~10+ days of data.
+      // Below that we soften to "in your recent check-ins" so the timeframe
+      // matches the actual evidence.
+      const window = rolling.sampleSize14d >= 10
+        ? "over the past two weeks"
+        : "in your recent check-ins";
       const labels: Record<InputCategory, string> = {
         energy: "energy",
         appetite: "appetite",
         nausea: "nausea",
         digestion: "digestion",
       };
+      let text: string;
       if (rolling.category === "nausea") {
-        insights.push({
-          id: `trend_improving_${rolling.category}`,
-          text: "Nausea has been steadily improving over the past two weeks",
-          category: rolling.category,
-          confidence: "high",
-          type: "trend",
-        });
+        text = `Nausea has been steadily improving ${window}`;
       } else if (rolling.category === "digestion") {
-        insights.push({
-          id: `trend_improving_${rolling.category}`,
-          text: "Digestion has been steadily settling down over the past two weeks",
-          category: rolling.category,
-          confidence: "high",
-          type: "trend",
-        });
+        text = `Digestion has been steadily settling down ${window}`;
       } else {
-        insights.push({
-          id: `trend_improving_${rolling.category}`,
-          text: `Your ${labels[rolling.category]} has been steadily improving over the past two weeks`,
-          category: rolling.category,
-          confidence: "high",
-          type: "trend",
-        });
+        text = `Your ${labels[rolling.category]} has been steadily improving ${window}`;
       }
+      insights.push({
+        id: `trend_improving_${rolling.category}`,
+        text,
+        category: rolling.category,
+        confidence: "high",
+        type: "trend",
+      });
     }
+  }
+
+  // If we have some data but nothing rises to a real trend, surface a
+  // neutral baseline statement instead of leaving the section empty (or,
+  // worse, letting an unrelated pattern carry weight it shouldn't). We
+  // only do this when the patient has clearly engaged (≥ 3 days) so the
+  // "still building" framing is honest -- a single check-in shouldn't
+  // claim a baseline either.
+  if (!anyTrendShown && maxSampleSize >= 3 && maxSampleSize < TREND_MIN_DAYS) {
+    insights.push({
+      id: "trend_baseline_building",
+      text: maxSampleSize >= 5
+        ? "Recent check-ins are still stabilizing into a pattern"
+        : "Tracking your recent check-ins to build your baseline",
+      category: "general",
+      confidence: "low",
+      type: "trend",
+    });
   }
 
   for (const override of patterns.adaptiveOverrides) {
