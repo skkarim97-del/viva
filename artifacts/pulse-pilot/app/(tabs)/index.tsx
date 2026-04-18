@@ -58,6 +58,11 @@ const NAUSEA_OPTIONS: { key: NonNullable<NauseaLevel>; label: string; tint: stri
   { key: "severe", label: "Severe", tint: TINT_RED },
 ];
 
+const BOWEL_OPTIONS: { key: "yes" | "no"; label: string; tint: string }[] = [
+  { key: "yes", label: "Yes", tint: TINT_GREEN },
+  { key: "no", label: "No", tint: TINT_RED },
+];
+
 const DIGESTION_OPTIONS: { key: NonNullable<DigestionStatus>; label: string; tint: string }[] = [
   { key: "fine", label: "Fine", tint: TINT_GREEN },
   { key: "bloated", label: "Bloated", tint: TINT_BLUE },
@@ -92,6 +97,7 @@ export default function DashboardScreen() {
     appetite, setAppetite,
     nausea, setNausea,
     digestion, setDigestion,
+    bowelMovementToday, setBowelMovementToday,
     glp1Energy, setGlp1Energy,
     medicationLog, logMedicationDose, removeMedicationDose,
     adaptiveInsights,
@@ -166,9 +172,9 @@ export default function DashboardScreen() {
         appetite,
         digestion,
         hydration,
-        bowelMovementToday: null,
+        bowelMovementToday,
       }).filter((t) => !dismissedTips.has(t.symptom)),
-    [nausea, appetite, digestion, hydration, dismissedTips],
+    [nausea, appetite, digestion, hydration, bowelMovementToday, dismissedTips],
   );
 
   const onAckSymptomTip = React.useCallback(
@@ -207,6 +213,20 @@ export default function DashboardScreen() {
 
   const selectDigestion = (d: NonNullable<DigestionStatus>) => {
     setDigestion(digestion === d ? null : d);
+  };
+
+  // Map the InputRow's "yes"/"no" key to the boolean stored in
+  // AppContext, with a tap on the already-selected option clearing
+  // back to null (matching the toggle behavior of the other rows).
+  const bowelSelectedKey: "yes" | "no" | null =
+    bowelMovementToday === true
+      ? "yes"
+      : bowelMovementToday === false
+        ? "no"
+        : null;
+  const selectBowelMovement = (k: "yes" | "no") => {
+    const next = k === "yes";
+    setBowelMovementToday(bowelSelectedKey === k ? null : next);
   };
 
   const selectGlp1Energy = (e: NonNullable<EnergyDaily>) => {
@@ -703,6 +723,7 @@ export default function DashboardScreen() {
             <InputRow label="Appetite" options={APPETITE_OPTIONS} selected={appetite} onSelect={selectAppetite} containerBg={c.background} />
             <InputRow label="Nausea" options={NAUSEA_OPTIONS} selected={nausea} onSelect={selectNausea} containerBg={c.background} />
             <InputRow label="Digestion" options={DIGESTION_OPTIONS} selected={digestion} onSelect={selectDigestion} containerBg={c.background} />
+            <InputRow label="Bowel movement today" options={BOWEL_OPTIONS} selected={bowelSelectedKey} onSelect={selectBowelMovement} containerBg={c.background} />
           </View>
         </View>
 

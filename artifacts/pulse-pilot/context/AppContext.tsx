@@ -111,6 +111,8 @@ interface AppContextType {
   setNausea: (v: NauseaLevel) => void;
   digestion: DigestionStatus;
   setDigestion: (v: DigestionStatus) => void;
+  bowelMovementToday: boolean | null;
+  setBowelMovementToday: (v: boolean | null) => void;
   riskResult: DropoutRiskResult | null;
   glp1InputHistory: GLP1DailyInputs[];
   medicationLog: MedicationLogEntry[];
@@ -163,6 +165,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [appetite, setAppetiteState] = useState<AppetiteLevel>(null);
   const [nausea, setNauseaState] = useState<NauseaLevel>(null);
   const [digestion, setDigestionState] = useState<DigestionStatus>(null);
+  const [bowelMovementToday, setBowelMovementTodayState] = useState<boolean | null>(null);
   const [riskResult, setRiskResult] = useState<DropoutRiskResult | null>(null);
   const [glp1InputHistory, setGlp1InputHistory] = useState<GLP1DailyInputs[]>([]);
   const [medicationLog, setMedicationLog] = useState<MedicationLogEntry[]>([]);
@@ -458,6 +461,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setAppetiteState(parsed.appetite ?? null);
           setNauseaState(parsed.nausea ?? null);
           setDigestionState(parsed.digestion ?? null);
+          setBowelMovementTodayState(parsed.bowelMovementToday ?? null);
         }
       }
 
@@ -630,11 +634,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const saveGlp1Inputs = useCallback((
-    en: EnergyDaily, ap: AppetiteLevel, na: NauseaLevel, di: DigestionStatus
+    en: EnergyDaily, ap: AppetiteLevel, na: NauseaLevel, di: DigestionStatus,
+    bm: boolean | null = bowelMovementToday,
   ) => {
     const todayDate = new Date().toISOString().split("T")[0];
     const inputs: GLP1DailyInputs = {
       date: todayDate, energy: en, appetite: ap, nausea: na, digestion: di,
+      bowelMovementToday: bm,
     };
     AsyncStorage.setItem(GLP1_INPUTS_KEY, JSON.stringify(inputs));
 
@@ -969,6 +975,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setTimeout(regenerateFromGlp1, 0);
   }, [glp1Energy, appetite, nausea, saveGlp1Inputs, regenerateFromGlp1]);
 
+  const setBowelMovementToday = useCallback((v: boolean | null) => {
+    setBowelMovementTodayState(v);
+    saveGlp1Inputs(glp1Energy, appetite, nausea, digestion, v);
+  }, [glp1Energy, appetite, nausea, digestion, saveGlp1Inputs]);
+
   const updateProfile = useCallback((updates: Partial<UserProfile>) => {
     setProfile((prev) => {
       const updated = { ...prev, ...updates };
@@ -1221,6 +1232,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           appetite: appetite ?? null,
           digestion: digestion ?? null,
           hydration: hydration ?? null,
+          bowelMovement: bowelMovementToday,
         })
         .then(() => {
           // Replay any guidance acks that were dismissed locally
@@ -1365,6 +1377,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setNausea,
         digestion,
         setDigestion,
+        bowelMovementToday,
+        setBowelMovementToday,
         riskResult,
         glp1InputHistory,
         medicationLog,

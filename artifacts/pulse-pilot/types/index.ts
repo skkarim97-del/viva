@@ -168,6 +168,9 @@ export interface GLP1DailyInputs {
   appetite: AppetiteLevel;
   nausea: NauseaLevel;
   digestion: DigestionStatus;
+  // Optional patient-reported objective signal for the constipation
+  // engine. Null = unanswered; the planning engine ignores this field.
+  bowelMovementToday?: boolean | null;
 }
 
 export type MentalState = "focused" | "good" | "low" | "burnt_out" | null;
