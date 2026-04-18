@@ -14,6 +14,7 @@ import { router } from "expo-router";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { useApp } from "@/context/AppContext";
+import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import {
   BRAND_OPTIONS,
@@ -562,7 +563,74 @@ export default function SettingsScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+      <SignOutSection />
     </ScrollView>
+  );
+}
+
+// Sits at the very bottom of Settings so the user can clear their bearer
+// token and return to the Connect screen. Routing reacts on the next
+// render: AuthProvider drops the user, RootLayoutNav re-evaluates and
+// pushes /connect.
+function SignOutSection() {
+  const { signOut, user } = useAuth();
+  const c = useColors();
+  const [busy, setBusy] = useState(false);
+  if (!user) return null;
+  const handle = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await signOut();
+      router.replace("/connect");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 32 }}>
+      <Text
+        style={[
+          styles.fieldLabel,
+          { color: c.mutedForeground, marginBottom: 8 },
+        ]}
+      >
+        Account
+      </Text>
+      <Text
+        style={{
+          fontFamily: "Montserrat_500Medium",
+          fontSize: 13,
+          color: c.mutedForeground,
+          marginBottom: 12,
+        }}
+      >
+        Signed in as {user.email}
+      </Text>
+      <Pressable
+        onPress={handle}
+        disabled={busy}
+        style={({ pressed }) => ({
+          backgroundColor: c.background,
+          borderWidth: 1,
+          borderColor: c.destructive || "#EF4444",
+          borderRadius: 14,
+          paddingVertical: 14,
+          alignItems: "center",
+          opacity: pressed || busy ? 0.7 : 1,
+        })}
+      >
+        <Text
+          style={{
+            fontFamily: "Montserrat_600SemiBold",
+            fontSize: 15,
+            color: c.destructive || "#EF4444",
+          }}
+        >
+          {busy ? "Signing out..." : "Sign out"}
+        </Text>
+      </Pressable>
+    </View>
   );
 }
 

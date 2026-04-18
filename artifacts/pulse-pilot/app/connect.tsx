@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useLocalSearchParams } from "expo-router";
 
 import colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
@@ -25,8 +26,14 @@ type Mode = "activate" | "signin";
 // after which RootLayout renders the rest of the app.
 export default function ConnectScreen() {
   const { activate, signIn } = useAuth();
+  // Deep-link prefill: viva://invite/<token> and the universal-link
+  // equivalent both forward into /connect with ?token=<token>. We
+  // accept the param as the initial value so the user just chooses a
+  // password and taps Activate -- no copy-paste required.
+  const params = useLocalSearchParams<{ token?: string }>();
+  const initialToken = typeof params.token === "string" ? params.token : "";
   const [mode, setMode] = useState<Mode>("activate");
-  const [link, setLink] = useState("");
+  const [link, setLink] = useState(initialToken);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);

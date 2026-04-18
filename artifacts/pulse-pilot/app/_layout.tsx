@@ -16,6 +16,9 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppProvider, useApp } from "@/context/AppContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import * as Linking from "expo-linking";
+import { router } from "expo-router";
+import { extractInviteToken } from "@/lib/api/sessionClient";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 // Fade the native splash out so it cross-fades into the JS screen instead of
@@ -99,9 +102,32 @@ function SplashGate({ fontsReady, children }: { fontsReady: boolean; children: R
   );
 }
 
+// Listen for incoming deep links of the form viva://invite/<token> or
+// https://viva-ai.replit.app/invite/<token>. Both shapes are handled
+// here in JS rather than via a file-based [token] route because Expo
+// Router on web can race the route discovery for nested dynamic
+// segments on cold start, producing a "screen doesn't exist" 404. A
+// listener is also closer to how the OS actually invokes the app from
+// a tap on the email link.
+function useInviteDeepLink() {
+  useEffect(() => {
+    const forward = (url: string | null) => {
+      const tok = extractInviteToken(url ?? "");
+      if (!tok) return;
+      // replace() so the back stack starts at /connect, not at the raw
+      // invite URL the OS handed us.
+      router.replace({ pathname: "/connect", params: { token: tok } });
+    };
+    Linking.getInitialURL().then(forward).catch(() => {});
+    const sub = Linking.addEventListener("url", (e) => forward(e.url));
+    return () => sub.remove();
+  }, []);
+}
+
 function RootLayoutNav() {
   const { profile } = useApp();
   const { user } = useAuth();
+  useInviteDeepLink();
   // Auth gate decided ONCE at first render, same pattern as before:
   //   no session         -> /connect (paste invite or sign in)
   //   session, no profile-> /onboarding (local profile wizard)

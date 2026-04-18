@@ -93,3 +93,5 @@ The patient mobile app and the doctor dashboard share the same API server.
 - Mobile gate: no token -> `/connect` (paste invite link OR sign in); token + no local profile -> `/onboarding`; token + profile -> `(tabs)`.
 - `saveDailyCheckIn` mirrors to `POST /me/checkins` fire-and-forget; failures stay local and re-sync on the next save (the endpoint upserts by patient+date).
 - `mentalState` enum -> mood int mapping: focused=5, good=4, low=2, burnt_out=1, null=3.
+- Sign Out lives at the bottom of the mobile Settings screen ("Account" section).
+- Deep-link handling: `_layout.tsx` registers a `Linking.addEventListener("url", ...)` listener that uses `extractInviteToken` to pull the token out of any `viva://invite/<t>` or `https://viva-ai.replit.app/invite/<t>` URL and `router.replace`s into `/connect?token=<t>`. The Connect screen reads the `token` query param via `useLocalSearchParams` and prefills the invite link field.

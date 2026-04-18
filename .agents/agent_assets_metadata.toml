@@ -35,3 +35,9 @@ id = "cTitCPC0M9O9AvDEjcVuI"
 uri = "file://artifacts/viva-dashboard-summary-bar.png"
 type = "image"
 title = "VIVA Dashboard — Panel-health summary bar"
+
+[[outputs]]
+id = "tVHxI_7LEOh0qWZYdZUOB"
+uri = "file://artifacts/viva-dashboard-checkin-update.jpg"
+type = "image"
+title = "Doctor dashboard after new patient check-in"

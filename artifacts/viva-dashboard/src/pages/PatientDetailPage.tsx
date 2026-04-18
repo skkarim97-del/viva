@@ -245,6 +245,11 @@ export function PatientDetailPage({ id }: { id: number }) {
                       </span>
                     </div>
                   </div>
+                  {c.notes && c.notes.trim().length > 0 && (
+                    <div className="mt-2 text-sm text-foreground italic leading-snug">
+                      &ldquo;{c.notes}&rdquo;
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
