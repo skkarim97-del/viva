@@ -8,6 +8,9 @@ export const usersTable = pgTable("users", {
   passwordHash: text("password_hash").notNull(),
   role: text("role", { enum: ["doctor", "patient"] }).notNull(),
   name: text("name").notNull(),
+  // Display name of the doctor's clinic / practice. Captured during the
+  // doctor onboarding wizard. Null on patient rows.
+  clinicName: text("clinic_name"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

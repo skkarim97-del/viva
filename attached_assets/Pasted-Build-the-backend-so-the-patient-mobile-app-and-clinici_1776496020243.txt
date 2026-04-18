@@ -1,0 +1,98 @@
+Build the backend so the patient mobile app and clinician dashboard use a shared API and shared Postgres database.
+
+Goal
+
+Ensure both products are tied together through one patient record and one unified data model.
+
+Requirements
+1. Shared patient identity
+
+When a doctor adds a patient, create a patient record in the database with:
+
+id
+doctor_id
+name
+email
+medication
+dose
+invite_token
+invite_status
+
+When that patient activates the mobile app, link the app account to the existing patient record using the invite token. Do not create a disconnected duplicate patient.
+
+2. Shared database
+
+Use one Postgres database for both:
+
+doctor dashboard
+patient app
+
+Core tables:
+
+doctors
+patients
+daily_checkins
+doctor_notes
+3. Patient app integration
+
+Move patient check-in data out of local-only storage for core clinical data.
+
+When a patient submits a check-in from the mobile app, send it to the backend and save it in daily_checkins tied to patient_id.
+
+4. Doctor dashboard integration
+
+Dashboard should read live patient data from the same database:
+
+patient status
+activation state
+latest check-in
+symptom history
+notes
+5. Activation states
+
+Add these patient statuses:
+
+invited
+activated
+no check-ins yet
+monitoring active
+
+Dashboard should reflect these states.
+
+6. API structure
+
+Create separate API routes for doctor and patient flows, but use the same backend and same database.
+
+Doctor routes:
+
+login
+list patients
+view patient details
+add notes
+
+Patient routes:
+
+activate account from invite
+login
+submit check-ins
+view own profile if needed
+Constraints
+keep this lean
+one backend
+one DB
+no duplicate patient identities
+no local-only storage for core monitoring data
+My honest take
+
+This is the real architecture unlock.
+
+Until the mobile app writes real data to the same DB the dashboard reads from, you do not have one product. You have two surfaces.
+
+Once:
+
+doctor invites patient
+patient activates app
+patient data writes to DB
+dashboard reflects it
+
+then Viva becomes an actual platform.

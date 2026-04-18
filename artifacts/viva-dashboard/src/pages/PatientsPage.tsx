@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
-import { Link } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { Link, useLocation } from "wouter";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type Action, type PatientRow } from "@/lib/api";
 import { RiskBadge } from "@/components/RiskBadge";
 import { ActionBadge } from "@/components/ActionBadge";
@@ -13,7 +13,10 @@ import { relativeTime } from "@/lib/relativeTime";
 // short sections instead of one long scroll. Inside each group we sort
 // by score desc, then break ties on the longest-silent patient so the
 // worst signals always surface to the top of their group.
-const ACTION_ORDER: Action[] = ["needs_followup", "monitor", "stable"];
+// Pending sits at the bottom: they're operationally important to track,
+// but they have no clinical signals to act on yet. Active workflow
+// states stay at the top of the queue.
+const ACTION_ORDER: Action[] = ["needs_followup", "monitor", "stable", "pending"];
 
 function sortRows(rows: PatientRow[]): PatientRow[] {
   return [...rows].sort((a, b) => {
@@ -79,11 +82,13 @@ const SEVERITY_STYLE: Record<
 
 export function PatientsPage() {
   const q = useQuery({ queryKey: ["patients"], queryFn: api.patients });
+  const [, setLocation] = useLocation();
   const grouped = useMemo(() => {
     const buckets: Record<Action, PatientRow[]> = {
       needs_followup: [],
       monitor: [],
       stable: [],
+      pending: [],
     };
     if (q.data) {
       for (const p of q.data) buckets[p.action].push(p);
@@ -101,11 +106,13 @@ export function PatientsPage() {
     needs_followup: true,
     monitor: false,
     stable: false,
+    pending: false,
   });
   const groupRefs = useRef<Record<Action, HTMLElement | null>>({
     needs_followup: null,
     monitor: null,
     stable: null,
+    pending: null,
   });
   const focusGroup = (action: Action) => {
     setOpenGroups((g) => ({ ...g, [action]: true }));
@@ -166,8 +173,32 @@ export function PatientsPage() {
         </div>
       )}
       {q.data && q.data.length === 0 && (
-        <div className="text-muted-foreground bg-card rounded-[20px] p-12 text-center font-medium">
-          You don't have any patients assigned yet.
+        <div className="bg-card rounded-[20px] p-12 text-center">
+          <div className="font-display text-[20px] font-bold text-foreground mb-2">
+            Add and invite patients to begin monitoring
+          </div>
+          <p className="text-sm text-muted-foreground font-medium max-w-md mx-auto leading-relaxed">
+            Viva starts working once your patients are connected. Invite them
+            from the onboarding wizard, then their daily check-ins will appear
+            here.
+          </p>
+          <button
+            type="button"
+            onClick={() => setLocation("/onboarding")}
+            className="mt-6 bg-primary text-primary-foreground font-semibold px-6 py-3 rounded-2xl hover:opacity-90"
+          >
+            Invite patients
+          </button>
+        </div>
+      )}
+
+      {q.data && grouped.pending.length > 0 && (
+        <div
+          className="rounded-2xl px-4 py-3 mb-5 text-sm font-medium leading-relaxed"
+          style={{ color: "#142240", backgroundColor: "rgba(56,182,255,0.12)" }}
+        >
+          Monitoring begins once patients complete their first check-in in the
+          Viva app.
         </div>
       )}
 
@@ -198,13 +229,17 @@ export function PatientsPage() {
                 groupRefs.current[action] = el;
               }}
             >
-              {rows.map((p) => (
-                <PatientCard
-                  key={p.id}
-                  p={p}
-                  onAddNote={() => setNoteTarget({ id: p.id, name: p.name })}
-                />
-              ))}
+              {rows.map((p) =>
+                p.pending ? (
+                  <PendingCard key={p.id} p={p} />
+                ) : (
+                  <PatientCard
+                    key={p.id}
+                    p={p}
+                    onAddNote={() => setNoteTarget({ id: p.id, name: p.name })}
+                  />
+                ),
+              )}
             </PatientGroup>
           );
         })}
@@ -216,6 +251,81 @@ export function PatientsPage() {
           onClose={() => setNoteTarget(null)}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * Pending-activation card: the patient has been invited but the mobile
+ * app hasn't claimed the account yet. We deliberately do NOT show risk
+ * badges, signals, or check-in summaries -- there's no data to score.
+ * Doctors get a copy/resend control so they can nudge the patient.
+ */
+function PendingCard({ p }: { p: PatientRow }) {
+  const qc = useQueryClient();
+  const [link, setLink] = useState<string | null>(
+    p.activationToken
+      ? `${window.location.origin}/invite/${p.activationToken}`
+      : null,
+  );
+  const [copied, setCopied] = useState(false);
+  const resend = useMutation({
+    mutationFn: () => api.resendInvite(p.id),
+    onSuccess: (r) => {
+      setLink(r.inviteLink);
+      qc.invalidateQueries({ queryKey: ["patients"] });
+    },
+  });
+  async function copy() {
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard blocked */
+    }
+  }
+  return (
+    <div className="bg-card rounded-[20px] p-5 opacity-95">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <div className="font-semibold text-[17px] text-foreground truncate">
+            {p.name}
+          </div>
+          <div className="text-xs text-muted-foreground mt-1 font-medium truncate">
+            {p.email}
+          </div>
+          <div className="text-xs text-muted-foreground mt-1 font-medium">
+            Awaiting first check-in. No monitoring data yet.
+          </div>
+        </div>
+        <ActionBadge action="pending" />
+      </div>
+      <div className="mt-4 pt-4 border-t border-border flex items-stretch gap-2">
+        <input
+          readOnly
+          value={link ?? "Generating..."}
+          onFocus={(e) => e.currentTarget.select()}
+          className="flex-1 px-3 py-2 rounded-lg bg-background text-foreground text-xs font-mono focus:outline-none focus:ring-2 focus:ring-accent"
+        />
+        <button
+          type="button"
+          onClick={copy}
+          disabled={!link}
+          className="px-3 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 disabled:opacity-60"
+        >
+          {copied ? "Copied" : "Copy link"}
+        </button>
+        <button
+          type="button"
+          onClick={() => resend.mutate()}
+          disabled={resend.isPending}
+          className="px-3 py-2 rounded-lg bg-background text-foreground text-xs font-semibold hover:opacity-80 disabled:opacity-60"
+        >
+          {resend.isPending ? "..." : "Resend"}
+        </button>
+      </div>
     </div>
   );
 }

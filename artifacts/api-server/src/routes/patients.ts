@@ -1,5 +1,7 @@
 import { Router, type Response } from "express";
-import { and, eq, desc, gte, inArray, max } from "drizzle-orm";
+import { randomBytes } from "node:crypto";
+import bcrypt from "bcryptjs";
+import { and, eq, desc, gte, inArray, max, isNull } from "drizzle-orm";
 import { z } from "zod";
 import {
   db,
@@ -33,6 +35,8 @@ router.get("/", async (req, res: Response) => {
       glp1Drug: patientsTable.glp1Drug,
       dose: patientsTable.dose,
       startedOn: patientsTable.startedOn,
+      activatedAt: patientsTable.activatedAt,
+      activationToken: patientsTable.activationToken,
     })
     .from(patientsTable)
     .innerJoin(usersTable, eq(usersTable.id, patientsTable.userId))
@@ -82,6 +86,29 @@ router.get("/", async (req, res: Response) => {
   }
 
   const result = rows.map((p) => {
+    // Pending patients have not yet claimed their account in the
+    // mobile app, so risk and signals are not yet meaningful. We
+    // surface them in their own dashboard bucket instead of scoring
+    // empty data and falsely calling them "Stable".
+    const pending = !p.activatedAt;
+    if (pending) {
+      return {
+        id: p.id,
+        name: p.name,
+        email: p.email,
+        glp1Drug: p.glp1Drug,
+        dose: p.dose,
+        startedOn: p.startedOn,
+        lastCheckin: null,
+        riskScore: 0,
+        riskBand: "low" as const,
+        action: "pending" as const,
+        signals: [] as string[],
+        lastNoteAt: lastNoteByPatient.get(p.id) ?? null,
+        pending: true,
+        activationToken: p.activationToken,
+      };
+    }
     const cks = byPatient.get(p.id) ?? [];
     const risk = computeRisk(cks);
     const lastCheckin =
@@ -89,22 +116,20 @@ router.get("/", async (req, res: Response) => {
         ? cks.reduce((acc, c) => (c.date > acc ? c.date : acc), cks[0]!.date)
         : null;
     return {
-      ...p,
+      id: p.id,
+      name: p.name,
+      email: p.email,
+      glp1Drug: p.glp1Drug,
+      dose: p.dose,
+      startedOn: p.startedOn,
       lastCheckin,
       riskScore: risk.score,
       riskBand: risk.band,
-      // Workflow state ("Needs follow-up" / "Monitor" / "Stable").
-      // Computed server-side so the list and detail views agree and so
-      // the dashboard can sort the queue without re-deriving the rule.
       action: deriveAction(risk.score, risk.rules, lastCheckin),
-      // Up to two signals (primary + secondary) so two patients with
-      // identical urgent signals don't read as visually identical.
-      // E.g. ["No check-in for 3d", "Low energy trend (7d)"].
       signals: deriveSignals(risk.rules, lastCheckin),
-      // ISO timestamp of the most recent care-team note, or null if
-      // nobody has logged anything yet. The UI turns this into
-      // "Last note: 2d ago" / "No recent action".
       lastNoteAt: lastNoteByPatient.get(p.id) ?? null,
+      pending: false,
+      activationToken: null as string | null,
     };
   });
 
@@ -132,6 +157,128 @@ router.get("/stats", async (req, res: Response) => {
       ),
     );
   res.json({ actionsToday: todays.length });
+});
+
+// PUT /patients/clinic -- set the calling doctor's clinic name. Captured
+// once during the onboarding wizard, but editable later.
+const clinicSchema = z.object({ clinicName: z.string().min(1).max(160) });
+router.put("/clinic", async (req, res: Response) => {
+  const doctorId = (req as AuthedRequest).auth.userId;
+  const parsed = clinicSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_input" });
+    return;
+  }
+  await db
+    .update(usersTable)
+    .set({ clinicName: parsed.data.clinicName.trim() })
+    .where(eq(usersTable.id, doctorId));
+  res.json({ ok: true, clinicName: parsed.data.clinicName.trim() });
+});
+
+// POST /patients/invite -- provision a pending patient under the calling
+// doctor and generate an opaque single-use activation token. The doctor
+// gives the patient the resulting link; the mobile app exchanges the
+// token for a real session on first launch (out of scope for this MVP).
+const inviteSchema = z.object({
+  name: z.string().min(1).max(120),
+  email: z.string().email(),
+  glp1Drug: z.string().max(80).optional().nullable(),
+  dose: z.string().max(80).optional().nullable(),
+});
+function buildInviteLink(req: AuthedRequest, token: string): string {
+  // Prefer the public host the dashboard is served on so the link the
+  // doctor copies actually opens in their patient's browser.
+  const proto = (req.get("x-forwarded-proto") || req.protocol || "https").split(",")[0]!.trim();
+  const host = req.get("host") || "viva-ai.replit.app";
+  return `${proto}://${host}/invite/${token}`;
+}
+router.post("/invite", async (req, res: Response) => {
+  const doctorId = (req as AuthedRequest).auth.userId;
+  const parsed = inviteSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_input" });
+    return;
+  }
+  const email = parsed.data.email.toLowerCase();
+  const [existing] = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(eq(usersTable.email, email))
+    .limit(1);
+  if (existing) {
+    res.status(409).json({ error: "email_in_use" });
+    return;
+  }
+  // Random unguessable hash so a stolen invite token can't double as a
+  // password. The patient sets a real password during activation.
+  const placeholderHash = await bcrypt.hash(randomBytes(24).toString("hex"), 10);
+  const token = randomBytes(24).toString("base64url");
+  const [user] = await db
+    .insert(usersTable)
+    .values({
+      email,
+      passwordHash: placeholderHash,
+      role: "patient",
+      name: parsed.data.name.trim(),
+    })
+    .returning();
+  if (!user) {
+    res.status(500).json({ error: "create_failed" });
+    return;
+  }
+  await db.insert(patientsTable).values({
+    userId: user.id,
+    doctorId,
+    glp1Drug: parsed.data.glp1Drug?.trim() || null,
+    dose: parsed.data.dose?.trim() || null,
+    activationToken: token,
+  });
+  res.status(201).json({
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    inviteLink: buildInviteLink(req as AuthedRequest, token),
+  });
+});
+
+// POST /patients/:id/resend -- rotate the activation token for a still-
+// pending patient and return the fresh link. No-op (409) if already
+// activated, since a real session has already been established.
+router.post("/:id/resend", async (req, res: Response) => {
+  const doctorId = (req as AuthedRequest).auth.userId;
+  const patientId = Number(req.params.id);
+  if (!Number.isFinite(patientId)) {
+    res.status(400).json({ error: "invalid_id" });
+    return;
+  }
+  const [row] = await db
+    .select({
+      doctorId: patientsTable.doctorId,
+      activatedAt: patientsTable.activatedAt,
+    })
+    .from(patientsTable)
+    .where(eq(patientsTable.userId, patientId))
+    .limit(1);
+  if (!row || row.doctorId !== doctorId) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  if (row.activatedAt) {
+    res.status(409).json({ error: "already_activated" });
+    return;
+  }
+  const token = randomBytes(24).toString("base64url");
+  await db
+    .update(patientsTable)
+    .set({ activationToken: token })
+    .where(
+      and(
+        eq(patientsTable.userId, patientId),
+        isNull(patientsTable.activatedAt),
+      ),
+    );
+  res.json({ inviteLink: buildInviteLink(req as AuthedRequest, token) });
 });
 
 // Helper: ensure a patient belongs to the calling doctor; throws 403 if not.

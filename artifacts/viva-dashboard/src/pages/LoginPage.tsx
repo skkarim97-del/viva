@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { HttpError } from "@/lib/api";
 import { Logo } from "@/components/Logo";
@@ -19,7 +19,8 @@ export function LoginPage() {
     try {
       const me = await login(email.trim().toLowerCase(), password);
       if (me.role === "doctor") {
-        setLocation("/");
+        // The Gate will route to /onboarding if the wizard isn't done.
+        setLocation(me.needsOnboarding ? "/onboarding" : "/");
       } else {
         setErr(
           "This account is a patient account. Please use the VIVA mobile app.",
@@ -100,6 +101,12 @@ export function LoginPage() {
           Demo doctor: <span className="text-foreground font-semibold">doctor@vivaai.demo</span>
           <br />
           Demo password: <span className="text-foreground font-semibold">viva-demo-2026</span>
+        </div>
+        <div className="mt-4 text-xs text-muted-foreground text-center">
+          New to Viva?{" "}
+          <Link href="/signup" className="text-foreground font-semibold underline">
+            Create a clinician account
+          </Link>
         </div>
       </div>
     </div>

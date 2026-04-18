@@ -11,9 +11,18 @@ export interface Me {
   email: string;
   name: string;
   role: Role;
+  // Doctor-only: name of the practice. Captured during onboarding;
+  // null until the wizard is completed.
+  clinicName: string | null;
+  // Server-derived flag: true when the doctor still needs to set a
+  // clinic name OR has zero patients on their panel. Drives the gate
+  // that pushes new accounts into the onboarding wizard.
+  needsOnboarding: boolean;
 }
 
-export type Action = "needs_followup" | "monitor" | "stable";
+// "pending" = patient has been invited but has not yet claimed their
+// account in the mobile app, so risk is not computed.
+export type Action = "needs_followup" | "monitor" | "stable" | "pending";
 
 export interface PatientRow {
   id: number;
@@ -35,6 +44,13 @@ export interface PatientRow {
   // or null if nobody has logged an action yet. Used to render
   // "Last note: 2d ago" on the queue so doctors don't double-up calls.
   lastNoteAt: string | null;
+  // True until the patient claims their account in the mobile app.
+  // While pending, riskScore/signals are placeholders and the queue
+  // routes the row into the dedicated "Pending activation" bucket.
+  pending: boolean;
+  // Single-use activation token for pending patients so the dashboard
+  // can render a copyable invite link inline. Null after activation.
+  activationToken: string | null;
 }
 
 export interface PatientDetail {
@@ -116,12 +132,35 @@ async function request<T>(
   return (await res.json()) as T;
 }
 
+export interface InviteResult {
+  id: number;
+  name: string;
+  email: string;
+  inviteLink: string;
+}
+
 export const api = {
   // auth
   login: (email: string, password: string) =>
     request<Me>("POST", "/auth/login", { email, password }),
+  signup: (name: string, email: string, password: string) =>
+    request<Me>("POST", "/auth/signup", { name, email, password }),
   logout: () => request<{ ok: true }>("POST", "/auth/logout"),
   me: () => request<Me>("GET", "/auth/me"),
+
+  // doctor onboarding
+  setClinic: (clinicName: string) =>
+    request<{ ok: true; clinicName: string }>("PUT", "/patients/clinic", {
+      clinicName,
+    }),
+  invitePatient: (input: {
+    name: string;
+    email: string;
+    glp1Drug?: string | null;
+    dose?: string | null;
+  }) => request<InviteResult>("POST", "/patients/invite", input),
+  resendInvite: (id: number) =>
+    request<{ inviteLink: string }>("POST", `/patients/${id}/resend`),
 
   // doctor
   patients: () => request<PatientRow[]>("GET", "/patients"),

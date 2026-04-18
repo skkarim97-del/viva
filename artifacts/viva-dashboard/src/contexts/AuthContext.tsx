@@ -13,6 +13,9 @@ interface AuthState {
   loading: boolean;
   login: (email: string, password: string) => Promise<Me>;
   logout: () => Promise<void>;
+  // Allow pages that mutated the doctor's profile (signup, onboarding
+  // wizard) to refresh the cached identity without a round trip.
+  setMe: (m: Me) => void;
 }
 
 const Ctx = createContext<AuthState | null>(null);
@@ -63,6 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // Clear cached patient data after logout for the same reason.
           queryClient.clear();
         },
+        setMe,
       }}
     >
       {children}

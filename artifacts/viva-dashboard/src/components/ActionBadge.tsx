@@ -32,6 +32,14 @@ const STYLES: Record<Action, { bg: string; text: string; label: string }> = {
     text: "#1F8A3E",
     label: "Stable",
   },
+  // Patient invited but hasn't claimed the mobile app yet. Amber tint
+  // (not red) because it's not clinically urgent, just operationally
+  // pending until they connect.
+  pending: {
+    bg: "rgba(255,159,10,0.14)",
+    text: "#B8650A",
+    label: "Pending activation",
+  },
 };
 
 export function ActionBadge({ action, size = "sm" }: Props) {

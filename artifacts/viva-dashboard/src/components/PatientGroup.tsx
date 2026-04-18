@@ -23,6 +23,7 @@ const HEADER: Record<Action, { label: string; dot: string }> = {
   needs_followup: { label: "Needs follow-up", dot: "#FF3B30" },
   monitor: { label: "Monitor", dot: "#FF9500" },
   stable: { label: "Stable", dot: "#34C759" },
+  pending: { label: "Pending activation", dot: "#B8650A" },
 };
 
 export const PatientGroup = forwardRef<HTMLElement, Props>(function PatientGroup(
