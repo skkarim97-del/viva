@@ -81,6 +81,10 @@ export function PatientDetailPage({ id }: { id: number }) {
     queryKey: ["patient", id, "notes"],
     queryFn: () => api.patientNotes(id),
   });
+  const weight = useQuery({
+    queryKey: ["patient", id, "weight"],
+    queryFn: () => api.patientWeight(id),
+  });
 
   const [draft, setDraft] = useState("");
   const addNote = useMutation({
@@ -146,6 +150,44 @@ export function PatientDetailPage({ id }: { id: number }) {
                 </span>
               )}
             </div>
+            {weight.data?.latest && (
+              <div
+                className="text-muted-foreground text-xs mt-2 font-medium flex items-center gap-2"
+                aria-label="Latest weight"
+              >
+                <span className="text-foreground font-semibold">
+                  {Math.round(weight.data.latest.weightLbs)} lbs
+                </span>
+                <span aria-hidden="true">·</span>
+                <span>
+                  {weight.data.daysSinceLast === 0
+                    ? "logged today"
+                    : weight.data.daysSinceLast === 1
+                    ? "1 day ago"
+                    : `${weight.data.daysSinceLast} days ago`}
+                </span>
+                {weight.data.trend === "down" && weight.data.prior && (
+                  <span style={{ color: "#1F8A4A" }}>
+                    ↓ {Math.abs(
+                      Math.round(
+                        weight.data.latest.weightLbs -
+                          weight.data.prior.weightLbs,
+                      ),
+                    )}{" "}
+                    lbs
+                  </span>
+                )}
+                {weight.data.trend === "up" && weight.data.prior && (
+                  <span style={{ color: "#B5251D" }}>
+                    ↑ {Math.round(
+                      weight.data.latest.weightLbs -
+                        weight.data.prior.weightLbs,
+                    )}{" "}
+                    lbs
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           {risk.data && (
             <div className="text-right shrink-0">

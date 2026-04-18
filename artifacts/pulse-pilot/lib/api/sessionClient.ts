@@ -188,4 +188,21 @@ export const sessionApi = {
       date,
       symptom,
     }),
+
+  // Weekly weight log. Lives outside the daily check-in payload so
+  // weight tracking has its own cadence and never adds friction to
+  // the daily flow. weeklyPromptDue is server-computed (>=7 days or
+  // never logged) so the client doesn't have to track its own clock.
+  getLatestWeight: () =>
+    request<{
+      latest: { weightLbs: number; recordedAt: string } | null;
+      daysSinceLast: number | null;
+      weeklyPromptDue: boolean;
+    }>("GET", "/me/weights/latest"),
+  logWeight: (weightLbs: number) =>
+    request<{ id: number; weightLbs: number; recordedAt: string }>(
+      "POST",
+      "/me/weights",
+      { weightLbs },
+    ),
 };

@@ -20,6 +20,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { InputRow } from "@/components/InputRow";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { SymptomTipCard } from "@/components/SymptomTipCard";
+import WeightLogModal from "@/components/WeightLogModal";
+import { sessionApi } from "@/lib/api/sessionClient";
 import { useApp } from "@/context/AppContext";
 import { deriveSymptomTips, type SymptomKind } from "@/lib/symptomTips";
 import { generateCoachInsight } from "@/data/insights";
@@ -30,6 +32,11 @@ import { summarizeCoachThread } from "@/lib/coachSummary";
 import { useColors } from "@/hooks/useColors";
 import { CATEGORY_OPTIONS } from "@/types";
 import type { MetricKey, FeelingType, ChatMessage, DailyState, ActionCategory, AppetiteLevel, NauseaLevel, DigestionStatus, EnergyDaily, MedicationLogEntry, MentalState } from "@/types";
+
+// Module-scoped one-shot guard for the weekly weight prompt. Survives
+// component remounts within the same JS runtime, only resets on
+// app cold-start (when the module is re-evaluated).
+let weeklyWeightPromptHandledThisLaunch = false;
 
 const TINT_GREEN = "#34C759";
 const TINT_BLUE = "#38B6FF";
@@ -131,6 +138,30 @@ export default function DashboardScreen() {
   const [selectedDoseDate, setSelectedDoseDate] = useState<string>("today");
   const chatListRef = useRef<FlatList>(null);
   const feedbackOpacity = useRef(new Animated.Value(0)).current;
+
+  // Weekly weight prompt. We check once per cold-start so we never
+  // re-pop the modal in the same session if the patient dismisses it
+  // OR if the Today screen happens to remount (tab switch, navigation
+  // pop, etc). The guard lives at module scope -- a `useRef` would
+  // reset on remount, allowing duplicate prompts in the same launch.
+  const [weightModalOpen, setWeightModalOpen] = useState(false);
+  const [latestWeightLbs, setLatestWeightLbs] = useState<number | null>(null);
+  const [weightDaysSince, setWeightDaysSince] = useState<number | null>(null);
+  useEffect(() => {
+    if (weeklyWeightPromptHandledThisLaunch) return;
+    weeklyWeightPromptHandledThisLaunch = true;
+    sessionApi
+      .getLatestWeight()
+      .then((r) => {
+        setLatestWeightLbs(r.latest?.weightLbs ?? null);
+        setWeightDaysSince(r.daysSinceLast);
+        if (r.weeklyPromptDue) setWeightModalOpen(true);
+      })
+      .catch(() => {
+        // Silent: a missing prompt is strictly better than a noisy
+        // error toast on app open.
+      });
+  }, []);
 
   useEffect(() => {
     if (lastCompletionFeedback) {
@@ -1476,6 +1507,16 @@ export default function DashboardScreen() {
           </Pressable>
         </Modal>
       )}
+      <WeightLogModal
+        visible={weightModalOpen}
+        daysSinceLast={weightDaysSince}
+        initialValue={latestWeightLbs}
+        onClose={() => setWeightModalOpen(false)}
+        onLogged={(w) => {
+          setLatestWeightLbs(w);
+          setWeightDaysSince(0);
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }

@@ -35,6 +35,8 @@ import {
   type MedicationBrand,
 } from "@/data/medicationData";
 import type { MedicationProfile } from "@/types";
+import WeightLogModal from "@/components/WeightLogModal";
+import { sessionApi } from "@/lib/api/sessionClient";
 import { connectAppleHealth } from "@/data/healthProviders";
 
 const GOAL_LABELS: Record<string, string> = {
@@ -73,6 +75,33 @@ export default function SettingsScreen() {
   const [connecting, setConnecting] = useState(false);
   const [medModalOpen, setMedModalOpen] = useState(false);
   const [medDraft, setMedDraft] = useState<MedDraft | null>(null);
+  // Server-backed weekly weight log (independent from profile.weight,
+  // which remains the local goal-tracking value used elsewhere in the
+  // app). We pull the latest entry on mount so the row can show
+  // "X lbs - 3 days ago" and pre-fill the modal.
+  const [weightLogOpen, setWeightLogOpen] = useState(false);
+  const [serverWeight, setServerWeight] = useState<{
+    weightLbs: number | null;
+    daysSinceLast: number | null;
+  }>({ weightLbs: null, daysSinceLast: null });
+  useEffect(() => {
+    let cancelled = false;
+    sessionApi
+      .getLatestWeight()
+      .then((r) => {
+        if (cancelled) return;
+        setServerWeight({
+          weightLbs: r.latest?.weightLbs ?? null,
+          daysSinceLast: r.daysSinceLast,
+        });
+      })
+      .catch(() => {
+        // Silent on settings -- the row simply shows "Not logged".
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleConnectHealth = useCallback(async () => {
     setConnecting(true);
@@ -271,6 +300,34 @@ export default function SettingsScreen() {
 
       <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>Profile</Text>
       <View style={[styles.section, { backgroundColor: c.card }]}>
+        <Pressable
+          onPress={() => setWeightLogOpen(true)}
+          style={({ pressed }) => [
+            styles.settingRow,
+            styles.settingRowBorder,
+            { borderBottomColor: c.background, opacity: pressed ? 0.7 : 1 },
+          ]}
+        >
+          <View style={[styles.settingIcon, { backgroundColor: c.accent + "10" }]}>
+            <Feather name="activity" size={16} color={c.accent} />
+          </View>
+          <Text style={[styles.settingLabel, { color: c.foreground }]}>Weekly weight</Text>
+          <Text
+            style={[styles.settingValue, { color: c.mutedForeground }]}
+            numberOfLines={1}
+          >
+            {serverWeight.weightLbs == null
+              ? "Log now"
+              : `${Math.round(serverWeight.weightLbs)} ${weightUnit} - ${
+                  serverWeight.daysSinceLast === 0
+                    ? "today"
+                    : serverWeight.daysSinceLast === 1
+                    ? "1d ago"
+                    : `${serverWeight.daysSinceLast}d ago`
+                }`}
+          </Text>
+          <Feather name="edit-2" size={13} color={c.mutedForeground + "60"} />
+        </Pressable>
         {[
           { label: "Current Weight", value: `${profile.weight} ${weightUnit}`, icon: "trending-down" as const, field: "weight" },
           { label: "Goal Weight", value: `${profile.goalWeight} ${weightUnit}`, icon: "target" as const, field: "goalWeight" },
@@ -575,6 +632,15 @@ export default function SettingsScreen() {
       </Modal>
       <RemindersSection />
       <SignOutSection />
+      <WeightLogModal
+        visible={weightLogOpen}
+        daysSinceLast={serverWeight.daysSinceLast}
+        initialValue={serverWeight.weightLbs}
+        onClose={() => setWeightLogOpen(false)}
+        onLogged={(w) =>
+          setServerWeight({ weightLbs: w, daysSinceLast: 0 })
+        }
+      />
     </ScrollView>
   );
 }

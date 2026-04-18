@@ -128,6 +128,14 @@ export interface Risk {
   symptomFlags: SymptomFlag[];
 }
 
+export interface PatientWeightSummary {
+  latest: { weightLbs: number; recordedAt: string } | null;
+  prior?: { weightLbs: number; recordedAt: string } | null;
+  daysSinceLast: number | null;
+  // "none" when no prior entry exists to compare against.
+  trend: "up" | "down" | "flat" | "none";
+}
+
 export interface DoctorNote {
   id: number;
   patientUserId: number;
@@ -208,6 +216,8 @@ export const api = {
   patientCheckins: (id: number) =>
     request<Checkin[]>("GET", `/patients/${id}/checkins`),
   patientRisk: (id: number) => request<Risk>("GET", `/patients/${id}/risk`),
+  patientWeight: (id: number) =>
+    request<PatientWeightSummary>("GET", `/patients/${id}/weight`),
   patientNotes: (id: number) =>
     request<DoctorNote[]>("GET", `/patients/${id}/notes`),
   addPatientNote: (

@@ -1,7 +1,7 @@
 import { Router, type Response } from "express";
 import { desc, eq, and } from "drizzle-orm";
 import { z } from "zod";
-import { db, patientCheckinsTable } from "@workspace/db";
+import { db, patientCheckinsTable, patientWeightsTable } from "@workspace/db";
 import { requirePatient, type AuthedRequest } from "../middlewares/auth";
 import { computeRisk } from "../lib/risk";
 import { computeSymptomFlags } from "../lib/symptoms";
@@ -219,6 +219,71 @@ router.patch("/checkins/escalate", async (req, res: Response) => {
     .set({ clinicianRequested: merged })
     .where(eq(patientCheckinsTable.id, existing.id));
   res.json({ ok: true, clinicianRequested: merged });
+});
+
+// -- Weekly weight log -------------------------------------------------
+// Lives in its own table (patient_weights) and on its own cadence
+// (every ~7 days), deliberately NOT inside the daily check-in payload.
+// The mobile app calls /me/weights/latest on session start to decide
+// whether to surface the weekly prompt; weeklyPromptDue flips true
+// when the patient has no entry, or the latest entry is 7+ days old.
+
+router.get("/weights/latest", async (req, res: Response) => {
+  const userId = (req as AuthedRequest).auth.userId;
+  const rows = await db
+    .select()
+    .from(patientWeightsTable)
+    .where(eq(patientWeightsTable.patientUserId, userId))
+    .orderBy(desc(patientWeightsTable.recordedAt))
+    .limit(1);
+  const latest = rows[0] ?? null;
+  let daysSinceLast: number | null = null;
+  if (latest) {
+    const diffMs = Date.now() - new Date(latest.recordedAt).getTime();
+    daysSinceLast = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  }
+  // Prompt the patient when they've never logged, or the last entry
+  // is at least 7 days old. The "or" is important: a patient who has
+  // never logged a weight should still see the prompt today.
+  const weeklyPromptDue =
+    daysSinceLast === null || daysSinceLast >= 7;
+  res.json({
+    latest: latest
+      ? {
+          weightLbs: latest.weightLbs,
+          recordedAt: latest.recordedAt,
+        }
+      : null,
+    daysSinceLast,
+    weeklyPromptDue,
+  });
+});
+
+const weightInputSchema = z.object({
+  // Reasonable clinical bounds for adults in lbs. We do NOT validate
+  // by patient (no kg path in MVP), so cap loosely to catch typos.
+  weightLbs: z.number().positive().min(40).max(900),
+});
+
+router.post("/weights", async (req, res: Response) => {
+  const userId = (req as AuthedRequest).auth.userId;
+  const parsed = weightInputSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_input" });
+    return;
+  }
+  const [row] = await db
+    .insert(patientWeightsTable)
+    .values({
+      patientUserId: userId,
+      weightLbs: parsed.data.weightLbs,
+    })
+    .returning();
+  res.status(201).json({
+    id: row!.id,
+    weightLbs: row!.weightLbs,
+    recordedAt: row!.recordedAt,
+  });
 });
 
 router.get("/risk", async (req, res: Response) => {

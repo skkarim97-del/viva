@@ -1,0 +1,62 @@
+Add weekly weight tracking to the patient app in a minimal, low-friction way, and ensure it flows through to the doctor dashboard as an additional patient stat where relevant. Keep this MVP-light and do not overbuild.
+
+Goal
+
+Capture weight trends over time without increasing daily friction or complicating the core check-in experience.
+
+Requirements
+1. Weight input
+allow user to enter weight in lbs
+simple numeric input only
+no advanced unit handling needed for now
+2. Frequency
+prompt user once every 7 days
+do not include weight in daily check-ins
+do not send daily reminders for weight
+3. UX
+use a simple modal or lightweight prompt:
+“What’s your current weight?”
+allow user to skip
+allow user to update weight manually anytime from settings/profile
+keep this lightweight and separate from the daily check-in flow
+4. Data storage
+store each weight entry in the backend database with:
+patient_id
+value
+timestamp
+persist it in the same shared backend / DB as the rest of the patient data
+5. Doctor dashboard visibility
+
+Make weight available in the clinician dashboard as one additional patient stat if relevant, but do not overemphasize it.
+
+For MVP:
+
+show the latest recorded weight on the patient detail page if one exists
+if easy, also show a simple recent trend indicator such as:
+weight up
+weight down
+no recent update
+keep it subtle and secondary to core signals like symptoms, check-ins, and follow-up status
+do not build charts or a heavy weight analytics section yet
+do not force weight to appear in the main patient queue unless it can be surfaced cleanly and only when meaningful
+
+The main idea is:
+
+patient enters weekly weight
+weight is stored in the shared DB
+doctor can see latest weight / basic weight context on the patient detail page
+6. Constraints
+do not add charts or advanced analytics yet
+do not increase friction in the daily check-in flow
+keep weight tracking isolated from daily check-ins
+do not make weight a required field
+do not overbuild risk logic around weight yet
+Output
+
+Show me:
+
+where and how the weekly weight prompt appears in the patient app
+where manual weight entry lives in settings/profile
+how weight is stored in the backend
+where weight appears in the doctor dashboard
+confirmation that this does not affect the daily check-in flow

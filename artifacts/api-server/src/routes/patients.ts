@@ -8,6 +8,7 @@ import {
   usersTable,
   patientsTable,
   patientCheckinsTable,
+  patientWeightsTable,
   doctorNotesTable,
 } from "@workspace/db";
 import { requireDoctor, type AuthedRequest } from "../middlewares/auth";
@@ -462,6 +463,60 @@ router.get("/:id/risk", async (req, res: Response) => {
     ),
     suggestedAction: deriveSuggestedAction(risk.rules, lastCheckin),
     symptomFlags,
+  });
+});
+
+// Latest weight entry for the patient + how many days ago, plus a
+// trend-vs-prior-entry indicator (up/down/flat). Subtle, MVP-only --
+// kept as its own endpoint so the queue list query stays cheap and
+// the dashboard's PatientDetailPage opts in to the small extra read.
+router.get("/:id/weight", async (req, res: Response) => {
+  const doctorId = (req as AuthedRequest).auth.userId;
+  const patientId = Number(req.params.id);
+  if (!Number.isFinite(patientId)) {
+    res.status(400).json({ error: "invalid_id" });
+    return;
+  }
+  const patient = await loadOwnedPatient(doctorId, patientId);
+  if (!patient) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  const rows = await db
+    .select()
+    .from(patientWeightsTable)
+    .where(eq(patientWeightsTable.patientUserId, patientId))
+    .orderBy(desc(patientWeightsTable.recordedAt))
+    .limit(2);
+  if (rows.length === 0) {
+    res.json({ latest: null, daysSinceLast: null, trend: "none" });
+    return;
+  }
+  const latest = rows[0]!;
+  const prior = rows[1] ?? null;
+  const daysSinceLast = Math.floor(
+    (Date.now() - new Date(latest.recordedAt).getTime()) /
+      (1000 * 60 * 60 * 24),
+  );
+  // Treat sub-1-lb wobble as flat so daily-edge fluctuations don't
+  // spam an "up" / "down" label on the doctor's view.
+  let trend: "up" | "down" | "flat" | "none" = "none";
+  if (prior) {
+    const delta = latest.weightLbs - prior.weightLbs;
+    if (delta >= 1) trend = "up";
+    else if (delta <= -1) trend = "down";
+    else trend = "flat";
+  }
+  res.json({
+    latest: {
+      weightLbs: latest.weightLbs,
+      recordedAt: latest.recordedAt,
+    },
+    prior: prior
+      ? { weightLbs: prior.weightLbs, recordedAt: prior.recordedAt }
+      : null,
+    daysSinceLast,
+    trend,
   });
 });
 
