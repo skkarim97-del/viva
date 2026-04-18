@@ -166,26 +166,23 @@ export function PatientDetailPage({ id }: { id: number }) {
                     ? "1 day ago"
                     : `${weight.data.daysSinceLast} days ago`}
                 </span>
-                {weight.data.trend === "down" && weight.data.prior && (
-                  <span style={{ color: "#1F8A4A" }}>
-                    ↓ {Math.abs(
-                      Math.round(
-                        weight.data.latest.weightLbs -
-                          weight.data.prior.weightLbs,
-                      ),
-                    )}{" "}
-                    lbs
-                  </span>
-                )}
-                {weight.data.trend === "up" && weight.data.prior && (
-                  <span style={{ color: "#B5251D" }}>
-                    ↑ {Math.round(
-                      weight.data.latest.weightLbs -
-                        weight.data.prior.weightLbs,
-                    )}{" "}
-                    lbs
-                  </span>
-                )}
+                {/* Direction + amount only -- intentionally neutral
+                    styling. We don't render up = bad / down = good
+                    color cues; weight change is clinical context for
+                    the doctor, not a value judgment. */}
+                {(weight.data.trend === "up" || weight.data.trend === "down") &&
+                  weight.data.prior && (
+                    <span className="text-muted-foreground">
+                      {weight.data.trend === "up" ? "↑" : "↓"}{" "}
+                      {Math.abs(
+                        Math.round(
+                          weight.data.latest.weightLbs -
+                            weight.data.prior.weightLbs,
+                        ),
+                      )}{" "}
+                      lbs
+                    </span>
+                  )}
               </div>
             )}
           </div>

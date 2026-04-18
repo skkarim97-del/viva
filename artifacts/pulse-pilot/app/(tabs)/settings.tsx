@@ -75,10 +75,11 @@ export default function SettingsScreen() {
   const [connecting, setConnecting] = useState(false);
   const [medModalOpen, setMedModalOpen] = useState(false);
   const [medDraft, setMedDraft] = useState<MedDraft | null>(null);
-  // Server-backed weekly weight log (independent from profile.weight,
-  // which remains the local goal-tracking value used elsewhere in the
-  // app). We pull the latest entry on mount so the row can show
-  // "X lbs - 3 days ago" and pre-fill the modal.
+  // Server-backed weekly weight log -- the single user-facing weight
+  // entry point. The local profile.weight field still exists in the
+  // data model (used by BMR / coach context) but is no longer
+  // editable here; we mirror the latest server value into it so
+  // those consumers stay accurate.
   const [weightLogOpen, setWeightLogOpen] = useState(false);
   const [serverWeight, setServerWeight] = useState<{
     weightLbs: number | null;
@@ -94,6 +95,9 @@ export default function SettingsScreen() {
           weightLbs: r.latest?.weightLbs ?? null,
           daysSinceLast: r.daysSinceLast,
         });
+        if (r.latest?.weightLbs != null) {
+          updateProfile({ weight: r.latest.weightLbs });
+        }
       })
       .catch(() => {
         // Silent on settings -- the row simply shows "Not logged".
@@ -101,7 +105,7 @@ export default function SettingsScreen() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [updateProfile]);
 
   const handleConnectHealth = useCallback(async () => {
     setConnecting(true);
@@ -329,7 +333,9 @@ export default function SettingsScreen() {
           <Feather name="edit-2" size={13} color={c.mutedForeground + "60"} />
         </Pressable>
         {[
-          { label: "Current Weight", value: `${profile.weight} ${weightUnit}`, icon: "trending-down" as const, field: "weight" },
+          // "Current Weight" intentionally removed -- the Weekly
+          // weight row above is now the single source of truth so
+          // patients aren't asked to maintain two weight values.
           { label: "Goal Weight", value: `${profile.goalWeight} ${weightUnit}`, icon: "target" as const, field: "goalWeight" },
           { label: "Goals", value: goalsDisplay, icon: "flag" as const, field: null },
         ].map((item, i) => (
@@ -637,9 +643,10 @@ export default function SettingsScreen() {
         daysSinceLast={serverWeight.daysSinceLast}
         initialValue={serverWeight.weightLbs}
         onClose={() => setWeightLogOpen(false)}
-        onLogged={(w) =>
-          setServerWeight({ weightLbs: w, daysSinceLast: 0 })
-        }
+        onLogged={(w) => {
+          setServerWeight({ weightLbs: w, daysSinceLast: 0 });
+          updateProfile({ weight: w });
+        }}
       />
     </ScrollView>
   );

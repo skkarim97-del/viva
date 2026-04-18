@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { InputRow } from "@/components/InputRow";
 import { ScreenHeader } from "@/components/ScreenHeader";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SymptomTipCard } from "@/components/SymptomTipCard";
 import WeightLogModal from "@/components/WeightLogModal";
 import { sessionApi } from "@/lib/api/sessionClient";
@@ -33,10 +34,24 @@ import { useColors } from "@/hooks/useColors";
 import { CATEGORY_OPTIONS } from "@/types";
 import type { MetricKey, FeelingType, ChatMessage, DailyState, ActionCategory, AppetiteLevel, NauseaLevel, DigestionStatus, EnergyDaily, MedicationLogEntry, MentalState } from "@/types";
 
-// Module-scoped one-shot guard for the weekly weight prompt. Survives
-// component remounts within the same JS runtime, only resets on
-// app cold-start (when the module is re-evaluated).
-let weeklyWeightPromptHandledThisLaunch = false;
+// Persistent "last day we surfaced the weekly prompt" key. We only
+// auto-pop the modal once per calendar day even if the patient cold-
+// starts the app multiple times -- avoids nag behavior. Stored as a
+// YYYY-MM-DD string in AsyncStorage; cleared implicitly by the date
+// rolling over.
+const WEIGHT_PROMPT_LAST_SHOWN_KEY = "@viva_weight_prompt_lastShownDate";
+
+function todayLocalDateString(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+// Module-scoped guard so we don't fire the AsyncStorage check more
+// than once per JS runtime even if the Today screen remounts.
+let weeklyWeightPromptCheckedThisLaunch = false;
 
 const TINT_GREEN = "#34C759";
 const TINT_BLUE = "#38B6FF";
@@ -139,29 +154,42 @@ export default function DashboardScreen() {
   const chatListRef = useRef<FlatList>(null);
   const feedbackOpacity = useRef(new Animated.Value(0)).current;
 
-  // Weekly weight prompt. We check once per cold-start so we never
-  // re-pop the modal in the same session if the patient dismisses it
-  // OR if the Today screen happens to remount (tab switch, navigation
-  // pop, etc). The guard lives at module scope -- a `useRef` would
-  // reset on remount, allowing duplicate prompts in the same launch.
+  // Weekly weight prompt. Surfaces at most once per calendar day even
+  // if the patient cold-starts multiple times (we persist the last
+  // shown date to AsyncStorage). The server still owns the "due" flag
+  // -- this guard is purely about prompt frequency.
   const [weightModalOpen, setWeightModalOpen] = useState(false);
   const [latestWeightLbs, setLatestWeightLbs] = useState<number | null>(null);
   const [weightDaysSince, setWeightDaysSince] = useState<number | null>(null);
+  const { updateProfile: updateProfileForWeightSync } = useApp();
   useEffect(() => {
-    if (weeklyWeightPromptHandledThisLaunch) return;
-    weeklyWeightPromptHandledThisLaunch = true;
-    sessionApi
-      .getLatestWeight()
-      .then((r) => {
+    if (weeklyWeightPromptCheckedThisLaunch) return;
+    weeklyWeightPromptCheckedThisLaunch = true;
+    (async () => {
+      try {
+        const r = await sessionApi.getLatestWeight();
         setLatestWeightLbs(r.latest?.weightLbs ?? null);
         setWeightDaysSince(r.daysSinceLast);
-        if (r.weeklyPromptDue) setWeightModalOpen(true);
-      })
-      .catch(() => {
+        // Mirror the server's authoritative weight onto the local
+        // profile so downstream consumers (BMR, coach context) keep
+        // working now that the dedicated settings row is gone.
+        if (r.latest?.weightLbs != null) {
+          updateProfileForWeightSync({ weight: r.latest.weightLbs });
+        }
+        if (!r.weeklyPromptDue) return;
+        const today = todayLocalDateString();
+        const lastShown = await AsyncStorage.getItem(
+          WEIGHT_PROMPT_LAST_SHOWN_KEY,
+        );
+        if (lastShown === today) return;
+        await AsyncStorage.setItem(WEIGHT_PROMPT_LAST_SHOWN_KEY, today);
+        setWeightModalOpen(true);
+      } catch {
         // Silent: a missing prompt is strictly better than a noisy
         // error toast on app open.
-      });
-  }, []);
+      }
+    })();
+  }, [updateProfileForWeightSync]);
 
   useEffect(() => {
     if (lastCompletionFeedback) {
@@ -1515,6 +1543,7 @@ export default function DashboardScreen() {
         onLogged={(w) => {
           setLatestWeightLbs(w);
           setWeightDaysSince(0);
+          updateProfileForWeightSync({ weight: w });
         }}
       />
     </KeyboardAvoidingView>
