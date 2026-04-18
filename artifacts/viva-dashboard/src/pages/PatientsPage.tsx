@@ -6,6 +6,7 @@ import { RiskBadge } from "@/components/RiskBadge";
 import { ActionBadge } from "@/components/ActionBadge";
 import { PatientGroup } from "@/components/PatientGroup";
 import { AddNoteModal } from "@/components/AddNoteModal";
+import { InvitePatientModal } from "@/components/InvitePatientModal";
 import { SummaryBar } from "@/components/SummaryBar";
 import { relativeTime } from "@/lib/relativeTime";
 
@@ -98,6 +99,7 @@ export function PatientsPage() {
   }, [q.data]);
 
   const [noteTarget, setNoteTarget] = useState<NoteTarget | null>(null);
+  const [showInvite, setShowInvite] = useState(false);
 
   // Group open-state lifted into the page so the SummaryBar can focus
   // a section (force-open + scroll) when a stat card is clicked.
@@ -152,11 +154,20 @@ export function PatientsPage() {
             Live risk band based on the last 14 days of check-ins.
           </p>
         </div>
-        {q.data && (
-          <div className="text-sm text-muted-foreground font-medium">
-            {q.data.length} patient{q.data.length === 1 ? "" : "s"}
-          </div>
-        )}
+        <div className="flex items-center gap-4">
+          {q.data && (
+            <div className="text-sm text-muted-foreground font-medium">
+              {q.data.length} patient{q.data.length === 1 ? "" : "s"}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setShowInvite(true)}
+            className="bg-primary text-primary-foreground font-semibold px-4 py-2.5 rounded-2xl hover:opacity-90 active:scale-[0.98] transition-all text-sm"
+          >
+            + Invite patient
+          </button>
+        </div>
       </div>
 
       {q.isPending && (
@@ -184,7 +195,7 @@ export function PatientsPage() {
           </p>
           <button
             type="button"
-            onClick={() => setLocation("/onboarding")}
+            onClick={() => setShowInvite(true)}
             className="mt-6 bg-primary text-primary-foreground font-semibold px-6 py-3 rounded-2xl hover:opacity-90"
           >
             Invite patients
@@ -250,6 +261,9 @@ export function PatientsPage() {
           patientName={noteTarget.name}
           onClose={() => setNoteTarget(null)}
         />
+      )}
+      {showInvite && (
+        <InvitePatientModal onClose={() => setShowInvite(false)} />
       )}
     </div>
   );

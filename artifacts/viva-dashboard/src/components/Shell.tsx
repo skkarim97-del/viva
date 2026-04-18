@@ -11,7 +11,7 @@ export function Shell({ children }: { children: ReactNode }) {
     <div className="min-h-screen flex flex-col bg-background">
       <header className="bg-background">
         <div className="max-w-6xl mx-auto px-6 pt-8 pb-5 flex items-center justify-between">
-          <Link href="/" aria-label="VIVA Clinic home" className="block">
+          <Link href="/" aria-label="viva clinic home" className="block">
             <Logo size="sm" />
           </Link>
           <div className="flex items-center gap-3 text-sm">
@@ -45,7 +45,7 @@ export function Shell({ children }: { children: ReactNode }) {
         {children}
       </main>
       <footer className="text-center text-xs text-muted-foreground pb-8">
-        VIVA Clinic
+        viva clinic
       </footer>
     </div>
   );
