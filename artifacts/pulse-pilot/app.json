@@ -10,9 +10,8 @@
     "newArchEnabled": false,
     "owner": "sullyk97",
     "splash": {
-      "image": "./assets/images/icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0F1923"
+      "backgroundColor": "#0A1628"
     },
     "ios": {
       "icon": "./assets/icon.png",

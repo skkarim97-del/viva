@@ -1,0 +1,87 @@
+Fix the stale old-logo flash when opening the patient app from the invite link. This is high priority.
+
+Problem
+
+When the patient taps “Open the app,” the app still briefly flashes the old Viva logo before loading. We need to diagnose exactly where that old asset is coming from and eliminate it so no outdated branding appears during app launch.
+
+Goal
+
+When the app opens from the invite link or from a normal cold launch:
+
+no old logo should flash
+no outdated splash / launch image should appear
+startup should feel clean and consistent with current branding
+Diagnose the source first
+
+Please identify exactly which asset or config is still responsible for the old logo flash. Check all of the following:
+
+Expo app config
+expo.icon
+expo.splash.image
+expo.ios.icon
+Android adaptive icon config if present
+any other launch / splash image references
+Native launch / splash behavior
+whether the old logo is coming from the native splash screen before React mounts
+whether the invite deep-link path is triggering a cold-launch that exposes an outdated launch asset
+Asset paths
+confirm whether any old image file is still referenced anywhere in:
+app config
+splash config
+onboarding / invite transition
+app loading screen
+cached assets folder
+Cache / build issue
+determine whether this is a stale native build cache issue versus an actual config reference to an old image
+Fix requirements
+
+After identifying the source, fix it cleanly.
+
+Preferred outcome:
+
+either use the current correct branding asset consistently across startup
+or remove the splash image entirely if that is the cleanest MVP solution
+Important constraint
+
+I do NOT want any outdated logo flash at all.
+If the safest solution is to simplify the splash screen to:
+
+plain white background
+or plain navy background
+with no logo
+that is acceptable for now.
+Do NOT
+do not change unrelated build config
+do not touch bundle identifiers or signing
+do not make broad design changes outside startup / launch behavior
+Validation
+
+After fixing:
+
+tell me exactly what was causing the old logo flash
+tell me exactly what config / asset references were changed
+verify startup behavior for:
+normal cold launch
+launch from invite deep link
+confirm whether a fresh native rebuild is required for the fix to take effect
+Output
+
+Show me:
+
+root cause
+exact files/config changed
+final recommended startup behavior
+whether I need a new TestFlight build
+My take
+
+There’s a good chance the culprit is this exact mismatch:
+
+app icon updated
+but splash.image still points to an older file
+
+If so, the fastest fix is:
+
+replace splash with current asset, or
+remove splash artwork entirely and use a clean solid background
+
+Honestly, for MVP, solid background with no logo is often the safest move if branding consistency is still in flux.
