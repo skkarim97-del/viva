@@ -11,6 +11,13 @@ import type { PatientCheckin } from "@workspace/db";
 
 export type RiskBand = "low" | "medium" | "high";
 
+/**
+ * Workflow state -- what the doctor should DO with this patient. Distinct
+ * from the risk band so the cutoffs can be tuned independently. Doctors
+ * scan this column first; the risk percentage is supporting context.
+ */
+export type Action = "needs_followup" | "monitor" | "stable";
+
 export interface FiredRule {
   code: string;
   label: string;
@@ -113,4 +120,59 @@ export function computeRisk(
     rules: fired,
     asOf: today.toISOString().split("T")[0]!,
   };
+}
+
+/**
+ * Map the score + signals to a workflow state. Hard escalation triggers
+ * (silence >= 5d or a recent severe-nausea spike) override the score
+ * threshold so a doctor never misses a critical case because the number
+ * happened to land at 49.
+ */
+export function deriveAction(
+  score: number,
+  rules: FiredRule[],
+  lastCheckin: string | null,
+  now: Date = new Date(),
+): Action {
+  const days = lastCheckin
+    ? daysBetween(now, new Date(lastCheckin))
+    : Number.POSITIVE_INFINITY;
+  const hasSevereNausea = rules.some((r) => r.code === "severe_nausea_3d");
+  if (score >= 50 || days >= 5 || hasSevereNausea) return "needs_followup";
+  if (score >= 30) return "monitor";
+  return "stable";
+}
+
+/**
+ * Translate the highest-priority fired rule into a one-line directive
+ * the doctor can act on. Mirrors deriveTopSignal but speaks in verbs
+ * instead of describing the signal.
+ */
+export function deriveSuggestedAction(
+  rules: FiredRule[],
+  lastCheckin: string | null,
+  now: Date = new Date(),
+): string | null {
+  if (rules.length === 0) return null;
+  const codes = new Set(rules.map((r) => r.code));
+  // Order matters: silence and severe nausea are the urgent ones.
+  if (codes.has("silence_3d")) {
+    const days = lastCheckin
+      ? daysBetween(now, new Date(lastCheckin))
+      : null;
+    if (days !== null && days >= 5) {
+      return `Call patient: no check-in in ${days} days`;
+    }
+    return "Follow up on missed check-ins";
+  }
+  if (codes.has("severe_nausea_3d")) {
+    return "Check in about side effects";
+  }
+  if (codes.has("low_energy_7d")) {
+    return "Discuss energy and dosing";
+  }
+  if (codes.has("mood_decline")) {
+    return "Wellness check-in";
+  }
+  return null;
 }

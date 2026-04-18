@@ -1,27 +1,20 @@
+import type { Action } from "@/lib/api";
+
 /**
- * Workflow chip that turns the risk score into a directive: should the
- * doctor act now, watch this patient, or move on? Lives next to the
- * risk pill so the eye lands on a verb, not a number.
- *
- * Thresholds match the user spec:
- *   60+ -> Needs follow-up, 30-59 -> Monitor, <30 -> Stable.
+ * Workflow chip that turns the patient's signals into a directive: should
+ * the doctor act now, watch this patient, or move on? The action is
+ * computed server-side (see api-server/src/lib/risk.ts deriveAction) so
+ * the list and detail views always agree, including on the hard-escalation
+ * overrides for silence and severe-nausea spikes.
  */
 
 interface Props {
-  score: number;
+  action: Action;
   size?: "sm" | "md";
 }
 
-type Action = "needs_followup" | "monitor" | "stable";
-
-function actionFor(score: number): Action {
-  if (score >= 60) return "needs_followup";
-  if (score >= 30) return "monitor";
-  return "stable";
-}
-
 const STYLES: Record<Action, { bg: string; text: string; label: string }> = {
-  // Filled solid -- this is the alarm. Pulls the eye first.
+  // Filled solid red -- the alarm. Pulls the eye first; this row is today's work.
   needs_followup: {
     bg: "#FF3B30",
     text: "#FFFFFF",
@@ -41,8 +34,8 @@ const STYLES: Record<Action, { bg: string; text: string; label: string }> = {
   },
 };
 
-export function ActionBadge({ score, size = "sm" }: Props) {
-  const s = STYLES[actionFor(score)];
+export function ActionBadge({ action, size = "sm" }: Props) {
+  const s = STYLES[action];
   const padding =
     size === "md" ? "px-3.5 py-1.5 text-sm" : "px-2.5 py-1 text-xs";
   return (

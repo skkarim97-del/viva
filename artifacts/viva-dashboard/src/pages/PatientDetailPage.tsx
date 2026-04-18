@@ -127,12 +127,29 @@ export function PatientDetailPage({ id }: { id: number }) {
                 Risk
               </div>
               <div className="flex flex-wrap gap-2 justify-end">
-                <ActionBadge score={risk.data.score} size="md" />
+                <ActionBadge action={risk.data.action} size="md" />
                 <RiskBadge band={risk.data.band} score={risk.data.score} size="md" />
               </div>
             </div>
           )}
         </div>
+        {/* Suggested action line: turns the diagnosis into a verb. Lives
+            inside the header card directly under the risk pills so the
+            doctor sees "what to do" before reading the rule list. */}
+        {risk.data?.suggestedAction && (
+          <div
+            className="mt-5 pt-5 border-t border-border flex items-start gap-3 text-sm font-semibold"
+            style={{ color: "#142240" }}
+          >
+            <span
+              className="text-[10px] uppercase tracking-wider font-semibold shrink-0 mt-0.5"
+              style={{ color: "#6B7280" }}
+            >
+              Suggested
+            </span>
+            <span>{risk.data.suggestedAction}</span>
+          </div>
+        )}
       </div>
 
       {/* Last check-in gap callout. Surfaces the strongest churn signal

@@ -9,7 +9,7 @@ import {
   doctorNotesTable,
 } from "@workspace/db";
 import { requireDoctor, type AuthedRequest } from "../middlewares/auth";
-import { computeRisk } from "../lib/risk";
+import { computeRisk, deriveAction, deriveSuggestedAction } from "../lib/risk";
 
 const router: Router = Router();
 
@@ -68,6 +68,10 @@ router.get("/", async (req, res: Response) => {
       lastCheckin,
       riskScore: risk.score,
       riskBand: risk.band,
+      // Workflow state ("Needs follow-up" / "Monitor" / "Stable").
+      // Computed server-side so the list and detail views agree and so
+      // the dashboard can sort the queue without re-deriving the rule.
+      action: deriveAction(risk.score, risk.rules, lastCheckin),
       // The single most-actionable signal for this patient. The list view
       // renders this as a short tagline under the name so a doctor can
       // triage without clicking in. Customised for silence so the row
@@ -186,7 +190,16 @@ router.get("/:id/risk", async (req, res: Response) => {
     .where(eq(patientCheckinsTable.patientUserId, patientId))
     .orderBy(desc(patientCheckinsTable.date))
     .limit(30);
-  res.json(computeRisk(cks));
+  const risk = computeRisk(cks);
+  const lastCheckin = cks[0]?.date ?? null;
+  // Send the workflow state and the suggested action alongside the raw
+  // risk so the detail page can render a directive without having to
+  // re-derive the rules client-side.
+  res.json({
+    ...risk,
+    action: deriveAction(risk.score, risk.rules, lastCheckin),
+    suggestedAction: deriveSuggestedAction(risk.rules, lastCheckin),
+  });
 });
 
 router.get("/:id/notes", async (req, res: Response) => {

@@ -13,6 +13,8 @@ export interface Me {
   role: Role;
 }
 
+export type Action = "needs_followup" | "monitor" | "stable";
+
 export interface PatientRow {
   id: number;
   name: string;
@@ -23,6 +25,8 @@ export interface PatientRow {
   lastCheckin: string | null;
   riskScore: number;
   riskBand: "low" | "medium" | "high";
+  // Workflow state computed server-side: needs_followup / monitor / stable.
+  action: Action;
   // Short, scannable headline of the patient's most-actionable signal,
   // e.g. "No check-in for 5d". Null when nothing is firing.
   topSignal: string | null;
@@ -59,6 +63,10 @@ export interface Risk {
   band: "low" | "medium" | "high";
   rules: FiredRule[];
   asOf: string;
+  action: Action;
+  // One-line directive derived from the highest-priority rule, e.g.
+  // "Follow up on missed check-ins". Null when no rules fired.
+  suggestedAction: string | null;
 }
 
 export interface DoctorNote {

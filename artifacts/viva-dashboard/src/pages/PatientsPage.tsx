@@ -1,23 +1,24 @@
 import { useMemo } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { api, type PatientRow } from "@/lib/api";
+import { api, type Action, type PatientRow } from "@/lib/api";
 import { RiskBadge } from "@/components/RiskBadge";
 import { ActionBadge } from "@/components/ActionBadge";
 
-// Highest-risk first so the care team triages without scanning. Within a
-// band we order by score, and break ties on the most recent check-in
-// (older silence first) to keep the worst signals at the top.
-const BAND_RANK: Record<PatientRow["riskBand"], number> = {
-  high: 0,
-  medium: 1,
-  low: 2,
+// The list reads as a triage queue: action first (Needs follow-up at the
+// top, Stable at the bottom), then highest risk first inside each group,
+// then the longest-silent patient breaks ties so the worst signals
+// always surface to the top.
+const ACTION_RANK: Record<Action, number> = {
+  needs_followup: 0,
+  monitor: 1,
+  stable: 2,
 };
 
-function sortByRisk(rows: PatientRow[]): PatientRow[] {
+function sortByAction(rows: PatientRow[]): PatientRow[] {
   return [...rows].sort((a, b) => {
-    const band = BAND_RANK[a.riskBand] - BAND_RANK[b.riskBand];
-    if (band !== 0) return band;
+    const action = ACTION_RANK[a.action] - ACTION_RANK[b.action];
+    if (action !== 0) return action;
     if (a.riskScore !== b.riskScore) return b.riskScore - a.riskScore;
     const aTs = a.lastCheckin ? Date.parse(a.lastCheckin) : 0;
     const bTs = b.lastCheckin ? Date.parse(b.lastCheckin) : 0;
@@ -44,7 +45,7 @@ function formatDate(d: string | null): string {
 
 export function PatientsPage() {
   const q = useQuery({ queryKey: ["patients"], queryFn: api.patients });
-  const sorted = useMemo(() => (q.data ? sortByRisk(q.data) : []), [q.data]);
+  const sorted = useMemo(() => (q.data ? sortByAction(q.data) : []), [q.data]);
 
   return (
     <div>
@@ -89,7 +90,7 @@ export function PatientsPage() {
             <Link
               key={p.id}
               href={`/patients/${p.id}`}
-              className="block bg-card rounded-[20px] p-5 hover:bg-secondary active:scale-[0.995] transition-all"
+              className="block bg-card rounded-[20px] p-5 hover:bg-secondary active:scale-[0.995] transition-all cursor-pointer no-underline"
             >
               {/* Two-row layout keeps name+risk on top and metadata below
                   so labels never collide on narrower viewports. */}
@@ -100,14 +101,26 @@ export function PatientsPage() {
                   </div>
                   {/* The most-actionable signal sits right under the name
                       so the row reads like a triage line: "who, why".
+                      Urgent rows (Needs follow-up) get bolder/louder type
+                      and a warning glyph so churn signals visually punch.
                       Falls back to the email when nothing's firing. */}
                   {p.topSignal ? (
-                    <div
-                      className="text-xs mt-1 font-semibold truncate"
-                      style={{ color: "#B8650A" }}
-                    >
-                      {p.topSignal}
-                    </div>
+                    p.action === "needs_followup" ? (
+                      <div
+                        className="text-sm mt-1.5 font-bold flex items-center gap-1.5 truncate"
+                        style={{ color: "#B5251D" }}
+                      >
+                        <span aria-hidden>⚠️</span>
+                        <span className="truncate">{p.topSignal}</span>
+                      </div>
+                    ) : (
+                      <div
+                        className="text-xs mt-1 font-semibold truncate"
+                        style={{ color: "#B8650A" }}
+                      >
+                        {p.topSignal}
+                      </div>
+                    )
                   ) : (
                     <div className="text-xs text-muted-foreground mt-1 font-medium truncate">
                       {p.email}
@@ -115,7 +128,7 @@ export function PatientsPage() {
                   )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2 shrink-0 justify-end">
-                  <ActionBadge score={p.riskScore} />
+                  <ActionBadge action={p.action} />
                   <RiskBadge band={p.riskBand} score={p.riskScore} />
                   <span className="text-accent text-xl font-semibold leading-none">
                     →
