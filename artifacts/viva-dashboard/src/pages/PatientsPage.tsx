@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { api, type PatientRow } from "@/lib/api";
 import { RiskBadge } from "@/components/RiskBadge";
+import { ActionBadge } from "@/components/ActionBadge";
 
 // Highest-risk first so the care team triages without scanning. Within a
 // band we order by score, and break ties on the most recent check-in
@@ -97,11 +98,24 @@ export function PatientsPage() {
                   <div className="font-semibold text-[17px] text-foreground truncate">
                     {p.name}
                   </div>
-                  <div className="text-xs text-muted-foreground mt-1 font-medium truncate">
-                    {p.email}
-                  </div>
+                  {/* The most-actionable signal sits right under the name
+                      so the row reads like a triage line: "who, why".
+                      Falls back to the email when nothing's firing. */}
+                  {p.topSignal ? (
+                    <div
+                      className="text-xs mt-1 font-semibold truncate"
+                      style={{ color: "#B8650A" }}
+                    >
+                      {p.topSignal}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-muted-foreground mt-1 font-medium truncate">
+                      {p.email}
+                    </div>
+                  )}
                 </div>
-                <div className="flex items-center gap-3 shrink-0">
+                <div className="flex flex-wrap items-center gap-2 shrink-0 justify-end">
+                  <ActionBadge score={p.riskScore} />
                   <RiskBadge band={p.riskBand} score={p.riskScore} />
                   <span className="text-accent text-xl font-semibold leading-none">
                     →

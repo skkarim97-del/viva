@@ -68,11 +68,32 @@ router.get("/", async (req, res: Response) => {
       lastCheckin,
       riskScore: risk.score,
       riskBand: risk.band,
+      // The single most-actionable signal for this patient. The list view
+      // renders this as a short tagline under the name so a doctor can
+      // triage without clicking in. Customised for silence so the row
+      // shows the actual gap rather than a generic phrase.
+      topSignal: deriveTopSignal(risk.rules, lastCheckin),
     };
   });
 
   res.json(result);
 });
+
+function deriveTopSignal(
+  rules: ReturnType<typeof computeRisk>["rules"],
+  lastCheckin: string | null,
+): string | null {
+  if (rules.length === 0) return null;
+  const top = rules[0]!; // computeRisk returns rules in firing order; silence is checked first
+  if (top.code === "silence_3d" && lastCheckin) {
+    const days = Math.floor(
+      (Date.now() - new Date(lastCheckin).getTime()) / (1000 * 60 * 60 * 24),
+    );
+    return `No check-in for ${days}d`;
+  }
+  if (top.code === "silence_3d") return "Never checked in";
+  return top.label;
+}
 
 // Helper: ensure a patient belongs to the calling doctor; throws 403 if not.
 async function loadOwnedPatient(
@@ -180,9 +201,19 @@ router.get("/:id/notes", async (req, res: Response) => {
     res.status(404).json({ error: "not_found" });
     return;
   }
+  // Join the author so the UI can render "Dr. Kim • 2m ago" without a
+  // separate users lookup per note.
   const notes = await db
-    .select()
+    .select({
+      id: doctorNotesTable.id,
+      patientUserId: doctorNotesTable.patientUserId,
+      doctorUserId: doctorNotesTable.doctorUserId,
+      doctorName: usersTable.name,
+      body: doctorNotesTable.body,
+      createdAt: doctorNotesTable.createdAt,
+    })
     .from(doctorNotesTable)
+    .innerJoin(usersTable, eq(usersTable.id, doctorNotesTable.doctorUserId))
     .where(eq(doctorNotesTable.patientUserId, patientId))
     .orderBy(desc(doctorNotesTable.createdAt));
   res.json(notes);
@@ -215,7 +246,14 @@ router.post("/:id/notes", async (req, res: Response) => {
       body: parsed.data.body.trim(),
     })
     .returning();
-  res.status(201).json(created);
+  // Look up the author's display name so the response matches the GET
+  // shape -- the UI can drop the row into its list without a refetch.
+  const [author] = await db
+    .select({ name: usersTable.name })
+    .from(usersTable)
+    .where(eq(usersTable.id, doctorId))
+    .limit(1);
+  res.status(201).json({ ...created!, doctorName: author?.name ?? "" });
 });
 
 router.delete("/:patientId/notes/:noteId", async (req, res: Response) => {

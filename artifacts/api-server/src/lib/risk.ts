@@ -24,25 +24,28 @@ export interface RiskResult {
   asOf: string; // ISO date
 }
 
+// Doctors scan, they don't read paragraphs. Labels are short, scannable
+// phrases that act like badges -- the full explanation lives in the rule
+// code if we ever need to expand it back out.
 const RULES = {
   silence3d: {
     code: "silence_3d",
-    label: "No check-in in the last 3 days",
+    label: "No check-in (3+ days)",
     weight: 30,
   },
   lowEnergy7d: {
     code: "low_energy_7d",
-    label: "Average energy low or tired across last 7 days",
+    label: "Low energy trend (7d)",
     weight: 20,
   },
   severeNausea3d: {
     code: "severe_nausea_3d",
-    label: "Severe nausea reported in last 3 days",
+    label: "Recent nausea spike",
     weight: 15,
   },
   moodDecline: {
     code: "mood_decline",
-    label: "Mood trending down (recent vs prior week)",
+    label: "Mood trending down",
     weight: 10,
   },
 } as const;

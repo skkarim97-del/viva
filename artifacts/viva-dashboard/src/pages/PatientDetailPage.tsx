@@ -3,6 +3,8 @@ import { Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type Checkin } from "@/lib/api";
 import { RiskBadge } from "@/components/RiskBadge";
+import { ActionBadge } from "@/components/ActionBadge";
+import { relativeTime, daysSince } from "@/lib/relativeTime";
 
 const ENERGY_LABEL: Record<Checkin["energy"], string> = {
   depleted: "Depleted",
@@ -124,11 +126,38 @@ export function PatientDetailPage({ id }: { id: number }) {
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
                 Risk
               </div>
-              <RiskBadge band={risk.data.band} score={risk.data.score} size="md" />
+              <div className="flex flex-wrap gap-2 justify-end">
+                <ActionBadge score={risk.data.score} size="md" />
+                <RiskBadge band={risk.data.band} score={risk.data.score} size="md" />
+              </div>
             </div>
           )}
         </div>
       </div>
+
+      {/* Last check-in gap callout. Surfaces the strongest churn signal
+          (silence) without making the doctor scan the timeline first. */}
+      {checkins.data && checkins.data.length > 0 && (() => {
+        const gap = daysSince(checkins.data[0]!.date);
+        if (gap < 2) return null;
+        const urgent = gap >= 5;
+        return (
+          <div
+            className="rounded-[20px] px-5 py-4 flex items-center gap-3 font-semibold text-sm"
+            style={{
+              backgroundColor: urgent
+                ? "rgba(255,59,48,0.10)"
+                : "rgba(255,149,0,0.10)",
+              color: urgent ? "#B5251D" : "#B8650A",
+            }}
+          >
+            <span aria-hidden>{urgent ? "⚠️" : "⏱"}</span>
+            <span>
+              Last check-in: {gap} day{gap === 1 ? "" : "s"} ago
+            </span>
+          </div>
+        );
+      })()}
 
       <div className="grid lg:grid-cols-2 gap-5">
         {/* Risk explanation */}
@@ -251,7 +280,13 @@ export function PatientDetailPage({ id }: { id: number }) {
                   {n.body}
                 </div>
                 <div className="text-xs text-muted-foreground mt-2.5 flex items-center justify-between font-medium">
-                  <span>{new Date(n.createdAt).toLocaleString()}</span>
+                  <span title={new Date(n.createdAt).toLocaleString()}>
+                    <span className="text-foreground font-semibold">
+                      {n.doctorName || "Care team"}
+                    </span>
+                    <span className="mx-1.5 opacity-50">·</span>
+                    {relativeTime(n.createdAt)}
+                  </span>
                   <button
                     type="button"
                     onClick={() => {

@@ -23,6 +23,9 @@ export interface PatientRow {
   lastCheckin: string | null;
   riskScore: number;
   riskBand: "low" | "medium" | "high";
+  // Short, scannable headline of the patient's most-actionable signal,
+  // e.g. "No check-in for 5d". Null when nothing is firing.
+  topSignal: string | null;
 }
 
 export interface PatientDetail {
@@ -62,6 +65,7 @@ export interface DoctorNote {
   id: number;
   patientUserId: number;
   doctorUserId: number;
+  doctorName: string;
   body: string;
   createdAt: string;
 }
