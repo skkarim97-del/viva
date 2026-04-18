@@ -23,3 +23,9 @@ id = "PjjQ6D6noN6WRPT-KOeei"
 uri = "file://artifacts/viva-dashboard-queue.png"
 type = "image"
 title = "VIVA Dashboard — Grouped triage queue"
+
+[[outputs]]
+id = "91crpb_OJRkumEF5ewzRR"
+uri = "file://artifacts/viva-dashboard-focus-mode.png"
+type = "image"
+title = "VIVA Dashboard — Focus mode + urgency tiers + outcome capture"

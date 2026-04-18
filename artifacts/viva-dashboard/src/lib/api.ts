@@ -80,6 +80,10 @@ export interface DoctorNote {
   doctorUserId: number;
   doctorName: string;
   body: string;
+  // Outcome flag captured by the doctor right after the note was saved.
+  // true = the action resolved the issue, false = needs more work,
+  // null = doctor skipped the question.
+  resolved: boolean | null;
   createdAt: string;
 }
 
@@ -127,8 +131,12 @@ export const api = {
   patientRisk: (id: number) => request<Risk>("GET", `/patients/${id}/risk`),
   patientNotes: (id: number) =>
     request<DoctorNote[]>("GET", `/patients/${id}/notes`),
-  addPatientNote: (id: number, body: string) =>
-    request<DoctorNote>("POST", `/patients/${id}/notes`, { body }),
+  addPatientNote: (
+    id: number,
+    body: string,
+    resolved: boolean | null = null,
+  ) =>
+    request<DoctorNote>("POST", `/patients/${id}/notes`, { body, resolved }),
   deletePatientNote: (patientId: number, noteId: number) =>
     request<{ ok: true }>(
       "DELETE",

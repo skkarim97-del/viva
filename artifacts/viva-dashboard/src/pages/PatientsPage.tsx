@@ -45,6 +45,37 @@ interface NoteTarget {
   name: string;
 }
 
+// Urgency scaling for silence-based signals. Within "Needs follow-up"
+// a 5-day gap should not look identical to a 12-day gap. We parse the
+// "No check-in for Xd" / "Never checked in" primary signal and pick a
+// color + optional URGENT prefix so the longest-silent patients punch
+// through their own group.
+type SilenceSeverity = "amber" | "red" | "deepRed";
+
+function silenceSeverity(daysSilent: number | null): SilenceSeverity | null {
+  if (daysSilent === null) return null;
+  if (daysSilent >= 8) return "deepRed";
+  if (daysSilent >= 5) return "red";
+  if (daysSilent >= 3) return "amber";
+  return null;
+}
+
+function parseSilenceDays(signal: string | undefined): number | null {
+  if (!signal) return null;
+  if (signal === "Never checked in") return 999;
+  const m = /^No check-in for (\d+)d$/.exec(signal);
+  return m ? Number(m[1]) : null;
+}
+
+const SEVERITY_STYLE: Record<
+  SilenceSeverity,
+  { color: string; bold: boolean; prefix: string | null; size: "sm" | "xs" }
+> = {
+  amber: { color: "#B8650A", bold: false, prefix: null, size: "xs" },
+  red: { color: "#B5251D", bold: true, prefix: null, size: "sm" },
+  deepRed: { color: "#7A1410", bold: true, prefix: "URGENT:", size: "sm" },
+};
+
 export function PatientsPage() {
   const q = useQuery({ queryKey: ["patients"], queryFn: api.patients });
   const grouped = useMemo(() => {
@@ -103,9 +134,10 @@ export function PatientsPage() {
         ACTION_ORDER.map((action) => {
           const rows = grouped[action];
           if (rows.length === 0) return null;
-          // Stable starts collapsed at scale -- doctors don't need to
-          // see the calm patients first thing in the morning.
-          const defaultOpen = action !== "stable";
+          // Focus mode: at scale, only Needs follow-up should be open by
+          // default. Monitor and Stable collapse so the queue is one
+          // tight column of "act on this now".
+          const defaultOpen = action === "needs_followup";
           return (
             <PatientGroup
               key={action}
@@ -141,14 +173,60 @@ interface CardProps {
 }
 
 function PatientCard({ p, onAddNote }: CardProps) {
-  // Three lines under the name (in priority order):
-  //   1. Signal line -- urgent red+bold for needs_followup, amber for
-  //      monitor; falls back to email when no rules fired.
-  //   2. Last action line -- "Last note: 2d ago" or "No recent action",
-  //      so doctors don't double-up follow-ups.
   const lastNote = p.lastNoteAt
     ? `Last note: ${relativeTime(p.lastNoteAt)}`
     : "No recent action";
+
+  // Pick the signal style. If the primary signal is silence-based, we
+  // override the default action color with a 3-tier urgency scale so a
+  // 12-day gap visually outranks a 5-day gap inside the same group.
+  const daysSilent = parseSilenceDays(p.signals[0]);
+  const severity = silenceSeverity(daysSilent);
+  const joined = p.signals.join(" · ");
+  let signalNode: React.ReactNode = null;
+  if (p.signals.length > 0) {
+    if (severity) {
+      const s = SEVERITY_STYLE[severity];
+      signalNode = (
+        <div
+          className={`mt-1.5 flex items-center gap-1.5 truncate ${
+            s.size === "sm" ? "text-sm" : "text-xs"
+          } ${s.bold ? "font-bold" : "font-semibold"}`}
+          style={{ color: s.color }}
+        >
+          {s.bold && <span aria-hidden>⚠️</span>}
+          {s.prefix && (
+            <span
+              className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold shrink-0"
+              style={{ backgroundColor: s.color, color: "#FFFFFF" }}
+            >
+              {s.prefix}
+            </span>
+          )}
+          <span className="truncate">{joined}</span>
+        </div>
+      );
+    } else if (p.action === "needs_followup") {
+      signalNode = (
+        <div
+          className="text-sm mt-1.5 font-bold flex items-center gap-1.5 truncate"
+          style={{ color: "#B5251D" }}
+        >
+          <span aria-hidden>⚠️</span>
+          <span className="truncate">{joined}</span>
+        </div>
+      );
+    } else {
+      signalNode = (
+        <div
+          className="text-xs mt-1 font-semibold truncate"
+          style={{ color: "#B8650A" }}
+        >
+          {joined}
+        </div>
+      );
+    }
+  }
 
   return (
     <Link
@@ -160,24 +238,7 @@ function PatientCard({ p, onAddNote }: CardProps) {
           <div className="font-semibold text-[17px] text-foreground truncate">
             {p.name}
           </div>
-          {p.signals.length > 0 ? (
-            p.action === "needs_followup" ? (
-              <div
-                className="text-sm mt-1.5 font-bold flex items-center gap-1.5 truncate"
-                style={{ color: "#B5251D" }}
-              >
-                <span aria-hidden>⚠️</span>
-                <span className="truncate">{p.signals.join(" · ")}</span>
-              </div>
-            ) : (
-              <div
-                className="text-xs mt-1 font-semibold truncate"
-                style={{ color: "#B8650A" }}
-              >
-                {p.signals.join(" · ")}
-              </div>
-            )
-          ) : (
+          {signalNode ?? (
             <div className="text-xs text-muted-foreground mt-1 font-medium truncate">
               {p.email}
             </div>

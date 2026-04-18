@@ -1,4 +1,11 @@
-import { pgTable, serial, integer, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  serial,
+  integer,
+  text,
+  timestamp,
+  boolean,
+} from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { usersTable } from "./users";
@@ -12,6 +19,11 @@ export const doctorNotesTable = pgTable("doctor_notes", {
     .notNull()
     .references(() => usersTable.id, { onDelete: "restrict" }),
   body: text("body").notNull(),
+  // Doctor's self-reported outcome of the note. true = action resolved
+  // the issue, false = needs more work, null = not answered yet. Kept
+  // nullable so historical notes don't get a misleading default; this
+  // becomes the seed of a worked-vs-didn't-work training signal.
+  resolved: boolean("resolved"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

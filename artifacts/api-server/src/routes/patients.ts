@@ -235,6 +235,7 @@ router.get("/:id/notes", async (req, res: Response) => {
       doctorUserId: doctorNotesTable.doctorUserId,
       doctorName: usersTable.name,
       body: doctorNotesTable.body,
+      resolved: doctorNotesTable.resolved,
       createdAt: doctorNotesTable.createdAt,
     })
     .from(doctorNotesTable)
@@ -244,7 +245,12 @@ router.get("/:id/notes", async (req, res: Response) => {
   res.json(notes);
 });
 
-const noteSchema = z.object({ body: z.string().min(1).max(5000) });
+const noteSchema = z.object({
+  body: z.string().min(1).max(5000),
+  // Optional outcome flag captured right after saving the note --
+  // becomes the seed of a worked-vs-didn't-work training signal.
+  resolved: z.boolean().nullable().optional(),
+});
 
 router.post("/:id/notes", async (req, res: Response) => {
   const doctorId = (req as AuthedRequest).auth.userId;
@@ -269,6 +275,7 @@ router.post("/:id/notes", async (req, res: Response) => {
       patientUserId: patientId,
       doctorUserId: doctorId,
       body: parsed.data.body.trim(),
+      resolved: parsed.data.resolved ?? null,
     })
     .returning();
   // Look up the author's display name so the response matches the GET

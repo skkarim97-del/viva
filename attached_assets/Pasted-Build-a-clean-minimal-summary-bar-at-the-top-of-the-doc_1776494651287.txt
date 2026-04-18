@@ -1,0 +1,61 @@
+Build a clean, minimal summary bar at the top of the doctor web dashboard, above the “Your patients” section.
+
+Goal
+
+Add a lightweight top summary that gives doctors an instant snapshot of their panel without cluttering the page or distracting from the patient queue. This should feel premium, modern, and very easy to scan.
+
+Design direction
+
+Keep it:
+
+clean
+minimal
+horizontally aligned
+visually consistent with the current Viva AI dashboard
+subtle, not loud
+premium and operational, not analytical-heavy
+
+Do not add charts, graphs, spark lines, or dense tables.
+Do not make it look like a corporate BI dashboard.
+This should feel like a simple “panel health” header.
+
+What to add
+
+Create a top summary row with 4 small cards or pill-style stat blocks.
+
+Use these 4 metrics:
+
+Needs follow-up
+count of patients currently in the “Needs follow-up” bucket
+No check-in (3+ days)
+count of patients whose last check-in was 3 or more days ago
+Actions taken today
+count of doctor notes created today
+Total patients
+total number of patients in the doctor’s panel
+UX requirements
+Place this summary directly under the page title area and above the grouped patient queue
+It should be visible immediately when the doctor lands on the dashboard
+Keep spacing generous and typography clean
+Prioritize readability and elegance over data density
+If possible, make each stat block subtly clickable:
+“Needs follow-up” scrolls to that section
+“No check-in (3+ days)” filters or scrolls to the relevant patients
+“Actions taken today” can remain static if no action exists yet
+“Total patients” can remain static
+Visual guidance
+Use the existing Viva AI palette and styling language
+White or very light cards with soft borders or subtle shadows
+Rounded corners
+Large number, smaller label beneath or above it
+Keep labels very short
+Use subtle accent colors only where helpful:
+red/orange tint for “Needs follow-up”
+amber for “No check-in”
+neutral/dark for “Actions taken today”
+blue/neutral for “Total patients”
+Important constraint
+
+This should not overpower the queue.
+The patient queue remains the main event.
+The summary bar should feel like a calm, high-level snapshot, not the center of attention.
