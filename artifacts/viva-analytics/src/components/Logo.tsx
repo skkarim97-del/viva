@@ -15,7 +15,7 @@ export function Logo({ size = "md", variant = "color" }: Props) {
   const width = SIZES[size];
   const height = Math.round(width * (1068 / 2318));
   const file = variant === "white" ? "viva-logo-nobg.png" : "viva-logo.png";
-  const src = `${import.meta.env.BASE_URL}${file}?v=2026041901`;
+  const src = `${import.meta.env.BASE_URL}${file}?v=2026041902`;
   return (
     <img
       src={src}
