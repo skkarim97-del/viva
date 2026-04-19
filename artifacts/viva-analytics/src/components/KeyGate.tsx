@@ -22,7 +22,10 @@ export function KeyGate({
             wordmark stacked over the product label. No separators. */}
         <div className="max-w-md mx-auto flex flex-col items-start">
           <Logo size="sm" />
-          <span className="font-display text-[15px] font-bold text-foreground tracking-tight -mt-0.5 ml-px">
+          {/* See Shell.tsx for the 13px offset rationale: it cancels
+              out the transparent left padding inside the logo PNG so
+              the "A" lines up with the visible "v" of "viva.". */}
+          <span className="font-display text-[15px] font-bold text-foreground tracking-tight -mt-0.5 ml-[13px]">
             Analytics
           </span>
         </div>

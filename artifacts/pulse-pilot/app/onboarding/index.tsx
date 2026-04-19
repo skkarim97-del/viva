@@ -357,6 +357,10 @@ export default function OnboardingScreen() {
                   the entry / sign-in surface. */}
               <View style={styles.welcomeBrand}>
                 <Logo size="large" />
+                {/* Left-align with the visible "v" of "viva." rather
+                    than the PNG's bounding box. The asset has 13.3%
+                    transparent padding on the left; at size="large"
+                    (200px) that works out to ~27px. */}
                 <Text style={[styles.welcomeProduct, { color: c.foreground }]}>Care</Text>
               </View>
               <Text style={[styles.welcomeTagline, { color: c.foreground }]}>Daily support for your GLP-1 journey</Text>
@@ -954,8 +958,8 @@ const styles = StyleSheet.create({
   scrollContent: { flex: 1 },
   contentInner: { paddingHorizontal: 24, paddingBottom: 24 },
   welcomeSection: { alignItems: "center", justifyContent: "center", flex: 1, gap: 10, paddingTop: 40 },
-  welcomeBrand: { flexDirection: "column", alignItems: "center", gap: 0 },
-  welcomeProduct: { fontSize: 22, fontFamily: "Montserrat_700Bold", letterSpacing: -0.4, marginTop: -2 },
+  welcomeBrand: { flexDirection: "column", alignItems: "flex-start", gap: 0 },
+  welcomeProduct: { fontSize: 22, fontFamily: "Montserrat_700Bold", letterSpacing: -0.4, marginTop: -2, marginLeft: 27 },
   heroIcon: { width: 88, height: 88, borderRadius: 26, alignItems: "center", justifyContent: "center", marginBottom: 4 },
   welcomeTitle: { fontSize: 24, fontFamily: "Montserrat_500Medium", letterSpacing: 8 },
   welcomeTagline: { fontSize: 30, fontFamily: "Montserrat_700Bold", textAlign: "center", lineHeight: 38, letterSpacing: -0.5, marginTop: 6 },

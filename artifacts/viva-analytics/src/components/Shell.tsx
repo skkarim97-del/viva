@@ -99,7 +99,11 @@ export function Shell({
             as one platform. */}
         <div className="flex flex-col items-start mb-1">
           <Logo size="sm" variant="white" />
-          <span className="font-display text-[15px] font-bold text-white tracking-tight -mt-0.5 ml-px">
+          {/* Left offset = transparent padding inside the logo PNG
+              (309 of 2318 px = ~13.3%). At size="sm" (96px) that's
+              ~13px, which lines the "A" up exactly with the visible
+              "v" of "viva." rather than the image bounding box. */}
+          <span className="font-display text-[15px] font-bold text-white tracking-tight -mt-0.5 ml-[13px]">
             Analytics
           </span>
         </div>

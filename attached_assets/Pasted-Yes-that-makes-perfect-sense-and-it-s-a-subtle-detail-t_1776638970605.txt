@@ -1,0 +1,138 @@
+Yes, that makes perfect sense — and it’s a subtle detail that actually matters a lot.
+
+Right now you’re close, but not fully dialed. The alignment needs to be pixel-precise or it starts to feel slightly off, even if people can’t articulate why.
+
+What you want (exactly)
+
+The left edge of “Clinic / Analytics” should align with the left edge of “viva.” text, not the container, not the icon, not visually centered.
+
+So visually:
+
+viva.
+Clinic
+
+Both lines should share the same starting x-position.
+
+⸻
+
+What I’m seeing in your screenshots
+
+* “viva.” is aligned correctly
+* “Clinic / Analytics” is slightly indented or offset
+* It looks like it’s aligned to a container or padding, not the text itself
+
+That creates a tiny but noticeable imbalance.
+
+⸻
+
+How to fix it (this is the key)
+
+Rule:
+
+Treat both lines as one text block, not two separate elements with independent padding
+
+⸻
+
+Implementation guidance (Replit agent)
+
+Use this:
+
+⸻
+
+Fix header alignment across all Viva surfaces
+
+Goal
+
+Ensure the product label (Care / Clinic / Analytics) is perfectly left-aligned with the “viva.” logo text.
+
+Requirements
+
+* The left edge of:
+    * Clinic
+    * Analytics
+    * Care
+    must align exactly with the left edge of viva.
+
+⸻
+
+Layout fix
+
+* Wrap both elements in a single vertical container
+* Do NOT apply separate left padding to the second line
+* Do NOT center or offset the second line
+* Avoid margin-left adjustments unless absolutely necessary
+
+Correct structure:
+
+<div class="flex flex-col items-start">
+  <Logo />
+  <span>Clinic</span>
+</div>
+
+⸻
+
+Common mistakes to avoid
+
+Do NOT:
+
+* indent the second line with margin or padding
+* align based on container edges instead of text edges
+* use items-center or justify-center
+* visually “eyeball” it — it must be exact
+
+⸻
+
+Typography consistency
+
+* same font family (Montserrat)
+* second line bold
+* same color as logo
+* tight vertical spacing (small gap, not loose)
+
+⸻
+
+Verification
+
+After fixing, confirm:
+
+1. zoom in and check both lines share identical left alignment
+2. compare across:
+    * Viva Clinic
+    * Viva Analytics
+    * Viva Care (where applicable)
+3. ensure no regressions in header spacing or layout
+
+⸻
+
+Why this matters (quick reality check)
+
+This is one of those:
+
+* small detail
+* big perceived polish
+
+When aligned properly:
+
+* feels intentional
+* feels premium
+* feels like a real product
+
+When slightly off:
+
+* feels “early” even if everything else is strong
+
+⸻
+
+Bottom line
+
+You’re 90% there.
+
+Fix this alignment and the header will go from:
+
+good
+
+to:
+
+clean, tight, and legit
+
+This is exactly the kind of detail that separates solid from polished.
