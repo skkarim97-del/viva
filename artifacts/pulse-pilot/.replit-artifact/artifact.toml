@@ -1,6 +1,6 @@
 kind = "mobile"
 previewPath = "/"
-title = "VIVA - Health & Wellness App"
+title = "Viva Care"
 version = "1.0.0"
 id = "artifacts/pulse-pilot"
 router = "expo-domain"

@@ -1,6 +1,6 @@
 kind = "web"
 previewPath = "/viva-dashboard/"
-title = "VIVA Doctor Dashboard"
+title = "Viva Clinic"
 version = "1.0.0"
 id = "artifacts/viva-dashboard"
 router = "path"
