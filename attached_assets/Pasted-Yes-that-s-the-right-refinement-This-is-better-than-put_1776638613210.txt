@@ -1,0 +1,136 @@
+Yes, that’s the right refinement.
+
+This is better than putting the label beside the logo. Stacking it underneath makes it feel cleaner, more premium, and more intentional.
+
+Recommended header pattern
+
+For the web products:
+
+Line 1: viva.
+Line 2: Clinic / Analytics
+
+Styling:
+
+* both in the same dark blue as the logo
+* second line in bold Montserrat
+* left-aligned with the logo
+* tight vertical spacing so it reads as one unit
+* no extra divider, pill, or badge
+
+So visually it should feel like:
+
+viva.
+Clinic
+
+and
+
+viva.
+Analytics
+
+For Viva Care
+
+Your instinct is right:
+
+* inside the mobile app itself, keep it just viva.
+* on onboarding / sign-in / landing surfaces, you can use:
+    * viva.
+    * Care
+
+That keeps the app cleaner while still making the product architecture clear where it matters.
+
+Also yes: remove “Viva AI” from internal dashboards
+
+Change that to just Viva.
+
+You want:
+
+* Viva = master brand
+* Care / Clinic / Analytics = product surface
+
+Not:
+
+* Viva AI
+* Viva Clinic
+* Viva Analytics as totally separate logo marks
+
+Instruction for Replit agent
+
+Use this exactly:
+
+⸻
+
+Update branding headers across the Viva product surfaces.
+
+Goal
+
+Use a consistent stacked header treatment across Viva Clinic and Viva Analytics, and simplify internal branding from “Viva AI” to just “Viva”.
+
+Header treatment
+
+For Viva Clinic and Viva Analytics, update the top-left header branding to:
+
+* first line: viva.
+* second line: Clinic or Analytics
+
+Styling requirements
+
+* place the product label underneath the logo, not beside it
+* use the same dark blue color as the Viva logo
+* use bold Montserrat for the product label
+* keep the treatment clean, minimal, and premium
+* align the second line cleanly with the logo above it
+* keep vertical spacing tight so it reads as one branding unit
+
+Product-specific behavior
+
+Viva Clinic
+
+Show:
+
+* viva.
+* Clinic
+
+Viva Analytics
+
+Show:
+
+* viva.
+* Analytics
+
+Viva Care
+
+* inside the actual mobile app, keep branding as just viva.
+* on onboarding / sign-in / entry surfaces, use the stacked format:
+    * viva.
+    * Care
+* do not clutter the in-app mobile UI if the extra label hurts simplicity
+
+Branding cleanup
+
+* replace any internal dashboard references to “Viva AI” with just “Viva”
+* keep one master brand across all surfaces
+
+Design consistency
+
+* reuse the same design tokens, spacing, typography, and color palette already used across Viva Care, Viva Clinic, and Viva Analytics
+* do not create separate logos
+* do not add pills, dividers, boxes, or badges around the label
+
+Constraints
+
+* do not touch mobile / iOS / EAS / native config
+* do not redesign unrelated layout
+* keep this a contained branding / header update
+
+Deliverables
+
+After updating, tell me:
+
+1. which files changed
+2. where “Viva AI” was replaced with “Viva”
+3. which surfaces now use the stacked header
+4. whether anything in mobile build / web routing / auth was affected
+
+⸻
+
+My take: this is a cleaner system than side-by-side branding. It’ll make the products feel more polished immediately.

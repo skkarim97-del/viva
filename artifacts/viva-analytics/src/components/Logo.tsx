@@ -19,7 +19,7 @@ export function Logo({ size = "md", variant = "color" }: Props) {
   return (
     <img
       src={src}
-      alt="VIVA AI"
+      alt="Viva"
       width={width}
       height={height}
       style={{ width, height }}

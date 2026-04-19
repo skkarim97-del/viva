@@ -8,9 +8,11 @@ const SIZES: Record<NonNullable<Props["size"]>, number> = {
   lg: 200,
 };
 
-// VIVA AI wordmark (navy pill with white "VIVA" + accent "AI"). Same source
-// PNG used by the mobile app's <Logo /> and <VivaWordmark /> components so
-// brand presentation stays exact across surfaces.
+// Viva wordmark (the "viva." brandmark). Same source PNG used by the
+// mobile app's <Logo /> and <VivaWordmark /> components so brand
+// presentation stays exact across surfaces. "Viva" is the master
+// brand; product surfaces (Clinic, Analytics, Care) appear as a
+// separate label stacked beneath this mark.
 export function Logo({ size = "md" }: Props) {
   const width = SIZES[size];
   // Source asset is 2318x1068 -> preserve that aspect ratio.
@@ -22,7 +24,7 @@ export function Logo({ size = "md" }: Props) {
   return (
     <img
       src={src}
-      alt="VIVA AI"
+      alt="Viva"
       width={width}
       height={height}
       style={{ width, height }}

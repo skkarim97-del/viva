@@ -11,17 +11,17 @@ export function Shell({ children }: { children: ReactNode }) {
     <div className="min-h-screen flex flex-col bg-background">
       <header className="bg-background">
         <div className="max-w-6xl mx-auto px-6 pt-8 pb-5 flex items-center justify-between">
-          {/* Brand lockup: viva. wordmark + product label, no
-              separators or badges. Same pattern used by Viva Care
-              (mobile) and Viva Analytics so the three surfaces read
-              as one platform. */}
+          {/* Brand lockup: viva. wordmark stacked over the product
+              label. No separators, pills, or badges. Same pattern
+              used by Viva Care and Viva Analytics so the three
+              surfaces read as one platform. */}
           <Link
             href="/"
             aria-label="viva clinic home"
-            className="flex items-center gap-2"
+            className="flex flex-col items-start"
           >
             <Logo size="sm" />
-            <span className="font-display text-[16px] font-medium text-foreground/70 tracking-tight">
+            <span className="font-display text-[15px] font-bold text-foreground tracking-tight -mt-0.5 ml-px">
               Clinic
             </span>
           </Link>

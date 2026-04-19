@@ -93,16 +93,17 @@ export function Shell({
   const sidebar = (
     <aside className="bg-[var(--color-sidebar)] text-[var(--color-sidebar-foreground)] flex flex-col h-full">
       <div className="px-5 pt-6 pb-5">
-        {/* Brand lockup: viva. wordmark + product label, no separators
-            or badges. Matches the pattern used by viva-clinic and
-            viva-care so the three surfaces read as one platform. */}
-        <div className="flex items-center gap-2 mb-1">
+        {/* Brand lockup: viva. wordmark stacked over the product
+            label. No badges, pills, or separators. Same pattern used
+            by Viva Clinic and Viva Care so the three surfaces read
+            as one platform. */}
+        <div className="flex flex-col items-start mb-1">
           <Logo size="sm" variant="white" />
-          <span className="font-display text-[16px] font-medium text-white/80 tracking-tight">
+          <span className="font-display text-[15px] font-bold text-white tracking-tight -mt-0.5 ml-px">
             Analytics
           </span>
         </div>
-        <div className="text-[11px] opacity-60 mt-1.5 leading-snug">
+        <div className="text-[11px] opacity-60 mt-2.5 leading-snug">
           Internal operating dashboard
         </div>
       </div>

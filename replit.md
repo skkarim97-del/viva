@@ -33,7 +33,7 @@ The system is a pnpm workspace monorepo using Node.js 24 and TypeScript 5.9. The
     -   **Spacing**: Generous whitespace, 24px horizontal padding, 28px section gaps.
     -   **Interactions**: Press scale (0.97-0.98) and opacity (0.8) on interactive elements. Subtle scale (1.02x selected, 0.96x pressed) for selection animations.
     -   **Dividers**: HairlineWidth only, using background color.
--   **Brand**: "VIVA AI" logo (dark navy pill with white "VIVA" + blue "AI" text) from `assets/viva-logo-cropped.png`.
+-   **Brand**: "Viva" wordmark (the lowercase "viva." mark) from `assets/viva-logo-cropped.png`. "Viva" is the master brand; product surfaces are labelled separately as Care (mobile), Clinic (doctors), and Analytics (internal). Do not refer to the master brand as "Viva AI".
 
 ### GLP-1 Data Model
 

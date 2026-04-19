@@ -349,12 +349,15 @@ export default function OnboardingScreen() {
         >
           {step === "welcome" && (
             <View style={styles.welcomeSection}>
-              {/* Brand lockup: viva. wordmark + product label. Same
-                  pattern used by Viva Clinic and Viva Analytics so the
-                  three surfaces read as one platform. */}
+              {/* Brand lockup: viva. wordmark stacked over the
+                  product label. Same pattern used by Viva Clinic and
+                  Viva Analytics so the three surfaces read as one
+                  platform. Inside the actual tab UI we keep just the
+                  wordmark — the "Care" label only appears here on
+                  the entry / sign-in surface. */}
               <View style={styles.welcomeBrand}>
                 <Logo size="large" />
-                <Text style={[styles.welcomeProduct, { color: c.foreground + "B8" }]}>Care</Text>
+                <Text style={[styles.welcomeProduct, { color: c.foreground }]}>Care</Text>
               </View>
               <Text style={[styles.welcomeTagline, { color: c.foreground }]}>Daily support for your GLP-1 journey</Text>
               <Text style={[styles.welcomeSub, { color: c.mutedForeground + "CC" }]}>
@@ -951,8 +954,8 @@ const styles = StyleSheet.create({
   scrollContent: { flex: 1 },
   contentInner: { paddingHorizontal: 24, paddingBottom: 24 },
   welcomeSection: { alignItems: "center", justifyContent: "center", flex: 1, gap: 10, paddingTop: 40 },
-  welcomeBrand: { flexDirection: "row", alignItems: "center", gap: 10 },
-  welcomeProduct: { fontSize: 22, fontFamily: "Montserrat_500Medium", letterSpacing: -0.4 },
+  welcomeBrand: { flexDirection: "column", alignItems: "center", gap: 0 },
+  welcomeProduct: { fontSize: 22, fontFamily: "Montserrat_700Bold", letterSpacing: -0.4, marginTop: -2 },
   heroIcon: { width: 88, height: 88, borderRadius: 26, alignItems: "center", justifyContent: "center", marginBottom: 4 },
   welcomeTitle: { fontSize: 24, fontFamily: "Montserrat_500Medium", letterSpacing: 8 },
   welcomeTagline: { fontSize: 30, fontFamily: "Montserrat_700Bold", textAlign: "center", lineHeight: 38, letterSpacing: -0.5, marginTop: 6 },

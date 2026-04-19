@@ -130,7 +130,7 @@ ${HEAD_LINKS}
 <body>
   <main class="shell">
     <div class="brand-row">
-      <img class="brand-logo" src="${VIVA_LOGO_URL}" alt="VIVA AI" width="132" height="44" draggable="false" />
+      <img class="brand-logo" src="${VIVA_LOGO_URL}" alt="Viva" width="132" height="44" draggable="false" />
       <p class="brand-caption">Patient activation</p>
     </div>
     <section class="card">
@@ -175,7 +175,7 @@ ${HEAD_LINKS}
 <body>
   <main class="shell">
     <div class="brand-row">
-      <img class="brand-logo" src="${VIVA_LOGO_URL}" alt="VIVA AI" width="132" height="44" draggable="false" />
+      <img class="brand-logo" src="${VIVA_LOGO_URL}" alt="Viva" width="132" height="44" draggable="false" />
       <p class="brand-caption">Patient activation</p>
     </div>
 

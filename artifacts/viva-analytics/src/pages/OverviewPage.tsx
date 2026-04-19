@@ -23,7 +23,7 @@ export function OverviewPage({ data }: { data: AnalyticsSummary }) {
   return (
     <>
       <PageHeader
-        title="Today at Viva Ai"
+        title="Today at Viva"
         subtitle="The headline numbers, refreshed every minute. Pick a section in the sidebar to dig deeper."
         right={
           sanity ? (
