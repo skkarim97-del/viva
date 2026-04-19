@@ -10,6 +10,39 @@ export type { CoachContext } from "./coachEngine";
 export { generateDailyPlan, generateWeeklyPlan, stateTagFromReadiness } from "./planEngine";
 export type { MedContext } from "./planEngine";
 
+export { selectDailyTreatmentState } from "./dailyState";
+export type {
+  DailyTreatmentState,
+  ClaimsPolicy,
+  DataSufficiencyMarkers,
+  TreatmentStage,
+  DoseDayPosition,
+  PrimaryFocus,
+  TreatmentDailyState,
+  RiskBand,
+  AdherenceSignal,
+  EscalationNeed,
+  MovementReadiness,
+  SelectInputs,
+} from "./dailyState";
+
+export {
+  selectStatusChip,
+  selectHero,
+  selectFocusItems,
+  selectInterventions,
+  selectInsightSummary,
+  selectInsufficientDataNotice,
+  selectClaimsPolicy,
+  selectActiveInterventionForAck,
+} from "./selectors";
+export type {
+  StatusChip,
+  HeroBlock,
+  InsightSummary,
+  InsufficientDataNotice,
+} from "./selectors";
+
 export { generateCompletionFeedback } from "./feedbackEngine";
 
 export { calculateDropoutRisk } from "@/data/riskEngine";

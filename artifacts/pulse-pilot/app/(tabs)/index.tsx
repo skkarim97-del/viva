@@ -24,10 +24,20 @@ import { SymptomTipCard } from "@/components/SymptomTipCard";
 import WeightLogModal from "@/components/WeightLogModal";
 import { sessionApi } from "@/lib/api/sessionClient";
 import { useApp } from "@/context/AppContext";
-import { deriveSymptomTips, planActivityFromState, type SymptomKind } from "@/lib/symptomTips";
+import { type SymptomKind } from "@/lib/symptomTips";
 import { generateCoachInsight } from "@/data/insights";
 import { formatDoseDisplay, getDoseOptions, type MedicationBrand } from "@/data/medicationData";
-import { generateGreeting, generateInputSummary, buildCoachContext } from "@/lib/engine";
+import {
+  generateGreeting,
+  buildCoachContext,
+  selectStatusChip,
+  selectHero,
+  selectInsightSummary,
+  selectInterventions,
+  selectInsufficientDataNotice,
+  selectActiveInterventionForAck,
+  type StatusChip,
+} from "@/lib/engine";
 import { sendCoachMessage, CoachRequestError, describeCoachError } from "@/lib/api/coachClient";
 import { summarizeCoachThread } from "@/lib/coachSummary";
 import { useColors } from "@/hooks/useColors";
@@ -100,21 +110,23 @@ const DIGESTION_OPTIONS: { key: NonNullable<DigestionStatus>; label: string; tin
   { key: "diarrhea", label: "Diarrhea", tint: TINT_RED },
 ];
 
-// statusLabel is now free-form copy produced by the context-aware selector
-// in planEngine. Color must derive from the structural dailyState instead,
-// otherwise any new phrase would miss the map and crash the Today tab.
-const STATUS_COLOR_FOR_STATE: Record<DailyState, (c: ReturnType<typeof useColors>) => string> = {
-  push: (c) => c.success,
-  build: (c) => c.accent,
-  maintain: (c) => c.warning,
-  recover: (c) => c.destructive,
+// Status chip color derives from the selector's semantic tone, not
+// from raw plan.dailyState. This lets new treatment-aware bands
+// (escalate, support) and the insufficient-data path render with
+// the right tone without each consumer maintaining its own map.
+const TONE_COLOR: Record<StatusChip["tone"], (c: ReturnType<typeof useColors>) => string> = {
+  success: (c) => c.success,
+  accent: (c) => c.accent,
+  warning: (c) => c.warning,
+  destructive: (c) => c.destructive,
+  muted: (c) => c.mutedForeground,
 };
 
 export default function DashboardScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const {
-    todayMetrics, dailyPlan, insights, feeling, setFeeling,
+    todayMetrics, dailyPlan, dailyState, insights, feeling, setFeeling,
     energy, setEnergy, stress, setStress,
     hydration, setHydration,
     trainingIntent, setTrainingIntent,
@@ -232,59 +244,49 @@ export default function DashboardScreen() {
     });
   }, [todayMetrics, metrics, feeling, energy, stress, hydration, trainingIntent, completionHistory, hasHealthData]);
 
-  const inputSummaryResult = React.useMemo(() => generateInputSummary({
-    energy: glp1Energy, appetite, nausea, digestion,
-  }), [glp1Energy, appetite, nausea, digestion]);
-  const inputSummary = inputSummaryResult.text || null;
-
-  // Today's active symptom tips. Filtered against dismissedTips with
-  // re-trigger logic so a card the patient already acked can surface
-  // again when (a) the symptom worsens or (b) enough time has passed
-  // and the symptom is still being logged. See dismissedTips comment.
-  const symptomTips = React.useMemo(
-    () => {
-      const now = Date.now();
-      return deriveSymptomTips({
-        nausea,
-        appetite,
-        digestion,
-        hydration,
-        bowelMovementToday,
-        // Plan guardrail: symptom CTAs (currently constipation)
-        // step their action down to stay coherent with today's plan
-        // mode so we never recommend a 10-min walk on a rest day.
-        planActivity: planActivityFromState(dailyPlan.dailyState),
-      }).filter((t) => {
-        const ack = dismissedTips.get(t.symptom);
-        if (!ack) return true;
-        // Worsened since ack -> resurface immediately as a fresh
-        // (now-more-severe) tip.
-        if (t.severity > ack.severity) return true;
-        // Recurrence after a meaningful gap -> resurface. Same-state
-        // pings inside the window are suppressed to avoid spam.
-        if (now - ack.ackedAt >= SUPPRESSION_RETRIGGER_MS) return true;
-        return false;
-      });
-    },
-    [nausea, appetite, digestion, hydration, bowelMovementToday, dismissedTips, dailyPlan.dailyState],
+  // All Today recommendation surfaces now read from the central
+  // DailyTreatmentState through selectors. The dailyState object is
+  // computed in AppContext and includes raw symptom interventions for
+  // today; the dismissed-tips suppression filter is applied here
+  // because that state is component-local (resets on app restart by
+  // design).
+  const insightSummary = React.useMemo(
+    () => (dailyState ? selectInsightSummary(dailyState) : null),
+    [dailyState],
   );
+  const inputSummary = insightSummary?.text || null;
+
+  const insufficientNotice = React.useMemo(
+    () => (dailyState ? selectInsufficientDataNotice(dailyState) : null),
+    [dailyState],
+  );
+
+  const symptomTips = React.useMemo(() => {
+    if (!dailyState) return [];
+    const raw = selectInterventions(dailyState);
+    if (dismissedTips.size === 0) return raw;
+    const now = Date.now();
+    return raw.filter((t) => {
+      const ack = dismissedTips.get(t.symptom);
+      if (!ack) return true;
+      // Worsened since ack -> resurface immediately as a fresh
+      // (now-more-severe) tip.
+      if (t.severity > ack.severity) return true;
+      // Recurrence after a meaningful gap -> resurface. Same-state
+      // pings inside the window are suppressed to avoid spam.
+      if (now - ack.ackedAt >= SUPPRESSION_RETRIGGER_MS) return true;
+      return false;
+    });
+  }, [dailyState, dismissedTips]);
 
   const onAckSymptomTip = React.useCallback(
     (symptom: SymptomKind) => {
       // Snapshot the current severity at ack time so the re-trigger
-      // logic above can compare against it. We re-derive here (rather
-      // than passing severity in from the card) so the snapshot
-      // always reflects "what was true the moment the patient tapped
-      // the CTA", even if the inputs change before the next render.
-      const currentTip = deriveSymptomTips({
-        nausea,
-        appetite,
-        digestion,
-        hydration,
-        bowelMovementToday,
-        planActivity: planActivityFromState(dailyPlan.dailyState),
-      }).find((t) => t.symptom === symptom);
-      const severity: 1 | 2 | 3 = currentTip?.severity ?? 1;
+      // logic above can compare against it. The selector reflects
+      // "what was true the moment the patient tapped the CTA" since
+      // dailyState is recomputed every render.
+      const snap = dailyState ? selectActiveInterventionForAck(dailyState, symptom) : null;
+      const severity: 1 | 2 | 3 = snap?.severity ?? 1;
       setDismissedTips((prev) => {
         const next = new Map(prev);
         next.set(symptom, { severity, ackedAt: Date.now() });
@@ -295,14 +297,7 @@ export default function DashboardScreen() {
       // before today's check-in row exists" race.
       acknowledgeSymptomTip(symptom);
     },
-    [
-      acknowledgeSymptomTip,
-      nausea,
-      appetite,
-      digestion,
-      hydration,
-      bowelMovementToday,
-    ],
+    [acknowledgeSymptomTip, dailyState],
   );
 
   const haptic = () => {
@@ -428,7 +423,17 @@ export default function DashboardScreen() {
   ];
   const metricItems = allMetricItems.filter(item => availableMetricTypes.includes(item.requiredType as any));
 
-  const statusColor = (STATUS_COLOR_FOR_STATE[dailyPlan.dailyState] ?? ((cc) => cc.accent))(c);
+  // Status chip + hero come from the central selectors. They
+  // automatically degrade to a calm "Set up your day" / "Tell us how
+  // today is going" prompt when sufficiency is too low for a
+  // confident plan, replacing the historical 70% silent fallback.
+  const statusChip: StatusChip = dailyState
+    ? selectStatusChip(dailyState)
+    : { label: dailyPlan.statusLabel, tone: "accent" };
+  const statusColor = (TONE_COLOR[statusChip.tone] ?? ((cc) => cc.accent))(c);
+  const hero = dailyState
+    ? selectHero(dailyState)
+    : { headline: dailyPlan.headline, drivers: dailyPlan.statusDrivers };
 
   const hasMedProfile = !!profile.medicationProfile;
   const ACTION_META: Record<string, { label: string; icon: keyof typeof Feather.glyphMap; color: string }> = {
@@ -498,14 +503,25 @@ export default function DashboardScreen() {
                 allowFontScaling
                 maxFontSizeMultiplier={1.3}
               >
-                {dailyPlan.statusLabel}
+                {statusChip.label}
               </Text>
             </View>
           </View>
-          <Text style={[styles.headline, { color: c.foreground }]} numberOfLines={2} adjustsFontSizeToFit>{dailyPlan.headline}</Text>
+          <Text style={[styles.headline, { color: c.foreground }]} numberOfLines={2} adjustsFontSizeToFit>{hero.headline}</Text>
           <Text style={[styles.driversInline, { color: c.mutedForeground }]} numberOfLines={2}>
-            {dailyPlan.statusDrivers.join(" · ")}
+            {hero.drivers.join(" · ")}
           </Text>
+          {insufficientNotice ? (
+            // Insufficient-data prompt. Replaces the historical silent
+            // 70% readiness fallback: we now openly tell the patient
+            // we don't have enough signal yet and point them at the
+            // 30-second check-in directly below.
+            <View style={[styles.insufficientNotice, { backgroundColor: c.background, borderColor: c.border }]}>
+              <Text style={[styles.insufficientBody, { color: c.mutedForeground }]}>
+                {insufficientNotice.body}
+              </Text>
+            </View>
+          ) : null}
           {todayCompletionRate > 0 && (
             <View style={styles.progressBarWrap}>
               <View style={[styles.progressBarBg, { backgroundColor: c.border + "40" }]}>
@@ -1775,6 +1791,18 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: "Montserrat_600SemiBold",
     letterSpacing: -0.1,
+  },
+  insufficientNotice: {
+    marginTop: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  insufficientBody: {
+    fontSize: 13,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 18,
   },
   inputSummaryText: {
     fontSize: 13,

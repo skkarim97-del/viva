@@ -16,6 +16,8 @@ import {
   generateAdaptiveInsights,
   computeInternalSeverity,
   applyAdaptiveOverrides,
+  selectDailyTreatmentState,
+  type DailyTreatmentState,
 } from "@/lib/engine";
 import { computeInsights, type DailyInsights } from "@/data/insights";
 import type { UserPatterns, AdaptiveInsight } from "@/types";
@@ -66,6 +68,12 @@ interface AppContextType {
   hasHealthData: boolean;
   availableMetricTypes: AvailableMetricType[];
   dailyPlan: DailyPlan | null;
+  // Central daily treatment state. New surfaces should consume this
+  // (via selectors in lib/engine/selectors) instead of reading
+  // dailyPlan directly. dailyPlan stays exposed during the migration
+  // window so legacy consumers (workout card, action toggles, why-
+  // this-plan modal) keep working without changes.
+  dailyState: DailyTreatmentState | null;
   weeklyPlan: WeeklyPlan | null;
   trends: TrendData[];
   workouts: WorkoutEntry[];
@@ -1434,6 +1442,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, [glp1InputHistory, profile.medicationProfile, completionHistory, recomputeAnalytics]);
 
+  // Single source of truth for the Today experience. Wraps the
+  // existing dailyPlan with treatment-aware lenses, claims policy,
+  // sufficiency markers, and the day's symptom interventions. The
+  // dismissed-tips suppression filter is applied at the consumer
+  // (Today screen) since it owns that ephemeral state.
+  const dailyState: DailyTreatmentState | null = useMemo(() => {
+    if (!dailyPlan || !todayMetrics) return null;
+    const todayDate = new Date().toISOString().split("T")[0];
+    const currentGlp1: GLP1DailyInputs | undefined = (glp1Energy || appetite || nausea || digestion || bowelMovementToday !== null)
+      ? { date: todayDate, energy: glp1Energy, appetite, nausea, digestion, bowelMovementToday }
+      : undefined;
+    return selectDailyTreatmentState({
+      plan: dailyPlan,
+      todayMetrics,
+      recentMetrics: metrics,
+      inputs: { feeling, energy, stress, hydration, trainingIntent },
+      glp1Inputs: currentGlp1,
+      hydration,
+      bowelMovementToday,
+      profile,
+      medicationLog,
+      hasHealthData,
+      availableMetricTypes,
+      completionHistory,
+    });
+  }, [
+    dailyPlan, todayMetrics, metrics,
+    feeling, energy, stress, hydration, trainingIntent,
+    glp1Energy, appetite, nausea, digestion, bowelMovementToday,
+    profile, medicationLog, hasHealthData, availableMetricTypes, completionHistory,
+  ]);
+
   const todayCheckIn = (() => {
     const todayDate = new Date().toISOString().split("T")[0];
     const found = checkInHistory.find(c => c.date === todayDate);
@@ -1452,6 +1492,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         hasHealthData,
         availableMetricTypes,
         dailyPlan,
+        dailyState,
         weeklyPlan,
         trends,
         workouts,
