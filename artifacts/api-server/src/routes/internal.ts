@@ -22,22 +22,20 @@ const router: Router = Router();
 // product analytics through the same browser session.
 //
 // Activation:
-//   * Set INTERNAL_API_KEY in the deployment environment.
-//   * The /internal dashboard page prompts the operator for the key
-//     and stores it in localStorage; the page sends it as
-//     Authorization: Bearer <key>.
-//
-// In dev, if INTERNAL_API_KEY is not set we fall back to a fixed dev
-// string so a fresh checkout works without configuration. In prod we
-// hard-fail closed -- never serve metrics if the key is unset.
+//   * The operator code defaults to OPERATOR_CODE below -- single
+//     source of truth for the whole platform (Viva Clinic /internal*
+//     and the Viva Analytics product both gate against this).
+//   * To rotate the code in production without a redeploy, set the
+//     INTERNAL_API_KEY environment secret -- if present it overrides
+//     the constant below.
+//   * The gate page prompts the operator for the code and stores it
+//     in localStorage; the page sends it as Authorization: Bearer <code>.
 
-const DEV_FALLBACK_KEY = "viva-internal-dev";
+const OPERATOR_CODE = "Viva2026!";
 
 function expectedKey(): string | null {
-  const k = (process.env.INTERNAL_API_KEY || "").trim();
-  if (k) return k;
-  if (process.env.NODE_ENV === "production") return null;
-  return DEV_FALLBACK_KEY;
+  const override = (process.env.INTERNAL_API_KEY || "").trim();
+  return override || OPERATOR_CODE;
 }
 
 function requireInternalKey(req: Request, res: Response, next: NextFunction) {
