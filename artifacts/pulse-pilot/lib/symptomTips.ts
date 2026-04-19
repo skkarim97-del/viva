@@ -19,12 +19,29 @@
 
 import type {
   AppetiteLevel,
+  DailyState,
   DigestionStatus,
   HydrationLevel,
   NauseaLevel,
 } from "@/types";
 
 export type SymptomKind = "nausea" | "constipation" | "low_appetite";
+
+// Plan guardrail for symptom CTAs. Symptom recommendations must never
+// contradict the day's overall operating mode -- e.g. a "Walk 10
+// minutes now" CTA on a full rest day breaks trust immediately. We
+// collapse the planning engine's four-state DailyState into the three
+// activity bands the symptom layer actually needs.
+export type PlanActivityContext = "full_rest" | "light_activity" | "normal_activity";
+
+export function planActivityFromState(state: DailyState): PlanActivityContext {
+  // recover  -> rest is the explicit prescription for the day
+  // maintain -> basics only; light, optional movement
+  // build / push -> normal activity is on the table
+  if (state === "recover") return "full_rest";
+  if (state === "maintain") return "light_activity";
+  return "normal_activity";
+}
 
 export interface SymptomTip {
   symptom: SymptomKind;
@@ -59,6 +76,12 @@ export interface SymptomInputs {
   digestion: DigestionStatus;
   hydration: HydrationLevel;
   bowelMovementToday: boolean | null;
+  // Today's plan activity context. Symptom CTAs that involve movement
+  // (currently constipation) downshift their action to stay coherent
+  // with the daily plan -- on a "full rest" day a 10-minute walk
+  // would directly contradict the plan headline. Optional for back
+  // compat; defaults to "normal_activity" when omitted.
+  planActivity?: PlanActivityContext;
 }
 
 function lowHydration(h: HydrationLevel): boolean {
@@ -102,6 +125,28 @@ export function deriveSymptomTips(input: SymptomInputs): SymptomTip[] {
   ) {
     const factors: string[] = [];
     if (lowHydration(input.hydration)) factors.push("Low hydration");
+    // Plan-aware CTA. Constipation guidance is movement-based, so it
+    // has to respect the day's plan or it'll directly contradict the
+    // headline ("full rest day" + "walk 10 minutes now"). We keep
+    // urgency intact and only step the action down to the lightest
+    // coherent variant for each plan band.
+    const plan = input.planActivity ?? "normal_activity";
+    const cta =
+      plan === "full_rest"
+        ? "Stand and stretch for 2 minutes"
+        : plan === "light_activity"
+        ? "Walk 5 minutes gently"
+        : "Walk 10 minutes now";
+    const urgency =
+      plan === "full_rest"
+        ? "Gentle movement only as tolerated -- it can still help things move."
+        : plan === "light_activity"
+        ? "Do this within the next hour at an easy pace."
+        : "Do this within the next hour to help things move.";
+    const ctaCompleted =
+      plan === "full_rest"
+        ? "Nice -- gentle movement logged"
+        : "Nice -- walk logged";
     tips.push({
       symptom: "constipation",
       // Subjective "feels constipated" is treated as moderate;
@@ -112,9 +157,9 @@ export function deriveSymptomTips(input: SymptomInputs): SymptomTip[] {
           ? 2
           : 1,
       title: "Get things moving (active)",
-      urgency: "Do this within the next hour to help things move.",
-      cta: "Walk 10 minutes now",
-      ctaCompleted: "Nice -- walk logged",
+      urgency,
+      cta,
+      ctaCompleted,
       factors,
     });
   }

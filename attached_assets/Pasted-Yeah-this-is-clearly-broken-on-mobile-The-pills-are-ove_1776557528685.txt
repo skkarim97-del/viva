@@ -1,0 +1,173 @@
+Yeah this is clearly broken on mobile. The pills are overflowing and the layout isn’t respecting width constraints. This will look sloppy to any clinician.
+
+Here’s exactly what to tell Replit agent:
+
+⸻
+
+Replit Instructions — Fix Mobile Card Layout (Clinician Dashboard)
+
+Goal
+
+Ensure all patient cards render cleanly on mobile with:
+
+* no horizontal overflow
+* properly wrapped text
+* responsive pill layout
+* consistent spacing
+
+⸻
+
+1. Fix the header row (pills + note button)
+
+Problem
+
+* “Needs follow-up” + “Patient treatment risk 50” are sitting inline and overflowing
+* No wrapping or flex control
+
+Fix
+
+Wrap the top row in a flex container with wrapping:
+
+.cardHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+⸻
+
+2. Make pills responsive (CRITICAL)
+
+Problem
+
+Risk pill is too long and doesn’t shrink
+
+Fix
+
+.pill {
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+For risk specifically:
+
+.riskPill {
+  max-width: 60%;
+}
+
+Optional better UX:
+
+* shorten text to: “Risk: 50” instead of full phrase
+
+⸻
+
+3. Stack layout on small screens
+
+Add breakpoint:
+
+@media (max-width: 480px) {
+  .cardHeader {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+This ensures:
+
+* buttons don’t fight for horizontal space
+* everything stacks cleanly
+
+⸻
+
+4. Fix content row (Drug / Dose / Last check-in)
+
+Problem
+
+Columns are trying to stay horizontal and getting cramped
+
+Fix
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+Instead of:
+
+DRUG | DOSE | LAST CHECK-IN
+
+Make it:
+
+Drug: Tirzepatide
+Dose: 7.5mg weekly
+Last check-in: 4d ago
+
+Cleaner, more readable on mobile.
+
+⸻
+
+5. Add padding + breathing room
+
+.card {
+  padding: 16px;
+}
+
+⸻
+
+6. Reduce visual noise
+
+Right now:
+
+* red “Needs follow-up”
+* orange risk pill
+* ●	note button
+
+Too much in one line.
+
+Fix hierarchy:
+
+* Keep Needs follow-up as primary (red)
+* Make risk pill lighter / secondary tone
+* Reduce size slightly
+
+⸻
+
+7. Final expected result
+
+Each card should look like:
+
+[+ Note]   [Needs follow-up]
+[Risk: 50]
+Drug: Tirzepatide
+Dose: 7.5mg weekly
+Last check-in: 4d ago
+
+No overflow. No clipping. Clean stack.
+
+⸻
+
+What to ask them to confirm
+
+Have them show:
+
+1. iPhone 13 or similar viewport screenshot
+2. No horizontal scrolling
+3. No text overflow
+4. Pills wrap cleanly
+
+⸻
+
+My take
+
+This is a 7/10 → 9/10 fix.
+
+It’s not about adding features. It’s about:
+👉 making the product feel trustworthy and polished
+
+Clinicians judge fast. If layout is sloppy, they assume the data is too.
+
+Fix this now before pilot.

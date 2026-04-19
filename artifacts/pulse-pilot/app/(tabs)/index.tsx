@@ -24,7 +24,7 @@ import { SymptomTipCard } from "@/components/SymptomTipCard";
 import WeightLogModal from "@/components/WeightLogModal";
 import { sessionApi } from "@/lib/api/sessionClient";
 import { useApp } from "@/context/AppContext";
-import { deriveSymptomTips, type SymptomKind } from "@/lib/symptomTips";
+import { deriveSymptomTips, planActivityFromState, type SymptomKind } from "@/lib/symptomTips";
 import { generateCoachInsight } from "@/data/insights";
 import { formatDoseDisplay, getDoseOptions, type MedicationBrand } from "@/data/medicationData";
 import { generateGreeting, generateInputSummary, buildCoachContext } from "@/lib/engine";
@@ -249,6 +249,10 @@ export default function DashboardScreen() {
         digestion,
         hydration,
         bowelMovementToday,
+        // Plan guardrail: symptom CTAs (currently constipation)
+        // step their action down to stay coherent with today's plan
+        // mode so we never recommend a 10-min walk on a rest day.
+        planActivity: planActivityFromState(dailyPlan.dailyState),
       }).filter((t) => {
         const ack = dismissedTips.get(t.symptom);
         if (!ack) return true;
@@ -277,6 +281,7 @@ export default function DashboardScreen() {
         digestion,
         hydration,
         bowelMovementToday,
+        planActivity: planActivityFromState(dailyPlan.dailyState),
       }).find((t) => t.symptom === symptom);
       const severity: 1 | 2 | 3 = currentTip?.severity ?? 1;
       setDismissedTips((prev) => {

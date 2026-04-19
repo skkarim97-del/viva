@@ -1,0 +1,154 @@
+Yes, that absolutely needs to be fixed. Contradictory guidance kills trust fast.
+
+If the app says:
+
+* Your plan: full rest day
+* Symptom action: take a 10-minute walk
+
+the user immediately feels:
+
+“this app is not actually thinking”
+
+That’s a core product integrity issue.
+
+What should be true
+
+Your symptom actions should respect the day’s plan context.
+
+Think of it like this:
+
+* Your Plan = the day’s overall operating mode
+* Symptom recommendation = the best action within that mode
+
+So if the plan says:
+
+* full rest day
+
+then symptom actions should adapt to:
+
+* “stand and stretch for 2 minutes”
+* “walk lightly around your home”
+* “gentle movement only if tolerated”
+
+Not:
+
+* “walk 10 minutes now”
+
+Clean logic
+
+You need a simple hierarchy:
+
+1. Plan context is the guardrail
+
+Possible plan states:
+
+* full rest
+* light activity
+* normal activity
+
+2. Symptom actions are generated inside that guardrail
+
+Example:
+
+Constipation
+
+* if plan = normal activity → “Walk 10 minutes now”
+* if plan = light activity → “Walk 5 minutes gently”
+* if plan = full rest → “Stand and move gently for 2 minutes if tolerated”
+
+Low energy
+
+* if plan = full rest → “Stay off your feet and eat something small now”
+* not “push through with movement”
+
+Nausea
+
+Usually less affected by movement plan, but still should stay coherent with recovery framing.
+
+What to tell Replit
+
+Paste this:
+
+Ensure symptom recommendations are consistent with the patient’s Your Plan for that day. I do not want contradictory guidance.
+
+Goal
+
+Symptom actions should adapt to the day’s plan context so the app feels coherent and clinically credible.
+
+Problem
+
+Right now a symptom recommendation can conflict with the daily plan. Example:
+
+* Your Plan says full rest day
+* symptom recommendation says walk 10 minutes now
+
+That should not happen.
+
+Required behavior
+
+Treat the daily plan as the context / guardrail for symptom actions.
+
+Logic
+
+Symptom recommendations should be generated or adjusted based on the current day’s plan intensity.
+
+At minimum, support these plan contexts:
+
+* full rest
+* light activity
+* normal activity
+
+Example behavior
+
+For constipation / digestion:
+
+* if plan = normal activity → Walk 10 minutes now
+* if plan = light activity → Walk 5 minutes gently
+* if plan = full rest → Stand and move gently for 2 minutes if tolerated or another rest-compatible action
+
+For low energy:
+
+* if plan = full rest → avoid movement-based action that conflicts with rest guidance
+
+For all symptom cards:
+
+* recommendations should never contradict the plan
+* if movement is contraindicated by the plan, adjust to the lightest compatible action or swap to a different recommendation
+
+Implementation direction
+
+Use the current day’s plan as an input into symptom tip generation.
+
+The symptom tip system should:
+
+1. check the plan context for today
+2. choose the symptom action variant that fits that plan
+3. keep urgency and CTA logic intact
+
+Constraints
+
+* keep this lean
+* do not build a giant rules engine
+* just make sure symptom actions and plan guidance are aligned
+* preserve the current clean UI
+
+Output
+
+Show me:
+
+1. the logic used to map plan context to symptom action variants
+2. at least 2 examples of symptom tips changing based on:
+    * full rest day
+    * light activity day
+    * normal activity day
+3. confirmation that contradictory recommendations can no longer happen
+
+My take
+
+This is a must-fix, not a nice-to-have.
+
+You don’t need a complex engine. Just a simple rule:
+
+symptom advice can intensify or soften, but it cannot break the plan guardrail
+
+That’s enough for MVP and makes the app feel way smarter.
