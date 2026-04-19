@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+/*
+ * Viva design tokens. Same color/font/radius set as viva-dashboard
+ * (clinic) and pulse-pilot (care) so all three surfaces read as one
+ * product. Analytics tilts denser: tighter spacing, smaller body type,
+ * grid-heavy layout — all expressed via the utility classes, not by
+ * forking the tokens.
+ */
+@theme {
+  --color-text: #142240;
+  --color-foreground: #142240;
+  --color-background: #f7f8fb;
+
+  --color-card: #ffffff;
+  --color-card-foreground: #142240;
+
+  --color-primary: #142240;
+  --color-primary-foreground: #ffffff;
+
+  --color-secondary: #e8edf5;
+  --color-secondary-foreground: #142240;
+
+  --color-muted: #eef0f6;
+  --color-muted-foreground: #6b7a90;
+
+  --color-accent: #38b6ff;
+  --color-accent-foreground: #ffffff;
+
+  --color-border: #e0e4eb;
+  --color-input: #dde1e9;
+
+  --color-success: #34c759;
+  --color-warning: #ff9500;
+  --color-destructive: #ff3b30;
+  --color-info: #38b6ff;
+
+  /* Sidebar shell — denser, slightly tinted vs. main background. */
+  --color-sidebar: #0d1a36;
+  --color-sidebar-foreground: #c9d4e8;
+  --color-sidebar-active: #38b6ff;
+
+  --font-sans: "Montserrat", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Montserrat", ui-sans-serif, system-ui, sans-serif;
+
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 22px;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.005em;
+  font-size: 14px;
+}
+
+/* Tabular numerals for every dashboard figure so columns line up. */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}

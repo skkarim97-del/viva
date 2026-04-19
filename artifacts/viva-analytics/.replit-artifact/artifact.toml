@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/viva-analytics/"
+title = "Viva Analytics"
+version = "1.0.0"
+id = "artifacts/viva-analytics"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/viva-analytics/" ]
+localPort = 21516
+
+[services.development]
+run = "pnpm --filter @workspace/viva-analytics run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/viva-analytics", "run", "build" ]
+publicDir = "artifacts/viva-analytics/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21516"
+BASE_PATH = "/viva-analytics/"

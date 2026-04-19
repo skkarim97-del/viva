@@ -10,7 +10,6 @@ import { PatientsPage } from "@/pages/PatientsPage";
 import { PatientDetailPage } from "@/pages/PatientDetailPage";
 import { InternalDashboardPage } from "@/pages/InternalDashboardPage";
 import { InternalAnalyticsPage } from "@/pages/InternalAnalyticsPage";
-import { VivaAnalyticsPage } from "@/pages/VivaAnalyticsPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -62,11 +61,10 @@ function Gate() {
   if (location === "/internal/analytics") {
     return <InternalAnalyticsPage />;
   }
-  // Viva Analytics is a top-level internal surface, sister to viva
-  // care + viva clinic. Same operator-key gate as /internal*.
-  if (location === "/viva-analytics") {
-    return <VivaAnalyticsPage />;
-  }
+  // Viva Analytics now lives in its own top-level artifact at
+  // /viva-analytics/ (separate sidebar, separate workflow). The proxy
+  // routes that path to a different web service, so there is no route
+  // here in viva-dashboard for it.
 
   // Routes that don't require an authenticated doctor session.
   const isPublic = location === "/login" || location === "/signup";
