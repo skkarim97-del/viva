@@ -1,0 +1,167 @@
+Yes — that’s exactly the right move. Clean, scalable, and feels like a real platform.
+
+Here’s how to implement it properly so it doesn’t look hacky.
+
+⸻
+
+Final pattern (use this everywhere)
+
+Header structure
+
+Left side:
+
+viva.   Care
+viva.   Clinic
+viva.   Analytics
+
+* “viva.” = logo (consistent everywhere)
+* “Care / Clinic / Analytics” = product context label
+
+⸻
+
+Design rules (important)
+
+1. Keep hierarchy clear
+
+* viva. → primary brand (bolder)
+* Care / Clinic / Analytics → secondary (slightly lighter)
+
+Example:
+
+* viva. → bold / darker
+* Analytics → medium weight / slightly muted
+
+⸻
+
+2. Same spacing everywhere
+
+* small horizontal gap between logo and label
+* consistent across all 3 products
+
+⸻
+
+3. Same placement
+
+* top-left corner
+* inside header bar
+* identical positioning across:
+    * Viva Care
+    * Viva Clinic
+    * Viva Analytics
+
+Consistency = polish
+
+⸻
+
+4. No dividers or overdesign
+
+Don’t add:
+
+* pipes (|)
+* slashes (/)
+* boxes
+* badges
+
+Keep it minimal:
+
+viva. Analytics
+
+⸻
+
+Behavior across products
+
+Viva Care
+
+viva. Care
+
+Viva Clinic
+
+viva. Clinic
+
+Viva Analytics
+
+viva. Analytics
+
+⸻
+
+Optional (nice but not required)
+
+Subtle visual distinction per product
+
+You can lightly differentiate without breaking brand:
+
+* Care → slightly softer tone
+* Clinic → neutral
+* Analytics → slightly denser / darker UI
+
+But keep:
+
+* same base palette
+* same logo
+
+⸻
+
+What NOT to do
+
+Don’t:
+
+* create separate logos (VivaCare, VivaAnalytics, etc.)
+* change colors per product drastically
+* restyle the logo per surface
+* treat them as separate brands
+
+⸻
+
+Instruction for Replit agent
+
+Use this:
+
+⸻
+
+Implement a consistent header across Viva Care, Viva Clinic, and Viva Analytics.
+
+Requirements
+
+* Use the same viva. logo across all products
+* Add a product label next to the logo:
+    * “Care”
+    * “Clinic”
+    * “Analytics”
+
+Layout
+
+* Place in top-left header
+* Structure:
+    * [viva. logo] + [product label]
+* Keep consistent spacing across all surfaces
+
+Styling
+
+* viva. = primary emphasis (bold / darker)
+* product label = secondary emphasis (slightly lighter weight or color)
+* no separators (no “|” or “/”)
+* no additional badges or boxes
+
+Consistency
+
+* identical positioning and spacing across all three products
+* reuse existing typography and design tokens
+* do not introduce a new design system
+
+Constraints
+
+* do not modify mobile / iOS / EAS configs
+* do not change core layout outside header
+* ensure no regressions in existing UI
+
+⸻
+
+Bottom line
+
+This gives you:
+
+* one strong brand (viva.)
+* clear product separation (Care / Clinic / Analytics)
+* clean, modern SaaS feel
+
+This is exactly how good multi-surface products are designed.

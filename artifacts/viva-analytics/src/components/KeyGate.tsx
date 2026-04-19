@@ -18,16 +18,13 @@ export function KeyGate({
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <header className="px-6 py-5 border-b border-border bg-card">
-        <div className="max-w-md mx-auto flex items-center gap-3">
+        {/* Brand lockup matches viva-clinic and viva-care: viva.
+            wordmark + lighter-weight product label, no separators. */}
+        <div className="max-w-md mx-auto flex items-center gap-2">
           <Logo size="sm" />
-          <div className="leading-tight">
-            <div className="font-display text-[16px] font-bold text-foreground">
-              Viva Analytics
-            </div>
-            <div className="text-[11px] text-muted-foreground">
-              Internal operating dashboard
-            </div>
-          </div>
+          <span className="font-display text-[16px] font-medium text-foreground/70 tracking-tight">
+            Analytics
+          </span>
         </div>
       </header>
       <main className="flex-1 max-w-md w-full mx-auto px-6 py-12">

@@ -349,7 +349,13 @@ export default function OnboardingScreen() {
         >
           {step === "welcome" && (
             <View style={styles.welcomeSection}>
-              <Logo size="large" />
+              {/* Brand lockup: viva. wordmark + product label. Same
+                  pattern used by Viva Clinic and Viva Analytics so the
+                  three surfaces read as one platform. */}
+              <View style={styles.welcomeBrand}>
+                <Logo size="large" />
+                <Text style={[styles.welcomeProduct, { color: c.foreground + "B8" }]}>Care</Text>
+              </View>
               <Text style={[styles.welcomeTagline, { color: c.foreground }]}>Daily support for your GLP-1 journey</Text>
               <Text style={[styles.welcomeSub, { color: c.mutedForeground + "CC" }]}>
                 A simple daily check-in plus Apple Health, so your care team sees how you're really doing between visits.
@@ -945,6 +951,8 @@ const styles = StyleSheet.create({
   scrollContent: { flex: 1 },
   contentInner: { paddingHorizontal: 24, paddingBottom: 24 },
   welcomeSection: { alignItems: "center", justifyContent: "center", flex: 1, gap: 10, paddingTop: 40 },
+  welcomeBrand: { flexDirection: "row", alignItems: "center", gap: 10 },
+  welcomeProduct: { fontSize: 22, fontFamily: "Montserrat_500Medium", letterSpacing: -0.4 },
   heroIcon: { width: 88, height: 88, borderRadius: 26, alignItems: "center", justifyContent: "center", marginBottom: 4 },
   welcomeTitle: { fontSize: 24, fontFamily: "Montserrat_500Medium", letterSpacing: 8 },
   welcomeTagline: { fontSize: 30, fontFamily: "Montserrat_700Bold", textAlign: "center", lineHeight: 38, letterSpacing: -0.5, marginTop: 6 },
