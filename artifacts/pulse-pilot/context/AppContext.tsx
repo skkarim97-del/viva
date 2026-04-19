@@ -694,13 +694,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     bm: boolean | null = bowelMovementToday,
   ) => {
     const todayDate = new Date().toISOString().split("T")[0];
-    const inputs: GLP1DailyInputs = {
-      date: todayDate, energy: en, appetite: ap, nausea: na, digestion: di,
-      bowelMovementToday: bm,
-    };
-    AsyncStorage.setItem(GLP1_INPUTS_KEY, JSON.stringify(inputs));
 
     setGlp1InputHistory(prev => {
+      // Same-day "previous value" capture. If the patient already
+      // saved a row for today, snapshot whichever fields actually
+      // changed -- this gives downstream features ("Energy worsened
+      // today", smarter re-trigger) an intra-day deterioration signal
+      // without ever storing a second trend datapoint. Strict !== so
+      // a no-op edit doesn't pretend to be a change.
+      const existing = prev.find(i => i.date === todayDate);
+      const previousEnergy = existing && existing.energy !== en ? existing.energy : null;
+      const previousAppetite = existing && existing.appetite !== ap ? existing.appetite : null;
+      const previousNausea = existing && existing.nausea !== na ? existing.nausea : null;
+      const previousDigestion = existing && existing.digestion !== di ? existing.digestion : null;
+
+      const inputs: GLP1DailyInputs = {
+        date: todayDate, energy: en, appetite: ap, nausea: na, digestion: di,
+        bowelMovementToday: bm,
+        previousEnergy, previousAppetite, previousNausea, previousDigestion,
+      };
+      AsyncStorage.setItem(GLP1_INPUTS_KEY, JSON.stringify(inputs));
+
       const filtered = prev.filter(i => i.date !== todayDate);
       const updated = [...filtered, inputs].slice(-30);
       AsyncStorage.setItem(GLP1_HISTORY_KEY, JSON.stringify(updated));

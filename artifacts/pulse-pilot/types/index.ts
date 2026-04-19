@@ -171,6 +171,18 @@ export interface GLP1DailyInputs {
   // Optional patient-reported objective signal for the constipation
   // engine. Null = unanswered; the planning engine ignores this field.
   bowelMovementToday?: boolean | null;
+  // Same-day "previous value" snapshots. Captured at upsert time when
+  // the patient edits a category later in the same day (e.g. 9am
+  // energy=tired, 2pm energy=depleted -> previousEnergy="tired"). Null
+  // when this is the first entry of the day, or when the new value
+  // matches the previous one. Cleared on the next day's first save.
+  // Used for intra-day deterioration detection ("Energy worsened
+  // today") and smarter re-trigger logic, without polluting the trend
+  // history -- there is still exactly one row per day.
+  previousEnergy?: EnergyDaily | null;
+  previousAppetite?: AppetiteLevel | null;
+  previousNausea?: NauseaLevel | null;
+  previousDigestion?: DigestionStatus | null;
 }
 
 export type MentalState = "focused" | "good" | "low" | "burnt_out" | null;

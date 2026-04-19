@@ -458,7 +458,11 @@ export function generateAdaptiveInsights(patterns: UserPatterns): AdaptiveInsigh
   // the last 14 days. We require at least 7 days of data before any
   // trend statement, and we phrase the timeframe based on how much data
   // we actually have. Anything less only contributes a neutral fallback.
-  const TREND_MIN_DAYS = 7;
+  // Pilot-stage threshold: 5 days is enough to start surfacing
+  // directional patterns so early users feel value quickly. The
+  // separate "two weeks" phrasing gate (sampleSize14d >= 10) still
+  // protects us from claiming a 14-day pattern off a 5-day signal.
+  const TREND_MIN_DAYS = 5;
   let anyTrendShown = false;
   let maxSampleSize = 0;
 
@@ -508,12 +512,16 @@ export function generateAdaptiveInsights(patterns: UserPatterns): AdaptiveInsigh
   // only do this when the patient has clearly engaged (≥ 3 days) so the
   // "still building" framing is honest -- a single check-in shouldn't
   // claim a baseline either.
-  if (!anyTrendShown && maxSampleSize >= 3 && maxSampleSize < TREND_MIN_DAYS) {
+  // Actionable nudge instead of a passive "tracking..." statement.
+  // Behavioral lift: users who see a clear ask ("keep logging") check
+  // in more consistently than users who see a status update.
+  if (!anyTrendShown && maxSampleSize >= 1 && maxSampleSize < TREND_MIN_DAYS) {
+    const daysLeft = TREND_MIN_DAYS - maxSampleSize;
     insights.push({
       id: "trend_baseline_building",
-      text: maxSampleSize >= 5
-        ? "Recent check-ins are still stabilizing into a pattern"
-        : "Tracking your recent check-ins to build your baseline",
+      text: maxSampleSize >= 3
+        ? `Keep logging daily -- ${daysLeft} more day${daysLeft === 1 ? "" : "s"} unlocks your pattern view`
+        : "Keep logging daily so we can understand your pattern",
       category: "general",
       confidence: "low",
       type: "trend",
