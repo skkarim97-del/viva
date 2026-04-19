@@ -5,6 +5,8 @@ import {
   usersTable,
   patientsTable,
   patientCheckinsTable,
+  doctorNotesTable,
+  interventionEventsTable,
   deriveStopTiming,
 } from "@workspace/db";
 import { computeRisk, deriveAction } from "../lib/risk";
@@ -546,6 +548,303 @@ router.get(
         }),
       );
 
+      // ----- Operating metrics (viva care + viva clinic) ----------------
+      // Activity is derived from existing tables; we don't track an
+      // auth-level "last_login" column, so the honest definition of
+      // "active" is "did something the system can observe".
+      //   patient activity = patient_checkins.date OR
+      //                      intervention_events.occurred_on
+      //   doctor activity  = doctor_notes.created_at OR
+      //                      patients.treatment_status_updated_at
+      //                      (when source = 'doctor')
+      const today = ymdLocal(new Date());
+      const ymd7 = ymdDaysAgo(6);
+      const ymd30 = ymdDaysAgo(29);
+
+      // Patient activity windows. UNION over check-ins + interventions
+      // so we don't undercount patients who used the app today but
+      // skipped the check-in card.
+      const patientActivityRows = await db.execute(sql`
+        with activity as (
+          select patient_user_id as uid, date::date as d
+          from patient_checkins
+          where date >= ${ymd30}
+          union
+          select patient_user_id as uid, occurred_on::date as d
+          from intervention_events
+          where occurred_on >= ${ymd30}
+        )
+        select
+          (select cast(count(distinct uid) as int) from activity where d = ${today}) as dau,
+          (select cast(count(distinct uid) as int) from activity where d >= ${ymd7}) as wau,
+          (select cast(count(distinct uid) as int) from activity) as mau
+      `);
+      const pAct =
+        (patientActivityRows.rows?.[0] as
+          | { dau?: number; wau?: number; mau?: number }
+          | undefined) ?? {};
+      const patientDau = Number(pAct.dau ?? 0);
+      const patientWau = Number(pAct.wau ?? 0);
+      const patientMau = Number(pAct.mau ?? 0);
+
+      const [{ count: totalDoctors }] = await db
+        .select({ count: sql<number>`cast(count(*) as int)` })
+        .from(usersTable)
+        .where(eq(usersTable.role, "doctor"));
+
+      // Doctor activity windows.
+      const doctorActivityRows = await db.execute(sql`
+        with activity as (
+          select doctor_user_id as uid, created_at::date as d
+          from doctor_notes
+          where created_at >= ${ymd30}::date
+          union
+          select treatment_status_updated_by as uid,
+                 treatment_status_updated_at::date as d
+          from patients
+          where treatment_status_source = 'doctor'
+            and treatment_status_updated_at >= ${ymd30}::date
+            and treatment_status_updated_by is not null
+        )
+        select
+          (select cast(count(distinct uid) as int) from activity where d = ${today}::date) as dau,
+          (select cast(count(distinct uid) as int) from activity where d >= ${ymd7}::date) as wau,
+          (select cast(count(distinct uid) as int) from activity) as mau
+      `);
+      const dAct =
+        (doctorActivityRows.rows?.[0] as
+          | { dau?: number; wau?: number; mau?: number }
+          | undefined) ?? {};
+      const doctorDau = Number(dAct.dau ?? 0);
+      const doctorWau = Number(dAct.wau ?? 0);
+      const doctorMau = Number(dAct.mau ?? 0);
+
+      // Apple Health connected % uses intervention dataTier as the
+      // honest proxy: a patient is counted as "connected" if any of
+      // their interventions in the last 30 days carried a wearable
+      // data-tier snapshot. Denominator = activated patients (we
+      // don't ding pre-activation invites for not connecting yet).
+      const ahRows = await db.execute(sql`
+        select cast(count(distinct patient_user_id) as int) as connected
+        from intervention_events
+        where occurred_on >= ${ymd30}
+          and treatment_state_snapshot->>'dataTier' = 'wearable'
+      `);
+      const appleHealthConnected = Number(
+        (ahRows.rows?.[0] as { connected?: number } | undefined)?.connected ?? 0,
+      );
+      const [{ count: activatedCount }] = await db
+        .select({ count: sql<number>`cast(count(*) as int)` })
+        .from(patientsTable)
+        .where(isNotNull(patientsTable.activatedAt));
+      const pctAppleHealthConnected =
+        activatedCount > 0 ? appleHealthConnected / activatedCount : 0;
+
+      // % completing check-ins = activated patients with a check-in in
+      // the last 7 days. Mirrors what the doctor would call "active
+      // logging" without inventing a new threshold.
+      const checkin7Rows = await db.execute(sql`
+        select cast(count(distinct patient_user_id) as int) as n
+        from patient_checkins
+        where date >= ${ymd7}
+      `);
+      const completingCheckins = Number(
+        (checkin7Rows.rows?.[0] as { n?: number } | undefined)?.n ?? 0,
+      );
+      const pctCompletingCheckins =
+        activatedCount > 0 ? completingCheckins / activatedCount : 0;
+
+      // Coach engagement = activated patients with a Coach surface
+      // intervention in the last 30 days. Honest "did they use it?"
+      // signal, not a quality measure.
+      const coachRows = await db.execute(sql`
+        select cast(count(distinct patient_user_id) as int) as n
+        from intervention_events
+        where occurred_on >= ${ymd30}
+          and surface = 'Coach'
+      `);
+      const coachEngaged = Number(
+        (coachRows.rows?.[0] as { n?: number } | undefined)?.n ?? 0,
+      );
+      const pctEngagingCoaching =
+        activatedCount > 0 ? coachEngaged / activatedCount : 0;
+
+      // Doctor productivity (rolling 30d window).
+      const [{ count: notesWritten30d }] = await db
+        .select({ count: sql<number>`cast(count(*) as int)` })
+        .from(doctorNotesTable)
+        .where(gte(doctorNotesTable.createdAt, sql`${ymd30}::date`));
+
+      const reviewedRows = await db.execute(sql`
+        select cast(count(distinct patient_user_id) as int) as n
+        from doctor_notes
+        where created_at >= ${ymd30}::date
+      `);
+      const patientsReviewed = Number(
+        (reviewedRows.rows?.[0] as { n?: number } | undefined)?.n ?? 0,
+      );
+
+      const tsuRows = await db.execute(sql`
+        select cast(count(*) as int) as n
+        from patients
+        where treatment_status_updated_at >= ${ymd30}::date
+      `);
+      const treatmentStatusesUpdated30d = Number(
+        (tsuRows.rows?.[0] as { n?: number } | undefined)?.n ?? 0,
+      );
+
+      // Avg patients reviewed per doctor over the same 30d window.
+      // Denominator = doctors with at least one patient assigned, so
+      // doctors who haven't been seeded with a panel don't drag the
+      // average down to look like neglect.
+      const docsWithPanelRows = await db.execute(sql`
+        select cast(count(distinct doctor_id) as int) as n from patients
+      `);
+      const doctorsWithPanel = Number(
+        (docsWithPanelRows.rows?.[0] as { n?: number } | undefined)?.n ?? 0,
+      );
+      const avgPatientsReviewedPerDoctor =
+        doctorsWithPanel > 0 ? patientsReviewed / doctorsWithPanel : 0;
+
+      // ----- Drill-down: patient list (full panel) ----------------------
+      const patientRows = await db.execute(sql`
+        select
+          p.user_id as id,
+          u.name as name,
+          u.email as email,
+          d.name as doctor_name,
+          p.doctor_id as doctor_id,
+          p.treatment_status as treatment_status,
+          p.stop_reason as stop_reason,
+          p.started_on as started_on,
+          p.treatment_status_updated_at as treatment_status_updated_at,
+          (
+            select max(date) from patient_checkins c
+            where c.patient_user_id = p.user_id
+          ) as last_checkin,
+          exists (
+            select 1 from intervention_events ie
+            where ie.patient_user_id = p.user_id
+              and ie.occurred_on >= ${ymd30}
+              and ie.treatment_state_snapshot->>'dataTier' = 'wearable'
+          ) as apple_health_connected
+        from patients p
+        join users u on u.id = p.user_id
+        join users d on d.id = p.doctor_id
+        order by u.name asc
+      `);
+      type PatientDrillRow = {
+        id: number;
+        name: string;
+        email: string;
+        doctor_name: string;
+        doctor_id: number;
+        treatment_status: "active" | "stopped" | "unknown";
+        stop_reason: string | null;
+        started_on: string | Date | null;
+        treatment_status_updated_at: string | Date | null;
+        last_checkin: string | null;
+        apple_health_connected: boolean;
+      };
+      const patientDrilldown = (patientRows.rows as PatientDrillRow[]).map(
+        (r) => {
+          const { bucket, daysOnTreatment } =
+            r.treatment_status === "stopped"
+              ? deriveStopTiming(r.started_on, r.treatment_status_updated_at)
+              : { bucket: "unknown" as const, daysOnTreatment: null };
+          return {
+            id: Number(r.id),
+            name: r.name,
+            email: r.email,
+            doctorName: r.doctor_name,
+            doctorId: Number(r.doctor_id),
+            treatmentStatus: r.treatment_status,
+            stopReason: r.stop_reason,
+            stopTimingBucket: bucket,
+            daysOnTreatment,
+            lastCheckin: r.last_checkin,
+            appleHealthConnected: !!r.apple_health_connected,
+          };
+        },
+      );
+
+      // ----- Drill-down: doctor list ------------------------------------
+      const doctorRows = await db.execute(sql`
+        select
+          u.id as id,
+          u.name as name,
+          u.email as email,
+          (select cast(count(*) as int) from patients p where p.doctor_id = u.id) as patient_count,
+          (select cast(count(*) as int) from patients p
+             where p.doctor_id = u.id and p.treatment_status = 'active') as active_patients,
+          (select cast(count(*) as int) from patients p
+             where p.doctor_id = u.id and p.treatment_status = 'stopped') as stopped_patients,
+          (select cast(count(*) as int) from doctor_notes n
+             where n.doctor_user_id = u.id and n.created_at >= ${ymd30}::date) as notes_written,
+          (select cast(count(*) as int) from patients p
+             where p.treatment_status_updated_by = u.id
+               and p.treatment_status_updated_at >= ${ymd30}::date) as statuses_updated,
+          greatest(
+            (select max(created_at) from doctor_notes n where n.doctor_user_id = u.id),
+            (select max(treatment_status_updated_at) from patients p
+               where p.treatment_status_updated_by = u.id)
+          ) as last_active_at
+        from users u
+        where u.role = 'doctor'
+        order by u.name asc
+      `);
+      type DoctorDrillRow = {
+        id: number;
+        name: string;
+        email: string;
+        patient_count: number;
+        active_patients: number;
+        stopped_patients: number;
+        notes_written: number;
+        statuses_updated: number;
+        last_active_at: string | Date | null;
+      };
+      const doctorDrilldown = (doctorRows.rows as DoctorDrillRow[]).map((r) => ({
+        id: Number(r.id),
+        name: r.name,
+        email: r.email,
+        patientCount: Number(r.patient_count),
+        activePatients: Number(r.active_patients),
+        stoppedPatients: Number(r.stopped_patients),
+        notesWritten: Number(r.notes_written),
+        statusesUpdated: Number(r.statuses_updated),
+        lastActiveAt:
+          r.last_active_at instanceof Date
+            ? r.last_active_at.toISOString()
+            : r.last_active_at,
+      }));
+
+      // ----- Data sanity ------------------------------------------------
+      // Cheap reconciliation: catch the day a metric quietly diverges
+      // from the source rows.
+      const stoppedReasonSum = Object.values(reasonCounts).reduce(
+        (a, b) => a + b,
+        0,
+      );
+      const stoppedTimingSum =
+        timingCounts.early +
+        timingCounts.mid +
+        timingCounts.late +
+        timingCounts.unknown;
+      const dataSanity = {
+        totalPatientsRow: totalPatients,
+        sumByStatus:
+          statusCounts.active + statusCounts.stopped + statusCounts.unknown,
+        stoppedRow: stoppedTotal,
+        stoppedSumByReason: stoppedReasonSum,
+        stoppedSumByTiming: stoppedTimingSum,
+        ok:
+          totalPatients ===
+            statusCounts.active + statusCounts.stopped + statusCounts.unknown &&
+          stoppedTotal === stoppedReasonSum &&
+          stoppedTotal === stoppedTimingSum,
+      };
+
       res.json({
         generatedAt: new Date().toISOString(),
         windowDays: 7,
@@ -585,6 +884,39 @@ router.get(
           stopTiming,
           stopReasonByTiming,
         },
+        operating: {
+          windowDays: 30,
+          patients: {
+            total: totalPatients,
+            activated: activatedCount,
+            activeToday: patientDau,
+            dau: patientDau,
+            wau: patientWau,
+            mau: patientMau,
+            appleHealthConnected,
+            pctAppleHealthConnected,
+            completingCheckins,
+            pctCompletingCheckins,
+            coachEngaged,
+            pctEngagingCoaching,
+          },
+          doctors: {
+            total: totalDoctors,
+            withPanel: doctorsWithPanel,
+            dau: doctorDau,
+            wau: doctorWau,
+            mau: doctorMau,
+            patientsReviewed,
+            treatmentStatusesUpdated: treatmentStatusesUpdated30d,
+            notesWritten: notesWritten30d,
+            avgPatientsReviewedPerDoctor,
+          },
+        },
+        drilldown: {
+          patients: patientDrilldown,
+          doctors: doctorDrilldown,
+        },
+        dataSanity,
         totals: {
           interventionEvents: links.length,
         },

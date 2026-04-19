@@ -1,0 +1,374 @@
+Build Brief: Viva Analytics
+
+Build a new top-level internal dashboard page called Viva Analytics.
+
+Viva Analytics should be a web-based internal dashboard for the Viva team that lives in the existing web environment, follows the same design system and product feel as viva care and viva clinic, and is optimized for desktop first but still fully viewable on mobile from the website URL.
+
+This is not a patient-facing surface and not part of the clinician’s normal workflow. It is an internal analytics and operating dashboard for Viva.
+
+Product role
+
+Viva now has three surfaces:
+
+viva care = patient mobile app
+viva clinic = clinician web dashboard
+Viva Analytics = internal web-based analytics dashboard for Viva/admin team
+
+Viva Analytics should help us answer:
+
+Is the system alive and being used?
+Are patients staying on treatment or churning?
+Why are they churning and when?
+Are clinicians using the product?
+Are interventions and engagement signals moving in the right direction?
+Can we inspect the underlying raw data by patient and doctor?
+Dashboard type
+
+Build Viva Analytics as a responsive web dashboard.
+
+Requirements
+desktop-first layout for internal use
+still fully viewable and usable on mobile via the website URL
+no native mobile app work
+no changes to iOS / Expo / EAS / build systems
+no heavy dependencies
+Mobile web requirement
+
+On smaller screens:
+
+stack KPI cards vertically
+keep tables readable with horizontal scroll if needed
+preserve hierarchy and usability
+do not remove key sections
+do not create a separate mobile-only experience
+
+The goal is:
+
+best experience on desktop
+good readable experience on mobile web
+Design / UI / UX requirements
+
+Viva Analytics must follow the same overall design language, UI system, and UX feel as viva care and viva clinic.
+
+Match existing Viva product language
+typography
+spacing
+card styling
+section hierarchy
+chips / badges
+buttons
+table styling
+icon treatment
+color palette
+overall polish and simplicity
+It should feel like
+a natural third surface in the Viva ecosystem
+an internal extension of viva clinic
+clean, modern, minimal, and productized
+It should not feel like
+a generic admin panel
+a third-party analytics template
+a random BI dashboard
+an off-brand internal tool
+UX principles
+
+Prioritize:
+
+quick scanning
+clear visual hierarchy
+simple KPI visibility
+practical drill-down
+information density without clutter
+
+Use:
+
+top summary cards
+clear section headers
+compact readable tables
+collapsible / expandable drill-down sections where useful
+
+Reuse existing shared components and patterns where possible.
+
+Page structure
+
+Structure the page into 3 main sections plus a drill-down section in this order:
+
+Operating Metrics
+Retention & Churn
+System Behavior
+Drill-down
+
+Keep layout simple and readable.
+
+1. Operating Metrics
+
+This is the top section. It should show product usage and system activity for both viva care and viva clinic.
+
+Split this into:
+
+viva care metrics
+viva clinic metrics
+viva care metrics
+
+Include:
+
+total patients
+active today
+DAU / WAU / MAU
+% Apple Health connected
+% completing check-ins
+% engaging with coaching if available
+any existing patient-side intervention engagement metric if already implemented
+viva clinic metrics
+
+Include:
+
+total doctors
+doctor DAU / WAU / MAU
+of patients reviewed
+treatment statuses updated
+notes written
+
+If easy, also include:
+
+average patients reviewed per doctor
+Design guidance
+
+Use simple KPI cards or compact card rows.
+Keep this section fast to scan.
+
+Goal
+
+This section should answer:
+
+are patients using viva care?
+are doctors using viva clinic?
+is the system active?
+2. Retention & Churn
+
+This is the middle section and the core business section.
+
+Show:
+
+active vs stopped vs unknown patients
+% still on treatment
+total stopped patients
+stop reasons breakdown
+stop timing (early / mid / late)
+reason × timing table
+
+Optionally include a simple cohort breakdown by:
+
+time on treatment buckets
+Definitions
+% still on treatment
+
+Calculate as:
+
+active / (active + stopped)
+
+Exclude unknown from denominator.
+
+Stop timing
+
+Use the existing derived timing logic:
+
+early = <= 30 days
+mid = 31–90 days
+late = > 90 days
+Stop reasons
+
+Use the structured stop reasons already implemented:
+
+side_effects
+cost_or_insurance
+lack_of_efficacy
+patient_choice_or_motivation
+other
+Required blocks
+A. treatment status overview
+
+Show:
+
+active count
+stopped count
+unknown count
+% still on treatment
+B. stop reason breakdown
+
+Show count + % by stop reason
+Sort highest to lowest
+
+C. stop timing breakdown
+
+Show early / mid / late counts and percentages
+
+D. reason × timing table
+
+Simple table:
+| reason | early | mid | late |
+
+E. simple cohort breakdown
+
+If easy, add a lightweight cohort view by:
+
+time on treatment bucket
+
+Keep it simple. No advanced cohort explorer.
+
+Goal
+
+This section should answer:
+
+how many patients have churned?
+why did they stop?
+when did they stop?
+does this look like an addressable retention problem?
+3. System Behavior
+
+This section ties product activity to behavioral signals.
+
+Show:
+
+next-day check-in after intervention
+engagement improving (3d)
+symptom trend direction
+top interventions
+
+If easy and already supported by data, optionally include:
+
+% of stopped patients with worsening symptoms
+% of stopped patients with missed check-ins
+% of stopped patients with low energy or high nausea before stopping
+
+Only include optional cuts if they are easy and grounded in existing data.
+
+Goal
+
+This section should answer:
+
+are interventions being used?
+is engagement improving after intervention?
+what patterns seem to show up before churn?
+
+Keep it simple and directional.
+
+4. Drill-down (collapsible)
+
+Add a drill-down section at the bottom with collapsible or expandable inspection areas.
+
+Include:
+
+patient list table
+doctor list table
+
+Each should show key fields and allow inspection.
+
+Patient list table
+
+Include fields like:
+
+patient name or ID
+assigned doctor
+treatment status
+stop reason if applicable
+stop timing if applicable
+days on treatment if available
+Apple Health connected
+last check-in
+latest risk level if available
+Doctor list table
+
+Include fields like:
+
+doctor name
+number of patients
+active patients
+stopped patients
+last active
+notes written if available
+treatment statuses updated if available
+Goal
+
+This section should let us:
+
+inspect raw patient and doctor records
+see which patients belong to which doctors
+cross-check dashboard numbers against actual rows
+Constraints
+extend existing analytics endpoint where possible
+do not build a new analytics system
+keep UI simple and readable
+no heavy dependencies
+no changes to mobile / iOS / EAS
+no native mobile work
+must remain viewable from the website URL on mobile
+reuse existing design system and components where possible
+Analytics architecture requirements
+
+Build Viva Analytics by extending the existing internal analytics system.
+
+Requirements
+extend existing /internal/analytics/summary endpoint where possible
+keep aggregation server-side
+centralize calculations so dashboard and analytics use the same logic
+avoid unnecessary schema changes unless required
+do not create a separate analytics service
+Data sanity / reconciliation
+
+Add a small internal data sanity block if easy, either near the bottom or inside retention.
+
+Examples:
+
+total patients = active + stopped + unknown
+stopped patients = sum of stop reasons
+stopped patients = sum of stop timing buckets plus unknown timing if applicable
+
+This helps catch broken flows early.
+
+What NOT to build
+
+Do not build:
+
+a separate BI platform
+advanced filtering UI
+export tooling
+heavy charting infrastructure
+ML / predictive layers
+public dashboards
+mobile app analytics surfaces
+redesigns of viva care or viva clinic
+
+Keep this practical.
+
+Deliverables
+
+After implementation, tell me:
+
+what page / route was added for Viva Analytics
+what new fields were added
+how each metric is calculated
+how denominators are handled, especially for unknowns / missing data
+what UI components were added
+whether any schema changes were needed
+whether any API contracts changed
+confirm no impact to mobile or build stability
+Final build philosophy
+
+Optimize for:
+
+clear
+consistent
+responsive
+easy to inspect
+easy to demo
+easy to validate with simulated users next
+
+Do not optimize for:
+
+complexity
+fancy visuals
+lots of filters
+premature sophistication
+
+Viva Analytics should feel like a serious internal operating dashboard for Viva, built in the same product family as viva care and viva clinic.
