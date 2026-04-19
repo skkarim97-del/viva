@@ -162,8 +162,11 @@ export function SymptomTipCard(props: SymptomTipCardProps) {
             styles.title,
             {
               color: navy,
-              fontSize: isPrimary ? 17 : 14,
-              lineHeight: isPrimary ? 22 : 18,
+              // Type scale: primary title = 17, secondary title = 15.
+              // Same role across cards; emphasis differential lives in
+              // size + the implicit weight from Montserrat_600SemiBold.
+              fontSize: isPrimary ? 17 : 15,
+              lineHeight: isPrimary ? 22 : 20,
             },
           ]}
           numberOfLines={2}
@@ -207,7 +210,10 @@ export function SymptomTipCard(props: SymptomTipCardProps) {
       <Text
         style={[
           styles.urgency,
-          { color: mutedForeground, fontSize: isPrimary ? 13 : 12 },
+          // Body / urgency text is a single role at fontSize 13 across
+          // every card. Hierarchy comes from the title above, not from
+          // shrinking the body on secondary cards.
+          { color: mutedForeground, fontSize: 13 },
         ]}
       >
         {mode === "followup"
@@ -297,7 +303,7 @@ export function SymptomTipCard(props: SymptomTipCardProps) {
             ]}
           >
             <Feather name="check-circle" size={15} color="#FFFFFF" />
-            <Text style={[styles.ctaPrimaryText, { fontSize: 14 }]}>
+            <Text style={styles.ctaPrimaryText}>
               {tip.cta}
             </Text>
           </Pressable>
@@ -423,7 +429,10 @@ const styles = StyleSheet.create({
   },
   ctaSecondaryText: {
     fontFamily: "Montserrat_600SemiBold",
-    fontSize: 12,
+    // CTA role is fontSize 13 across primary and secondary cards.
+    // Secondary's lower emphasis comes from the ghost border + tighter
+    // padding, not from shrinking the label.
+    fontSize: 13,
   },
   completedRow: {
     flexDirection: "row",
@@ -444,7 +453,9 @@ const styles = StyleSheet.create({
   },
   completedText: {
     fontFamily: "Montserrat_600SemiBold",
-    fontSize: 12,
+    // Confirmation copy replaces the CTA in the same slot, so it shares
+    // the CTA role's fontSize 13 to keep the type scale consistent.
+    fontSize: 13,
   },
   accountabilityText: {
     fontFamily: "Montserrat_500Medium",
