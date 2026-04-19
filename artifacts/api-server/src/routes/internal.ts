@@ -342,9 +342,142 @@ router.get(
           | undefined) ?? { reengaged: 0, total: 0 }
       );
 
+      // ----- "Is this actually working?" simple health KPIs (14d) -----
+      // Four raw signals, no segmentation. Window is 14 days because
+      // a 7-day window collapses to noise with our current cohort
+      // size; 14d gives a more honest read while still being recent.
+      const healthWindowDays = 14;
+      const sinceYmd = ymdDaysAgo(healthWindowDays - 1);
+
+      // KPI 1: % of users who logged a check-in on the day AFTER any
+      // intervention event. Numerator = distinct patients with at
+      // least one (intervention day, day+1 checkin) pair in the
+      // window. Denominator = distinct patients with any intervention
+      // in the window.
+      const nextDayRows = await db.execute(sql`
+        with recent as (
+          select distinct ie.patient_user_id, ie.occurred_on
+          from intervention_events ie
+          where ie.occurred_on >= ${sinceYmd}
+        ),
+        with_followup as (
+          select distinct r.patient_user_id
+          from recent r
+          where exists (
+            select 1 from patient_checkins c
+            where c.patient_user_id = r.patient_user_id
+              and c.date = (r.occurred_on::date + interval '1 day')::date
+          )
+        ),
+        any_intervention as (
+          select distinct patient_user_id from recent
+        )
+        select
+          (select cast(count(*) as int) from with_followup) as with_followup,
+          (select cast(count(*) as int) from any_intervention) as denom
+      `);
+      const nextDayRow =
+        (nextDayRows.rows?.[0] as
+          | { with_followup?: number; denom?: number }
+          | undefined) ?? { with_followup: 0, denom: 0 };
+      const nextDayCheckinUsers = Number(nextDayRow.with_followup ?? 0);
+      const nextDayCheckinDenom = Number(nextDayRow.denom ?? 0);
+
+      // KPI 2: % of users improving engagement over 3 days.
+      // Numerator = distinct patients with at least one
+      // outcome_snapshots row in the window where
+      // adherence_improved_3d=true. Denominator = distinct patients
+      // with any outcome snapshot in the window.
+      const engagementRows = await db.execute(sql`
+        with recent as (
+          select patient_user_id, adherence_improved_3d
+          from outcome_snapshots
+          where snapshot_date >= ${sinceYmd}
+        )
+        select
+          (select cast(count(distinct patient_user_id) as int)
+             from recent where adherence_improved_3d) as improved,
+          (select cast(count(distinct patient_user_id) as int)
+             from recent) as denom
+      `);
+      const engagementRow =
+        (engagementRows.rows?.[0] as
+          | { improved?: number; denom?: number }
+          | undefined) ?? { improved: 0, denom: 0 };
+      const engagementImprovedUsers = Number(engagementRow.improved ?? 0);
+      const engagementDenom = Number(engagementRow.denom ?? 0);
+
+      // KPI 3: top 3 intervention types by raw usage in the window.
+      const topInterventionRows = await db.execute(sql`
+        select
+          intervention_type as type,
+          cast(count(*) as int) as count
+        from intervention_events
+        where occurred_on >= ${sinceYmd}
+        group by intervention_type
+        order by count desc
+        limit 3
+      `);
+      const topInterventions = (
+        topInterventionRows.rows as Array<{ type: string; count: number }>
+      ).map((r) => ({ type: r.type, count: Number(r.count) }));
+
+      // KPI 4: symptom trend direction across all patients (window).
+      // Counts outcome snapshots tagged improved vs worsened. We pick
+      // the direction with the larger count and report a magnitude
+      // ratio so the dashboard can show "improving 2:1" style copy.
+      const symptomTrendRows = await db.execute(sql`
+        select
+          cast(count(*) filter (where symptom_trend_3d = 'improved') as int) as improved,
+          cast(count(*) filter (where symptom_trend_3d = 'worsened') as int) as worsened,
+          cast(count(*) filter (where symptom_trend_3d = 'stable') as int) as stable
+        from outcome_snapshots
+        where snapshot_date >= ${sinceYmd}
+      `);
+      const symptomTrendRow =
+        (symptomTrendRows.rows?.[0] as
+          | { improved?: number; worsened?: number; stable?: number }
+          | undefined) ?? { improved: 0, worsened: 0, stable: 0 };
+      const symImproved = Number(symptomTrendRow.improved ?? 0);
+      const symWorsened = Number(symptomTrendRow.worsened ?? 0);
+      const symStable = Number(symptomTrendRow.stable ?? 0);
+      let symptomDirection: "improving" | "worsening" | "flat" | "no_data" =
+        "no_data";
+      if (symImproved + symWorsened + symStable > 0) {
+        if (symImproved > symWorsened) symptomDirection = "improving";
+        else if (symWorsened > symImproved) symptomDirection = "worsening";
+        else symptomDirection = "flat";
+      }
+
       res.json({
         generatedAt: new Date().toISOString(),
         windowDays: 7,
+        health: {
+          windowDays: healthWindowDays,
+          nextDayCheckinAfterIntervention: {
+            users: nextDayCheckinUsers,
+            denom: nextDayCheckinDenom,
+            pct:
+              nextDayCheckinDenom > 0
+                ? nextDayCheckinUsers / nextDayCheckinDenom
+                : 0,
+          },
+          engagementImproved3d: {
+            users: engagementImprovedUsers,
+            denom: engagementDenom,
+            pct:
+              engagementDenom > 0
+                ? engagementImprovedUsers / engagementDenom
+                : 0,
+          },
+          topInterventions,
+          symptomTrend: {
+            direction: symptomDirection,
+            improved: symImproved,
+            worsened: symWorsened,
+            stable: symStable,
+          },
+        },
         totals: {
           interventionEvents: links.length,
         },

@@ -168,3 +168,12 @@ Adds per-signal confidence, behavior strategy, intervention/outcome telemetry, a
 - Client logger: `lib/intervention/logger.ts` with debounced batching (3s) and AsyncStorage dedupe per `(date|surface|type|title)`. Hooked into Today (primaryFocus + escalation + symptom tips), Plan (primaryFocus per render), Coach (`adherence_checkin` on successful send). Drops events on auth absence and on 4xx/5xx by design (no retry queue) to prevent storms.
 - Internal analytics: `GET /internal/analytics/summary` (operator-key gated) aggregates by interventionType / communicationMode / primaryFocus / confidenceBand + escalation pathways + coach re-engagement. `viva-dashboard` `/internal/analytics` route renders the summary; bypasses the auth gate the same way `/internal` does.
 - Forbidden user-facing words remain banned: dropout, churn, adherence/compliance risk. Hydration in cups. No em dashes.
+
+## "Is this actually working?" Health KPIs (April 2026)
+
+Simple raw-signal reporting layer on top of the measurement infrastructure. Lives inside `GET /internal/analytics/summary` as a new top-level `health` block over a 14-day window. No segmentation, no ML.
+- KPI 1: % users completing next-day check-in after intervention -- `(distinct patients with intervention day + check-in on day+1) / (distinct patients with any intervention in window)`. SQL CTE on `intervention_events` and `patient_checkins`.
+- KPI 2: % users improving engagement over 3 days -- `(distinct patients with adherence_improved_3d=true) / (distinct patients with any outcome snapshot)`.
+- KPI 3: top 3 interventions by usage -- `count(*) group by intervention_type order by count desc limit 3`.
+- KPI 4: symptom trend direction -- counts `symptom_trend_3d` improved/worsened/stable across all snapshots in window; reports `improving | worsening | flat | no_data`.
+- Surfaced as a "Is this actually working?" stat panel at the top of `/internal/analytics` (viva-dashboard), above the per-bucket attribution tables. 14-day window chosen because 7d collapses to noise at current cohort size.

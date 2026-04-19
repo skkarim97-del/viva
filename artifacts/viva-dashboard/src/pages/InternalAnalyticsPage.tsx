@@ -16,9 +16,23 @@ interface OutcomeBucket {
   reengagedAfterLow: number;
 }
 
+interface HealthBlock {
+  windowDays: number;
+  nextDayCheckinAfterIntervention: { users: number; denom: number; pct: number };
+  engagementImproved3d: { users: number; denom: number; pct: number };
+  topInterventions: Array<{ type: string; count: number }>;
+  symptomTrend: {
+    direction: "improving" | "worsening" | "flat" | "no_data";
+    improved: number;
+    worsened: number;
+    stable: number;
+  };
+}
+
 interface AnalyticsSummary {
   generatedAt: string;
   windowDays: number;
+  health?: HealthBlock;
   totals: { interventionEvents: number };
   byInterventionType: Record<string, OutcomeBucket>;
   byCommunicationMode: Record<string, OutcomeBucket>;
@@ -49,6 +63,133 @@ async function fetchSummary(key: string): Promise<AnalyticsSummary> {
 function pct(num: number, denom: number): string {
   if (!denom) return "—";
   return `${Math.round((num / denom) * 100)}%`;
+}
+
+function Stat({
+  label,
+  value,
+  sub,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  tone?: "good" | "bad" | "neutral";
+}) {
+  const color =
+    tone === "good" ? "#047857" : tone === "bad" ? "#b91c1c" : "#111827";
+  return (
+    <div
+      style={{
+        flex: 1,
+        minWidth: 180,
+        padding: "12px 14px",
+        background: "#f9fafb",
+        border: "1px solid #e5e7eb",
+        borderRadius: 8,
+      }}
+    >
+      <div style={{ color: "#6b7280", fontSize: 12, marginBottom: 4 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 22, fontWeight: 700, color }}>{value}</div>
+      {sub && (
+        <div style={{ color: "#6b7280", fontSize: 12, marginTop: 4 }}>{sub}</div>
+      )}
+    </div>
+  );
+}
+
+function HealthPanel({ h }: { h: HealthBlock }) {
+  const pctStr = (p: number) => `${Math.round(p * 100)}%`;
+  const trendLabel: Record<HealthBlock["symptomTrend"]["direction"], string> = {
+    improving: "Improving",
+    worsening: "Worsening",
+    flat: "Flat",
+    no_data: "No data",
+  };
+  const trendTone: Record<
+    HealthBlock["symptomTrend"]["direction"],
+    "good" | "bad" | "neutral"
+  > = {
+    improving: "good",
+    worsening: "bad",
+    flat: "neutral",
+    no_data: "neutral",
+  };
+  const t = h.symptomTrend;
+  const trendSub =
+    t.direction === "no_data"
+      ? "No outcome snapshots yet."
+      : `${t.improved} improved · ${t.worsened} worsened · ${t.stable} stable`;
+  const top = h.topInterventions;
+  return (
+    <section
+      style={{
+        background: "white",
+        border: "1px solid #e5e7eb",
+        borderRadius: 8,
+        padding: 16,
+        marginBottom: 16,
+      }}
+    >
+      <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>
+        Is this actually working?
+      </h2>
+      <p
+        style={{
+          marginTop: 4,
+          marginBottom: 12,
+          color: "#6b7280",
+          fontSize: 12,
+        }}
+      >
+        Raw signal across the full population over the last {h.windowDays} days.
+        No segmentation.
+      </p>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+        <Stat
+          label="Next-day check-in after intervention"
+          value={pctStr(h.nextDayCheckinAfterIntervention.pct)}
+          sub={`${h.nextDayCheckinAfterIntervention.users} of ${h.nextDayCheckinAfterIntervention.denom} users`}
+          tone={
+            h.nextDayCheckinAfterIntervention.denom === 0
+              ? "neutral"
+              : h.nextDayCheckinAfterIntervention.pct >= 0.5
+                ? "good"
+                : "neutral"
+          }
+        />
+        <Stat
+          label="Engagement improving over 3 days"
+          value={pctStr(h.engagementImproved3d.pct)}
+          sub={`${h.engagementImproved3d.users} of ${h.engagementImproved3d.denom} users`}
+          tone={
+            h.engagementImproved3d.denom === 0
+              ? "neutral"
+              : h.engagementImproved3d.pct >= 0.3
+                ? "good"
+                : "neutral"
+          }
+        />
+        <Stat
+          label="Symptom trend"
+          value={trendLabel[t.direction]}
+          sub={trendSub}
+          tone={trendTone[t.direction]}
+        />
+        <Stat
+          label="Top interventions"
+          value={top.length === 0 ? "—" : `${top.length}`}
+          sub={
+            top.length === 0
+              ? "No interventions logged yet."
+              : top.map((r) => `${r.type} (${r.count})`).join(" · ")
+          }
+        />
+      </div>
+    </section>
+  );
 }
 
 function BucketTable({
@@ -250,6 +391,8 @@ export function InternalAnalyticsPage() {
           {new Date(data.generatedAt).toLocaleTimeString()}
         </div>
       </header>
+
+      {data.health && <HealthPanel h={data.health} />}
 
       <BucketTable
         title="Outcomes by intervention type"

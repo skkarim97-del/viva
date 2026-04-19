@@ -1,0 +1,190 @@
+Instruction for Replit agent
+
+Update the AI coach message generation so the coaching feels clearly personalized to the user’s real data, while keeping the existing coaching architecture and iOS / EAS stability intact.
+
+Goal
+
+Right now the coach can feel generic and templated. I want every coach insight card to feel grounded in the user’s actual recent data, especially their latest check-in and available Apple Health / wearable signals.
+
+The coach should sound like a warm, practical clinician or care team member. It should feel observant and helpful, not robotic, overly polished, or generic.
+
+Scope
+
+Apply this update to:
+
+Today screen coach insight cards
+Plan tab coach section
+Any short coach preview / summary card that appears in those surfaces
+
+Do not redesign the UI or change navigation. This is a message-generation logic update, not a layout overhaul.
+
+Core requirement
+
+Every coach message should reference at least one specific real user signal from:
+
+most recent check-in
+recent treatment / dose context
+recent Apple Health / wearable data if available
+recent trend direction if already computed in the app
+
+Examples of acceptable signals:
+
+nausea = mild
+energy = low
+digestion = bloated / constipation
+appetite = low
+bowel movement = no
+dose increased recently
+sleep below baseline
+steps down vs recent average
+recovery weaker than normal
+hydration consistency weak
+streak / adherence slipping
+Example of desired output
+
+If user logged mild nausea and low energy today:
+
+“You flagged mild nausea and low energy today. That combo can show up early on Mounjaro. Keep meals small for the next few hours and don’t force a hard workout.”
+
+If sleep and recovery dipped:
+
+“Your sleep and recovery both came in lower than your recent baseline. Today is probably better treated as a lighter recovery day than a push day.”
+
+If appetite is low and bowel movement is no:
+
+“You logged low appetite and no bowel movement today. That usually points to slowing things down a bit on food volume and staying ahead on fluids.”
+
+If wearable data is unavailable:
+
+still personalize off check-in data only
+never hallucinate health metrics
+Tone requirements
+
+Write in:
+
+plain conversational language
+warm and supportive
+practical and slightly human
+concise
+
+Avoid:
+
+“I know”
+“I understand”
+“that must be hard”
+robotic empathy
+generic filler
+overly clinical or medical language
+vague lines that could apply to anyone
+
+The coach should sound like:
+
+a smart, calm clinician
+or a thoughtful care team member reviewing the user’s actual data
+
+Not like:
+
+a generic chatbot
+a motivational quote machine
+a therapist
+a doctor making medical claims
+Logic requirements
+
+Update the message logic so it prefers this hierarchy:
+
+Latest check-in data
+today’s symptoms and qualitative inputs should be the primary anchor
+Recent trend context
+if available, add short context like:
+“this has been showing up for the last 2 days”
+“this is better than earlier this week”
+“this dipped after your last dose”
+Wearable / Apple Health context
+only if present and already available in the app state
+examples:
+sleep lower than recent average
+steps down
+recovery weaker
+resting HR up
+do not invent missing data
+Actionable next step
+every message should end with a clear practical suggestion or framing
+example:
+lighter movement
+smaller frequent meals
+hydrate earlier
+avoid pushing intensity
+monitor symptoms after dose day
+Guardrails
+
+Very important:
+
+Do not break existing coach architecture
+Do not introduce risky dependencies
+Do not change API contracts unless absolutely necessary
+Do not touch native iOS config, Expo config, EAS config, HealthKit config, package versions, plugins, or build settings
+Do not add any new library unless required
+Do not refactor unrelated logic
+
+This should be implemented as a contained logic improvement inside the existing coach / insight generation layer.
+
+Preferred implementation approach
+
+Keep this safe and modular:
+
+find the current coach message builder / generator
+improve message selection + message composition there
+use existing user state, check-in state, trends state, and wearable state already available in the app
+add a deterministic message builder that assembles:
+observed signal
+short interpretation
+actionable suggestion
+
+Pseudo pattern:
+
+observation: “You logged mild nausea and low energy today.”
+interpretation: “That tends to be a lighter-treatment day signal.”
+action: “Keep meals smaller and go easier on activity for the rest of the day.”
+Personalization rules
+
+Messages should:
+
+always mention at least one actual user-specific input
+preferably mention two if naturally related
+mention trend direction when meaningful
+mention medication / dose context when relevant
+mention wearable data only when available and useful
+Fallback behavior
+
+If data is sparse:
+
+use the latest real signal available
+if only one check-in exists, personalize off that
+if wearable data is unavailable, do not mention it
+if almost no user data exists, use the most recent logged symptom / treatment fact rather than a generic motivational line
+What not to do
+do not rewrite the whole coaching system
+do not change the clinician dashboard
+do not change risk scoring
+do not change plan generation unless needed only to improve coach text
+do not add backend complexity unless absolutely required
+do not make the coach verbose
+Success criteria
+
+I should see:
+
+Today coach cards that clearly reference actual user input
+Plan tab coach section that clearly references recent symptoms, trends, or wearable data
+less generic phrasing
+no bot-like empathy language
+same UI, same flows, same stability
+no regressions in iOS / TestFlight / EAS build behavior
+Final output I want from you
+
+After implementing, tell me:
+
+exactly which files were changed
+how the personalization logic now works
+what fallback logic is used when data is missing
+whether any API or type contracts changed
+whether this touched anything that could affect EAS build or iOS submission
