@@ -476,12 +476,13 @@ export function generateAdaptiveInsights(patterns: UserPatterns): AdaptiveInsigh
 
     if (hasEnoughData && directionConsistent) {
       anyTrendShown = true;
-      // Only claim "two weeks" once we genuinely have ~10+ days of data.
-      // Below that we soften to "in your recent check-ins" so the timeframe
-      // matches the actual evidence.
-      const window = rolling.sampleSize14d >= 10
-        ? "over the past two weeks"
-        : "in your recent check-ins";
+      // Phrasing tracks how strong the evidence actually is.
+      //   * 10+ days  -> definitive: "has been steadily improving over the past two weeks"
+      //   * 5-9 days  -> soft:       "is trending toward improvement in your recent check-ins"
+      // We never claim "two weeks" or "steadily" off a 5-day signal --
+      // those words imply a level of certainty the sample size hasn't
+      // earned yet.
+      const isFullWindow = rolling.sampleSize14d >= 10;
       const labels: Record<InputCategory, string> = {
         energy: "energy",
         appetite: "appetite",
@@ -489,12 +490,22 @@ export function generateAdaptiveInsights(patterns: UserPatterns): AdaptiveInsigh
         digestion: "digestion",
       };
       let text: string;
-      if (rolling.category === "nausea") {
-        text = `Nausea has been steadily improving ${window}`;
-      } else if (rolling.category === "digestion") {
-        text = `Digestion has been steadily settling down ${window}`;
+      if (isFullWindow) {
+        if (rolling.category === "nausea") {
+          text = "Nausea has been steadily improving over the past two weeks";
+        } else if (rolling.category === "digestion") {
+          text = "Digestion has been steadily settling down over the past two weeks";
+        } else {
+          text = `Your ${labels[rolling.category]} has been steadily improving over the past two weeks`;
+        }
       } else {
-        text = `Your ${labels[rolling.category]} has been steadily improving ${window}`;
+        if (rolling.category === "nausea") {
+          text = "Nausea looks like it may be easing in your recent check-ins";
+        } else if (rolling.category === "digestion") {
+          text = "Digestion looks like it may be settling in your recent check-ins";
+        } else {
+          text = `Your ${labels[rolling.category]} is trending toward improvement in your recent check-ins`;
+        }
       }
       insights.push({
         id: `trend_improving_${rolling.category}`,
