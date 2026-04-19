@@ -10,6 +10,8 @@ import {
   patientCheckinsTable,
   patientWeightsTable,
   doctorNotesTable,
+  TREATMENT_STATUSES,
+  STOP_REASONS,
 } from "@workspace/db";
 import { requireDoctor, type AuthedRequest } from "../middlewares/auth";
 import {
@@ -43,6 +45,8 @@ router.get("/", async (req, res: Response) => {
       startedOn: patientsTable.startedOn,
       activatedAt: patientsTable.activatedAt,
       activationToken: patientsTable.activationToken,
+      treatmentStatus: patientsTable.treatmentStatus,
+      stopReason: patientsTable.stopReason,
     })
     .from(patientsTable)
     .innerJoin(usersTable, eq(usersTable.id, patientsTable.userId))
@@ -115,6 +119,8 @@ router.get("/", async (req, res: Response) => {
         lastNoteAt: lastNoteByPatient.get(p.id) ?? null,
         pending: true,
         activationToken: p.activationToken,
+        treatmentStatus: p.treatmentStatus,
+        stopReason: p.stopReason,
       };
     }
     const cks = byPatient.get(p.id) ?? [];
@@ -150,6 +156,8 @@ router.get("/", async (req, res: Response) => {
         lastNoteAt: lastNoteByPatient.get(p.id) ?? null,
         pending: true,
         activationToken: null as string | null,
+        treatmentStatus: p.treatmentStatus,
+        stopReason: p.stopReason,
       };
     }
     return {
@@ -180,6 +188,8 @@ router.get("/", async (req, res: Response) => {
       symptomFlagCount: symptomFlags.length,
       symptomEscalating: symptomFlags.some((f) => f.suggestFollowup),
       symptomSummary,
+      treatmentStatus: p.treatmentStatus,
+      stopReason: p.stopReason,
     };
   });
 
@@ -383,6 +393,11 @@ async function loadOwnedPatient(
   glp1Drug: string | null;
   dose: string | null;
   startedOn: string | null;
+  treatmentStatus: "active" | "stopped" | "unknown";
+  treatmentStatusSource: "doctor" | "patient" | "system" | null;
+  stopReason: "side_effects" | "cost" | "other" | "unknown" | null;
+  stopNote: string | null;
+  treatmentStatusUpdatedAt: Date | null;
 } | null> {
   const [row] = await db
     .select({
@@ -394,6 +409,11 @@ async function loadOwnedPatient(
       dose: patientsTable.dose,
       startedOn: patientsTable.startedOn,
       doctorId: patientsTable.doctorId,
+      treatmentStatus: patientsTable.treatmentStatus,
+      treatmentStatusSource: patientsTable.treatmentStatusSource,
+      stopReason: patientsTable.stopReason,
+      stopNote: patientsTable.stopNote,
+      treatmentStatusUpdatedAt: patientsTable.treatmentStatusUpdatedAt,
     })
     .from(patientsTable)
     .innerJoin(usersTable, eq(usersTable.id, patientsTable.userId))
@@ -408,8 +428,83 @@ async function loadOwnedPatient(
     glp1Drug: row.glp1Drug,
     dose: row.dose,
     startedOn: row.startedOn,
+    treatmentStatus: row.treatmentStatus,
+    treatmentStatusSource: row.treatmentStatusSource,
+    stopReason: row.stopReason,
+    stopNote: row.stopNote,
+    treatmentStatusUpdatedAt: row.treatmentStatusUpdatedAt,
   };
 }
+
+// PATCH /patients/:id/treatment-status -- doctor-only control to mark
+// a patient's treatment status. Owns the entire transition: when
+// status leaves 'stopped' we MUST clear the reason/note so they
+// don't linger as ghost data on the next stop event.
+const treatmentStatusBody = z
+  .object({
+    status: z.enum(TREATMENT_STATUSES),
+    stopReason: z.enum(STOP_REASONS).optional(),
+    stopNote: z.string().max(500).optional().nullable(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.status === "stopped" && !v.stopReason) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "stopReason required when status is stopped",
+        path: ["stopReason"],
+      });
+    }
+  });
+
+router.patch("/:id/treatment-status", async (req, res: Response) => {
+  const doctorId = (req as AuthedRequest).auth.userId;
+  const patientId = Number(req.params.id);
+  if (!Number.isFinite(patientId)) {
+    res.status(400).json({ error: "invalid_id" });
+    return;
+  }
+  const owned = await loadOwnedPatient(doctorId, patientId);
+  if (!owned) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  const parsed = treatmentStatusBody.safeParse(req.body);
+  if (!parsed.success) {
+    res
+      .status(400)
+      .json({ error: "invalid_input", details: parsed.error.flatten() });
+    return;
+  }
+  const isStop = parsed.data.status === "stopped";
+  // Re-assert ownership *atomically* in the WHERE clause so a race
+  // (e.g. patient reassigned between loadOwnedPatient and this UPDATE)
+  // can never let a non-owning doctor mutate the row. The loadOwnedPatient
+  // pre-check stays in for the clean 404 message; this is the actual
+  // authorization gate.
+  const updated = await db
+    .update(patientsTable)
+    .set({
+      treatmentStatus: parsed.data.status,
+      treatmentStatusSource: "doctor",
+      stopReason: isStop ? parsed.data.stopReason ?? "unknown" : null,
+      stopNote: isStop ? parsed.data.stopNote ?? null : null,
+      treatmentStatusUpdatedAt: new Date(),
+      treatmentStatusUpdatedBy: doctorId,
+    })
+    .where(
+      and(
+        eq(patientsTable.userId, patientId),
+        eq(patientsTable.doctorId, doctorId),
+      ),
+    )
+    .returning({ userId: patientsTable.userId });
+  if (updated.length === 0) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  const fresh = await loadOwnedPatient(doctorId, patientId);
+  res.json(fresh);
+});
 
 router.get("/:id", async (req, res: Response) => {
   const doctorId = (req as AuthedRequest).auth.userId;

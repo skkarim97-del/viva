@@ -449,6 +449,49 @@ router.get(
         else symptomDirection = "flat";
       }
 
+      // ----- Treatment status retention block ---------------------------
+      // Counts every patient row (whether activated or not) by current
+      // treatment_status. Top stop reasons aggregated from the same
+      // table. % still on treatment uses (active / (active + stopped))
+      // so unknowns don't artificially deflate the rate -- pilots
+      // routinely have unconfirmed cohorts and we don't want to call
+      // those churned.
+      const statusRows = await db.execute(sql`
+        select
+          treatment_status as status,
+          cast(count(*) as int) as count
+        from patients
+        group by treatment_status
+      `);
+      const statusCounts = { active: 0, stopped: 0, unknown: 0 };
+      for (const r of statusRows.rows as Array<{
+        status: keyof typeof statusCounts;
+        count: number;
+      }>) {
+        if (r.status in statusCounts) {
+          statusCounts[r.status] = Number(r.count);
+        }
+      }
+      const totalPatients =
+        statusCounts.active + statusCounts.stopped + statusCounts.unknown;
+      const onTreatmentDenom = statusCounts.active + statusCounts.stopped;
+      const pctStillOnTreatment =
+        onTreatmentDenom > 0 ? statusCounts.active / onTreatmentDenom : 0;
+
+      const stopReasonRows = await db.execute(sql`
+        select
+          coalesce(stop_reason, 'unknown') as reason,
+          cast(count(*) as int) as count
+        from patients
+        where treatment_status = 'stopped'
+        group by stop_reason
+        order by count desc
+        limit 10
+      `);
+      const topStopReasons = (
+        stopReasonRows.rows as Array<{ reason: string; count: number }>
+      ).map((r) => ({ reason: r.reason, count: Number(r.count) }));
+
       res.json({
         generatedAt: new Date().toISOString(),
         windowDays: 7,
@@ -477,6 +520,14 @@ router.get(
             worsened: symWorsened,
             stable: symStable,
           },
+        },
+        treatmentStatus: {
+          totalPatients,
+          active: statusCounts.active,
+          stopped: statusCounts.stopped,
+          unknown: statusCounts.unknown,
+          pctStillOnTreatment,
+          topStopReasons,
         },
         totals: {
           interventionEvents: links.length,

@@ -1,0 +1,163 @@
+1. Don’t make the agent choose between patient vs doctor input
+
+Right now you wrote:
+
+patient self-report OR doctor marks stopped
+
+That leaves room for the agent to make the wrong tradeoff.
+
+For Viva, I’d say:
+
+implement doctor input first
+add patient self-report only if it is fast and low-risk
+
+Why:
+
+B2B product
+clinician-confirmed status is more credible
+less chance of adding noisy consumer UX right now
+2. Add one simple “at risk” flag if easy
+
+You said optional. I agree. But I’d phrase it like:
+
+add at_risk only if it can be derived from existing risk logic without creating major new logic
+
+That keeps it clean.
+
+3. Be explicit that “unknown” is the default for missing truth
+
+Otherwise the agent may over-infer. You want:
+
+active = explicitly confirmed or reasonably assumed by current treatment workflow
+stopped = explicitly marked
+unknown = not enough evidence
+4. Ask for dashboard changes only, not full analytics architecture
+
+Be direct:
+
+extend the existing internal analytics page with treatment-status reporting
+do not build a new analytics system
+
+That’ll prevent scope creep.
+
+Here’s the version I’d actually send
+
+Instruction for Replit agent
+
+Build a lean MVP retention layer for Viva that helps us answer one question:
+
+Did this help keep patients engaged and on treatment?
+
+This is not a full churn intelligence system. Do not overbuild this.
+
+Scope
+
+Add only the minimum internal retention tracking needed to support pilots and early reporting.
+
+Must-have features
+1. Treatment status
+
+Add a simple treatment status field for each patient:
+
+active
+stopped
+unknown
+
+Optional:
+
+at_risk only if it can be derived cleanly from existing risk logic without major extra work
+
+Definitions:
+
+active = currently on treatment based on clinician confirmation or current workflow assumption
+stopped = explicitly marked as no longer on treatment
+unknown = not enough information to confidently label active or stopped
+
+Do not add more status categories in this version.
+
+2. Status source
+
+Track how the treatment status was set:
+
+doctor
+patient
+system
+
+Keep this lightweight.
+
+3. Stop reason
+
+If a patient is marked stopped, store a simple structured reason:
+
+side_effects
+cost
+other
+unknown
+
+No expanded taxonomy for now.
+
+4. Fastest status update workflow
+
+Implement the fastest reliable way to mark a patient as stopped.
+
+Priority: doctor input first
+
+add a simple clinician dashboard control to mark a patient:
+active
+stopped
+optional: unknown if needed
+
+If marked stopped:
+
+capture reason
+optional note if easy
+
+Add patient self-report only if it is fast, low-risk, and does not complicate the mobile app.
+
+5. Internal reporting
+
+Extend the existing internal analytics/dashboard view to show:
+
+total patients
+active patients
+stopped patients
+unknown patients
+optionally at-risk patients if included
+% still on treatment
+top stop reasons
+existing engagement metrics alongside this
+
+Do not build a new analytics architecture or a new dashboard system. Extend the current one.
+
+What NOT to build in this version
+
+Do not build:
+
+full churn taxonomy
+full event streaming system
+full patient timeline UI
+deep cohort analytics
+complex inferred churn logic
+ML-ready infrastructure
+major mobile UX redesign
+
+This should remain a contained MVP retention layer.
+
+Implementation guardrails
+do not break patient app flows
+do not break clinician dashboard core flows
+do not touch iOS / Expo / EAS / native config
+do not add risky dependencies
+do not refactor unrelated systems
+Deliverables
+
+After implementation, tell me:
+
+which files changed
+schema changes made
+how treatment status is defined
+how stopped status gets set
+how stop reasons are captured
+what internal dashboard metrics were added
+whether any API contracts changed
+whether anything touched build stability

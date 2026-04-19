@@ -29,10 +29,20 @@ interface HealthBlock {
   };
 }
 
+interface TreatmentStatusBlock {
+  totalPatients: number;
+  active: number;
+  stopped: number;
+  unknown: number;
+  pctStillOnTreatment: number;
+  topStopReasons: Array<{ reason: string; count: number }>;
+}
+
 interface AnalyticsSummary {
   generatedAt: string;
   windowDays: number;
   health?: HealthBlock;
+  treatmentStatus?: TreatmentStatusBlock;
   totals: { interventionEvents: number };
   byInterventionType: Record<string, OutcomeBucket>;
   byCommunicationMode: Record<string, OutcomeBucket>;
@@ -393,6 +403,9 @@ export function InternalAnalyticsPage() {
       </header>
 
       {data.health && <HealthPanel h={data.health} />}
+      {data.treatmentStatus && (
+        <TreatmentStatusPanel t={data.treatmentStatus} />
+      )}
 
       <BucketTable
         title="Outcomes by intervention type"
@@ -483,5 +496,86 @@ export function InternalAnalyticsPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+const STOP_REASON_DISPLAY: Record<string, string> = {
+  side_effects: "Side effects",
+  cost: "Cost / coverage",
+  other: "Other",
+  unknown: "Unknown",
+};
+
+function TreatmentStatusPanel({ t }: { t: TreatmentStatusBlock }) {
+  const pctStr = `${Math.round(t.pctStillOnTreatment * 100)}%`;
+  const tone =
+    t.pctStillOnTreatment >= 0.85
+      ? "good"
+      : t.pctStillOnTreatment >= 0.65
+      ? "neutral"
+      : "bad";
+  return (
+    <section
+      style={{
+        padding: 16,
+        border: "1px solid #e5e7eb",
+        borderRadius: 8,
+        background: "#fff",
+      }}
+    >
+      <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>
+        Treatment status retention
+      </h2>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <Stat
+          label="% still on treatment"
+          value={pctStr}
+          sub={`${t.active} of ${t.active + t.stopped} confirmed`}
+          tone={tone as "good" | "bad" | "neutral"}
+        />
+        <Stat
+          label="On treatment"
+          value={String(t.active)}
+          sub="Currently active"
+          tone="good"
+        />
+        <Stat
+          label="Stopped"
+          value={String(t.stopped)}
+          sub="Off treatment"
+          tone={t.stopped > 0 ? "bad" : "neutral"}
+        />
+        <Stat
+          label="Unknown"
+          value={String(t.unknown)}
+          sub="Pending confirmation"
+        />
+        <Stat label="Total panel" value={String(t.totalPatients)} />
+      </div>
+      {t.topStopReasons.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <div
+            style={{
+              color: "#6b7280",
+              fontSize: 12,
+              fontWeight: 600,
+              marginBottom: 6,
+              textTransform: "uppercase",
+              letterSpacing: 0.4,
+            }}
+          >
+            Top stop reasons
+          </div>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 14 }}>
+            {t.topStopReasons.map((r) => (
+              <li key={r.reason}>
+                {STOP_REASON_DISPLAY[r.reason] ?? r.reason}
+                <span style={{ color: "#6b7280" }}> · {r.count}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
   );
 }

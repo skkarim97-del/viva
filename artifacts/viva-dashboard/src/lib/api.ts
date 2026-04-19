@@ -60,6 +60,9 @@ export interface PatientRow {
   activationToken: string | null;
 }
 
+export type TreatmentStatus = "active" | "stopped" | "unknown";
+export type StopReason = "side_effects" | "cost" | "other" | "unknown";
+
 export interface PatientDetail {
   id: number;
   name: string;
@@ -68,6 +71,11 @@ export interface PatientDetail {
   glp1Drug: string | null;
   dose: string | null;
   startedOn: string | null;
+  treatmentStatus: TreatmentStatus;
+  treatmentStatusSource: "doctor" | "patient" | "system" | null;
+  stopReason: StopReason | null;
+  stopNote: string | null;
+  treatmentStatusUpdatedAt: string | null;
 }
 
 export interface Checkin {
@@ -160,7 +168,7 @@ class HttpError extends Error {
 }
 
 async function request<T>(
-  method: "GET" | "POST" | "DELETE",
+  method: "GET" | "POST" | "DELETE" | "PUT" | "PATCH",
   path: string,
   body?: unknown,
 ): Promise<T> {
@@ -230,6 +238,19 @@ export const api = {
     request<{ ok: true }>(
       "DELETE",
       `/patients/${patientId}/notes/${noteId}`,
+    ),
+  setTreatmentStatus: (
+    id: number,
+    input: {
+      status: TreatmentStatus;
+      stopReason?: StopReason;
+      stopNote?: string | null;
+    },
+  ) =>
+    request<PatientDetail>(
+      "PATCH",
+      `/patients/${id}/treatment-status`,
+      input,
     ),
 };
 

@@ -1,7 +1,13 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type Checkin, type SymptomFlag } from "@/lib/api";
+import {
+  api,
+  type Checkin,
+  type StopReason,
+  type SymptomFlag,
+  type TreatmentStatus,
+} from "@/lib/api";
 import { RiskBadge } from "@/components/RiskBadge";
 import { ActionBadge } from "@/components/ActionBadge";
 import { relativeTime, daysSince } from "@/lib/relativeTime";
@@ -87,6 +93,31 @@ export function PatientDetailPage({ id }: { id: number }) {
   });
 
   const [draft, setDraft] = useState("");
+  // Local state for the treatment-status editor. We don't keep these in
+  // a separate query; mutating PATCH returns the fresh PatientDetail
+  // and we just push it into the patient cache.
+  const [statusEditOpen, setStatusEditOpen] = useState(false);
+  const [statusDraft, setStatusDraft] = useState<TreatmentStatus>("active");
+  const [stopReasonDraft, setStopReasonDraft] =
+    useState<StopReason>("side_effects");
+  const [stopNoteDraft, setStopNoteDraft] = useState("");
+  const setStatusMut = useMutation({
+    mutationFn: () =>
+      api.setTreatmentStatus(id, {
+        status: statusDraft,
+        stopReason:
+          statusDraft === "stopped" ? stopReasonDraft : undefined,
+        stopNote:
+          statusDraft === "stopped" && stopNoteDraft.trim()
+            ? stopNoteDraft.trim()
+            : null,
+      }),
+    onSuccess: (fresh) => {
+      qc.setQueryData(["patient", id], fresh);
+      qc.invalidateQueries({ queryKey: ["patients"] });
+      setStatusEditOpen(false);
+    },
+  });
   const addNote = useMutation({
     mutationFn: (body: string) => api.addPatientNote(id, body),
     onSuccess: () => {
@@ -216,6 +247,41 @@ export function PatientDetailPage({ id }: { id: number }) {
           </div>
         )}
       </div>
+
+      {/* Treatment status. Doctor-owned source of truth for whether
+          this patient is currently on GLP-1 therapy. Drives whether
+          they show up in the active panel and feeds the retention
+          KPIs in /internal/analytics. We deliberately keep it to
+          three states (active / stopped / unknown) so the control
+          stays unambiguous; risk-band/at-risk is derived elsewhere. */}
+      <TreatmentStatusCard
+        status={p.treatmentStatus}
+        source={p.treatmentStatusSource}
+        stopReason={p.stopReason}
+        stopNote={p.stopNote}
+        updatedAt={p.treatmentStatusUpdatedAt}
+        editing={statusEditOpen}
+        onEdit={() => {
+          setStatusDraft(p.treatmentStatus);
+          setStopReasonDraft((p.stopReason as StopReason) ?? "side_effects");
+          setStopNoteDraft(p.stopNote ?? "");
+          setStatusEditOpen(true);
+        }}
+        onCancel={() => setStatusEditOpen(false)}
+        onSave={() => setStatusMut.mutate()}
+        saving={setStatusMut.isPending}
+        errorMessage={
+          setStatusMut.isError
+            ? (setStatusMut.error as Error).message
+            : null
+        }
+        statusDraft={statusDraft}
+        setStatusDraft={setStatusDraft}
+        stopReasonDraft={stopReasonDraft}
+        setStopReasonDraft={setStopReasonDraft}
+        stopNoteDraft={stopNoteDraft}
+        setStopNoteDraft={setStopNoteDraft}
+      />
 
       {/* Last check-in gap callout. Surfaces the strongest churn signal
           (silence) without making the doctor scan the timeline first. */}
@@ -512,5 +578,204 @@ export function PatientDetailPage({ id }: { id: number }) {
         )}
       </section>
     </div>
+  );
+}
+
+// ---- TreatmentStatusCard ---------------------------------------------------
+// Pulled out of PatientDetailPage so the JSX above stays scannable.
+// Read-mode shows a colored chip + "edited by ..." line. Edit-mode is
+// a tiny inline form -- no modal, no separate page -- because doctors
+// will hit this constantly during weekly reviews and a modal would
+// add a click for nothing.
+
+const STATUS_LABEL: Record<TreatmentStatus, string> = {
+  active: "On treatment",
+  stopped: "Stopped",
+  unknown: "Unknown",
+};
+const STATUS_STYLE: Record<TreatmentStatus, { bg: string; fg: string }> = {
+  active: { bg: "rgba(52,199,89,0.12)", fg: "#1F7A3A" },
+  stopped: { bg: "rgba(255,59,48,0.12)", fg: "#B5251D" },
+  unknown: { bg: "rgba(142,142,147,0.16)", fg: "#4A4A55" },
+};
+const STOP_REASON_LABEL: Record<StopReason, string> = {
+  side_effects: "Side effects",
+  cost: "Cost / coverage",
+  other: "Other",
+  unknown: "Unknown",
+};
+const SOURCE_LABEL: Record<"doctor" | "patient" | "system", string> = {
+  doctor: "you",
+  patient: "patient",
+  system: "system",
+};
+
+function TreatmentStatusCard(props: {
+  status: TreatmentStatus;
+  source: "doctor" | "patient" | "system" | null;
+  stopReason: StopReason | null;
+  stopNote: string | null;
+  updatedAt: string | null;
+  editing: boolean;
+  onEdit: () => void;
+  onCancel: () => void;
+  onSave: () => void;
+  saving: boolean;
+  errorMessage: string | null;
+  statusDraft: TreatmentStatus;
+  setStatusDraft: (s: TreatmentStatus) => void;
+  stopReasonDraft: StopReason;
+  setStopReasonDraft: (r: StopReason) => void;
+  stopNoteDraft: string;
+  setStopNoteDraft: (n: string) => void;
+}) {
+  const style = STATUS_STYLE[props.status];
+  return (
+    <section className="bg-card rounded-[20px] p-6">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap">
+          <h2 className="font-display text-[18px] font-semibold text-foreground">
+            Treatment status
+          </h2>
+          <span
+            className="px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap"
+            style={{ backgroundColor: style.bg, color: style.fg }}
+          >
+            {STATUS_LABEL[props.status]}
+          </span>
+          {props.status === "stopped" && props.stopReason && (
+            <span
+              className="px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap"
+              style={{
+                backgroundColor: "rgba(142,142,147,0.16)",
+                color: "#4A4A55",
+              }}
+            >
+              {STOP_REASON_LABEL[props.stopReason]}
+            </span>
+          )}
+        </div>
+        {!props.editing && (
+          <button
+            type="button"
+            onClick={props.onEdit}
+            className="text-sm font-semibold text-foreground bg-background hover:bg-muted rounded-lg px-3 py-1.5 transition-colors"
+          >
+            Update
+          </button>
+        )}
+      </div>
+
+      {!props.editing && (
+        <>
+          {props.status === "stopped" && props.stopNote && (
+            <p className="text-sm text-foreground mt-3 leading-relaxed">
+              {props.stopNote}
+            </p>
+          )}
+          {props.updatedAt && props.source && (
+            <div className="text-xs text-muted-foreground mt-3 font-medium">
+              Set by {SOURCE_LABEL[props.source]} ·{" "}
+              {relativeTime(props.updatedAt)}
+            </div>
+          )}
+        </>
+      )}
+
+      {props.editing && (
+        <div className="mt-4 space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {(Object.keys(STATUS_LABEL) as TreatmentStatus[]).map((s) => {
+              const selected = props.statusDraft === s;
+              const sStyle = STATUS_STYLE[s];
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => props.setStatusDraft(s)}
+                  className="px-3 py-1.5 rounded-lg text-sm font-semibold transition-all"
+                  style={{
+                    backgroundColor: selected ? sStyle.bg : "transparent",
+                    color: selected ? sStyle.fg : "#4A4A55",
+                    border: `1px solid ${
+                      selected ? sStyle.fg : "rgba(142,142,147,0.3)"
+                    }`,
+                  }}
+                >
+                  {STATUS_LABEL[s]}
+                </button>
+              );
+            })}
+          </div>
+          {props.statusDraft === "stopped" && (
+            <>
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">
+                  Reason
+                </label>
+                <select
+                  value={props.stopReasonDraft}
+                  onChange={(e) =>
+                    props.setStopReasonDraft(e.target.value as StopReason)
+                  }
+                  className="bg-background rounded-lg px-3 py-2 text-sm font-medium text-foreground w-full max-w-xs"
+                >
+                  {(Object.keys(STOP_REASON_LABEL) as StopReason[]).map(
+                    (r) => (
+                      <option key={r} value={r}>
+                        {STOP_REASON_LABEL[r]}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">
+                  Note (optional)
+                </label>
+                <textarea
+                  value={props.stopNoteDraft}
+                  onChange={(e) => props.setStopNoteDraft(e.target.value)}
+                  rows={2}
+                  maxLength={500}
+                  placeholder="Context for the care team"
+                  className="bg-background rounded-lg px-3 py-2 text-sm font-medium text-foreground w-full"
+                />
+              </div>
+            </>
+          )}
+          {props.errorMessage && (
+            <div
+              className="text-xs font-semibold rounded-lg px-3 py-2"
+              style={{
+                backgroundColor: "rgba(255,59,48,0.10)",
+                color: "#B5251D",
+              }}
+            >
+              {props.errorMessage}
+            </div>
+          )}
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={props.onSave}
+              disabled={props.saving}
+              className="px-4 py-2 rounded-lg text-sm font-semibold text-white transition-colors disabled:opacity-50"
+              style={{ backgroundColor: "#142240" }}
+            >
+              {props.saving ? "Saving..." : "Save"}
+            </button>
+            <button
+              type="button"
+              onClick={props.onCancel}
+              disabled={props.saving}
+              className="px-4 py-2 rounded-lg text-sm font-semibold text-foreground bg-background hover:bg-muted transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }

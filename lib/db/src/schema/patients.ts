@@ -30,7 +30,49 @@ export const patientsTable = pgTable("patients", {
   // null the dashboard shows the patient as "Pending activation" and
   // skips risk scoring entirely (no signals to score yet).
   activatedAt: timestamp("activated_at"),
+
+  // ----- Treatment status (lean MVP retention layer) -----------------
+  // active = currently on treatment (clinician-confirmed or system-
+  //          assumed for activated patients before any explicit mark)
+  // stopped = explicitly marked as no longer on treatment
+  // unknown = not enough info to confidently label
+  // We deliberately keep this to three values + an optional at-risk
+  // derived in code, not a DB column, to avoid taxonomy creep.
+  treatmentStatus: text("treatment_status", {
+    enum: ["active", "stopped", "unknown"],
+  })
+    .notNull()
+    .default("unknown"),
+  // Who set the current status. doctor = clinician dashboard control,
+  // patient = future patient-app self-report (not yet wired),
+  // system = backfill / activation-time assumption.
+  treatmentStatusSource: text("treatment_status_source", {
+    enum: ["doctor", "patient", "system"],
+  }),
+  // Only meaningful when treatmentStatus = 'stopped'. Cleared on any
+  // transition back to active/unknown.
+  stopReason: text("stop_reason", {
+    enum: ["side_effects", "cost", "other", "unknown"],
+  }),
+  // Optional free-text doctor note, capped at 500 chars at the API.
+  stopNote: text("stop_note"),
+  treatmentStatusUpdatedAt: timestamp("treatment_status_updated_at"),
+  treatmentStatusUpdatedBy: integer("treatment_status_updated_by"),
 });
+
+export const TREATMENT_STATUSES = ["active", "stopped", "unknown"] as const;
+export type TreatmentStatus = (typeof TREATMENT_STATUSES)[number];
+
+export const TREATMENT_STATUS_SOURCES = ["doctor", "patient", "system"] as const;
+export type TreatmentStatusSource = (typeof TREATMENT_STATUS_SOURCES)[number];
+
+export const STOP_REASONS = [
+  "side_effects",
+  "cost",
+  "other",
+  "unknown",
+] as const;
+export type StopReason = (typeof STOP_REASONS)[number];
 
 export const insertPatientSchema = createInsertSchema(patientsTable);
 export type InsertPatient = z.infer<typeof insertPatientSchema>;
