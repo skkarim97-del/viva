@@ -1,0 +1,412 @@
+I want to upgrade Viva’s recommendation system and data architecture so the app feels 10/10, pilot-ready, clinically credible, and clearly valuable to a telehealth company focused on GLP-1 treatment retention.
+
+This is not just a UI cleanup. I want a true product and logic upgrade centered around one goal:
+
+Keep patients on treatment longer, more safely, more consistently, and with better day-to-day support between visits.
+
+Please treat this as a product logic + architecture + instrumentation project. Be very thoughtful and systematic. Avoid superficial tweaks.
+
+CORE PRODUCT PRINCIPLE
+
+Viva should not feel like a generic AI health coach.
+It should feel like a clinically sensible daily treatment support layer for GLP-1 patients.
+
+Every recommendation should prioritize:
+1. symptom burden and patient stability
+2. treatment continuity / adherence risk
+3. hydration and fueling support
+4. recovery / movement guidance
+5. motivation and engagement framing
+
+The app should work for:
+- basic iPhone users with no wearable
+- Apple Health users
+- more data-rich wearable users
+
+Wearable data should enhance personalization, but should not be required for the app to be useful.
+
+PRIMARY OBJECTIVES
+
+1) Unify the recommendation system into one source of truth
+Right now recommendation logic is too fragmented across planEngine, symptomTips, todayEngine, coach context, etc.
+
+I want one central daily treatment state object that drives all major recommendation surfaces.
+
+This central state should include conceptually:
+- symptomBurden: low / moderate / high
+- hydrationRisk: low / moderate / high
+- fuelingRisk: low / moderate / high
+- movementReadiness: recovery / light / train
+- adherenceRisk: low / moderate / high
+- treatmentStage: early / titration / stable / advanced
+- recoveryReadiness: low / moderate / high
+- dataConfidence: low / medium / high
+- escalationNeed: none / monitor / clinician
+- primarySupportFocus: symptom relief / hydration / fueling / adherence / recovery / performance
+
+All surfaces should derive from this same state:
+- top chip
+- hero headline
+- hero summary text
+- focus items
+- action cards
+- symptom intervention card
+- daily plan
+- coach context
+- any adherence or reminder nudges
+
+No contradictory outputs.
+
+2) Make the system explicitly retention-oriented
+I want the logic optimized not for generic wellness, but for GLP-1 treatment continuation.
+
+The engine should specifically recognize patterns that increase drop-off risk, such as:
+- moderate or severe nausea
+- constipation / GI burden
+- low appetite plus low energy
+- dehydration
+- worsening symptoms after titration
+- repeated low-energy days
+- silence / disengagement
+- skipped check-ins
+- upcoming dose anxiety or post-dose symptom burden
+- early treatment phase fragility
+
+The app should be able to identify:
+- “this is a symptom management day”
+- “this is a treatment continuity support day”
+- “this is a hydration / fueling support day”
+- “this is a recovery day”
+- “this is a clinician escalation watch day”
+- “this is a normal progress day”
+- “this is a higher-capacity day”
+
+Recommendations should reflect the actual priority of the day.
+
+3) Add true treatment-stage logic
+The first 90 days are critical and should not be treated like long-term stable usage.
+
+Please expand the engine so treatment stage matters meaningfully in recommendations, confidence, and escalation logic.
+
+At minimum distinguish:
+- less than 30 days
+- 30 to 60 days
+- 60 to 90 days
+- 3 to 6 months
+- 6 to 12 months
+- 1 year+
+
+Behavior changes should include:
+- more conservative logic in the first 90 days
+- higher sensitivity to side effects
+- stronger adherence monitoring after dose changes
+- more symptom support and reassurance in early treatment
+- more tolerance for low-capacity days without framing the patient as failing
+- smarter titration-week logic
+
+Do not make this display-only. It should materially influence recommendations.
+
+4) Add a real data sufficiency / confidence layer
+The app should never sound more confident than the underlying data supports.
+
+Please build explicit handling for:
+- no check-in today
+- stale Apple Health data
+- partial wearable data
+- brand-new user with no baseline
+- incomplete onboarding / medication info
+- sparse history
+- self-report only
+- self-report + wearable
+- richer longitudinal data
+
+Add a clear internal confidence model so the engine knows whether it is operating on:
+- low-confidence data
+- medium-confidence data
+- high-confidence data
+
+If data is weak, the app should degrade gracefully and say less, not more.
+For example, it should prefer:
+- supportive, conditional guidance
+- prompts to complete check-in
+- requests for better data
+instead of confidently prescribing a build or training day with weak evidence.
+
+Also add stale-sync detection for Apple Health so yesterday’s metrics are not treated as today’s if sync is old.
+
+5) Symptom burden should outrank performance guidance
+If a patient has meaningful nausea, digestive issues, hydration risk, or appetite suppression, the engine should prioritize treatment support before exercise or performance goals.
+
+Please ensure the hierarchy is:
+- safety / escalation
+- acute symptom support
+- adherence / continuity support
+- hydration and nutrition support
+- movement guidance
+- motivation / framing
+
+The app should not tell someone to do a 30 to 40 min strength workout if the same-day context points to nausea recovery, poor fueling, or significant symptom burden.
+
+6) Upgrade symptom interventions so they feel clinical, specific, and useful
+All intervention cards and action prompts should be:
+- specific
+- measurable
+- immediate
+- clinically sensible
+- coherent with the day state
+
+Move away from vague wellness phrasing.
+
+Examples of the standard I want:
+- “Drink at least 5 sips of water now”
+- “Walk gently for 5 minutes now”
+- “Eat 2 to 3 bites of yogurt, toast, or nuts within 15 minutes”
+- “Choose a lighter meal and re-check symptoms after eating”
+- “Focus on hydration and a light protein source before considering activity”
+
+Each intervention should ideally encode:
+- what to do
+- how much
+- when
+- why
+- when to escalate if symptoms worsen
+
+Please make sure symptomTips is not operating as a parallel mini-brain with its own conflicting activity logic.
+
+7) Add explicit adherence risk logic
+I want a true adherence / drop-off risk layer inside the mobile experience, not just generic status logic.
+
+This should consider patterns like:
+- repeated low-energy days
+- symptom spikes
+- engagement silence
+- missed check-ins
+- recent titration
+- low hydration / low appetite clusters
+- deterioration after dose day
+- negative symptom trend
+- possibly repeated dismissal of guidance
+
+The point is not to scare users.
+The point is to quietly shift the app into a higher-support mode when risk rises.
+
+Examples:
+- gentler guidance
+- simpler goals
+- stronger hydration/fueling emphasis
+- more check-ins
+- clearer reassurance
+- escalation prompts when needed
+- clinician-facing flags in the future
+
+8) Add dose-day and post-dose logic
+Treatment support should reflect timing around medication use.
+
+Please build stronger logic for:
+- day before dose
+- dose day
+- 1 to 3 days after dose
+- symptom clusters around dose changes
+- recent titration windows
+
+This should affect:
+- expected symptom burden
+- hydration/fueling emphasis
+- movement conservatism
+- adherence support
+- confidence in recommendations
+
+9) Build a coherent tiered experience by data richness
+The app should still feel excellent even for users without wearables.
+
+Please make the engine work across three tiers:
+
+Tier 1: self-report only
+Use symptoms, energy, appetite, hydration, treatment stage, dose timing, engagement, and history to create strong support.
+
+Tier 2: self-report + Apple Health
+Layer in sleep, steps, recovery-related signals, workout patterns, and readiness modifiers.
+
+Tier 3: richer longitudinal user
+Use baselines, trends, post-dose patterns, and repeated response history for more personalized support.
+
+The engine should know which tier the user is in and tailor confidence, personalization, and copy accordingly.
+
+10) Build instrumentation so the system can learn as usage scales
+This is critical.
+
+I want internal tracking such that onboarding hundreds or thousands of users allows us to learn from:
+- their symptoms
+- treatment stage
+- wearable patterns
+- engagement behavior
+- adherence behavior
+- intervention response
+- churn / retention outcomes
+
+Please instrument the system so each patient-day can be analyzed later.
+
+At minimum, track these categories:
+
+A. Patient-day state
+- symptom inputs
+- energy
+- hydration
+- appetite
+- digestion
+- bowel movement
+- mood
+- treatment stage
+- dose timing
+- recent titration
+- wearable metrics used
+- data confidence tier
+- daily treatment state outputs
+
+B. Recommendation outputs
+- status label shown
+- hero headline shown
+- support focus selected
+- action items rendered
+- intervention cards rendered
+- plan type rendered
+- coach context summary
+
+C. Engagement behavior
+- app open
+- check-in completed
+- weight logged
+- tip clicked / dismissed
+- guidance acknowledged
+- reminder interacted with
+- coach used
+- return next day
+- return next week
+
+D. Outcome markers
+- symptom improvement / worsening
+- better/same/worse follow-up
+- clinician escalation requests
+- missed doses if tracked
+- dropout / silence
+- reactivation
+- treatment continuation
+- weight trend
+
+The purpose is to create a dataset that supports future:
+- churn prediction
+- symptom worsening prediction
+- intervention effectiveness analysis
+- treatment-stage segmentation
+- cross-clinic intelligence
+
+11) Create a future-proof treatment intelligence architecture
+Please refactor the architecture so Viva can become more predictive over time.
+
+That means:
+- one clean daily state object
+- one recommendation engine
+- one confidence model
+- one adherence risk model
+- one event-tracking schema
+- shared selectors used by UI and coach
+- no duplicated risk logic between mobile and server where avoidable
+- no recommendation logic living ad hoc inside UI components
+
+I want the system to be architected so that over time we can learn:
+- what predicts churn
+- what predicts symptom spikes
+- which interventions help stabilize patients
+- which users need clinician intervention earlier
+- how treatment stage changes response patterns
+- what multi-signal combinations precede drop-off
+
+12) Preserve pilot practicality
+Do not over-engineer this into a research project.
+The near-term goal is to make the product feel highly coherent, useful, and defensible for a telehealth pilot.
+
+So I want you to balance:
+- high product quality
+- clean architecture
+- pragmatic implementation
+- clear sequencing
+
+OUTPUT I WANT FROM YOU
+
+Do not just start coding blindly.
+
+First, produce a concrete implementation plan with these sections:
+
+A. Recommended target architecture
+Explain in plain English how you would restructure the logic around one central daily treatment state.
+
+B. New decision hierarchy
+Show the exact order of rule precedence you recommend, from highest priority to lowest priority.
+
+C. Daily state model
+List the key internal fields the engine should compute and what they mean.
+
+D. Data confidence model
+Explain how low / medium / high confidence should be determined.
+
+E. Adherence risk model
+Explain the inputs and logic for a mobile-first adherence risk layer.
+
+F. Treatment-stage logic
+Explain how recommendations should behave differently in:
+- <30d
+- 30–60d
+- 60–90d
+- 3–6m
+- 6m+
+
+G. Data-tier logic
+Explain how self-report only vs wearable-enhanced users should differ.
+
+H. Instrumentation plan
+List the analytics / event schema you recommend tracking.
+
+I. Prioritized task list
+Break implementation into:
+- P0 trust breakers
+- P1 pilot-critical improvements
+- P2 future-proofing work
+
+For each task include:
+- title
+- why it matters
+- files likely involved
+- rough effort
+- dependency order
+
+J. Then start implementation
+After presenting the plan, begin implementing the highest-priority changes in a clean sequence.
+
+IMPORTANT IMPLEMENTATION RULES
+
+- Keep recommendations clinically sensible and conservative where appropriate
+- Do not allow contradictory surfaces
+- Make all copy more professional, specific, and useful
+- If data is weak, reduce confidence and specificity
+- Use wearable data as a modifier, not the sole truth
+- Make early treatment and titration logic materially more protective
+- Favor retaining the patient on treatment over pushing performance recommendations
+- Preserve the premium look and feel
+- Do not introduce regressions
+- After each implementation chunk, summarize exact files changed and the logic improvements made
+
+BIG PICTURE GOAL
+
+I want Viva to become:
+a daily treatment support and retention intelligence layer for GLP-1 care
+
+That means:
+- better support between visits
+- smarter symptom handling
+- more coherent recommendations
+- stronger adherence and retention support
+- better data capture
+- better future prediction
+- better value to telehealth clinics
+
+Please think like a product-minded health-tech systems designer, not just a coder.
