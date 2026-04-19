@@ -101,6 +101,20 @@ retry them.
 calls `flushCheckinSync()` on every "active" transition, and
 `AppContext` calls `checkinSync.flush()` once on mount.
 
+## Daily Check-in Reminders
+
+Local-only push reminders for the patient app, owned by `artifacts/pulse-pilot/lib/reminders.ts`.
+
+-   **Slots**: 12:00 PM and 7:00 PM local time, defined in `REMINDER_TIMES`.
+-   **Default**: ON for new installs (`getRemindersEnabled` only treats explicit `"false"` in AsyncStorage as opt-out).
+-   **No duplicate after check-in**: `rescheduleReminders({ hasCheckedInToday: true })` skips today's slots entirely. `AppContext.saveDailyCheckIn` calls this immediately after a successful save (lazy-imported so the web build still loads). The `useReminderScheduler` hook in `app/_layout.tsx` also re-fires on `[user, hasCheckedInToday]` changes and on every `AppState === "active"` transition.
+-   **Forward window**: 7 days. Cancel-and-replace on every reschedule keeps the window fresh; a missed launch only affects future days, not today.
+-   **Tag scoping**: every scheduled notification carries `data.tag === "viva-reminder"`. `cancelOurScheduled` filters on this so unrelated future notifications are never touched.
+-   **Single-flight runId**: every reschedule call grabs `nextRunId()` and bails on `isStale(myRun)` after each await. Prevents the four overlapping callers (foreground, signed-in user effect, post-check-in, settings toggle, sign-out) from racing each other into a stale schedule.
+-   **Sign-out wipe**: `AuthContext.logout` calls `clearAllReminders()` so the next sign-in (possibly a different patient on the same device) doesn't inherit the previous user's queue.
+-   **Settings UI**: `RemindersSection` in `app/(tabs)/settings.tsx`. Single toggle, inline OS permission request on first enable, "Open Settings" affordance on denial. AppState foreground listener re-reads permission so the row reflects newly-granted permission immediately on return from OS Settings.
+-   **Verification**: `.local/scripts/verify-reminders.mjs` — 23 invariants covering default-on, toggle-off, permission denial, forward-window math at six clock times, no-duplicate-after-check-in, idempotent re-check-in, tag-scoped cancellation, and single-flight runId.
+
 ## Known Follow-ups (post-pilot cleanup)
 
 -   **`artifacts/api-server/src/routes/patients.ts` — pre-existing TypeScript errors**: several handlers cast `req as AuthedRequest` but `AuthedRequest` doesn't include `auth` in its type, so `req.auth.userId` reports as missing. Build still succeeds (esbuild strips types) and the runtime is correct because the auth middleware does populate `req.auth`. Tighten by augmenting Express's `Request` type with an optional `auth` field via module augmentation, then have the auth middleware narrow it for downstream handlers. Unrelated to current pilot-critical reliability work.

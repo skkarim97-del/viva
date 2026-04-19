@@ -25,7 +25,7 @@ import {
   type PermissionState,
 } from "@/lib/reminders";
 import { useEffect } from "react";
-import { Linking, Platform } from "react-native";
+import { AppState, type AppStateStatus, Linking, Platform } from "react-native";
 import {
   BRAND_OPTIONS,
   MEDICATION_DATABASE,
@@ -666,7 +666,7 @@ function RemindersSection() {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    const refresh = async () => {
       const [e, p] = await Promise.all([
         getRemindersEnabled(),
         getPermissionState(),
@@ -674,9 +674,21 @@ function RemindersSection() {
       if (cancelled) return;
       setEnabled(e);
       setPerm(p);
-    })();
+    };
+    void refresh();
+    // Re-read permission whenever the app returns to the foreground.
+    // Covers the "patient tapped Open Settings, granted permission in
+    // iOS/Android Settings, came back to the app" path -- without this
+    // the toggle would still display the stale "denied" state until the
+    // tab unmounted. The actual rescheduling on grant is owned by the
+    // root-level useReminderScheduler AppState hook; this listener
+    // exists purely so the UI reflects the new permission immediately.
+    const sub = AppState.addEventListener("change", (state: AppStateStatus) => {
+      if (state === "active") void refresh();
+    });
     return () => {
       cancelled = true;
+      sub.remove();
     };
   }, []);
 
