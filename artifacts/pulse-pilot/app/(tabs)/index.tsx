@@ -1646,11 +1646,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: "Montserrat_500Medium",
     textAlign: "center",
-    // Sit the greeting a touch lower beneath the wordmark and give it
-    // more air below so the status card doesn't crowd it. Was 12/16
-    // which read as "logo + greeting + card" stacked too tightly.
-    marginTop: 20,
-    marginBottom: 22,
+    // Logo / greeting / status card read as one vertical stack at the
+    // top of the screen. We want the greeting to sit visually centered
+    // between the logo above and the gray card below.
+    //   gap above greeting = ScreenHeader.paddingBottom (8) + this marginTop
+    //   gap below greeting = this marginBottom
+    // Set both to land at ~26pt so the eye reads even spacing.
+    marginTop: 18,
+    marginBottom: 26,
     letterSpacing: 0.3,
     opacity: 0.6,
   },
