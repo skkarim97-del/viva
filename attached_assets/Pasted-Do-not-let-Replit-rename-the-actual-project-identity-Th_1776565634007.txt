@@ -1,0 +1,91 @@
+Do not let Replit rename the actual project identity. That’s how you break EAS, signing, or App Store submission.
+
+What should change
+
+Only the user-facing app name:
+
+* what shows under the icon
+* what shows on-device in iOS / Android
+
+Change it to:
+
+* viva care
+
+What should NOT change
+
+Do not change:
+
+* bundle identifier
+* package name
+* Expo slug
+* scheme
+* project ID
+* EAS linkage
+* signing config
+* App Store Connect app record
+* any internal technical identifiers like viva-ai
+
+Those can stay as-is.
+
+⸻
+
+Paste this to Replit
+
+Update the user-facing mobile app name from “Viva AI” to “viva care” in the safest possible way, without breaking EAS build, TestFlight submission, signing, or app identifiers.
+
+Goal
+
+Change only the display name seen by users on-device.
+
+The app should appear as:
+
+* viva care
+
+This must be a display-name-only change.
+
+Important constraints
+
+Do not change any of the following unless absolutely required:
+
+* iOS bundle identifier
+* Android package / applicationId
+* Expo slug
+* Expo project ID
+* URL scheme
+* EAS project linkage
+* signing settings
+* App Store Connect app record
+* technical/internal project names already wired to builds
+
+I do not want a broad rename of the project.
+I only want the user-facing app name changed safely.
+
+What to inspect and update
+
+Please inspect the app config and update only the fields required for the on-device display name.
+
+Check and update as appropriate:
+
+* Expo name
+* iOS display name / CFBundleDisplayName equivalent if used
+* Android display label if it derives from Expo app config
+
+Validation
+
+After making the change, tell me explicitly:
+
+1. exactly which config fields were changed
+2. exactly which identifiers were not changed
+3. whether this requires a fresh native build
+4. whether this creates any App Store / TestFlight risk
+5. whether the App Store listing name remains separate from the on-device app name
+
+Output
+
+Show me:
+
+* exact config diff
+* confirmation that this is a safe display-name-only change
+* confirmation that no signing / bundle / package / EAS identifiers were changed
+
+Keep this surgical.
