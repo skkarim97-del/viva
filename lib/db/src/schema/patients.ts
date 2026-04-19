@@ -19,6 +19,13 @@ export const patientsTable = pgTable("patients", {
   // Single-use opaque token the doctor sends to a patient so the mobile
   // app can claim this account on first launch. Null after activation.
   activationToken: text("activation_token").unique(),
+  // When the current activation token was issued (or last re-issued via
+  // /patients/:id/resend). Null on legacy rows that predate this column;
+  // the TTL check at activate time grandfathers those in (`null` -> no
+  // expiry enforced) so we don't strand any in-flight pilot invites.
+  // New tokens always get a stamp; the activation flow rejects tokens
+  // older than INVITE_TOKEN_TTL_DAYS with 410 Gone.
+  activationTokenIssuedAt: timestamp("activation_token_issued_at"),
   // Stamped the first time the patient signs in to the mobile app. While
   // null the dashboard shows the patient as "Pending activation" and
   // skips risk scoring entirely (no signals to score yet).

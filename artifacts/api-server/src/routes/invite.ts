@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { eq } from "drizzle-orm";
 import { db, usersTable, patientsTable } from "@workspace/db";
+import { isInviteTokenExpired } from "../lib/inviteTokens";
 
 // Public invite routes. These are intentionally mounted OUTSIDE the
 // /api prefix because:
@@ -50,6 +51,7 @@ async function loadInvitePreview(token: string): Promise<InvitePreview | null> {
       patientUserId: patientsTable.userId,
       doctorId: patientsTable.doctorId,
       activatedAt: patientsTable.activatedAt,
+      activationTokenIssuedAt: patientsTable.activationTokenIssuedAt,
     })
     .from(patientsTable)
     .where(eq(patientsTable.activationToken, token))
@@ -58,6 +60,13 @@ async function loadInvitePreview(token: string): Promise<InvitePreview | null> {
   if (patientRow.activatedAt) {
     // Token was already burned. We surface this as "not valid" so the
     // page can show the right CTA (sign in instead of activate).
+    return null;
+  }
+  if (isInviteTokenExpired(patientRow.activationTokenIssuedAt)) {
+    // Same UX as already-burned: render the "no longer valid" page.
+    // Calling activate with this token would 410 anyway, so we hide
+    // the CTA up front rather than letting the patient set a password
+    // and then bounce.
     return null;
   }
   const [patient] = await db

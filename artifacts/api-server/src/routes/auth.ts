@@ -9,6 +9,7 @@ import {
   apiTokensTable,
 } from "@workspace/db";
 import { z } from "zod";
+import { isInviteTokenExpired } from "../lib/inviteTokens";
 
 // Issue a long-lived bearer token for the patient mobile app. Cookies
 // are not reliable on RN, so the app stores this in AsyncStorage and
@@ -108,10 +109,17 @@ router.post("/activate", async (req: Request, res: Response) => {
     res.status(400).json({ error: "invalid_input" });
     return;
   }
+  // Step 1: Look up the token. We read activatedAt and issuedAt up
+  // front so we can return a precise status code (404 vs 409 vs 410)
+  // without burning the token. The atomic claim below still defends
+  // against the case where two requests both pass these checks
+  // concurrently -- one will win the UPDATE, the other will get 0
+  // rows back and fall through to the post-claim recovery branch.
   const [patient] = await db
     .select({
       userId: patientsTable.userId,
       activatedAt: patientsTable.activatedAt,
+      activationTokenIssuedAt: patientsTable.activationTokenIssuedAt,
     })
     .from(patientsTable)
     .where(eq(patientsTable.activationToken, parsed.data.token))
@@ -122,28 +130,88 @@ router.post("/activate", async (req: Request, res: Response) => {
   }
   if (patient.activatedAt) {
     // Token was already burned. Fail closed -- the patient should
-    // sign in with their email + password instead.
+    // sign in with their email + password instead. (Idempotency note:
+    // we deliberately do NOT re-issue a bearer here, because at this
+    // point we cannot tell whether this caller is the same client that
+    // already activated, or a different device replaying a leaked URL.
+    // The mobile client surfaces this as "already used, sign in instead".)
     res.status(409).json({ error: "already_activated" });
     return;
   }
+  if (isInviteTokenExpired(patient.activationTokenIssuedAt)) {
+    // 410 Gone is the right shape: the resource existed, but the
+    // window for using it has closed. The mobile client maps this
+    // to "ask your clinician for a fresh invite link".
+    res.status(410).json({ error: "token_expired" });
+    return;
+  }
+
+  // Step 2: Hash the password BEFORE the atomic claim. Bcrypt is the
+  // expensive step (~100ms); doing it before the UPDATE means the
+  // critical section is just two writes. If hashing throws, we have
+  // not yet touched the DB and the token remains usable.
   const passwordHash = await bcrypt.hash(parsed.data.password, 10);
-  await db
-    .update(usersTable)
-    .set({ passwordHash })
-    .where(eq(usersTable.id, patient.userId));
-  await db
-    .update(patientsTable)
-    .set({ activatedAt: new Date(), activationToken: null })
-    .where(
-      and(
-        eq(patientsTable.userId, patient.userId),
-        isNull(patientsTable.activatedAt),
-      ),
-    );
+
+  // Step 3: Atomic claim + password write in a single transaction.
+  // The UPDATE filters on `activationToken = $token AND activatedAt IS
+  // NULL`, so concurrent activations cannot both succeed: the second
+  // one matches zero rows. .returning() lets us detect that case
+  // without a second SELECT.
+  const claimed = await db.transaction(async (tx) => {
+    const rows = await tx
+      .update(patientsTable)
+      .set({
+        activatedAt: new Date(),
+        activationToken: null,
+        activationTokenIssuedAt: null,
+      })
+      .where(
+        and(
+          eq(patientsTable.activationToken, parsed.data.token),
+          isNull(patientsTable.activatedAt),
+        ),
+      )
+      .returning({ userId: patientsTable.userId });
+    if (rows.length === 0) return null;
+    const winningUserId = rows[0]!.userId;
+    await tx
+      .update(usersTable)
+      .set({ passwordHash })
+      .where(eq(usersTable.id, winningUserId));
+    return winningUserId;
+  });
+
+  if (claimed === null) {
+    // Lost the race. Re-read so we can give the right status: if
+    // activatedAt is now set, a parallel request beat us (409); if
+    // the row no longer matches the token, it was rotated out from
+    // under us by a doctor /resend (404). Both responses are precise
+    // enough for the mobile client to render the correct CTA.
+    const [recheck] = await db
+      .select({
+        userId: patientsTable.userId,
+        activatedAt: patientsTable.activatedAt,
+      })
+      .from(patientsTable)
+      .where(eq(patientsTable.userId, patient.userId))
+      .limit(1);
+    if (recheck?.activatedAt) {
+      res.status(409).json({ error: "already_activated" });
+      return;
+    }
+    res.status(404).json({ error: "invalid_token" });
+    return;
+  }
+
+  // Step 4: Read back the user (the transaction is closed; the
+  // password hash is durably written) and issue the bearer the mobile
+  // client will store in AsyncStorage. The bearer insert is awaited
+  // so the token is queryable on the very next request -- there is
+  // no read-your-write race for the first authenticated call.
   const [user] = await db
     .select()
     .from(usersTable)
-    .where(eq(usersTable.id, patient.userId))
+    .where(eq(usersTable.id, claimed))
     .limit(1);
   if (!user) {
     res.status(500).json({ error: "activation_failed" });

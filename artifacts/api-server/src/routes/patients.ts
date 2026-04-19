@@ -302,6 +302,7 @@ router.post("/invite", async (req, res: Response) => {
     glp1Drug: parsed.data.glp1Drug?.trim() || null,
     dose: parsed.data.dose?.trim() || null,
     activationToken: token,
+    activationTokenIssuedAt: new Date(),
   });
   res.status(201).json({
     id: user.id,
@@ -321,6 +322,11 @@ router.post("/:id/resend", async (req, res: Response) => {
     res.status(400).json({ error: "invalid_id" });
     return;
   }
+  // Ownership check first so a doctor probing other clinicians'
+  // patient IDs cannot tell "exists but not yours" from "doesn't
+  // exist" -- both return 404. Activation state is read for the
+  // pre-flight 409, but the actual rotation below is conditional and
+  // its rowcount is the source of truth (see comment there).
   const [row] = await db
     .select({
       doctorId: patientsTable.doctorId,
@@ -338,15 +344,30 @@ router.post("/:id/resend", async (req, res: Response) => {
     return;
   }
   const token = randomBytes(24).toString("base64url");
-  await db
+  // Atomic rotation. If the patient activates between the SELECT above
+  // and this UPDATE, the activatedAt-IS-NULL filter matches zero rows
+  // and we fall through to the rowcount check -- so we can never hand
+  // back a "fresh" invite link for a token that was never persisted.
+  // Stamping issuedAt starts a new TTL window; the unique constraint
+  // on activation_token invalidates the previous token in place.
+  const rotated = await db
     .update(patientsTable)
-    .set({ activationToken: token })
+    .set({ activationToken: token, activationTokenIssuedAt: new Date() })
     .where(
       and(
         eq(patientsTable.userId, patientId),
+        eq(patientsTable.doctorId, doctorId),
         isNull(patientsTable.activatedAt),
       ),
-    );
+    )
+    .returning({ userId: patientsTable.userId });
+  if (rotated.length === 0) {
+    // Lost the race against an activation that landed between our
+    // pre-flight read and the UPDATE. Surface the same 409 the
+    // pre-flight would have, so the dashboard re-fetches state.
+    res.status(409).json({ error: "already_activated" });
+    return;
+  }
   res.json({ inviteLink: buildInviteLink(req as AuthedRequest, token) });
 });
 

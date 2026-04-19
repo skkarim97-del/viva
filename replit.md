@@ -73,6 +73,16 @@ A standalone React + Vite web app at `/viva-dashboard/` for the care team. Built
 
 Express 5 + Drizzle + Postgres. Session auth via `connect-pg-simple` with manually-provisioned `session` table (createTableIfMissing breaks under esbuild bundling). Login regenerates session ID and waits on `req.session.save()` before responding. CORS with credentials, sameSite=lax, `trust proxy: 1`. Schema: users (doctor|patient), patients, patient_checkins, doctor_notes. Rules-based risk engine in `src/lib/risk.ts` (silence +30, low energy +20, severe nausea +15, mood decline +10; bands low/medium/high). Endpoints: `/api/auth/{login,logout,me}`, `/api/patients`, `/api/patients/:id/{checkins,risk,notes}`, `/api/me/{checkins,risk}`. Demo creds: `doctor@vivaai.demo` / `viva-demo-2026`. Seed script in `scripts/seed.ts` creates 1 doctor + 4 varied patients with 25-29 days of check-ins; idempotent.
 
+## Known Follow-ups (post-pilot cleanup)
+
+-   **`artifacts/api-server/src/routes/patients.ts` — pre-existing TypeScript errors**: several handlers cast `req as AuthedRequest` but `AuthedRequest` doesn't include `auth` in its type, so `req.auth.userId` reports as missing. Build still succeeds (esbuild strips types) and the runtime is correct because the auth middleware does populate `req.auth`. Tighten by augmenting Express's `Request` type with an optional `auth` field via module augmentation, then have the auth middleware narrow it for downstream handlers. Unrelated to current pilot-critical reliability work.
+
+## Invite & Activation
+
+-   **TTL**: 14 days, defined in `artifacts/api-server/src/lib/inviteTokens.ts` as `INVITE_TOKEN_TTL_DAYS`. Both the activate route and the invite-preview surfaces (HTML and JSON) enforce it via the shared `isInviteTokenExpired()` helper. Legacy rows (issuedAt = null) are grandfathered to never expire so existing pilot invites aren't stranded. `/patients/invite` and `/patients/:id/resend` always stamp `activationTokenIssuedAt`.
+-   **Atomic activation**: the activate flow performs the token claim inside a single `db.transaction()` — UPDATE on `patientsTable` filters on `activationToken=$token AND activatedAt IS NULL` and uses `.returning()` to detect race losers. The password hash is computed BEFORE the transaction (so a hash failure can't strand the token); the password write happens INSIDE the transaction (so a partial activation can't lock out the patient). Two concurrent activates resolve as 200/409 — verified with parallel curl test 2026-04-19.
+-   **Status codes**: 400 invalid_input, 404 invalid_token (not found OR rotated by /resend after we read), 409 already_activated, 410 token_expired (TTL exceeded). The mobile client already maps 404→"not valid" and 409→"sign in instead"; 410 surfaces the same "no longer valid" copy the invite landing uses.
+
 ## External Dependencies
 
 -   **API Framework**: Express 5

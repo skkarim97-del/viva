@@ -69,6 +69,13 @@ export default function ConnectScreen() {
           setError(
             "This invite has already been used. Sign in with your email instead.",
           );
+        else if (e.status === 410)
+          // 410 Gone = TTL exceeded. The link itself was real but the
+          // window for using it has closed. Direct them at the doctor
+          // for a fresh one rather than implying the link is malformed.
+          setError(
+            "This invite link has expired. Ask your clinician to send you a fresh one.",
+          );
         else setError("Something went wrong. Please try again.");
       } else {
         setError("Network error. Check your connection and try again.");
