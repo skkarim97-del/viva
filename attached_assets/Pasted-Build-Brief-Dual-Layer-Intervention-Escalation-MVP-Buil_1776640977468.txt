@@ -1,0 +1,291 @@
+Build Brief: Dual-Layer Intervention + Escalation MVP
+
+Build a simple dual-layer intervention system for Viva that tracks:
+
+Viva Care intervention
+Escalation if needed
+Doctor intervention
+Outcome after each layer
+
+This is for MVP / pilot use only. Keep it lightweight. Do not build chat, messaging, or complex workflow infrastructure.
+
+Goal
+
+We want to support and measure a simple care loop:
+
+patient has issue / risk signal
+Viva Care gives an automated intervention
+if that works, no doctor needed
+if it does not work, or the patient requests more help, the case is escalated
+doctor reviews and intervenes
+we track what happened after
+
+This should let us understand:
+
+what % of issues are resolved by Viva alone
+what % require escalation
+what % improve after doctor action
+Scope
+
+Build the minimum system needed to log and analyze this flow.
+
+Do NOT build:
+chat
+doctor-patient messaging
+invite acceptance workflow
+task assignment system
+notification engine
+full case management
+
+This is just:
+
+event logging
+simple escalation signal
+simple doctor action tracking
+analytics visibility
+1. Define the two intervention layers
+Layer 1: Viva intervention
+
+These are automated product actions from Viva Care.
+
+Examples:
+
+coach insight shown
+recovery recommendation shown
+symptom-specific suggestion shown
+
+Log these as:
+
+source = "viva"
+Layer 2: Doctor intervention
+
+These are clinician actions in Viva Clinic.
+
+Examples:
+
+note written
+patient reviewed
+treatment status updated
+
+Log these as:
+
+source = "doctor"
+2. Add / extend intervention event logging
+
+Create or extend a lightweight intervention event model so we can track actions across both layers.
+
+Required fields
+id
+patient_id
+source
+viva
+doctor
+patient if needed for escalation request
+type
+created_at
+metadata json if useful and already consistent with current patterns
+Supported event types
+
+For MVP, support these:
+
+coach_message
+recommendation_shown
+escalation_requested
+doctor_reviewed
+doctor_note
+treatment_status_updated
+
+Do not over-expand beyond this.
+
+3. Add simple escalation concept
+
+We need a lightweight way to track that Viva’s first pass was not enough and the patient needs more help.
+
+Add escalation concept
+
+Support a simple escalation signal in one or both of these ways:
+
+A. Patient-driven escalation
+
+Add a simple patient action in Viva Care:
+
+Button / action label:
+Need more support
+
+When triggered:
+
+log event:
+source = "patient"
+type = "escalation_requested"
+mark patient as escalated in a lightweight way if needed for querying
+surface this clearly in Viva Clinic and Viva Analytics
+B. System-driven escalation (only if easy)
+
+If current logic already supports this cleanly, allow the system to mark escalation when:
+
+patient remains at risk after Viva intervention
+or no improvement occurs over defined short window
+
+If this is not easy, skip for now. Patient-driven escalation is enough for MVP.
+
+4. Add doctor-side “reviewed” action
+
+We need one clean doctor action beyond notes to make doctor intervention easier to measure.
+
+Add simple doctor action
+
+In Viva Clinic patient detail view, add a lightweight action:
+
+Button:
+Mark as reviewed
+
+When clicked:
+
+log event:
+source = "doctor"
+type = "doctor_reviewed"
+timestamp it
+do not build a workflow around it
+
+This gives us:
+
+% of escalated patients reviewed
+time from escalation to review
+
+Keep this simple and non-intrusive.
+
+5. Treat existing doctor notes and status updates as interventions
+
+If not already done, ensure these also count as doctor interventions:
+
+doctor writes note → log doctor_note
+treatment status updated → log treatment_status_updated
+
+No new workflow needed. Just make sure these actions are reflected in the event stream.
+
+6. Track simple outcomes after intervention
+
+We do not need complex causal modeling.
+
+We just need simple observable follow-through.
+
+Outcome signals to reuse
+
+Use existing data where possible:
+
+next-day check-in
+engagement improving over 3 days
+still active on treatment
+stopped treatment
+Goal
+
+We should be able to compare:
+
+patients with Viva intervention only
+patients who escalated
+patients with doctor intervention
+7. Add analytics for the dual-layer loop
+
+Extend Viva Analytics to show a new small section or panel for intervention flow.
+
+Add metrics:
+Viva layer
+total Viva interventions
+% of patients with Viva intervention
+% with follow-up engagement after Viva intervention
+Escalation layer
+total escalations
+% of patients escalated
+source of escalation if tracked:
+patient-requested
+system-generated
+Doctor layer
+% of escalated patients reviewed by doctor
+avg time from escalation to doctor review
+% of escalated patients with doctor note
+% of escalated patients with status update
+Outcome layer
+% resolved by Viva alone
+% escalated to doctor
+% improved after doctor intervention
+
+Keep definitions simple and explain assumptions clearly.
+
+8. Define simple MVP logic for “resolved by Viva alone”
+
+Use a practical proxy. Do not overbuild.
+
+A patient can count as “resolved by Viva alone” if:
+
+they received a Viva intervention
+they were not escalated within a short window
+and they showed positive follow-through signal
+e.g. next-day check-in or improved engagement
+
+If current data is too sparse, document the proxy used.
+
+9. Define simple MVP logic for “improved after doctor intervention”
+
+A patient can count as “improved after doctor intervention” if:
+
+they were escalated
+doctor took an action
+and the patient later showed a positive follow-through signal
+e.g. next-day check-in, improved engagement, or remained active
+
+Again, keep it simple and document the chosen logic.
+
+10. UI changes
+Viva Care
+
+If feasible and low-risk:
+
+add a simple “Need more support” action in the appropriate place
+keep it minimal and not disruptive
+do not redesign core app flows
+
+If adding to mobile app is too risky for this pass, say so explicitly and implement the rest first.
+
+Viva Clinic
+
+Add:
+
+Mark as reviewed action on patient detail
+clear indication if patient requested more support / escalated
+Viva Analytics
+
+Add:
+
+small intervention funnel / escalation panel
+keep it simple, clear, and consistent with existing UI
+11. Constraints
+keep this MVP-safe
+no chat
+no messaging
+no complex case workflow
+no new heavy dependencies
+no changes to iOS / Expo / EAS / native config unless absolutely required
+do not break existing Viva Care or Viva Clinic flows
+reuse current architecture and patterns
+12. Deliverables
+
+After implementation, tell me:
+
+what event model / fields were added or extended
+which user actions now log intervention events
+whether patient escalation request was added
+whether doctor “Mark as reviewed” was added
+how “resolved by Viva alone” is calculated
+how “improved after doctor intervention” is calculated
+what new Viva Analytics metrics were added
+whether anything touched mobile / iOS / EAS stability
+Product intent
+
+This feature is meant to prove a simple but important thesis:
+
+Viva should handle the first pass automatically
+if that is not enough, patients should be escalated
+doctors should then intervene
+we should be able to measure both layers separately
+
+This is the minimum system needed to show that dual-layer care model in a pilot.

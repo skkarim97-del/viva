@@ -8,6 +8,7 @@ import meRouter from "./me";
 import internalRouter from "./internal";
 import interventionsRouter from "./interventions";
 import outcomesRouter from "./outcomes";
+import careEventsRouter from "./careEvents";
 
 const router: IRouter = Router();
 
@@ -19,6 +20,7 @@ router.use("/patients", patientsRouter);
 router.use("/me", meRouter);
 router.use("/interventions", interventionsRouter);
 router.use("/outcomes", outcomesRouter);
+router.use("/care-events", careEventsRouter);
 // Operator-only metrics. Gated by its own bearer key (INTERNAL_API_KEY)
 // rather than the doctor session, so signed-in clinicians cannot pull
 // product analytics through their browser session.

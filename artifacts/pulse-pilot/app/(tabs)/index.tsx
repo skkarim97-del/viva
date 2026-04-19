@@ -24,6 +24,7 @@ import { SymptomTipCard } from "@/components/SymptomTipCard";
 import WeightLogModal from "@/components/WeightLogModal";
 import { sessionApi } from "@/lib/api/sessionClient";
 import { logIntervention, type InterventionType } from "@/lib/intervention/logger";
+import { logCareEventDeduped } from "@/lib/care-events/client";
 import { useApp } from "@/context/AppContext";
 import { type SymptomKind } from "@/lib/symptomTips";
 import { generateCoachInsight } from "@/data/insights";
@@ -302,6 +303,13 @@ export default function DashboardScreen() {
           rationale: dailyState.rationale?.join(" | ") ?? null,
           state: dailyState,
         });
+        // Care-events stream: one row per (date|surface|focus). Funnel
+        // uses this as "Viva surfaced an actionable rec today".
+        logCareEventDeduped(
+          "recommendation_shown",
+          `Today|${dailyState.primaryFocus}`,
+          { surface: "Today", focus: dailyState.primaryFocus },
+        );
       }
     }
     if (dailyState.escalationNeed === "clinician") {

@@ -83,6 +83,19 @@ const SEVERITY_STYLE: Record<
 
 export function PatientsPage() {
   const q = useQuery({ queryKey: ["patients"], queryFn: api.patients });
+  // Cheap sibling lookup -- ids of patients whose most-recent
+  // escalation_requested has not been followed by a doctor_reviewed.
+  // Used to badge worklist rows without bloating the main /patients
+  // payload.
+  const needsReview = useQuery({
+    queryKey: ["needs-review-ids"],
+    queryFn: api.needsReviewIds,
+    staleTime: 30_000,
+  });
+  const needsReviewSet = useMemo(
+    () => new Set(needsReview.data?.ids ?? []),
+    [needsReview.data],
+  );
   const [, setLocation] = useLocation();
   const grouped = useMemo(() => {
     const buckets: Record<Action, PatientRow[]> = {
@@ -242,6 +255,7 @@ export function PatientsPage() {
                   <PatientCard
                     key={p.id}
                     p={p}
+                    needsReview={needsReviewSet.has(p.id)}
                     onAddNote={() => setNoteTarget({ id: p.id, name: p.name })}
                   />
                 ),
@@ -378,10 +392,11 @@ function PendingCard({ p }: { p: PatientRow }) {
 
 interface CardProps {
   p: PatientRow;
+  needsReview?: boolean;
   onAddNote: () => void;
 }
 
-function PatientCard({ p, onAddNote }: CardProps) {
+function PatientCard({ p, needsReview, onAddNote }: CardProps) {
   const lastNote = p.lastNoteAt
     ? `Last note: ${relativeTime(p.lastNoteAt)}`
     : "No recent action";
@@ -453,6 +468,15 @@ function PatientCard({ p, onAddNote }: CardProps) {
             <div className="font-semibold text-[17px] text-foreground truncate flex-1 min-w-0">
               {p.name}
             </div>
+            {needsReview && (
+              <span
+                className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full shrink-0"
+                style={{ backgroundColor: "#FF9500", color: "#FFFFFF" }}
+                title="Patient requested more support"
+              >
+                Needs review
+              </span>
+            )}
             {/* Arrow rides with the name on mobile so the pill row
                 below stays clean; on desktop the arrow sits with
                 the pill cluster (rendered below). */}

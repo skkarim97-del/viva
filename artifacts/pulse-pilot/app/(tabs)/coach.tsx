@@ -20,6 +20,8 @@ import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
 import { sendCoachMessage, CoachRequestError, describeCoachError } from "@/lib/api/coachClient";
 import { logIntervention } from "@/lib/intervention/logger";
+import { logCareEventDeduped, logCareEventImmediate } from "@/lib/care-events/client";
+import { Alert } from "react-native";
 import { buildCoachContext } from "@/lib/engine/coachEngine";
 import type { ChatMessage } from "@/types";
 
@@ -169,6 +171,12 @@ export default function CoachScreen() {
           state: dailyState,
         });
       }
+      // Care-events stream: one row per coach response so the dual-layer
+      // funnel can attribute "Viva touched the patient today". De-duped
+      // per (date|surface) so the same chat session doesn't write 30 rows.
+      logCareEventDeduped("coach_message", "Coach", {
+        mode: dailyState?.communicationMode ?? "simplify",
+      });
     } catch (err: any) {
       console.log("[Coach] final error:", { kind: err?.kind, status: err?.status, message: err?.message, body: err?.body, url: err?.url });
       const userMessage = err instanceof CoachRequestError
@@ -224,6 +232,48 @@ export default function CoachScreen() {
   };
 
   const showQuickActions = chatMessages.length === 0 && !isTyping;
+
+  const requestCareTeamReview = useCallback(() => {
+    const fire = async () => {
+      const ok = await logCareEventImmediate("escalation_requested", {
+        from: "coach_tab",
+      });
+      if (Platform.OS !== "web") {
+        try {
+          Haptics.notificationAsync(
+            ok
+              ? Haptics.NotificationFeedbackType.Success
+              : Haptics.NotificationFeedbackType.Warning,
+          );
+        } catch {}
+      }
+      const title = ok ? "Care team notified" : "Could not send right now";
+      const body = ok
+        ? "Your care team has been notified and will follow up soon."
+        : "We couldn't reach the server. Please try again in a moment.";
+      if (Platform.OS === "web") {
+        // Alert.alert is a no-op on web — fall back to window.alert.
+        try { (globalThis as any).alert?.(`${title}\n\n${body}`); } catch {}
+      } else {
+        Alert.alert(title, body);
+      }
+    };
+    if (Platform.OS === "web") {
+      const yes = (globalThis as any).confirm?.(
+        "Notify your care team that you'd like more support?",
+      );
+      if (yes) void fire();
+      return;
+    }
+    Alert.alert(
+      "Need more support?",
+      "We'll let your care team know you'd like a closer look. They'll follow up with you.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Notify care team", onPress: () => void fire() },
+      ],
+    );
+  }, []);
 
   return (
     <KeyboardAvoidingView
@@ -283,6 +333,21 @@ export default function CoachScreen() {
       )}
 
       <View style={[styles.inputArea, { backgroundColor: c.background, paddingBottom: bottomPad + 8 }]}>
+        {!isTyping && (
+          <Pressable
+            onPress={requestCareTeamReview}
+            style={({ pressed }) => [
+              styles.supportLink,
+              { opacity: pressed ? 0.6 : 1 },
+            ]}
+            hitSlop={8}
+          >
+            <Feather name="life-buoy" size={13} color={c.mutedForeground} />
+            <Text style={{ color: c.mutedForeground, fontFamily: "Montserrat_500Medium", fontSize: 12 }}>
+              Need more support? Notify your care team
+            </Text>
+          </Pressable>
+        )}
         {lastFailedDraft && !isTyping && (
           <Pressable
             onPress={() => sendMessage(lastFailedDraft)}
@@ -436,6 +501,14 @@ const styles = StyleSheet.create({
   inputArea: {
     paddingTop: 8,
     paddingHorizontal: 16,
+  },
+  supportLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 6,
+    marginBottom: 4,
   },
   inputRow: {
     flexDirection: "row",

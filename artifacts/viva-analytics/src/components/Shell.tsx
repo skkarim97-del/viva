@@ -28,6 +28,7 @@ const NAV: ReadonlyArray<NavItem> = [
   { href: "/operating", label: "Operating", hint: "DAU · WAU · MAU · adoption" },
   { href: "/retention", label: "Retention", hint: "Treatment status & stop reasons" },
   { href: "/behavior", label: "System behavior", hint: "Interventions & signals" },
+  { href: "/care-loop", label: "Care loop", hint: "Viva → escalation → doctor" },
   { href: "/patients", label: "Patients", hint: "Per-patient drill-down" },
   { href: "/doctors", label: "Doctors", hint: "Per-doctor drill-down" },
 ];

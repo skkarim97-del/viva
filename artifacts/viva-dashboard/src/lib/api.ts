@@ -168,6 +168,33 @@ export interface DoctorNote {
   createdAt: string;
 }
 
+export type CareEventSource = "viva" | "doctor" | "patient";
+export type CareEventType =
+  | "coach_message"
+  | "recommendation_shown"
+  | "escalation_requested"
+  | "doctor_reviewed"
+  | "doctor_note"
+  | "treatment_status_updated";
+
+export interface CareEvent {
+  id: number;
+  patientUserId: number;
+  actorUserId: number | null;
+  actorName: string | null;
+  source: CareEventSource;
+  type: CareEventType;
+  occurredAt: string;
+  metadata: Record<string, unknown> | null;
+}
+
+export interface CareEventsResponse {
+  escalationOpen: boolean;
+  lastEscalationAt: string | null;
+  lastReviewAt: string | null;
+  events: CareEvent[];
+}
+
 const BASE = "/api";
 
 class HttpError extends Error {
@@ -250,6 +277,17 @@ export const api = {
       "DELETE",
       `/patients/${patientId}/notes/${noteId}`,
     ),
+  // care events (dual-layer intervention loop)
+  careEvents: (id: number) =>
+    request<CareEventsResponse>("GET", `/care-events/${id}`),
+  markPatientReviewed: (id: number) =>
+    request<{ id: number; occurredAt: string }>(
+      "POST",
+      `/care-events/${id}/reviewed`,
+    ),
+  needsReviewIds: () =>
+    request<{ ids: number[] }>("GET", `/care-events/_ids/needs-review`),
+
   setTreatmentStatus: (
     id: number,
     input: {

@@ -6,3 +6,4 @@ export * from "./doctorNotes";
 export * from "./apiTokens";
 export * from "./interventionEvents";
 export * from "./outcomeSnapshots";
+export * from "./careEvents";

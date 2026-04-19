@@ -10,6 +10,7 @@ import {
   patientCheckinsTable,
   patientWeightsTable,
   doctorNotesTable,
+  careEventsTable,
   TREATMENT_STATUSES,
   STOP_REASONS,
   deriveStopTiming,
@@ -523,6 +524,23 @@ router.patch("/:id/treatment-status", async (req, res: Response) => {
     res.status(404).json({ error: "not_found" });
     return;
   }
+  // Mirror the status change into the care-events stream so the
+  // dual-layer funnel (Viva Analytics) can count "doctor took action
+  // after escalation" without us building a parallel audit table.
+  // Best-effort: if this insert fails the status update still stands.
+  db
+    .insert(careEventsTable)
+    .values({
+      patientUserId: patientId,
+      actorUserId: doctorId,
+      source: "doctor",
+      type: "treatment_status_updated",
+      metadata: {
+        status: parsed.data.status,
+        stopReason: isStop ? parsed.data.stopReason : null,
+      },
+    })
+    .catch(() => {});
   const fresh = await loadOwnedPatient(doctorId, patientId);
   res.json(fresh);
 });
@@ -721,6 +739,18 @@ router.post("/:id/notes", async (req, res: Response) => {
       resolved: parsed.data.resolved ?? null,
     })
     .returning();
+  // Mirror as a care event so the dual-layer funnel sees doctor notes
+  // as an intervention. Best-effort, same rationale as treatment-status.
+  db
+    .insert(careEventsTable)
+    .values({
+      patientUserId: patientId,
+      actorUserId: doctorId,
+      source: "doctor",
+      type: "doctor_note",
+      metadata: { noteId: created!.id, resolved: parsed.data.resolved ?? null },
+    })
+    .catch(() => {});
   // Look up the author's display name so the response matches the GET
   // shape -- the UI can drop the row into its list without a refetch.
   const [author] = await db

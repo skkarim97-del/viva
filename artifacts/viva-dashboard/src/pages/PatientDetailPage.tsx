@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   api,
+  type CareEvent,
   type Checkin,
   type StopReason,
   type StopTimingBucket,
@@ -92,6 +93,20 @@ export function PatientDetailPage({ id }: { id: number }) {
     queryKey: ["patient", id, "weight"],
     queryFn: () => api.patientWeight(id),
   });
+  // Care events power the dual-layer intervention surface: the amber
+  // escalation banner up top and the doctor-side audit trail below
+  // the notes section.
+  const care = useQuery({
+    queryKey: ["patient", id, "care-events"],
+    queryFn: () => api.careEvents(id),
+  });
+  const markReviewed = useMutation({
+    mutationFn: () => api.markPatientReviewed(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["patient", id, "care-events"] });
+      qc.invalidateQueries({ queryKey: ["needs-review-ids"] });
+    },
+  });
 
   const [draft, setDraft] = useState("");
   // Local state for the treatment-status editor. We don't keep these in
@@ -158,6 +173,55 @@ export function PatientDetailPage({ id }: { id: number }) {
       >
         ← All patients
       </Link>
+
+      {/* Escalation banner. Renders amber + CTA when the patient has
+          requested care-team review and no doctor_reviewed event has
+          fired since. After reviewing, collapses to a quiet line so
+          the audit trail is still visible without screaming for
+          attention. */}
+      {care.data?.escalationOpen && care.data.lastEscalationAt && (
+        <div
+          className="rounded-[20px] px-5 py-4 flex items-center gap-4 flex-wrap"
+          style={{
+            backgroundColor: "rgba(255,149,0,0.10)",
+            color: "#8B4F00",
+          }}
+        >
+          <span aria-hidden className="text-lg">🛟</span>
+          <div className="flex-1 min-w-[200px]">
+            <div className="font-semibold text-sm">
+              Patient requested more support
+            </div>
+            <div className="text-xs mt-0.5 opacity-80 font-medium">
+              {relativeTime(care.data.lastEscalationAt)}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => markReviewed.mutate()}
+            disabled={markReviewed.isPending}
+            className="rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-60"
+            style={{ backgroundColor: "#142240", color: "#fff" }}
+          >
+            {markReviewed.isPending ? "Marking..." : "Mark as reviewed"}
+          </button>
+        </div>
+      )}
+      {care.data && !care.data.escalationOpen && care.data.lastReviewAt && (
+        <div className="text-xs text-muted-foreground font-medium">
+          {(() => {
+            const reviewer = care.data.events.find(
+              (e) =>
+                e.type === "doctor_reviewed" &&
+                e.occurredAt === care.data!.lastReviewAt,
+            );
+            const who = reviewer?.actorName
+              ? `Dr. ${reviewer.actorName.split(" ").slice(-1)[0]}`
+              : "Care team";
+            return `Reviewed by ${who} · ${relativeTime(care.data.lastReviewAt)}`;
+          })()}
+        </div>
+      )}
 
       {/* Header card */}
       <div className="bg-card rounded-[20px] p-6">
@@ -580,8 +644,79 @@ export function PatientDetailPage({ id }: { id: number }) {
           </ul>
         )}
       </section>
+
+      {/* Care-events audit trail. Compact list of doctor-side actions
+          + patient escalations so the doctor can see the loop without
+          leaving the page. We hide the high-volume viva-side
+          coach_message / recommendation_shown rows here -- those live
+          in analytics, not in the per-patient view. */}
+      {care.data && care.data.events.length > 0 && (() => {
+        const visible = care.data.events.filter(
+          (e) =>
+            e.type === "doctor_reviewed" ||
+            e.type === "doctor_note" ||
+            e.type === "treatment_status_updated" ||
+            e.type === "escalation_requested",
+        );
+        if (visible.length === 0) return null;
+        return (
+          <section className="bg-card rounded-[20px] p-6">
+            <SectionTitle>Care loop activity</SectionTitle>
+            <ul className="space-y-2">
+              {visible.slice(0, 12).map((e) => (
+                <li
+                  key={e.id}
+                  className="flex items-center gap-3 text-sm font-medium"
+                >
+                  <span
+                    aria-hidden
+                    className="inline-block w-2 h-2 rounded-full shrink-0"
+                    style={{
+                      backgroundColor:
+                        e.source === "patient"
+                          ? "#FF9500"
+                          : e.source === "doctor"
+                          ? "#142240"
+                          : "#5AC8FA",
+                    }}
+                  />
+                  <span className="text-foreground">
+                    {careEventLabel(e)}
+                  </span>
+                  <span className="text-muted-foreground text-xs ml-auto">
+                    {relativeTime(e.occurredAt)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        );
+      })()}
     </div>
   );
+}
+
+// Compact human label for the care-events audit trail. Kept as a plain
+// switch so adding a new event type is a one-line edit.
+function careEventLabel(e: CareEvent): string {
+  switch (e.type) {
+    case "escalation_requested":
+      return "Patient requested more support";
+    case "doctor_reviewed":
+      return e.actorName
+        ? `${e.actorName} marked as reviewed`
+        : "Marked as reviewed";
+    case "doctor_note":
+      return e.actorName
+        ? `${e.actorName} added a note`
+        : "Care note added";
+    case "treatment_status_updated": {
+      const status = (e.metadata?.status as string) ?? "updated";
+      return `Treatment status set to ${status}`;
+    }
+    default:
+      return e.type;
+  }
 }
 
 // ---- TreatmentStatusCard ---------------------------------------------------

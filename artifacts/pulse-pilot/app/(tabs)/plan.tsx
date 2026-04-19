@@ -19,6 +19,7 @@ import { CATEGORY_OPTIONS } from "@/types";
 import type { ActionCategory, WeeklyPlanDay } from "@/types";
 import { selectWeeklyDayView } from "@/lib/engine";
 import { logIntervention, type InterventionType } from "@/lib/intervention/logger";
+import { logCareEventDeduped } from "@/lib/care-events/client";
 
 const CATEGORY_META: Record<ActionCategory, { label: string; icon: keyof typeof Feather.glyphMap; color: string }> = {
   move: { label: "Move", icon: "activity", color: "#FF6B6B" },
@@ -57,6 +58,14 @@ export default function PlanScreen() {
       rationale: dailyState.rationale?.join(" | ") ?? null,
       state: dailyState,
     });
+    // Care-events stream: one row per (date|surface|focus) so the
+    // dual-layer funnel knows Viva surfaced an actionable rec to this
+    // patient today.
+    logCareEventDeduped(
+      "recommendation_shown",
+      `WeeklyPlan|${dailyState.primaryFocus}`,
+      { surface: "WeeklyPlan", focus: dailyState.primaryFocus },
+    );
   }, [dailyState]);
 
   const haptic = () => {

@@ -38,6 +38,8 @@ import type { MedicationProfile } from "@/types";
 import WeightLogModal from "@/components/WeightLogModal";
 import { sessionApi } from "@/lib/api/sessionClient";
 import { connectAppleHealth } from "@/data/healthProviders";
+import { logCareEventImmediate } from "@/lib/care-events/client";
+import { Alert } from "react-native";
 
 const GOAL_LABELS: Record<string, string> = {
   fat_loss: "Weight Loss",
@@ -647,6 +649,7 @@ export default function SettingsScreen() {
       {/* RemindersSection moved up beneath the Apple Health section.
           SignOutSection stays anchored at the very bottom of the
           ScrollView so signing out remains the last thing on the page. */}
+      <CareTeamReviewSection />
       <SignOutSection />
       <WeightLogModal
         visible={weightLogOpen}
@@ -817,6 +820,85 @@ function RemindersSection() {
           </Text>
         </Pressable>
       )}
+    </View>
+  );
+}
+
+// Quieter, always-discoverable entry point for the patient to ask the
+// care team for a closer look. The Coach tab has the contextual entry;
+// this one lives here so it's findable from anywhere in the app.
+function CareTeamReviewSection() {
+  const c = useColors();
+  const [busy, setBusy] = useState(false);
+  const handle = useCallback(() => {
+    if (busy) return;
+    const fire = async () => {
+      setBusy(true);
+      try {
+        const ok = await logCareEventImmediate("escalation_requested", {
+          from: "settings",
+        });
+        const title = ok ? "Care team notified" : "Could not send right now";
+        const body = ok
+          ? "Your care team has been notified and will follow up soon."
+          : "We couldn't reach the server. Please try again in a moment.";
+        if (Platform.OS === "web") {
+          try { (globalThis as any).alert?.(`${title}\n\n${body}`); } catch {}
+        } else {
+          Alert.alert(title, body);
+        }
+      } finally {
+        setBusy(false);
+      }
+    };
+    if (Platform.OS === "web") {
+      const yes = (globalThis as any).confirm?.(
+        "Notify your care team that you'd like a closer look?",
+      );
+      if (yes) void fire();
+      return;
+    }
+    Alert.alert(
+      "Request care-team review?",
+      "We'll let your care team know you'd like a closer look. They'll follow up with you.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Notify care team", onPress: () => void fire() },
+      ],
+    );
+  }, [busy]);
+  return (
+    <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4 }}>
+      <Text style={[styles.fieldLabel, { color: c.mutedForeground, marginBottom: 8 }]}>
+        Care team
+      </Text>
+      <Pressable
+        onPress={handle}
+        disabled={busy}
+        style={({ pressed }) => ({
+          backgroundColor: c.card,
+          borderRadius: 14,
+          paddingVertical: 14,
+          paddingHorizontal: 16,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 12,
+          opacity: pressed || busy ? 0.7 : 1,
+        })}
+      >
+        <Feather name="life-buoy" size={16} color={c.accent} />
+        <Text
+          style={{
+            fontFamily: "Montserrat_600SemiBold",
+            fontSize: 14,
+            color: c.foreground,
+            flex: 1,
+          }}
+        >
+          {busy ? "Sending..." : "Request care-team review"}
+        </Text>
+        <Feather name="chevron-right" size={14} color={c.mutedForeground + "80"} />
+      </Pressable>
     </View>
   );
 }

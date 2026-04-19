@@ -7,6 +7,8 @@ import {
   patientCheckinsTable,
   doctorNotesTable,
   interventionEventsTable,
+  careEventsTable,
+  outcomeSnapshotsTable,
   deriveStopTiming,
 } from "@workspace/db";
 import { computeRisk, deriveAction } from "../lib/risk";
@@ -939,6 +941,367 @@ router.get(
     } catch (err) {
       logger.error({ err }, "internal_analytics_summary_failed");
       res.status(500).json({ error: "analytics_failed" });
+    }
+  },
+);
+
+// ----------------------------------------------------------------------
+// GET /internal/care-loop/summary?days=30
+//
+// Dual-layer intervention funnel: Viva → Escalation → Doctor → Outcome.
+// Reads from the `care_events` stream (escalations, doctor reviews,
+// doctor notes, treatment status updates) and joins to outcome_snapshots
+// for follow-through proxies. Each percentage in the response is paired
+// with the raw counts so the operator can sanity-check it.
+// ----------------------------------------------------------------------
+
+router.get(
+  "/care-loop/summary",
+  requireInternalKey,
+  async (req: Request, res: Response) => {
+    const days = Math.max(
+      1,
+      Math.min(180, Number(req.query.days ?? 30) || 30),
+    );
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+
+    try {
+      // ---- Viva layer ------------------------------------------------
+      // Total events of source=viva and the distinct patient count.
+      const vivaAgg = await db
+        .select({
+          total: sql<number>`count(*)::int`,
+          distinctPatients: sql<number>`count(distinct ${careEventsTable.patientUserId})::int`,
+        })
+        .from(careEventsTable)
+        .where(
+          and(
+            eq(careEventsTable.source, "viva"),
+            gte(careEventsTable.occurredAt, since),
+          ),
+        );
+      const vivaRow = vivaAgg[0] ?? { total: 0, distinctPatients: 0 };
+
+      // % of touched-by-Viva patients who had a next-day check-in
+      // (the cleanest follow-through signal for the Viva layer).
+      const vivaFollowupRows = await db.execute(sql`
+        with viva_first_per_patient as (
+          select patient_user_id, min(occurred_at) as first_at
+          from care_events
+          where source = 'viva' and occurred_at >= ${since.toISOString()}
+          group by patient_user_id
+        )
+        select
+          count(*)::int as total_patients,
+          count(case when os.next_day_checkin_completed then 1 end)::int as engaged
+        from viva_first_per_patient v
+        left join lateral (
+          select next_day_checkin_completed
+          from outcome_snapshots
+          where patient_user_id = v.patient_user_id
+            and snapshot_date >= v.first_at::date
+            and snapshot_date <= (v.first_at::date + interval '1 day')
+          order by snapshot_date asc
+          limit 1
+        ) os on true
+      `);
+      const vivaFollowup = (vivaFollowupRows.rows[0] ?? {}) as {
+        total_patients?: number;
+        engaged?: number;
+      };
+
+      // Patients who had a Viva event AND escalated within 7 days.
+      // Used as the "escalated" outcome numerator (denominator = touched).
+      const escalatedFromVivaRows = await db.execute(sql`
+        with viva_first_per_patient as (
+          select patient_user_id, min(occurred_at) as first_at
+          from care_events
+          where source = 'viva' and occurred_at >= ${since.toISOString()}
+          group by patient_user_id
+        )
+        select count(distinct v.patient_user_id)::int as escalated_patients
+        from viva_first_per_patient v
+        join care_events ce
+          on ce.patient_user_id = v.patient_user_id
+         and ce.type = 'escalation_requested'
+         and ce.occurred_at >= v.first_at
+         and ce.occurred_at <= v.first_at + interval '7 days'
+      `);
+      const escalatedFromViva = (escalatedFromVivaRows.rows[0] ?? {}) as {
+        escalated_patients?: number;
+      };
+
+      // ---- Escalation layer -----------------------------------------
+      const escAgg = await db
+        .select({
+          total: sql<number>`count(*)::int`,
+          distinctPatients: sql<number>`count(distinct ${careEventsTable.patientUserId})::int`,
+        })
+        .from(careEventsTable)
+        .where(
+          and(
+            eq(careEventsTable.type, "escalation_requested"),
+            gte(careEventsTable.occurredAt, since),
+          ),
+        );
+      const escRow = escAgg[0] ?? { total: 0, distinctPatients: 0 };
+
+      const escBySource = await db
+        .select({
+          source: careEventsTable.source,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(careEventsTable)
+        .where(
+          and(
+            eq(careEventsTable.type, "escalation_requested"),
+            gte(careEventsTable.occurredAt, since),
+          ),
+        )
+        .groupBy(careEventsTable.source);
+
+      const totalActivePatientsRow = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(patientsTable);
+      const totalActivePatients =
+        Number(totalActivePatientsRow[0]?.count ?? 0) || 0;
+
+      // ---- Doctor layer ---------------------------------------------
+      // For every escalation_requested event, find the next doctor
+      // event of any kind (reviewed / note / status_updated) within
+      // the window. Aggregated in one SQL pass for sanity.
+      const doctorJoinRows = await db.execute(sql`
+        with esc as (
+          select
+            ce.id        as esc_id,
+            ce.patient_user_id,
+            ce.occurred_at as esc_at
+          from care_events ce
+          where ce.type = 'escalation_requested'
+            and ce.occurred_at >= ${since.toISOString()}
+        ),
+        first_review as (
+          select e.esc_id, min(d.occurred_at) as ts
+          from esc e
+          join care_events d
+            on d.patient_user_id = e.patient_user_id
+           and d.type = 'doctor_reviewed'
+           and d.occurred_at >= e.esc_at
+          group by e.esc_id
+        ),
+        first_note as (
+          select e.esc_id, min(d.occurred_at) as ts
+          from esc e
+          join care_events d
+            on d.patient_user_id = e.patient_user_id
+           and d.type = 'doctor_note'
+           and d.occurred_at >= e.esc_at
+          group by e.esc_id
+        ),
+        first_status as (
+          select e.esc_id, min(d.occurred_at) as ts
+          from esc e
+          join care_events d
+            on d.patient_user_id = e.patient_user_id
+           and d.type = 'treatment_status_updated'
+           and d.occurred_at >= e.esc_at
+          group by e.esc_id
+        )
+        select
+          (select count(*)::int from esc) as total_escalations,
+          (select count(*)::int from first_review) as reviewed_count,
+          (select count(*)::int from first_note) as noted_count,
+          (select count(*)::int from first_status) as status_updated_count,
+          (
+            select avg(extract(epoch from (fr.ts - e.esc_at)) / 60)::float
+            from esc e join first_review fr on fr.esc_id = e.esc_id
+          ) as avg_minutes_to_review
+      `);
+      const doctorRow = (doctorJoinRows.rows[0] ?? {}) as {
+        total_escalations?: number;
+        reviewed_count?: number;
+        noted_count?: number;
+        status_updated_count?: number;
+        avg_minutes_to_review?: number | null;
+      };
+
+      // ---- Outcomes -------------------------------------------------
+      // % resolved by Viva alone:
+      //   patients who had a Viva event AND no escalation_requested in
+      //   the next 7d AND a positive next-day check-in or
+      //   symptomImproved3d follow-through.
+      const resolvedByVivaRows = await db.execute(sql`
+        with viva_first_per_patient as (
+          select patient_user_id, min(occurred_at) as first_at
+          from care_events
+          where source = 'viva' and occurred_at >= ${since.toISOString()}
+          group by patient_user_id
+        ),
+        no_escalation as (
+          select v.patient_user_id, v.first_at
+          from viva_first_per_patient v
+          left join care_events ce
+            on ce.patient_user_id = v.patient_user_id
+           and ce.type = 'escalation_requested'
+           and ce.occurred_at >= v.first_at
+           and ce.occurred_at <= v.first_at + interval '7 days'
+          where ce.id is null
+        ),
+        with_outcome as (
+          select n.patient_user_id, n.first_at,
+                 os.next_day_checkin_completed, os.symptom_improved_3d
+          from no_escalation n
+          left join lateral (
+            select next_day_checkin_completed, symptom_improved_3d
+            from outcome_snapshots
+            where patient_user_id = n.patient_user_id
+              and snapshot_date >= n.first_at::date
+              and snapshot_date <= n.first_at::date + interval '7 days'
+            order by snapshot_date asc
+            limit 1
+          ) os on true
+        )
+        select
+          count(*)::int as candidate_patients,
+          count(case when next_day_checkin_completed or symptom_improved_3d then 1 end)::int as resolved
+        from with_outcome
+      `);
+      const resolvedRow = (resolvedByVivaRows.rows[0] ?? {}) as {
+        candidate_patients?: number;
+        resolved?: number;
+      };
+
+      // % improved after doctor intervention:
+      //   patients who escalated, then a doctor took an action
+      //   (reviewed / note / status updated), then a positive
+      //   follow-through (next-day check-in or symptomImproved3d)
+      //   within 7d of the doctor action.
+      const improvedAfterDoctorRows = await db.execute(sql`
+        with esc as (
+          select patient_user_id, min(occurred_at) as esc_at
+          from care_events
+          where type = 'escalation_requested'
+            and occurred_at >= ${since.toISOString()}
+          group by patient_user_id
+        ),
+        doc_action as (
+          select e.patient_user_id, e.esc_at, min(d.occurred_at) as doc_at
+          from esc e
+          join care_events d
+            on d.patient_user_id = e.patient_user_id
+           and d.source = 'doctor'
+           and d.occurred_at >= e.esc_at
+          group by e.patient_user_id, e.esc_at
+        ),
+        with_outcome as (
+          select da.patient_user_id, da.doc_at,
+                 os.next_day_checkin_completed, os.symptom_improved_3d
+          from doc_action da
+          left join lateral (
+            select next_day_checkin_completed, symptom_improved_3d
+            from outcome_snapshots
+            where patient_user_id = da.patient_user_id
+              and snapshot_date >= da.doc_at::date
+              and snapshot_date <= da.doc_at::date + interval '7 days'
+            order by snapshot_date asc
+            limit 1
+          ) os on true
+        )
+        select
+          count(*)::int as candidate_patients,
+          count(case when next_day_checkin_completed or symptom_improved_3d then 1 end)::int as improved
+        from with_outcome
+      `);
+      const improvedRow = (improvedAfterDoctorRows.rows[0] ?? {}) as {
+        candidate_patients?: number;
+        improved?: number;
+      };
+
+      // Fractions 0..1 — the analytics frontend (`pctStr`) renders these
+      // by multiplying ×100. Never pre-multiply here.
+      const frac = (n: number, d: number) => (d > 0 ? n / d : 0);
+
+      const vivaTotal = Number(vivaRow.total ?? 0);
+      const vivaDistinct = Number(vivaRow.distinctPatients ?? 0);
+      const nextDayNum = Number(vivaFollowup.engaged ?? 0);
+      const nextDayDen = Number(vivaFollowup.total_patients ?? 0);
+      const totalEsc = Number(escRow.total ?? 0);
+      const escDistinct = Number(escRow.distinctPatients ?? 0);
+      const docTotalEsc = Number(doctorRow.total_escalations ?? 0);
+      const docReviewed = Number(doctorRow.reviewed_count ?? 0);
+      const docNoted = Number(doctorRow.noted_count ?? 0);
+      const docStatus = Number(doctorRow.status_updated_count ?? 0);
+      const resolvedNum = Number(resolvedRow.resolved ?? 0);
+      const resolvedDen = Number(resolvedRow.candidate_patients ?? 0);
+      const escFromVivaNum = Number(
+        escalatedFromViva.escalated_patients ?? 0,
+      );
+      const improvedNum = Number(improvedRow.improved ?? 0);
+      const improvedDen = Number(improvedRow.candidate_patients ?? 0);
+
+      // bySource as an object keyed by source string — matches the
+      // frontend `Record<string, number>` shape exactly.
+      const bySource: Record<string, number> = {};
+      for (const r of escBySource) {
+        bySource[String(r.source)] = Number(r.count);
+      }
+
+      res.json({
+        windowDays: days,
+        generatedAt: new Date().toISOString(),
+        viva: {
+          totalEvents: vivaTotal,
+          distinctPatients: vivaDistinct,
+          nextDayCheckinPctOfTouchedPatients: frac(nextDayNum, nextDayDen),
+          nextDayCheckinNumerator: nextDayNum,
+          nextDayCheckinDenominator: nextDayDen,
+        },
+        escalation: {
+          totalEscalations: totalEsc,
+          distinctPatients: escDistinct,
+          bySource,
+        },
+        doctor: {
+          reviewedPct: frac(docReviewed, docTotalEsc),
+          reviewedNumerator: docReviewed,
+          reviewedDenominator: docTotalEsc,
+          avgMinutesEscalationToReview:
+            doctorRow.avg_minutes_to_review == null
+              ? null
+              : Number(doctorRow.avg_minutes_to_review),
+          withDoctorNotePct: frac(docNoted, docTotalEsc),
+          withTreatmentStatusUpdatedPct: frac(docStatus, docTotalEsc),
+        },
+        outcomes: {
+          resolvedByVivaAlonePct: frac(resolvedNum, resolvedDen),
+          resolvedByVivaAloneNumerator: resolvedNum,
+          resolvedByVivaAloneDenominator: resolvedDen,
+          escalatedPct: frac(escFromVivaNum, vivaDistinct),
+          escalatedNumerator: escFromVivaNum,
+          escalatedDenominator: vivaDistinct,
+          improvedAfterDoctorPct: frac(improvedNum, improvedDen),
+          improvedAfterDoctorNumerator: improvedNum,
+          improvedAfterDoctorDenominator: improvedDen,
+        },
+        notes: {
+          nextDayCheckin:
+            "Of patients with a Viva event in the window, the share whose next outcome_snapshots row (within 1 day) marks next_day_checkin_completed.",
+          escalated:
+            "Of patients touched by a Viva event, the share who then sent escalation_requested within 7 days.",
+          resolvedByVivaAlone:
+            "Of patients who had a Viva event AND no escalation_requested in the next 7 days, the share with a positive follow-through (next_day_checkin_completed OR symptom_improved_3d) within 7 days.",
+          improvedAfterDoctor:
+            "Of patients who escalated and then had a doctor action (reviewed / note / status update), the share with a positive follow-through within 7 days of that action.",
+          doctorDenominators:
+            "Doctor reviewed/note/status percentages all use total escalation_requested events in the window as the denominator (one escalation = one row).",
+          dataCaveat:
+            "Outcome columns are populated by /outcomes/snapshot and a server recompute job; sparse data pulls the outcomes section down until backfill catches up.",
+        },
+      });
+    } catch (err) {
+      logger.error({ err }, "internal_care_loop_summary_failed");
+      res.status(500).json({ error: "care_loop_failed" });
     }
   },
 );

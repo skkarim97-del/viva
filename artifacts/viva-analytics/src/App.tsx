@@ -10,6 +10,7 @@ import { RetentionPage } from "@/pages/RetentionPage";
 import { BehaviorPage } from "@/pages/BehaviorPage";
 import { PatientsPage } from "@/pages/PatientsPage";
 import { DoctorsPage } from "@/pages/DoctorsPage";
+import { CareLoopPage } from "@/pages/CareLoopPage";
 import NotFound from "@/pages/not-found";
 
 import { KEY_STORAGE } from "@/lib/api";
@@ -110,6 +111,7 @@ function Routes({ data }: { data: AnalyticsSummary }) {
       <Route path="/behavior" component={() => <BehaviorPage data={data} />} />
       <Route path="/patients" component={() => <PatientsPage data={data} />} />
       <Route path="/doctors" component={() => <DoctorsPage data={data} />} />
+      <Route path="/care-loop" component={() => <CareLoopPage />} />
       <Route component={NotFound} />
     </Switch>
   );
