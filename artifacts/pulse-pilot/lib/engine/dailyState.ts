@@ -94,6 +94,39 @@ export type TreatmentDailyState =
   | "build"
   | "push";
 
+// Per-signal confidence level. Used to modulate how strongly the coach /
+// copy templates may frame a reference to that signal.
+//   none   = forbidden from mention (claim suppressed at source)
+//   low    = only heavily hedged mention, never causal
+//   medium = can mention as a possible pattern
+//   high   = can mention more directly, but never as medical certainty
+export type SignalConfidenceLevel = "none" | "low" | "medium" | "high";
+
+export interface SignalConfidence {
+  // Does the user have any data for this signal at all (presence in
+  // their wearable/phone export). Independent of freshness or baseline.
+  isAvailable: boolean;
+  // Whether copy / coach may reference the signal today. Mirrors the
+  // boolean canCite* gates below; kept here so consumers can read both
+  // permission AND confidence from one place.
+  canCite: boolean;
+  // How strongly we'll let the model frame a reference. Always "none"
+  // when canCite is false.
+  confidenceLevel: SignalConfidenceLevel;
+  // Human-readable reason the level landed where it did. Surfaced in
+  // server prompt so the model knows WHY it's being asked to hedge.
+  confidenceReason: string | null;
+}
+
+export interface SignalConfidenceMap {
+  hrv: SignalConfidence;
+  rhr: SignalConfidence;
+  sleepDuration: SignalConfidence;
+  sleepQuality: SignalConfidence;
+  recovery: SignalConfidence;
+  activity: SignalConfidence;
+}
+
 export interface ClaimsPolicy {
   // What the engine + coach are allowed to assert today. Each gate is
   // derived from existing TierContext usability (sufficiency AND
@@ -112,7 +145,28 @@ export interface ClaimsPolicy {
   // Final confidence label that copy templates and coach prompt use to
   // pick hedge level. Capped by maxConfidenceForTier().
   narrativeConfidence: "low" | "moderate" | "high";
+  // Per-signal confidence map. Additive over the boolean gates above
+  // so legacy consumers keep working, but new copy + coach prompt
+  // generation should prefer this granular view.
+  signalConfidence: SignalConfidenceMap;
 }
+
+// Behavior-strategy layer: maps treatment state + adherence patterns into
+// a coarse communication mode. Same single-source-of-truth principle as
+// the rest of DailyTreatmentState -- never re-derive in a screen.
+//   reassure              = early treatment / symptoms / dose change; calm and patient
+//   simplify              = insufficient data or low engagement; ask for ONE concrete input
+//   encourage_consistency = stable + high adherence; reinforce the streak gently
+//   caution_and_monitor   = symptoms stacking or escalation_need=monitor; no performance push
+//   escalate              = escalation_need=clinician; suggest contacting care team
+//   reengage              = repeated missed check-ins / rising adherence signal; warmer, smaller asks
+export type CommunicationMode =
+  | "reassure"
+  | "simplify"
+  | "encourage_consistency"
+  | "caution_and_monitor"
+  | "escalate"
+  | "reengage";
 
 export interface DataSufficiencyMarkers {
   checkinToday: boolean;
@@ -154,6 +208,11 @@ export interface DailyTreatmentState {
   // Decision output
   primaryFocus: PrimaryFocus;
   treatmentDailyState: TreatmentDailyState;
+  // Behavior strategy: derived from treatment lenses + adherence +
+  // sufficiency. Drives coach tone selection and any future
+  // surface-level mode switches. Single source of truth -- never
+  // re-derived in a screen.
+  communicationMode: CommunicationMode;
   // Ordered list of rule IDs that fired, in precedence order. Used
   // for analytics + debugging + composing narrative copy that matches
   // what actually drove the day.
@@ -440,6 +499,149 @@ function computePrimaryFocus(args: {
   return { focus: "recovery", state: "recover" };
 }
 
+// Per-signal confidence derivation. Pure function of TierContext +
+// availability set so it stays in lockstep with the boolean canCite*
+// gates. Anything that flips canCite must keep confidence at "none".
+function computeSignalConfidence(tierCtx: TierContext): SignalConfidenceMap {
+  const set = new Set(tierCtx.availableMetricTypes);
+  const baselineDays = tierCtx.sufficiency.baselineDays;
+  const fullBaseline = baselineDays >= 14;
+  const partialBaseline = baselineDays >= 7;
+
+  // HRV: wearable-grade observed signal. High requires usable + full baseline.
+  const hrvAvailable = set.has("hrv");
+  const hrvCanCite = tierCtx.usableHrv;
+  let hrvLevel: SignalConfidenceLevel = "none";
+  let hrvReason: string | null = null;
+  if (!hrvAvailable) {
+    hrvReason = "no HRV data available for this user";
+  } else if (!tierCtx.freshness.hasFreshHrv) {
+    hrvLevel = "low";
+    hrvReason = "HRV is stale (last sample older than 72h)";
+  } else if (!tierCtx.sufficiency.hasHrvBaseline) {
+    hrvLevel = "low";
+    hrvReason = "HRV is fresh but personal baseline is not yet established";
+  } else if (!fullBaseline) {
+    hrvLevel = "medium";
+    hrvReason = "HRV baseline established on partial 14-day window";
+  } else {
+    hrvLevel = "high";
+    hrvReason = "HRV is fresh with a full 14-day personal baseline";
+  }
+  if (!hrvCanCite) hrvLevel = "none";
+
+  // Resting HR: wearable-grade observed signal.
+  const rhrAvailable = set.has("restingHeartRate");
+  const rhrCanCite = tierCtx.usableRhr;
+  let rhrLevel: SignalConfidenceLevel = "none";
+  let rhrReason: string | null = null;
+  if (!rhrAvailable) {
+    rhrReason = "no resting heart rate data available for this user";
+  } else if (!tierCtx.freshness.hasFreshRhr) {
+    rhrLevel = "low";
+    rhrReason = "resting heart rate is stale (last sample older than 72h)";
+  } else if (!tierCtx.sufficiency.hasRhrBaseline) {
+    rhrLevel = "low";
+    rhrReason = "resting heart rate is fresh but personal baseline is not yet established";
+  } else if (!fullBaseline) {
+    rhrLevel = "medium";
+    rhrReason = "resting heart rate baseline on partial 14-day window";
+  } else {
+    rhrLevel = "high";
+    rhrReason = "resting heart rate is fresh with a full 14-day personal baseline";
+  }
+  if (!rhrCanCite) rhrLevel = "none";
+
+  // Sleep duration: phone or wearable observed.
+  const sleepAvailable = set.has("sleep");
+  const sleepCanCite = tierCtx.usableSleep;
+  let sleepDurLevel: SignalConfidenceLevel = "none";
+  let sleepDurReason: string | null = null;
+  if (!sleepAvailable) {
+    sleepDurReason = "no sleep data available for this user";
+  } else if (!tierCtx.freshness.hasFreshSleep) {
+    sleepDurLevel = "low";
+    sleepDurReason = "sleep is stale (last sample older than 36h)";
+  } else if (!tierCtx.sufficiency.hasSleepHistory) {
+    sleepDurLevel = "low";
+    sleepDurReason = "sleep is fresh but fewer than 3 nights of recent history";
+  } else if (!partialBaseline) {
+    sleepDurLevel = "medium";
+    sleepDurReason = "sleep is fresh with limited recent history";
+  } else {
+    sleepDurLevel = "high";
+    sleepDurReason = "sleep is fresh with a full 7-day window of history";
+  }
+  if (!sleepCanCite) sleepDurLevel = "none";
+
+  // Sleep quality: derived/estimated unless wearable tier provides
+  // physiological grounding. Capped at medium for non-wearable tiers.
+  const sleepQualityCanCite = sleepCanCite && tierCtx.tier === "wearable" && (tierCtx.usableHrv || tierCtx.usableRhr);
+  let sleepQualLevel: SignalConfidenceLevel = "none";
+  let sleepQualReason: string | null = null;
+  if (!sleepAvailable) {
+    sleepQualReason = "no sleep data available";
+  } else if (!sleepQualityCanCite) {
+    sleepQualReason = "sleep quality requires wearable physiological signals (HRV or resting HR) to be considered observed";
+  } else if (!fullBaseline) {
+    sleepQualLevel = "medium";
+    sleepQualReason = "sleep quality is estimated from physiological signals on a partial baseline";
+  } else {
+    // Even at full baseline we cap at medium because the metric is
+    // derived, not directly observed end-of-sleep.
+    sleepQualLevel = "medium";
+    sleepQualReason = "sleep quality is estimated from physiological signals; treat as a possible pattern, not a direct measurement";
+  }
+
+  // Recovery / readiness proxy: almost always derived from HRV + RHR.
+  const recoveryCanCite = tierCtx.usableHrv || tierCtx.usableRhr;
+  let recoveryLevel: SignalConfidenceLevel = "none";
+  let recoveryReason: string | null = null;
+  if (!recoveryCanCite) {
+    recoveryReason = "recovery requires at least one usable wearable physiological signal (HRV or resting HR)";
+  } else if (tierCtx.usableHrv && tierCtx.usableRhr && fullBaseline) {
+    recoveryLevel = "high";
+    recoveryReason = "recovery is grounded in fresh HRV and resting HR with full 14-day baselines";
+  } else if (tierCtx.usableHrv && tierCtx.usableRhr) {
+    recoveryLevel = "medium";
+    recoveryReason = "recovery is grounded in fresh HRV and resting HR but baselines are still building";
+  } else {
+    recoveryLevel = "low";
+    recoveryReason = "recovery is inferred from a single wearable signal";
+  }
+
+  // Activity / steps: phone-observed, generally reliable when fresh.
+  const stepsAvailable = set.has("steps");
+  const activityCanCite = tierCtx.usableSteps;
+  let activityLevel: SignalConfidenceLevel = "none";
+  let activityReason: string | null = null;
+  if (!stepsAvailable) {
+    activityReason = "no step / activity data available for this user";
+  } else if (!tierCtx.freshness.hasFreshSteps) {
+    activityLevel = "low";
+    activityReason = "activity is stale (last sample older than 36h)";
+  } else if (!tierCtx.sufficiency.hasStepsHistory) {
+    activityLevel = "low";
+    activityReason = "activity is fresh but fewer than 3 days of recent history";
+  } else if (!partialBaseline) {
+    activityLevel = "medium";
+    activityReason = "activity is fresh with limited recent history";
+  } else {
+    activityLevel = "high";
+    activityReason = "activity is fresh with a full 7-day window of history";
+  }
+  if (!activityCanCite) activityLevel = "none";
+
+  return {
+    hrv:           { isAvailable: hrvAvailable,    canCite: hrvCanCite,           confidenceLevel: hrvLevel,       confidenceReason: hrvReason },
+    rhr:           { isAvailable: rhrAvailable,    canCite: rhrCanCite,           confidenceLevel: rhrLevel,       confidenceReason: rhrReason },
+    sleepDuration: { isAvailable: sleepAvailable,  canCite: sleepCanCite,         confidenceLevel: sleepDurLevel,  confidenceReason: sleepDurReason },
+    sleepQuality:  { isAvailable: sleepAvailable,  canCite: sleepQualityCanCite,  confidenceLevel: sleepQualLevel, confidenceReason: sleepQualReason },
+    recovery:      { isAvailable: rhrAvailable || hrvAvailable, canCite: recoveryCanCite, confidenceLevel: recoveryLevel, confidenceReason: recoveryReason },
+    activity:      { isAvailable: stepsAvailable,  canCite: activityCanCite,      confidenceLevel: activityLevel,  confidenceReason: activityReason },
+  };
+}
+
 function computeClaimsPolicy(tierCtx: TierContext): ClaimsPolicy {
   const physiological = tierCtx.usableHrv || tierCtx.usableRhr;
   const narrativeConfidence = maxConfidenceForTier(tierCtx);
@@ -451,7 +653,38 @@ function computeClaimsPolicy(tierCtx: TierContext): ClaimsPolicy {
     canQuantifyReadiness: tierCtx.tier === "wearable" && physiological,
     physiologicalClaimsAllowed: physiological,
     narrativeConfidence,
+    signalConfidence: computeSignalConfidence(tierCtx),
   };
+}
+
+// Behavior-strategy selector. Pure function of treatment lenses we have
+// already computed; no new inputs. Strict precedence so a higher-tier
+// concern always wins (e.g. clinician escalation always beats
+// encourage_consistency).
+function computeCommunicationMode(args: {
+  escalationNeed: EscalationNeed;
+  symptomBurden: RiskBand;
+  insufficientForPlan: boolean;
+  treatmentStage: TreatmentStage;
+  recentTitration: boolean;
+  adherenceSignal: AdherenceSignal;
+  hasCheckinToday: boolean;
+}): CommunicationMode {
+  // Tier 0: clinician escalation always wins.
+  if (args.escalationNeed === "clinician") return "escalate";
+  // Tier 1: monitor-level symptom stacking.
+  if (args.escalationNeed === "monitor" || args.symptomBurden === "high") return "caution_and_monitor";
+  // Tier 2: insufficient data or actively missing today -- ask for one input.
+  if (args.insufficientForPlan || !args.hasCheckinToday) return "simplify";
+  // Tier 3: rising adherence concern -- warmer, smaller asks.
+  if (args.adherenceSignal === "rising") return "reengage";
+  // Tier 4: early-treatment / dose-change patience.
+  if (args.treatmentStage === "first_30d" || args.recentTitration) return "reassure";
+  // Tier 5: attention-tier adherence -- still gentle but framed as
+  // re-engagement rather than reassurance about treatment context.
+  if (args.adherenceSignal === "attention") return "reengage";
+  // Default: stable + engaged -> reinforce the streak.
+  return "encourage_consistency";
 }
 
 function computeDataSufficiency(args: {
@@ -583,7 +816,20 @@ export function selectDailyTreatmentState(args: SelectInputs): DailyTreatmentSta
     rationale.unshift("sufficiency.insufficient");
   }
 
-  // 7. Symptom interventions, filtered against caller's dismiss map.
+  // 7. Behavior strategy. Driven entirely off the lenses we just
+  //    computed; nothing new pulled from raw inputs.
+  const communicationMode = computeCommunicationMode({
+    escalationNeed,
+    symptomBurden,
+    insufficientForPlan: dataSufficiency.insufficientForPlan,
+    treatmentStage,
+    recentTitration,
+    adherenceSignal,
+    hasCheckinToday,
+  });
+  rationale.push(`mode.${communicationMode}`);
+
+  // 8. Symptom interventions, filtered against caller's dismiss map.
   const planActivity = planActivityFromState(plan.dailyState);
   const interventions = computeInterventions(args, planActivity);
 
@@ -606,6 +852,7 @@ export function selectDailyTreatmentState(args: SelectInputs): DailyTreatmentSta
     dataSufficiency,
     primaryFocus,
     treatmentDailyState,
+    communicationMode,
     rationale,
     plan,
     interventions,

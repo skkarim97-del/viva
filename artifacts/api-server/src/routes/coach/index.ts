@@ -64,6 +64,25 @@ GUARDRAILS:
 - When data is limited, say so naturally and still be useful`;
 
 
+// Per-signal confidence shape mirrored from pulse-pilot's central
+// DailyTreatmentState. Kept here as a structural-only mirror; the
+// canonical definition lives in artifacts/pulse-pilot/lib/engine/dailyState.ts.
+type SignalConfidenceLevel = "none" | "low" | "medium" | "high";
+interface SignalConfidence {
+  isAvailable: boolean;
+  canCite: boolean;
+  confidenceLevel: SignalConfidenceLevel;
+  confidenceReason: string | null;
+}
+interface SignalConfidenceMap {
+  hrv: SignalConfidence;
+  rhr: SignalConfidence;
+  sleepDuration: SignalConfidence;
+  sleepQuality: SignalConfidence;
+  recovery: SignalConfidence;
+  activity: SignalConfidence;
+}
+
 interface ChatRequestBody {
   message: string;
   healthContext?: {
@@ -149,7 +168,16 @@ interface ChatRequestBody {
         canQuantifyReadiness: boolean;
         physiologicalClaimsAllowed: boolean;
         narrativeConfidence: "low" | "moderate" | "high";
+        signalConfidence?: SignalConfidenceMap;
       };
+      signalConfidence?: SignalConfidenceMap;
+      communicationMode?:
+        | "reassure"
+        | "simplify"
+        | "encourage_consistency"
+        | "caution_and_monitor"
+        | "escalate"
+        | "reengage";
       dataTier: "self_report" | "phone_health" | "wearable";
       statusChipLabel: string;
       heroHeadline: string;
@@ -411,6 +439,23 @@ router.post("/chat", async (req: Request, res: Response) => {
     // deny-all policy + insufficient-data tone so this endpoint can NEVER be
     // jailbroken into making physiological claims by an unmigrated client.
     {
+      // Deny-all signal confidence fallback. Used when an unmigrated client
+      // omits signalConfidence -- every signal is forbidden from mention.
+      const denyAllConfidence = (reason: string): SignalConfidence => ({
+        isAvailable: false,
+        canCite: false,
+        confidenceLevel: "none",
+        confidenceReason: reason,
+      });
+      const denyAllSignalConfidence: SignalConfidenceMap = {
+        hrv:           denyAllConfidence("no treatment state was sent with this request"),
+        rhr:           denyAllConfidence("no treatment state was sent with this request"),
+        sleepDuration: denyAllConfidence("no treatment state was sent with this request"),
+        sleepQuality:  denyAllConfidence("no treatment state was sent with this request"),
+        recovery:      denyAllConfidence("no treatment state was sent with this request"),
+        activity:      denyAllConfidence("no treatment state was sent with this request"),
+      };
+
       const tsRaw = healthContext?.treatmentState;
       const ts = tsRaw ?? {
         treatmentDailyState: "support" as const,
@@ -434,7 +479,10 @@ router.post("/chat", async (req: Request, res: Response) => {
           canQuantifyReadiness: false,
           physiologicalClaimsAllowed: false,
           narrativeConfidence: "low" as const,
+          signalConfidence: denyAllSignalConfidence,
         },
+        signalConfidence: denyAllSignalConfidence,
+        communicationMode: "simplify" as const,
         dataTier: "self_report" as const,
         statusChipLabel: "Set up your day",
         heroHeadline: "Tell us how today is going",
@@ -442,6 +490,12 @@ router.post("/chat", async (req: Request, res: Response) => {
         interventionTitles: [],
         rationale: [],
       };
+      // Resolve the per-signal confidence map. Prefer the top-level
+      // `signalConfidence` (newer wire shape), fall back to the one
+      // nested in claimsPolicy, and only finally fall back to deny-all.
+      const signalConfidence: SignalConfidenceMap =
+        ts.signalConfidence ?? ts.claimsPolicy?.signalConfidence ?? denyAllSignalConfidence;
+      const communicationMode = ts.communicationMode ?? "simplify";
       {
         const cp = ts.claimsPolicy;
         const allowed: string[] = [];
@@ -465,9 +519,74 @@ router.post("/chat", async (req: Request, res: Response) => {
         ];
         messages.push({ role: "system", content: cpLines.join("\n") });
 
+        // Per-signal confidence guidance. The CLAIMS POLICY above is binary
+        // (allowed vs forbidden); this section tells the model HOW STRONGLY
+        // it may frame anything it IS allowed to reference.
+        //   none   -> still forbidden; never mention
+        //   low    -> heavily hedged ("based on what you've shared today, ..."); never causal
+        //   medium -> may mention as a possible pattern, not a direct measurement
+        //   high   -> may mention more directly, but never as medical certainty
+        const signalLabels: { key: keyof SignalConfidenceMap; label: string }[] = [
+          { key: "hrv",           label: "HRV" },
+          { key: "rhr",           label: "resting heart rate" },
+          { key: "sleepDuration", label: "sleep duration" },
+          { key: "sleepQuality",  label: "sleep quality" },
+          { key: "recovery",      label: "recovery / readiness" },
+          { key: "activity",      label: "activity / steps" },
+        ];
+        const confLines: string[] = [
+          `SIGNAL CONFIDENCE (modulates wording for any signal you ARE allowed to reference; never overrides CLAIMS POLICY):`,
+        ];
+        let confidenceListedAny = false;
+        for (const { key, label } of signalLabels) {
+          const sc = signalConfidence[key];
+          const reason = sc.confidenceReason ? ` -- ${sc.confidenceReason}` : "";
+          if (sc.confidenceLevel === "none") {
+            // Suppressed signal: redundant with the CLAIMS POLICY forbidden list,
+            // so we omit it here unless we have a meaningful reason to surface
+            // why (helps the model explain the gap if asked).
+            if (sc.confidenceReason) {
+              confLines.push(`- ${label}: do not mention${reason}`);
+              confidenceListedAny = true;
+            }
+            continue;
+          }
+          confidenceListedAny = true;
+          if (sc.confidenceLevel === "low") {
+            confLines.push(`- ${label}: LOW confidence. Mention only if directly useful, and always heavily hedged ("based on what you've shared today"). Never causal language${reason}.`);
+          } else if (sc.confidenceLevel === "medium") {
+            confLines.push(`- ${label}: MEDIUM confidence. Frame as a possible pattern, not a direct measurement${reason}.`);
+          } else {
+            confLines.push(`- ${label}: HIGH confidence. May reference more directly, but never as medical certainty${reason}.`);
+          }
+        }
+        if (confidenceListedAny) {
+          messages.push({ role: "system", content: confLines.join("\n") });
+        }
+
         // Treatment-state tone rules. These keep the coach aligned with what the Today
         // and weekly surfaces are showing the patient right now.
         const toneLines: string[] = [`TONE & FRAMING (must match the rest of the app this person is looking at):`];
+
+        // Communication-mode header. Single behavior-strategy directive
+        // derived centrally; every detailed addendum below is a refinement
+        // of this top-level mode, not a parallel decision.
+        const modeRules: Record<typeof communicationMode, string> = {
+          reassure:
+            `- Communication mode: REASSURE. Early in treatment or recently changed dose. Be calm, patient, and normalize the experience. Lower the bar on what counts as a good day. Do not push performance.`,
+          simplify:
+            `- Communication mode: SIMPLIFY. Not enough input today. Ask for ONE concrete next input (how they feel, energy, appetite, or any side effects). Do not list multiple metrics. Do not give a detailed plan.`,
+          encourage_consistency:
+            `- Communication mode: ENCOURAGE_CONSISTENCY. Things look stable and engaged. Reinforce the streak quietly, suggest one specific next step that compounds it. Do not over-praise.`,
+          caution_and_monitor:
+            `- Communication mode: CAUTION_AND_MONITOR. Symptoms are stacking. Be careful and supportive, not performance-oriented. Hydration, rest, small bland meals come first. No training prescriptions today.`,
+          escalate:
+            `- Communication mode: ESCALATE. Symptoms warrant talking to the care team. Be calm, supportive, and explicitly suggest contacting their prescriber or care team. Do NOT prescribe specific protocols, doses, or medical action. No performance language.`,
+          reengage:
+            `- Communication mode: REENGAGE. Engagement is dropping. Use a warmer, lower-pressure tone. Smaller asks. More reassurance. Never mention compliance, dropout, churn, or risk.`,
+        };
+        toneLines.push(modeRules[communicationMode]);
+
         if (ts.insufficientForPlan) {
           toneLines.push(
             `- The Today screen is showing "Set up your day" because there is not enough input yet to personalize. Do NOT pretend to know how they are doing physiologically. Acknowledge the gap warmly and guide them toward the single most useful next input (a quick check-in: how they feel, energy, appetite, any side effects). One concrete suggestion. Do not list multiple metrics to log.`,

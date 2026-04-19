@@ -25,6 +25,8 @@ import type {
   AdherenceSignal,
   PrimaryFocus,
   ClaimsPolicy,
+  CommunicationMode,
+  SignalConfidenceMap,
 } from "./dailyState";
 import { selectStatusChip, selectHero } from "./selectors";
 
@@ -114,6 +116,12 @@ export interface CoachContext {
     adherenceSignal: AdherenceSignal;
     insufficientForPlan: boolean;
     claimsPolicy: ClaimsPolicy;
+    // Per-signal confidence is part of claimsPolicy. We forward it
+    // explicitly here too so the server prompt can render confidence
+    // hedge guidance per signal without re-deriving anything.
+    signalConfidence: SignalConfidenceMap;
+    // Behavior strategy for tone selection on the server side.
+    communicationMode: CommunicationMode;
     dataTier: "self_report" | "phone_health" | "wearable";
     statusChipLabel: string;
     heroHeadline: string;
@@ -174,6 +182,12 @@ export function buildCoachContext(
   // computed yet (cold start before any check-in), treat as
   // physiologically-blind self_report tier and let the API server
   // surface "tell me how today is going" framing.
+  const denyAllSignal = (reason: string) => ({
+    isAvailable: false,
+    canCite: false,
+    confidenceLevel: "none" as const,
+    confidenceReason: reason,
+  });
   const policy: ClaimsPolicy = dailyState?.claimsPolicy ?? {
     canCiteSleep: false,
     canCiteHRV: false,
@@ -182,6 +196,14 @@ export function buildCoachContext(
     canQuantifyReadiness: false,
     physiologicalClaimsAllowed: false,
     narrativeConfidence: "low",
+    signalConfidence: {
+      hrv:           denyAllSignal("no daily treatment state available yet"),
+      rhr:           denyAllSignal("no daily treatment state available yet"),
+      sleepDuration: denyAllSignal("no daily treatment state available yet"),
+      sleepQuality:  denyAllSignal("no daily treatment state available yet"),
+      recovery:      denyAllSignal("no daily treatment state available yet"),
+      activity:      denyAllSignal("no daily treatment state available yet"),
+    },
   };
 
   const hrvBaseline = computeHrvBaseline(metrics);
@@ -264,6 +286,8 @@ export function buildCoachContext(
         adherenceSignal: dailyState.adherenceSignal,
         insufficientForPlan: dailyState.dataSufficiency.insufficientForPlan,
         claimsPolicy: dailyState.claimsPolicy,
+        signalConfidence: dailyState.claimsPolicy.signalConfidence,
+        communicationMode: dailyState.communicationMode,
         dataTier: dailyState.dataTier,
         statusChipLabel: chip.label,
         heroHeadline: hero.headline,

@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
 import { sendCoachMessage, CoachRequestError, describeCoachError } from "@/lib/api/coachClient";
+import { logIntervention } from "@/lib/intervention/logger";
 import { buildCoachContext } from "@/lib/engine/coachEngine";
 import type { ChatMessage } from "@/types";
 
@@ -155,6 +156,19 @@ export default function CoachScreen() {
         content: result.content,
         timestamp: Date.now(),
       });
+      // Log the coach turn as an "adherence_checkin" intervention
+      // when the central treatment-state is available. This lets the
+      // analytics view attribute re-engagement and outcome shifts
+      // back to coach interactions.
+      if (dailyState) {
+        logIntervention({
+          surface: "Coach",
+          interventionType: "adherence_checkin",
+          title: `coach:${(dailyState.communicationMode ?? "simplify")}`,
+          rationale: dailyState.rationale?.join(" | ") ?? null,
+          state: dailyState,
+        });
+      }
     } catch (err: any) {
       console.log("[Coach] final error:", { kind: err?.kind, status: err?.status, message: err?.message, body: err?.body, url: err?.url });
       const userMessage = err instanceof CoachRequestError

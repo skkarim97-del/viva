@@ -9,6 +9,7 @@ import { OnboardingPage } from "@/pages/OnboardingPage";
 import { PatientsPage } from "@/pages/PatientsPage";
 import { PatientDetailPage } from "@/pages/PatientDetailPage";
 import { InternalDashboardPage } from "@/pages/InternalDashboardPage";
+import { InternalAnalyticsPage } from "@/pages/InternalAnalyticsPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -56,6 +57,9 @@ function Gate() {
   // operator key.
   if (location === "/internal") {
     return <InternalDashboardPage />;
+  }
+  if (location === "/internal/analytics") {
+    return <InternalAnalyticsPage />;
   }
 
   // Routes that don't require an authenticated doctor session.

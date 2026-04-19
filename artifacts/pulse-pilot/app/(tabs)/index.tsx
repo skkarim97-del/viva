@@ -23,6 +23,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SymptomTipCard } from "@/components/SymptomTipCard";
 import WeightLogModal from "@/components/WeightLogModal";
 import { sessionApi } from "@/lib/api/sessionClient";
+import { logIntervention, type InterventionType } from "@/lib/intervention/logger";
 import { useApp } from "@/context/AppContext";
 import { type SymptomKind } from "@/lib/symptomTips";
 import { generateCoachInsight } from "@/data/insights";
@@ -278,6 +279,50 @@ export default function DashboardScreen() {
       return false;
     });
   }, [dailyState, dismissedTips]);
+
+  // Best-effort intervention logging. Fires once per day per (focus +
+  // tip-symptom). Never blocks rendering; failures are swallowed by
+  // the logger. The dependency array includes only the data we actually
+  // read so re-renders that don't change interventions don't re-fire.
+  React.useEffect(() => {
+    if (!dailyState) return;
+    if (dailyState.primaryFocus && dailyState.primaryFocus !== "continuity_support") {
+      const focusToType: Partial<Record<string, InterventionType>> = {
+        hydration: "hydration",
+        fueling: "protein_fueling",
+        recovery: "recovery_rest",
+        symptom_relief: "symptom_monitoring",
+      };
+      const t = focusToType[dailyState.primaryFocus];
+      if (t) {
+        logIntervention({
+          surface: "Today",
+          interventionType: t,
+          title: `today:${dailyState.primaryFocus}`,
+          rationale: dailyState.rationale?.join(" | ") ?? null,
+          state: dailyState,
+        });
+      }
+    }
+    if (dailyState.escalationNeed === "clinician") {
+      logIntervention({
+        surface: "Today",
+        interventionType: "clinician_escalation",
+        title: "today:clinician_escalation",
+        rationale: dailyState.rationale?.join(" | ") ?? null,
+        state: dailyState,
+      });
+    }
+    for (const tip of symptomTips) {
+      logIntervention({
+        surface: "Today",
+        interventionType: "symptom_monitoring",
+        title: tip.title,
+        rationale: tip.symptom,
+        state: dailyState,
+      });
+    }
+  }, [dailyState, symptomTips]);
 
   const onAckSymptomTip = React.useCallback(
     (symptom: SymptomKind) => {

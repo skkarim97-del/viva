@@ -1,0 +1,219 @@
+Build the next iteration of Viva’s treatment intelligence layer by adding signal-level confidence scoring, intervention logging, proxy outcome tracking, a behavior-strategy layer, and a simple internal analytics view on top of the existing unified DailyTreatmentState + claimsPolicy architecture.
+
+Goal:
+We already unified coach, Today, and weekly plan around a single source of truth and server-enforced claims policy. Now upgrade the system from safe and consistent to safe, consistent, measurable, and increasingly intelligent over time.
+
+Implement the following in priority order.
+
+Add signal-level confidence scoring
+
+Objective:
+The current claims policy is too binary. Each physiological signal should carry a confidence level so the app and coach can modulate wording.
+
+Requirements:
+Extend the central treatment state / claims policy to support confidence metadata for each major signal:
+
+HRV
+resting heart rate
+sleep duration
+sleep quality
+recovery / readiness proxy
+activity / steps
+
+For each signal add:
+
+isAvailable: boolean
+canCite: boolean
+confidenceLevel: "none" | "low" | "medium" | "high"
+confidenceReason: string | null
+
+Confidence should depend on factors like:
+
+sufficient baseline history
+recent data freshness
+missingness / sparsity
+whether the signal is directly observed vs derived
+whether the signal is wearable-grade vs estimated
+
+Deliverables:
+
+update central types
+update selectors / engine logic
+update coach context builder so confidence metadata travels to server
+update API server prompt generation so the model is told both:
+what it may reference
+how strongly it may frame that reference
+
+Behavioral rules:
+
+none = forbidden from mention
+low = only heavily hedged mention, never causal
+medium = can mention as a possible pattern
+high = can mention more directly, but still avoid medical certainty
+
+Important:
+Do not reintroduce parallel logic in UI surfaces. Confidence must come from the same central treatment-state path.
+
+Add intervention logging
+
+Objective:
+We need to know what the system actually told the patient so we can later measure whether recommendations worked.
+
+Requirements:
+Create a lightweight intervention logging system that records every high-level intervention surfaced to the user.
+
+For each intervention event, log:
+
+user / patient id
+date
+surface: Today | WeeklyPlan | Coach
+intervention type:
+hydration
+protein_fueling
+light_movement
+recovery_rest
+symptom_monitoring
+clinician_escalation
+dose_day_caution
+adherence_checkin
+intervention title
+intervention rationale snapshot
+treatment state snapshot:
+primaryFocus
+escalationNeed
+treatmentStage
+dataTier
+claims policy summary
+optional confidence summary
+
+Storage:
+Keep it simple and production-friendly:
+
+create a DB table on server if easy
+otherwise create a durable server-side logging path that can later be upgraded
+
+Important:
+Log normalized intervention metadata, not full verbose chat output unless already supported safely.
+
+Add proxy outcome tracking
+
+Objective:
+We need a minimal way to measure whether interventions correlate with better retention and engagement.
+
+Requirements:
+Add a basic outcome model with fields like:
+
+next_day_checkin_completed
+adherence_improved_3d
+symptom_improved_3d
+symptom_worsened_3d
+app_engaged_72h
+clinician_outreach_triggered
+treatment_active_30d
+treatment_active_60d
+treatment_active_90d
+
+If full retention data is not yet available, start with proxy outcomes:
+
+daily check-in completion
+weekly consistency
+medication log completion
+symptom severity trend
+re-engagement after low adherence state
+
+Deliverables:
+
+data model or server schema for outcome events / snapshots
+helper utilities that attach post-intervention outcomes retrospectively
+basic linkage between intervention logs and later outcome windows
+
+Important:
+Do not overengineer attribution. Just create a clean first pass.
+
+Add a behavior-strategy layer for coach
+
+Objective:
+Coach tone should not just mirror current state. It should adapt based on behavior risk.
+
+Requirements:
+Create a simple behavior strategy layer that maps treatment state + adherence patterns into a communication mode such as:
+
+reassure
+simplify
+encourage_consistency
+caution_and_monitor
+escalate
+reengage
+
+Example mappings:
+
+insufficient data + low engagement → simplify + ask for one concrete input
+early treatment + symptoms → reassure + caution
+worsening symptoms + escalation risk → caution_and_monitor
+stable + high adherence → encourage_consistency
+repeated missed check-ins → reengage
+
+Important:
+This must still be driven centrally from treatment state and related inputs, not hand-built in each screen.
+
+Build a simple internal analytics view
+
+Objective:
+Let us inspect whether the intelligence layer is producing usable patterns.
+
+Requirements:
+Create a minimal internal debug/admin screen showing:
+
+counts of intervention types over time
+outcomes by intervention type
+outcomes by treatment state
+outcomes by confidence band
+top pathways to escalation
+re-engagement rate after coach interactions
+
+This can be ugly. Function over form. Internal only, not patient-facing.
+
+Guardrails
+
+Maintain these principles:
+
+No physiological claim may bypass claimsPolicy
+Missing treatmentState must still fall back to deny-all
+No duplicate derivation of state in coach tab, Today, weekly, or analytics
+Avoid introducing a second intelligence pipeline
+Keep everything typed and centralized
+
+Validate:
+Run full typecheck across the repo and verify:
+
+no old readiness-score-based rendering paths remain
+no legacy tier logic survives in coach or Today flows
+all new confidence logic comes from the unified treatment-state path
+Output format I want from you when done
+
+Give me:
+
+files edited
+schema / types added
+exact logic used for confidence scoring
+exact logic used for intervention logging
+exact outcome events now tracked
+any contradiction or bypass risks still remaining
+blunt assessment of what still needs improvement
+
+Priority order:
+
+signal-level confidence scoring
+intervention logging
+proxy outcome tracking
+behavior-strategy layer
+internal analytics view
+
+Non-goals for this slice:
+
+no visual polish
+no animations
+no copy tweaking
+no patient-facing redesign unless required to support the above
+
+Focus on infrastructure, measurement, and intelligence.

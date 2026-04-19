@@ -8,6 +8,8 @@ import {
 } from "@workspace/db";
 import { computeRisk, deriveAction } from "../lib/risk";
 import { logger } from "../lib/logger";
+import { linkInterventionsToOutcomes } from "./interventions";
+import { recomputeRecentOutcomesForAllPatients } from "./outcomes";
 
 const router: Router = Router();
 
@@ -232,5 +234,143 @@ router.get("/metrics", requireInternalKey, async (_req, res: Response) => {
 router.get("/ping", requireInternalKey, (_req, res: Response) => {
   res.json({ ok: true });
 });
+
+// ----- /internal/analytics/summary --------------------------------
+// Single roll-up powering the internal analytics page. Aggregates
+// intervention -> outcome attribution across the full population,
+// sliced by intervention type, treatment state, communication mode,
+// and signal-confidence band. Server-side recomputes outcome
+// snapshots first so older mobile clients (that don't yet POST
+// /outcomes/snapshot) still produce meaningful rows.
+router.get(
+  "/analytics/summary",
+  requireInternalKey,
+  async (_req, res: Response) => {
+    try {
+      // Recompute the recent window so the join below has fresh
+      // outcome rows even for clients that haven't migrated yet.
+      // 14 days is enough headroom for the 7-day window we attribute
+      // outcomes over while keeping the recompute cheap.
+      await recomputeRecentOutcomesForAllPatients(14);
+
+      // Cross-population, last-7-days outcome window per intervention.
+      const links = await linkInterventionsToOutcomes(null, 7);
+
+      // Helper to bucket counts.
+      type Bucket = {
+        total: number;
+        adherenceImproved: number;
+        symptomImproved: number;
+        symptomWorsened: number;
+        nextDayCheckin: number;
+        reengagedAfterLow: number;
+      };
+      const empty = (): Bucket => ({
+        total: 0,
+        adherenceImproved: 0,
+        symptomImproved: 0,
+        symptomWorsened: 0,
+        nextDayCheckin: 0,
+        reengagedAfterLow: 0,
+      });
+      const inc = (b: Bucket, l: (typeof links)[number]) => {
+        b.total += 1;
+        if (l.adherenceImproved) b.adherenceImproved += 1;
+        if (l.symptomImproved) b.symptomImproved += 1;
+        if (l.symptomWorsened) b.symptomWorsened += 1;
+        if (l.nextDayCheckin) b.nextDayCheckin += 1;
+        if (l.reengagedAfterLow) b.reengagedAfterLow += 1;
+      };
+
+      const byInterventionType: Record<string, Bucket> = {};
+      const byCommunicationMode: Record<string, Bucket> = {};
+      const byPrimaryFocus: Record<string, Bucket> = {};
+      const byConfidenceBand: Record<string, Bucket> = {};
+
+      for (const l of links) {
+        (byInterventionType[l.interventionType] ??= empty());
+        inc(byInterventionType[l.interventionType]!, l);
+
+        (byCommunicationMode[l.communicationMode] ??= empty());
+        inc(byCommunicationMode[l.communicationMode]!, l);
+
+        (byPrimaryFocus[l.primaryFocus] ??= empty());
+        inc(byPrimaryFocus[l.primaryFocus]!, l);
+
+        (byConfidenceBand[l.confidenceBand] ??= empty());
+        inc(byConfidenceBand[l.confidenceBand]!, l);
+      }
+
+      // Top pathway-to-escalation: count interventions whose own
+      // (or a follow-up) intervention escalated to clinician.
+      const escalationPathwaysRows = await db.execute(sql`
+        select
+          ie.intervention_type as intervention_type,
+          cast(count(*) as int) as count
+        from intervention_events ie
+        where exists (
+          select 1
+          from intervention_events ie2
+          where ie2.patient_user_id = ie.patient_user_id
+            and ie2.occurred_on >= ie.occurred_on
+            and ie2.occurred_on <= (ie.occurred_on::date + interval '7 days')
+            and ie2.intervention_type = 'clinician_escalation'
+        )
+        group by ie.intervention_type
+        order by count desc
+        limit 10
+      `);
+
+      const reengagementAfterCoachRows = await db.execute(sql`
+        select
+          cast(count(*) filter (where os.reengaged_after_low_adherence) as int) as reengaged,
+          cast(count(*) as int) as total
+        from intervention_events ie
+        left join lateral (
+          select * from outcome_snapshots os
+          where os.patient_user_id = ie.patient_user_id
+            and os.snapshot_date >= ie.occurred_on
+            and os.snapshot_date <= (ie.occurred_on::date + interval '7 days')
+          order by os.snapshot_date asc
+          limit 1
+        ) os on true
+        where ie.surface = 'Coach'
+      `);
+      const reEnrich = (
+        (reengagementAfterCoachRows.rows?.[0] as
+          | { reengaged?: number; total?: number }
+          | undefined) ?? { reengaged: 0, total: 0 }
+      );
+
+      res.json({
+        generatedAt: new Date().toISOString(),
+        windowDays: 7,
+        totals: {
+          interventionEvents: links.length,
+        },
+        byInterventionType,
+        byCommunicationMode,
+        byPrimaryFocus,
+        byConfidenceBand,
+        topPathwaysToEscalation: (
+          escalationPathwaysRows.rows as Array<{
+            intervention_type: string;
+            count: number;
+          }>
+        ).map((r) => ({
+          interventionType: r.intervention_type,
+          count: Number(r.count),
+        })),
+        reengagementAfterCoach: {
+          reengaged: Number(reEnrich.reengaged ?? 0),
+          coachInterventions: Number(reEnrich.total ?? 0),
+        },
+      });
+    } catch (err) {
+      logger.error({ err }, "internal_analytics_summary_failed");
+      res.status(500).json({ error: "analytics_failed" });
+    }
+  },
+);
 
 export default router;

@@ -18,6 +18,7 @@ import { useColors } from "@/hooks/useColors";
 import { CATEGORY_OPTIONS } from "@/types";
 import type { ActionCategory, WeeklyPlanDay } from "@/types";
 import { selectWeeklyDayView } from "@/lib/engine";
+import { logIntervention, type InterventionType } from "@/lib/intervention/logger";
 
 const CATEGORY_META: Record<ActionCategory, { label: string; icon: keyof typeof Feather.glyphMap; color: string }> = {
   move: { label: "Move", icon: "activity", color: "#FF6B6B" },
@@ -34,6 +35,29 @@ export default function PlanScreen() {
 
   const [editingDay, setEditingDay] = useState<WeeklyPlanDay | null>(null);
   const [editingCategory, setEditingCategory] = useState<ActionCategory | null>(null);
+
+  // Log the dominant intervention surfaced in the weekly plan once
+  // per day. The plan derives from dailyState.primaryFocus, so we
+  // log under the same canonical types the analytics view uses.
+  React.useEffect(() => {
+    if (!dailyState) return;
+    const focusToType: Partial<Record<string, InterventionType>> = {
+      hydration: "hydration",
+      fueling: "protein_fueling",
+      recovery: "recovery_rest",
+      symptom_relief: "symptom_monitoring",
+      continuity_support: "light_movement",
+    };
+    const t = focusToType[dailyState.primaryFocus];
+    if (!t) return;
+    logIntervention({
+      surface: "WeeklyPlan",
+      interventionType: t,
+      title: `weekly:${dailyState.primaryFocus}`,
+      rationale: dailyState.rationale?.join(" | ") ?? null,
+      state: dailyState,
+    });
+  }, [dailyState]);
 
   const haptic = () => {
     if (Platform.OS !== "web") {
