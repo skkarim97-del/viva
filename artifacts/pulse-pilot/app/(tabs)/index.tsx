@@ -265,7 +265,7 @@ export default function DashboardScreen() {
         return false;
       });
     },
-    [nausea, appetite, digestion, hydration, bowelMovementToday, dismissedTips],
+    [nausea, appetite, digestion, hydration, bowelMovementToday, dismissedTips, dailyPlan.dailyState],
   );
 
   const onAckSymptomTip = React.useCallback(

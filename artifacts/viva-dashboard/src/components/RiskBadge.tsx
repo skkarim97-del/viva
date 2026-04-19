@@ -37,15 +37,21 @@ export function RiskBadge({ band, score, size = "sm" }: Props) {
     size === "md" ? "px-3.5 py-1.5 text-sm" : "px-2.5 py-1 text-xs";
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full font-semibold ${padding}`}
+      className={`inline-flex items-center gap-1.5 rounded-full font-semibold max-w-full whitespace-nowrap ${padding}`}
       style={{ backgroundColor: s.bg, color: s.text }}
-      title={`${s.label} treatment risk`}
+      // Tooltip carries the full phrase so the compact mobile label
+      // ("Risk 50%") stays accessible to screen readers + hover.
+      title={`Patient treatment risk: ${s.label}${typeof score === "number" ? ` (${score}%)` : ""}`}
     >
       <span
-        className="size-1.5 rounded-full"
+        className="size-1.5 rounded-full shrink-0"
         style={{ backgroundColor: s.dot }}
       />
-      <span>Patient treatment risk</span>
+      {/* Long form on desktop. On narrow viewports the pill collapses
+          to "Risk <score>%" so it never wraps or eats the full row
+          next to the action badge. */}
+      <span className="hidden sm:inline">Patient treatment risk</span>
+      <span className="sm:hidden">Risk</span>
       {typeof score === "number" && (
         <span className="font-bold">{score}%</span>
       )}

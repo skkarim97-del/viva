@@ -447,10 +447,23 @@ function PatientCard({ p, onAddNote }: CardProps) {
       href={`/patients/${p.id}`}
       className="block bg-card rounded-[20px] p-5 hover:bg-secondary active:scale-[0.995] transition-all cursor-pointer no-underline"
     >
-      <div className="flex items-start justify-between gap-4">
+      {/* Header. On <sm we stack: name row (with arrow) on top, then
+          a wrapping pill row underneath. From sm+ we restore the
+          original two-column layout with pills hugging the right
+          edge. This kills the mobile overflow without changing the
+          desktop information density. */}
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
         <div className="min-w-0 flex-1">
-          <div className="font-semibold text-[17px] text-foreground truncate">
-            {p.name}
+          <div className="flex items-center gap-2">
+            <div className="font-semibold text-[17px] text-foreground truncate flex-1 min-w-0">
+              {p.name}
+            </div>
+            {/* Arrow rides with the name on mobile so the pill row
+                below stays clean; on desktop the arrow sits with
+                the pill cluster (rendered below). */}
+            <span className="text-accent text-xl font-semibold leading-none shrink-0 sm:hidden">
+              →
+            </span>
           </div>
           {signalNode ?? (
             <div className="text-xs text-muted-foreground mt-1 font-medium truncate">
@@ -461,7 +474,7 @@ function PatientCard({ p, onAddNote }: CardProps) {
             {lastNote}
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 shrink-0 justify-end">
+        <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end min-w-0">
           <button
             type="button"
             onClick={(e) => {
@@ -470,39 +483,42 @@ function PatientCard({ p, onAddNote }: CardProps) {
               e.stopPropagation();
               onAddNote();
             }}
-            className="px-3 py-1.5 rounded-full bg-background text-foreground text-xs font-semibold hover:bg-secondary border border-border transition-colors"
+            className="px-3 py-1.5 rounded-full bg-background text-foreground text-xs font-semibold hover:bg-secondary border border-border transition-colors shrink-0"
           >
             + Note
           </button>
           <ActionBadge action={p.action} />
           <RiskBadge band={p.riskBand} score={p.riskScore} />
-          <span className="text-accent text-xl font-semibold leading-none">
+          <span className="text-accent text-xl font-semibold leading-none hidden sm:inline">
             →
           </span>
         </div>
       </div>
-      <div className="mt-4 pt-4 border-t border-border grid grid-cols-3 gap-x-5 gap-y-3">
-        <div className="min-w-0">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+      {/* Body. Stacks on mobile with inline "LABEL value" rows so each
+          field gets a full line and nothing truncates aggressively.
+          From sm+ restores the original 3-column grid. */}
+      <div className="mt-4 pt-4 border-t border-border flex flex-col gap-2 sm:grid sm:grid-cols-3 sm:gap-x-5 sm:gap-y-3">
+        <div className="min-w-0 flex items-baseline gap-2 sm:block">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold shrink-0">
             Drug
           </div>
-          <div className="text-sm text-foreground font-medium mt-1 truncate">
+          <div className="text-sm text-foreground font-medium sm:mt-1 truncate">
             {p.glp1Drug ?? "--"}
           </div>
         </div>
-        <div className="min-w-0">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+        <div className="min-w-0 flex items-baseline gap-2 sm:block">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold shrink-0">
             Dose
           </div>
-          <div className="text-sm text-foreground font-medium mt-1 truncate">
+          <div className="text-sm text-foreground font-medium sm:mt-1 truncate">
             {p.dose ?? "--"}
           </div>
         </div>
-        <div className="min-w-0">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+        <div className="min-w-0 flex items-baseline gap-2 sm:block">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold shrink-0">
             Last check-in
           </div>
-          <div className="text-sm text-foreground font-medium mt-1 truncate">
+          <div className="text-sm text-foreground font-medium sm:mt-1 truncate">
             {formatDate(p.lastCheckin)}
           </div>
         </div>
