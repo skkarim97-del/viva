@@ -109,7 +109,7 @@ export function deriveSymptomTips(input: SymptomInputs): SymptomTip[] {
       urgency: severe
         ? "Do this in the next 15 minutes to settle your stomach."
         : "Do this now to ease nausea faster.",
-      cta: severe ? "Sip water + cracker now" : "Drink 5 sips now",
+      cta: severe ? "Sip water + cracker now" : "Drink at least 5 sips of water now",
       ctaCompleted: severe ? "Nice -- sips + cracker logged" : "Nice -- sips logged",
       factors,
     });
