@@ -1,0 +1,153 @@
+I want a full audit of the app’s internal recommendation and decision logic, especially how user inputs and Apple Health / HealthKit data flow into daily insights, intervention cards, and plan recommendations.
+
+Do not make code changes yet. This is an audit and explanation task only.
+
+Please inspect the codebase and give me a structured, engineering-level walkthrough of the full recommendation system.
+
+I want you to trace the full flow from raw inputs to user-facing outputs.
+
+Specifically audit and explain:
+
+1) All input sources
+List every input the recommendation system can consume, including:
+- user check-in inputs
+- onboarding / profile inputs
+- treatment inputs
+- Apple Health / HealthKit inputs
+- stored historical inputs
+- derived trend/baseline inputs
+- any mock/demo/fallback inputs still being used
+
+For each input, tell me:
+- file it comes from
+- variable / field name
+- whether it is currently used in recommendations or only collected
+- whether it is required, optional, or fallback-only
+
+2) Data flow architecture
+Explain the flow step by step:
+- where raw data is fetched
+- where it is normalized or transformed
+- where daily state is computed
+- where recommendations are generated
+- where UI surfaces read from that logic
+
+I want an end-to-end map:
+inputs → transformation / normalization → scoring / rule engine → final outputs
+
+3) Recommendation surfaces
+Identify every place recommendations or guidance appear in the app, including but not limited to:
+- top home insight chip
+- home hero headline / subtext
+- symptom intervention card
+- plan recommendations
+- based on your data / check-ins card
+- coaching/chat prompts if applicable
+- any treatment reminders or nudges
+
+For each surface, tell me exactly which function / file produces its content and whether it shares a common source of truth with other surfaces.
+
+4) Rule inventory
+List the actual recommendation rules currently in the app.
+
+For each rule, explain:
+- trigger conditions
+- priority / precedence
+- suppressors or exclusions
+- resulting output
+- where it renders in the UI
+
+Examples of the kinds of rules I want identified:
+- nausea or GI symptom rules
+- hydration rules
+- movement / exercise rules
+- recovery / rest rules
+- treatment adherence rules
+- dose escalation / medication timing rules
+- pattern / insufficient data rules
+
+5) Apple Health / HealthKit usage
+Audit exactly how Apple Health data is used.
+
+For each metric being used, explain:
+- metric name
+- source file
+- whether raw or aggregated
+- threshold / logic applied
+- whether it directly changes recommendations or only influences them
+- what happens if that data is missing
+- whether missing data can incorrectly lead to a bad recommendation
+
+I especially want clarity on things like:
+- sleep
+- HRV
+- resting heart rate
+- steps
+- workouts / activity
+- weight if applicable
+
+6) Single source of truth check
+Tell me whether the app currently has one unified recommendation engine / daily state object, or whether multiple screens/components generate recommendations independently.
+
+I want you to explicitly call out:
+- duplicated logic
+- conflicting logic
+- mock/demo logic disconnected from real recommendation logic
+- any reason the app could say one thing in the top banner and another thing in the plan
+
+7) Missing data / fallback behavior
+Explain how the app behaves when:
+- Apple Health is not connected
+- sync is stale
+- only some metrics are available
+- user has not checked in enough yet
+- onboarding/profile/treatment data is incomplete
+
+I want to know whether missing data is handled safely and credibly, or whether the app may overstate confidence.
+
+8) Historical / trend logic
+Explain whether the app uses:
+- same-day inputs only
+- rolling averages
+- baselines
+- previous check-ins
+- time since dose
+- time on treatment
+- symptom trends
+- adherence patterns
+
+If yes, show where and how.
+If not, say that clearly.
+
+9) Known contradictions / product risks
+Identify any current logic risks such as:
+- contradictory outputs across surfaces
+- recommendations that are too generic
+- copy that is not specific enough
+- rules that are too brittle
+- dead code / unused scoring logic
+- values being collected but not actually used
+- recommendation decisions happening in UI components instead of a central engine
+
+10) Output format
+Please respond in this structure:
+
+A. System overview
+B. Input inventory table
+C. End-to-end data flow
+D. Recommendation surfaces and source files
+E. Rule inventory
+F. Apple Health usage audit
+G. Source-of-truth assessment
+H. Missing-data / fallback behavior
+I. Contradictions / risks / tech debt
+J. Recommended architecture improvements (audit only, no code changes yet)
+
+Important instructions:
+- Be concrete and specific
+- Reference exact files, functions, and variables
+- Do not just summarize at a high level
+- Call out uncertainty clearly if something is ambiguous
+- If there are mock values, hardcoded defaults, or placeholders still affecting outputs, explicitly flag them
+- If recommendation logic is spread across multiple files, map that clearly
+- If helpful, include a simple dependency map of which files feed which recommendation surfaces
