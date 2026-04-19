@@ -53,8 +53,8 @@ const GOAL_OPTIONS: { id: HealthGoal; label: string; icon: keyof typeof Feather.
   { id: "metabolic_health", label: "Improve metabolic health", icon: "activity" },
   { id: "preserve_muscle", label: "Preserve muscle", icon: "zap" },
   { id: "improved_energy", label: "Maintain energy", icon: "sun" },
-  { id: "stay_consistent", label: "Stay consistent on treatment", icon: "check-circle" },
-  { id: "general_wellness", label: "General health", icon: "heart" },
+  { id: "stay_consistent", label: "Stay on treatment", icon: "check-circle" },
+  { id: "general_wellness", label: "Support overall health", icon: "heart" },
 ];
 
 const SIDE_EFFECT_OPTIONS: { key: SideEffectType; label: string; icon: keyof typeof Feather.glyphMap }[] = [
@@ -107,7 +107,7 @@ export default function OnboardingScreen() {
   const [previousDose, setPreviousDose] = useState<DoseOption | null>(null);
   const [customPreviousDose, setCustomPreviousDose] = useState("");
 
-  const [timeOnMed, setTimeOnMed] = useState<"less_1_month" | "1_3_months" | "3_6_months" | "6_9_months" | "9_12_months" | "1_1_5_years" | "1_5_2_years" | "2_plus_years" | null>(null);
+  const [timeOnMed, setTimeOnMed] = useState<"less_30_days" | "30_60_days" | "60_90_days" | "3_6_months" | "6_12_months" | "1_2_years" | "2_plus_years" | null>(null);
 
   const [telehealthPlatform, setTelehealthPlatform] = useState<string | null>(null);
   const [customPlatform, setCustomPlatform] = useState("");
@@ -197,7 +197,7 @@ export default function OnboardingScreen() {
         previousDoseUnit: customPreviousDose ? "mg" : null,
         previousFrequency: customPreviousDose ? customFrequency : null,
         doseChangeDate: null,
-        timeOnMedicationBucket: timeOnMed || "1_3_months",
+        timeOnMedicationBucket: timeOnMed || "3_6_months",
         telehealthPlatform: telehealthPlatform === "Other" ? customPlatform.trim() || "Other" : telehealthPlatform,
         plannedDoseDay: injectionDay,
       };
@@ -215,7 +215,7 @@ export default function OnboardingScreen() {
       previousDoseUnit: previousDose?.unit || null,
       previousFrequency: previousDose ? medFrequency : null,
       doseChangeDate: null,
-      timeOnMedicationBucket: timeOnMed || "1_3_months",
+      timeOnMedicationBucket: timeOnMed || "3_6_months",
       telehealthPlatform: telehealthPlatform === "Other" ? customPlatform.trim() || "Other" : telehealthPlatform,
       plannedDoseDay: injectionDay,
     };
@@ -350,9 +350,9 @@ export default function OnboardingScreen() {
           {step === "welcome" && (
             <View style={styles.welcomeSection}>
               <Logo size="large" />
-              <Text style={[styles.welcomeTagline, { color: c.foreground }]}>Your AI Health Coach</Text>
+              <Text style={[styles.welcomeTagline, { color: c.foreground }]}>Daily support for your GLP-1 journey</Text>
               <Text style={[styles.welcomeSub, { color: c.mutedForeground + "CC" }]}>
-                Stay on track between visits. Viva combines Apple Health data with simple daily check-ins to help you feel your best on GLP-1.
+                A simple daily check-in plus Apple Health, so your care team sees how you're really doing between visits.
               </Text>
             </View>
           )}
@@ -955,7 +955,10 @@ const styles = StyleSheet.create({
   nameInput: { fontSize: 18, fontFamily: "Montserrat_500Medium", paddingVertical: 16, paddingHorizontal: 18, borderRadius: 16, borderWidth: 1.5, marginTop: 8 },
   sectionLabel: { fontSize: 12, fontFamily: "Montserrat_600SemiBold", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 },
   goalGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 4 },
-  goalCard: { minWidth: "47%", flexBasis: "47%", flexGrow: 1, flexShrink: 1, flexDirection: "row", alignItems: "center", paddingVertical: 14, paddingHorizontal: 14, borderRadius: 16, gap: 10 },
+  // minHeight keeps every card the same vertical size regardless of how
+  // its label wraps, so a 1-line "Lose weight" sits flush with a 2-line
+  // "Improve metabolic health" and the grid reads as a tidy matrix.
+  goalCard: { minWidth: "47%", flexBasis: "47%", flexGrow: 1, flexShrink: 1, minHeight: 76, flexDirection: "row", alignItems: "center", paddingVertical: 14, paddingHorizontal: 14, borderRadius: 16, gap: 10 },
   goalIconWrap: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   goalLabel: { fontSize: 14, fontFamily: "Montserrat_600SemiBold", flex: 1, flexShrink: 1 },
   goalCheck: { width: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center" },

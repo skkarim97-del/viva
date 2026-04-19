@@ -298,9 +298,21 @@ router.post("/chat", async (req: Request, res: Response) => {
         }
         if (med.timeOnMedicationBucket) {
           const bucketLabels: Record<string, string> = {
+            less_30_days: "Less than 30 days",
+            "30_60_days": "30-60 days",
+            "60_90_days": "60-90 days",
+            "3_6_months": "3-6 months",
+            "6_12_months": "6-12 months",
+            "1_2_years": "1-2 years",
+            "2_plus_years": "2+ years",
+            // Legacy keys kept so coach prompts remain readable for any
+            // patient profile saved before the bucket schema migration.
             less_1_month: "Less than 1 month",
             "1_3_months": "1-3 months",
-            "3_6_months": "3-6 months",
+            "6_9_months": "6-9 months",
+            "9_12_months": "9-12 months",
+            "1_1_5_years": "1-1.5 years",
+            "1_5_2_years": "1.5-2 years",
             "6_plus_months": "6+ months",
           };
           medParts.push(`- Time on Medication: ${bucketLabels[med.timeOnMedicationBucket] || med.timeOnMedicationBucket}`);

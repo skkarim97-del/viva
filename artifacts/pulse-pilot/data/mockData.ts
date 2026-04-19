@@ -29,7 +29,7 @@ export const defaultProfile: UserProfile = {
   units: "imperial",
   glp1Medication: "tirzepatide",
   glp1Reason: "weight_loss",
-  glp1Duration: "1_3_months",
+  glp1Duration: "30_60_days",
   proteinConfidence: "medium",
   hydrationConfidence: "medium",
   mealsPerDay: 3,
@@ -51,7 +51,7 @@ export const defaultProfile: UserProfile = {
     previousDoseUnit: null,
     previousFrequency: null,
     doseChangeDate: null,
-    timeOnMedicationBucket: "1_3_months",
+    timeOnMedicationBucket: "30_60_days",
   },
 };
 

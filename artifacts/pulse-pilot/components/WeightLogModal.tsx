@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
-import { sessionApi, HttpError } from "@/lib/api/sessionClient";
+import { sessionApi } from "@/lib/api/sessionClient";
 
 interface WeightLogModalProps {
   visible: boolean;
@@ -68,17 +68,27 @@ export default function WeightLogModal({
     }
     setSubmitting(true);
     setError(null);
+    // Local-first: the patient's own weekly weigh-in should never be
+    // blocked by a transient auth/network failure. Validate range,
+    // close the modal first (so it unmounts cleanly), THEN commit to
+    // local profile via onLogged, then fire the server save in the
+    // background. Order matters -- onLogged updates parent state that
+    // feeds back into this modal's `initialValue` prop, which can
+    // re-trigger the visibility useEffect mid-fade-out and flash the
+    // input. Closing first sidesteps that race entirely. The remote
+    // write is the canonical source for clinicians, but its failure
+    // is recoverable (next mount GETs /me/weights/latest and either
+    // confirms the save or re-prompts the patient).
+    onClose();
+    onLogged(num);
     try {
       await sessionApi.logWeight(num);
-      onLogged(num);
-      onClose();
     } catch (e) {
-      const msg =
-        e instanceof HttpError && e.status === 401
-          ? "Please sign in again."
-          : "Couldn't save. Try again in a moment.";
-      setError(msg);
-      setSubmitting(false);
+      // Swallow -- local profile already updated. Logged in dev so we
+      // can spot session-token regressions during QA.
+      if (typeof __DEV__ !== "undefined" && __DEV__) {
+        console.warn("[WeightLogModal] remote save failed:", e);
+      }
     }
   };
 

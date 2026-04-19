@@ -1646,8 +1646,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: "Montserrat_500Medium",
     textAlign: "center",
-    marginTop: 12,
-    marginBottom: 16,
+    // Sit the greeting a touch lower beneath the wordmark and give it
+    // more air below so the status card doesn't crowd it. Was 12/16
+    // which read as "logo + greeting + card" stacked too tightly.
+    marginTop: 20,
+    marginBottom: 22,
     letterSpacing: 0.3,
     opacity: 0.6,
   },

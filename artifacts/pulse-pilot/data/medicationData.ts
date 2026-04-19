@@ -121,14 +121,20 @@ export const TELEHEALTH_PLATFORMS = [
   "Other",
 ];
 
+// First-90-days granularity is intentional: GLP-1 patients are most
+// fragile (titration, side effect onset, drop-off risk) in the early
+// weeks, and clinicians need to distinguish week-2 from week-10 at a
+// glance. After 90 days the windows widen because clinical signal
+// changes more gradually. Engine logic that fires on "still adapting"
+// patients keys off `less_30_days` only -- the new sub-90 buckets
+// give doctors visibility without retuning thresholds.
 export const TIME_ON_MED_OPTIONS = [
-  { key: "less_1_month" as const, label: "Less than 1 month" },
-  { key: "1_3_months" as const, label: "1 to 3 months" },
+  { key: "less_30_days" as const, label: "Less than 30 days" },
+  { key: "30_60_days" as const, label: "30 to 60 days" },
+  { key: "60_90_days" as const, label: "60 to 90 days" },
   { key: "3_6_months" as const, label: "3 to 6 months" },
-  { key: "6_9_months" as const, label: "6 to 9 months" },
-  { key: "9_12_months" as const, label: "9 to 12 months" },
-  { key: "1_1_5_years" as const, label: "1 to 1.5 years" },
-  { key: "1_5_2_years" as const, label: "1.5 to 2 years" },
+  { key: "6_12_months" as const, label: "6 to 12 months" },
+  { key: "1_2_years" as const, label: "1 to 2 years" },
   { key: "2_plus_years" as const, label: "2+ years" },
 ];
 

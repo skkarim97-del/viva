@@ -126,7 +126,7 @@ export function computeInternalSeverity(input: SeverityInput): SeverityResult {
       compositeScore += 1;
       drivers.push("high_dose");
     }
-    if (medicationProfile.timeOnMedicationBucket === "less_1_month") {
+    if (medicationProfile.timeOnMedicationBucket === "less_30_days") {
       compositeScore += 1;
       drivers.push("new_to_medication");
     }

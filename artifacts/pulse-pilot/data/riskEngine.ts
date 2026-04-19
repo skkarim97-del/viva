@@ -144,7 +144,7 @@ function getMedicationWeightMultiplier(medProfile?: MedicationProfile): number {
   const doseTier = getDoseTier(medProfile.medicationBrand, medProfile.doseValue);
   if (doseTier === "high") multiplier += 0.15;
   if (medProfile.recentTitration) multiplier += 0.2;
-  if (medProfile.timeOnMedicationBucket === "less_1_month") multiplier += 0.15;
+  if (medProfile.timeOnMedicationBucket === "less_30_days") multiplier += 0.15;
   return multiplier;
 }
 

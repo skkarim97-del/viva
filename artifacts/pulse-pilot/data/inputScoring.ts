@@ -348,7 +348,7 @@ export function buildPatientSummary(
   );
 
   let patientStatus: PatientStatus = "stable";
-  if (medicationProfile?.timeOnMedicationBucket === "less_1_month") {
+  if (medicationProfile?.timeOnMedicationBucket === "less_30_days") {
     patientStatus = "new_patient";
   } else if (negativeFlags.length >= 3) {
     patientStatus = "needs_attention";

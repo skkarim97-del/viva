@@ -222,7 +222,7 @@ function buildMedContext(medicationProfile?: MedicationProfile, medicationLog?: 
     recentTitration: medicationProfile.recentTitration === true,
     daysSinceDose: computeDaysSinceLastDose(medicationLog),
     frequency: medicationProfile.frequency || safeMedFrequency(medicationProfile.medicationBrand),
-    isNewToMed: medicationProfile.timeOnMedicationBucket === "less_1_month",
+    isNewToMed: medicationProfile.timeOnMedicationBucket === "less_30_days",
     titrationIntensity: titration.titrationIntensity,
   };
 }
@@ -582,7 +582,7 @@ export function generateDailyPlan(
     if (tier === "high" && (glp1Inputs?.nausea === "moderate" || glp1Inputs?.nausea === "severe")) {
       readinessScore = Math.max(readinessScore - 5, 0);
     }
-    if (medicationProfile.timeOnMedicationBucket === "less_1_month") readinessScore = Math.max(readinessScore - 5, 0);
+    if (medicationProfile.timeOnMedicationBucket === "less_30_days") readinessScore = Math.max(readinessScore - 5, 0);
   }
 
   if (patterns && patterns.overallConfidence !== "low" && medicationLog) {
@@ -641,7 +641,7 @@ export function generateDailyPlan(
   let workoutDesc = "";
 
   const isTitrated = medicationProfile?.recentTitration === true;
-  const isNewToMed = medicationProfile?.timeOnMedicationBucket === "less_1_month";
+  const isNewToMed = medicationProfile?.timeOnMedicationBucket === "less_30_days";
   const isHighDose = medicationProfile ? getDoseTier(medicationProfile.medicationBrand, medicationProfile.doseValue) === "high" : false;
 
   if (sleepCritical || (symptomsSevere && glp1Inputs?.energy === "depleted")) {
@@ -1016,7 +1016,14 @@ export function generateDailyPlan(
       // days, regardless of which signal drove the plan there.
       pool = ["Recovery phase", "Repair day", "Stabilization"];
     } else if (wearableAvailable && sleepHours < 6) {
-      pool = ["Sleep recovery", "Recovery priority", "Rest focus"];
+      // Short sleep alone does not flip dailyState to "recover" -- a
+      // patient who slept 5h but feels fine still gets a moderate
+      // workout from generateFocusItems. Rest-promising labels here
+      // ("Rest focus", "Sleep recovery") therefore contradicted the
+      // plan they were paired with. Use intensity-dampening language
+      // instead so the chip stays honest about the day's tone without
+      // overpromising a rest day the plan never delivers.
+      pool = ["Lower intensity", "Pace yourself", "Conservative day"];
     } else if (glp1Energy === "depleted" || glp1Energy === "tired" || energy === "low") {
       pool = ["Low energy support", "Energy conservation", "Reduced load"];
     } else if (subjectiveGood && objectiveWeak) {

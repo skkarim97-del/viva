@@ -186,7 +186,7 @@ export default function SettingsScreen() {
         doseValue: medDraft.doseValue,
         doseUnit: medDraft.doseUnit,
         frequency: medDraft.frequency,
-        timeOnMedicationBucket: existing?.timeOnMedicationBucket ?? "less_1_month",
+        timeOnMedicationBucket: existing?.timeOnMedicationBucket ?? "less_30_days",
         recentTitration: existing?.recentTitration ?? false,
         weekOnCurrentDose: existing?.weekOnCurrentDose,
         startDate: existing?.startDate ?? null,
@@ -439,6 +439,14 @@ export default function SettingsScreen() {
         })}
       </View>
 
+      {/* Reminders sit right under Apple Health so the patient sees the
+          notification toggle alongside the data integrations -- both
+          are "what Viva can do in the background". Previously this
+          section was rendered after the disclaimer + a 100pt spacer,
+          which left a large dead zone in the middle of the screen and
+          buried the reminders below the fold on most devices. */}
+      <RemindersSection />
+
       {__DEV__ && (
         <Pressable
           onPress={() => router.push("/dev-qa")}
@@ -457,7 +465,7 @@ export default function SettingsScreen() {
         Viva is for informational purposes only and does not provide medical advice.
       </Text>
 
-      <View style={{ height: 100 }} />
+      <View style={{ height: 24 }} />
 
       <Modal visible={editingField !== null} transparent animationType="fade" onRequestClose={() => setEditingField(null)}>
         <Pressable style={styles.modalOverlay} onPress={() => setEditingField(null)}>
@@ -636,7 +644,9 @@ export default function SettingsScreen() {
           </Pressable>
         </Pressable>
       </Modal>
-      <RemindersSection />
+      {/* RemindersSection moved up beneath the Apple Health section.
+          SignOutSection stays anchored at the very bottom of the
+          ScrollView so signing out remains the last thing on the page. */}
       <SignOutSection />
       <WeightLogModal
         visible={weightLogOpen}
