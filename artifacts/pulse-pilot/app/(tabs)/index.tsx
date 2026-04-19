@@ -126,6 +126,7 @@ export default function DashboardScreen() {
     saveDailyCheckIn, todayCheckIn, acknowledgeSymptomTip,
     recordSymptomTrend, requestClinicianForSymptom,
     guidanceAckHistory, clinicianRequestedToday,
+    checkinSyncStatus,
     appetite, setAppetite,
     nausea, setNausea,
     digestion, setDigestion,
@@ -1104,8 +1105,18 @@ export default function DashboardScreen() {
 
         {todayCheckIn && (
           <View style={[styles.checkInDone, { backgroundColor: c.card }]}>
-            <Feather name="check-circle" size={14} color={c.success} />
-            <Text style={[styles.checkInDoneText, { color: c.mutedForeground }]}>Reflection saved</Text>
+            <Feather
+              name={checkinSyncStatus === "failed" ? "wifi-off" : "check-circle"}
+              size={14}
+              color={checkinSyncStatus === "failed" ? c.mutedForeground : c.success}
+            />
+            <Text style={[styles.checkInDoneText, { color: c.mutedForeground }]}>
+              {checkinSyncStatus === "failed"
+                ? "Saved on this device — we'll sync when you're back online"
+                : checkinSyncStatus === "pending"
+                ? "Reflection saved · syncing…"
+                : "Reflection saved"}
+            </Text>
           </View>
         )}
 

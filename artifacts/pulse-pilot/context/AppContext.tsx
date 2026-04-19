@@ -55,6 +55,7 @@ import type {
 
 import { API_BASE } from "@/lib/apiConfig";
 import { sessionApi } from "@/lib/api/sessionClient";
+import { checkinSync, type SyncStatus } from "@/lib/sync/checkinSync";
 
 interface AppContextType {
   profile: UserProfile;
@@ -121,6 +122,17 @@ interface AppContextType {
   // Per-symptom set of "patient asked clinician for awareness today"
   // -- drives the inline confirmation on the tip card.
   clinicianRequestedToday: Partial<Record<import("@/lib/symptomTips").SymptomKind, true>>;
+  // Background-sync state for the daily check-in mirror. The Today
+  // tab shows a small fallback line when status === "failed" so the
+  // patient knows their data is safe locally and will sync later.
+  // "synced" is the resting state when the queue is empty; "pending"
+  // is in flight; "failed" means the last drain attempt left items
+  // queued (network down, server 5xx, timeout).
+  checkinSyncStatus: SyncStatus;
+  checkinLastSyncAt: string | null;
+  // Manual retry hook. Wired to AppState "active" transitions and
+  // can be exposed via a "Retry sync" UI affordance later.
+  flushCheckinSync: () => Promise<void>;
   glp1Energy: EnergyDaily;
   setGlp1Energy: (v: EnergyDaily) => void;
   appetite: AppetiteLevel;
@@ -194,25 +206,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [userPatterns, setUserPatterns] = useState<UserPatterns | null>(null);
   const [adaptiveInsights, setAdaptiveInsights] = useState<AdaptiveInsight[]>([]);
   const baselineWeeklyPlanRef = useRef<WeeklyPlan | null>(null);
-  // Set of symptoms whose in-app guidance the patient has tapped
-  // "Got it" on but for which the server hasn't yet recorded the ack
-  // (most commonly because the patient hasn't submitted today's
-  // check-in row yet). Drained inside saveDailyCheckIn after a
-  // successful POST.
-  const pendingGuidanceAcksRef = useRef<Set<import("@/lib/symptomTips").SymptomKind>>(
-    new Set(),
-  );
-  // Pending closed-loop actions that need a check-in row before the
-  // server will accept them. KEYED BY `${date}|${symptom}` so a
-  // queued event from yesterday is replayed against yesterday's row,
-  // not against whatever day the next saveDailyCheckIn happens to be
-  // for. Drain only items whose date matches the check-in being saved.
-  const pendingTrendResponsesRef = useRef<
-    Map<string, { date: string; symptom: import("@/lib/symptomTips").SymptomKind; response: "better" | "same" | "worse" }>
-  >(new Map());
-  const pendingClinicianRequestsRef = useRef<
-    Map<string, { date: string; symptom: import("@/lib/symptomTips").SymptomKind }>
-  >(new Map());
+  // Background sync state for the daily check-in mirror. Mirrored
+  // from `checkinSync` (the persistent queue) via subscribe() so the
+  // Today tab can render a small fallback indicator when the last
+  // drain attempt left items queued. The persistent queue itself is
+  // the source of truth for what's pending; these state values are
+  // for rendering only.
+  const [checkinSyncStatus, setCheckinSyncStatus] = useState<SyncStatus>("synced");
+  const [checkinLastSyncAt, setCheckinLastSyncAt] = useState<string | null>(null);
+  useEffect(() => {
+    const unsub = checkinSync.subscribe((status, lastSyncAt) => {
+      setCheckinSyncStatus(status);
+      setCheckinLastSyncAt(lastSyncAt);
+    });
+    // Drain on mount so a check-in queued during the previous session
+    // (or while offline) is mirrored as soon as the app boots with a
+    // valid bearer token. Errors are absorbed by the queue.
+    void checkinSync.flush();
+    return unsub;
+  }, []);
+  const flushCheckinSync = useCallback(async () => {
+    await checkinSync.flush();
+  }, []);
 
   // Persisted: per-symptom date of the most recent guidance ack. The
   // Today tab compares this to today's date to decide whether to
@@ -1253,63 +1268,43 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const acknowledgeSymptomTip = useCallback(
     (symptom: import("@/lib/symptomTips").SymptomKind) => {
-      // Optimistically queue the ack so saveDailyCheckIn can replay
-      // it after the next successful POST. We also fire it now in
-      // case today's check-in row already exists -- on success we
-      // remove it from the pending set.
-      pendingGuidanceAcksRef.current.add(symptom);
       const today = new Date().toISOString().split("T")[0]!;
       // Persist "the patient acknowledged guidance for this symptom
-      // on this date" so tomorrow we can offer the follow-up question.
+      // on this date" locally so tomorrow we can offer the follow-up
+      // question even if the network is down.
       setGuidanceAckHistory((prev) => {
         const next = { ...prev, [symptom]: today };
         AsyncStorage.setItem(GUIDANCE_ACK_HISTORY_KEY, JSON.stringify(next)).catch(() => {});
         return next;
       });
-      sessionApi
-        .markGuidanceShown(today, symptom)
-        .then(() => {
-          pendingGuidanceAcksRef.current.delete(symptom);
-        })
-        .catch(() => {
-          // Leave it queued; will retry after next saveDailyCheckIn.
-        });
+      // Persistent queue handles dedupe, retry on transient errors,
+      // and survives cold start. Returns 404 server-side when the
+      // check-in row for `today` doesn't exist yet -- the queue
+      // treats that as a non-retriable drop because the same patient
+      // tap also enqueues the check-in (drained first within the
+      // same flush).
+      void checkinSync.enqueueGuidanceAck(today, symptom);
     },
     [],
   );
 
   // Patient answered the day-after follow-up. Treat as an implicit
   // ack (so the tip card dismisses), refresh the ack-history date
-  // (don't re-prompt tomorrow), and mirror to the server.
+  // (don't re-prompt tomorrow), and queue both the trend response
+  // AND the implicit guidance ack to the persistent sync queue.
   const recordSymptomTrend = useCallback(
     (
       symptom: import("@/lib/symptomTips").SymptomKind,
       response: "better" | "same" | "worse",
     ) => {
       const today = new Date().toISOString().split("T")[0]!;
-      const key = `${today}|${symptom}`;
-      pendingTrendResponsesRef.current.set(key, { date: today, symptom, response });
-      pendingGuidanceAcksRef.current.add(symptom);
       setGuidanceAckHistory((prev) => {
         const next = { ...prev, [symptom]: today };
         AsyncStorage.setItem(GUIDANCE_ACK_HISTORY_KEY, JSON.stringify(next)).catch(() => {});
         return next;
       });
-      sessionApi
-        .submitSymptomTrend(today, symptom, response)
-        .then(() => {
-          pendingTrendResponsesRef.current.delete(key);
-        })
-        .catch(() => { /* will replay on next saveDailyCheckIn */ });
-      // Best-effort guidance ack mirror as well -- harmless if it
-      // fires twice and lets the dashboard show "guidance shown" on
-      // its own.
-      sessionApi
-        .markGuidanceShown(today, symptom)
-        .then(() => {
-          pendingGuidanceAcksRef.current.delete(symptom);
-        })
-        .catch(() => {});
+      void checkinSync.enqueueTrendResponse(today, symptom, response);
+      void checkinSync.enqueueGuidanceAck(today, symptom);
     },
     [],
   );
@@ -1317,19 +1312,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const requestClinicianForSymptom = useCallback(
     (symptom: import("@/lib/symptomTips").SymptomKind) => {
       const today = new Date().toISOString().split("T")[0]!;
-      const key = `${today}|${symptom}`;
-      pendingClinicianRequestsRef.current.set(key, { date: today, symptom });
       setClinicianRequestedDates((prev) => {
         const next = { ...prev, [symptom]: today };
         AsyncStorage.setItem(CLINICIAN_REQUESTED_DATES_KEY, JSON.stringify(next)).catch(() => {});
         return next;
       });
-      sessionApi
-        .requestClinicianForSymptom(today, symptom)
-        .then(() => {
-          pendingClinicianRequestsRef.current.delete(key);
-        })
-        .catch(() => { /* will replay on next saveDailyCheckIn */ });
+      void checkinSync.enqueueClinicianRequest(today, symptom);
     },
     [],
   );
@@ -1353,75 +1341,35 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await AsyncStorage.setItem(CHECKIN_KEY, JSON.stringify(updated));
 
     // Mirror to the shared backend so the doctor dashboard sees this
-    // patient's daily state. Fire-and-forget: a network failure here
-    // must not break the local UX. The /me/checkins endpoint upserts
-    // by (patient_user_id, date), so re-saving a day is idempotent.
+    // patient's daily state. The /me/checkins endpoint upserts by
+    // (patient_user_id, date), so re-saving a day is naturally
+    // idempotent. We capture a SNAPSHOT of the symptom-management
+    // inputs at save time and hand it to the persistent sync queue;
+    // a later retry sends what the patient actually saw, never a
+    // re-derived payload from whatever state happens to be in memory
+    // when the network recovers.
     //
-    // The DailyCheckIn struct only carries date + mentalState, so we
-    // pull all symptom-management inputs straight from AppContext
-    // state -- they're the source of truth for "what the patient
-    // selected today". The server requires non-null energy/nausea, so
-    // we skip the mirror when either is missing and try again on the
-    // next save once the patient has filled them in.
+    // The server requires non-null energy/nausea. If either is
+    // missing we skip the mirror; the next save (after the patient
+    // fills them in) will both update the local row AND enqueue a
+    // fresh snapshot, overwriting any prior pending entry for the
+    // same date.
     if (glp1Energy && nausea) {
       const moodMap: Record<string, number> = {
         focused: 5, good: 4, low: 2, burnt_out: 1,
       };
       const mood = checkIn.mentalState ? moodMap[checkIn.mentalState] ?? 3 : 3;
-      sessionApi
-        .submitCheckin({
-          date: checkIn.date,
-          energy: glp1Energy,
-          nausea,
-          mood,
-          notes: null,
-          appetite: appetite ?? null,
-          digestion: digestion ?? null,
-          hydration: hydration ?? null,
-          bowelMovement: bowelMovementToday,
-        })
-        .then(() => {
-          // Replay any guidance acks that were dismissed locally
-          // before today's check-in row existed (the server returns
-          // 404 for guidance ack on a missing row). This keeps the
-          // doctor dashboard's "patient has seen guidance" indicator
-          // consistent with what the patient actually did.
-          for (const symptom of pendingGuidanceAcksRef.current) {
-            sessionApi
-              .markGuidanceShown(checkIn.date, symptom)
-              .then(() => {
-                pendingGuidanceAcksRef.current.delete(symptom);
-              })
-              .catch(() => {});
-          }
-          // Drain pending trend responses (Better/Same/Worse) only
-          // for items whose ORIGINAL date matches the check-in row
-          // we just persisted. Items keyed for other days stay
-          // queued for the day we next save THAT date.
-          for (const [key, item] of pendingTrendResponsesRef.current) {
-            if (item.date !== checkIn.date) continue;
-            sessionApi
-              .submitSymptomTrend(item.date, item.symptom, item.response)
-              .then(() => {
-                pendingTrendResponsesRef.current.delete(key);
-              })
-              .catch(() => {});
-          }
-          // Drain pending clinician escalation requests with the
-          // same date-attribution discipline.
-          for (const [key, item] of pendingClinicianRequestsRef.current) {
-            if (item.date !== checkIn.date) continue;
-            sessionApi
-              .requestClinicianForSymptom(item.date, item.symptom)
-              .then(() => {
-                pendingClinicianRequestsRef.current.delete(key);
-              })
-              .catch(() => {});
-          }
-        })
-        .catch(() => {
-          // Silent failure: stored locally, will retry on next save.
-        });
+      void checkinSync.enqueueCheckin({
+        date: checkIn.date,
+        energy: glp1Energy,
+        nausea,
+        mood,
+        notes: null,
+        appetite: appetite ?? null,
+        digestion: digestion ?? null,
+        hydration: hydration ?? null,
+        bowelMovement: bowelMovementToday,
+      });
     }
 
     // Recompute the local reminder schedule. Today's check-in just
@@ -1542,6 +1490,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         requestClinicianForSymptom,
         guidanceAckHistory,
         clinicianRequestedToday,
+        checkinSyncStatus,
+        checkinLastSyncAt,
+        flushCheckinSync,
         todayCheckIn,
         glp1Energy,
         setGlp1Energy,

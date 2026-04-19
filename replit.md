@@ -73,6 +73,34 @@ A standalone React + Vite web app at `/viva-dashboard/` for the care team. Built
 
 Express 5 + Drizzle + Postgres. Session auth via `connect-pg-simple` with manually-provisioned `session` table (createTableIfMissing breaks under esbuild bundling). Login regenerates session ID and waits on `req.session.save()` before responding. CORS with credentials, sameSite=lax, `trust proxy: 1`. Schema: users (doctor|patient), patients, patient_checkins, doctor_notes. Rules-based risk engine in `src/lib/risk.ts` (silence +30, low energy +20, severe nausea +15, mood decline +10; bands low/medium/high). Endpoints: `/api/auth/{login,logout,me}`, `/api/patients`, `/api/patients/:id/{checkins,risk,notes}`, `/api/me/{checkins,risk}`. Demo creds: `doctor@vivaai.demo` / `viva-demo-2026`. Seed script in `scripts/seed.ts` creates 1 doctor + 4 varied patients with 25-29 days of check-ins; idempotent.
 
+## Check-in Sync Queue
+
+`artifacts/pulse-pilot/lib/sync/checkinSync.ts` is the persistent
+queue that mirrors patient daily state to the backend. It owns:
+
+- pending check-in snapshots (keyed by date — a later save for the
+  same date overwrites the prior snapshot, matching the server's
+  `(patient_user_id, date)` upsert)
+- pending guidance acks, trend responses, and clinician escalation
+  requests (keyed by `(date, symptom)` — re-enqueueing replaces)
+- single-flight `flush()` so concurrent triggers (cold-start hook,
+  `AppState` foreground transition, user save) never race
+- retriable vs. fatal classification (`status === 0` timeout/network,
+  `5xx`, `408/429` retry; everything else dropped after one attempt)
+- `subscribe()` for `checkinSyncStatus` / `checkinLastSyncAt` exposed
+  via `AppContext`. The Today tab swaps "Reflection saved" for
+  "Saved on this device — we'll sync when you're back online" when
+  the queue is in `failed` state.
+
+The `sessionApi` `request()` helper now wraps `fetch` in an
+`AbortController` with `DEFAULT_TIMEOUT_MS = 15_000` and surfaces
+timeouts as `HttpError(0, "request_timeout")` so the queue can
+retry them.
+
+`AppState.addEventListener("change", ...)` in `app/_layout.tsx`
+calls `flushCheckinSync()` on every "active" transition, and
+`AppContext` calls `checkinSync.flush()` once on mount.
+
 ## Known Follow-ups (post-pilot cleanup)
 
 -   **`artifacts/api-server/src/routes/patients.ts` — pre-existing TypeScript errors**: several handlers cast `req as AuthedRequest` but `AuthedRequest` doesn't include `auth` in its type, so `req.auth.userId` reports as missing. Build still succeeds (esbuild strips types) and the runtime is correct because the auth middleware does populate `req.auth`. Tighten by augmenting Express's `Request` type with an optional `auth` field via module augmentation, then have the auth middleware narrow it for downstream handlers. Unrelated to current pilot-critical reliability work.

@@ -133,8 +133,21 @@ function useInviteDeepLink() {
 // checked in" UI can never disagree.
 function useReminderScheduler() {
   const { user } = useAuth();
-  const { todayCheckIn } = useApp();
+  const { todayCheckIn, flushCheckinSync } = useApp();
   const hasCheckedInToday = !!todayCheckIn;
+
+  // Drain the persistent check-in sync queue whenever the app comes
+  // back to the foreground. Covers the "patient saved a check-in
+  // while offline, then opened the app on Wi-Fi later" path. A single
+  // attempt is enough because the queue is single-flight and idempotent.
+  useEffect(() => {
+    if (!user) return;
+    const sub = AppState.addEventListener("change", (state: AppStateStatus) => {
+      if (state !== "active") return;
+      void flushCheckinSync();
+    });
+    return () => sub.remove();
+  }, [user, flushCheckinSync]);
 
   useEffect(() => {
     if (!user) return;

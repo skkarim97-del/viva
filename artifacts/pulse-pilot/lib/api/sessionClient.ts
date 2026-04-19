@@ -38,20 +38,46 @@ export class HttpError extends Error {
   }
 }
 
+// Default per-request timeout. React Native's fetch has no built-in
+// timeout, so a stalled connection (captive portal, broken NAT, lossy
+// cell) would otherwise pin the request indefinitely and leave the
+// sync queue stuck on a dead promise. 15s is generous for an MVP API
+// that responds in <300ms p99 from a healthy network.
+const DEFAULT_TIMEOUT_MS = 15_000;
+
 async function request<T>(
   method: "GET" | "POST" | "PATCH" | "DELETE",
   path: string,
   body?: unknown,
+  opts?: { timeoutMs?: number },
 ): Promise<T> {
   const token = await getToken();
   const headers: Record<string, string> = {};
   if (body) headers["Content-Type"] = "application/json";
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  const res = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  const controller = new AbortController();
+  const timeoutMs = opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+  } catch (e) {
+    // Surface AbortError as a structured timeout so the sync queue
+    // can distinguish "network stalled" from "server said no".
+    if ((e as { name?: string })?.name === "AbortError") {
+      throw new HttpError(0, "request_timeout");
+    }
+    // Any other fetch-level error (DNS, TCP reset, no network) gets
+    // status=0. Callers treat status>=500 || status===0 as retriable.
+    throw new HttpError(0, (e as Error)?.message || "network_error");
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new HttpError(res.status, text || res.statusText);
