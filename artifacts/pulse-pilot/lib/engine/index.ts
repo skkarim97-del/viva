@@ -35,12 +35,15 @@ export {
   selectInsufficientDataNotice,
   selectClaimsPolicy,
   selectActiveInterventionForAck,
+  selectWeeklyDayView,
 } from "./selectors";
 export type {
   StatusChip,
   HeroBlock,
   InsightSummary,
   InsufficientDataNotice,
+  WeeklyDayView,
+  WeeklyDayConfidence,
 } from "./selectors";
 
 export { generateCompletionFeedback } from "./feedbackEngine";

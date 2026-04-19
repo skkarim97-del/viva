@@ -17,6 +17,7 @@ import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
 import { CATEGORY_OPTIONS } from "@/types";
 import type { ActionCategory, WeeklyPlanDay } from "@/types";
+import { selectWeeklyDayView } from "@/lib/engine";
 
 const CATEGORY_META: Record<ActionCategory, { label: string; icon: keyof typeof Feather.glyphMap; color: string }> = {
   move: { label: "Move", icon: "activity", color: "#FF6B6B" },
@@ -29,7 +30,7 @@ const CATEGORY_META: Record<ActionCategory, { label: string; icon: keyof typeof 
 export default function PlanScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
-  const { weeklyPlan, editWeeklyAction, toggleWeeklyAction } = useApp();
+  const { weeklyPlan, dailyState, editWeeklyAction, toggleWeeklyAction } = useApp();
 
   const [editingDay, setEditingDay] = useState<WeeklyPlanDay | null>(null);
   const [editingCategory, setEditingCategory] = useState<ActionCategory | null>(null);
@@ -88,7 +89,9 @@ export default function PlanScreen() {
         </View>
 
         {weeklyPlan.days.map((day) => {
-          const isToday = day.date === today;
+          const view = selectWeeklyDayView(day, today, dailyState);
+          const isToday = view.confidence === "today";
+          const isTentative = view.confidence === "tentative";
           const supportActions = day.actions.filter(a => a.category !== "consistent");
           const completedCount = supportActions.filter(a => a.completed).length;
           return (
@@ -98,6 +101,10 @@ export default function PlanScreen() {
                 styles.dayCard,
                 { backgroundColor: c.card },
                 isToday && { borderWidth: 1.5, borderColor: c.accent + "45", backgroundColor: c.accent + "06" },
+                // Future days are visually demoted: lighter card +
+                // dashed border keeps them parsable as "not yet
+                // committed" without being noisy.
+                isTentative && { opacity: 0.78, borderWidth: StyleSheet.hairlineWidth, borderColor: c.border },
               ]}
             >
               <View style={styles.dayHeader}>
@@ -108,6 +115,11 @@ export default function PlanScreen() {
                       <Text style={[styles.todayText, { color: c.accent }]}>Today</Text>
                     </View>
                   )}
+                  {isTentative && (
+                    <View style={[styles.tentativeBadge, { borderColor: c.border }]}>
+                      <Text style={[styles.tentativeBadgeText, { color: c.mutedForeground }]}>Tentative</Text>
+                    </View>
+                  )}
                 </View>
                 {completedCount > 0 && (
                   <Text style={[styles.progressText, { color: c.mutedForeground }]}>
@@ -116,9 +128,23 @@ export default function PlanScreen() {
                 )}
               </View>
 
-              <Text style={[styles.focusLabel, { color: c.accent }]}>{day.focusArea}</Text>
+              <Text style={[styles.focusKicker, { color: c.mutedForeground }]}>{view.focusLabel}</Text>
+              <Text
+                style={[
+                  styles.focusLabel,
+                  { color: isTentative ? c.mutedForeground : c.accent },
+                ]}
+              >
+                {view.focusText}
+              </Text>
 
-              {day.adaptiveNote && (
+              {view.tentativeCaption && (
+                <Text style={[styles.tentativeCaption, { color: c.mutedForeground }]}>
+                  {view.tentativeCaption}
+                </Text>
+              )}
+
+              {view.showAdaptiveNote && day.adaptiveNote && (
                 <View style={[styles.adaptiveNote, { backgroundColor: c.accent + "08" }]}>
                   <Feather name="heart" size={12} color={c.accent} style={{ marginTop: 1 }} />
                   <Text style={[styles.adaptiveNoteText, { color: c.mutedForeground }]}>{day.adaptiveNote}</Text>
@@ -343,10 +369,38 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Montserrat_500Medium",
   },
+  focusKicker: {
+    fontSize: 10,
+    fontFamily: "Montserrat_600SemiBold",
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
+    marginTop: 4,
+    opacity: 0.75,
+  },
   focusLabel: {
     fontSize: 13,
     fontFamily: "Montserrat_500Medium",
     marginBottom: 2,
+  },
+  tentativeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  tentativeBadgeText: {
+    fontSize: 10,
+    fontFamily: "Montserrat_600SemiBold",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
+  tentativeCaption: {
+    fontSize: 11,
+    fontFamily: "Montserrat_400Regular",
+    fontStyle: "italic",
+    lineHeight: 16,
+    marginTop: -2,
+    marginBottom: 4,
   },
   adaptiveNote: {
     flexDirection: "row" as const,

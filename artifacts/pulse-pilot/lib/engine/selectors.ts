@@ -6,8 +6,8 @@
 //
 // Selectors are pure functions. Memoize at the call site if needed.
 
-import type { DailyTreatmentState } from "./dailyState";
-import type { DailyState, FocusItem } from "@/types";
+import type { DailyTreatmentState, PrimaryFocus } from "./dailyState";
+import type { DailyState, FocusItem, WeeklyPlanDay } from "@/types";
 import type { SymptomKind, SymptomTip } from "@/lib/symptomTips";
 
 // ---------- Status chip --------------------------------------------------
@@ -227,4 +227,125 @@ export function selectActiveInterventionForAck(
   const tip = state.interventions.find(t => t.symptom === symptom);
   if (!tip) return null;
   return { severity: tip.severity, symptom: tip.symptom };
+}
+
+// ---------- Weekly day view ----------------------------------------------
+//
+// The weekly plan is generated from a snapshot of recent inputs and
+// then "adapted" once per refresh. That makes future days inherently
+// less reliable than today, and even today's stamped focusArea /
+// adaptiveNote can drift from the live DailyTreatmentState as the
+// patient logs new inputs through the day. This selector resolves
+// both contradictions at render time:
+//
+//   - past days  : keep the historical record (what was planned + what was done)
+//   - today      : override focus copy from the live treatment state so
+//                  the weekly tile cannot disagree with the Today tab hero
+//   - future days: marked tentative, soften workout-specific phrasing,
+//                  suppress per-day adaptiveNote (which was extrapolated
+//                  from current severity and cannot honestly forecast a
+//                  day we haven't observed yet)
+//
+// Callers should render the returned fields directly and ignore the
+// raw `day.focusArea` / `day.adaptiveNote` for confidence != "past".
+
+export type WeeklyDayConfidence = "past" | "today" | "tentative";
+
+export interface WeeklyDayView {
+  confidence: WeeklyDayConfidence;
+  // Small uppercase label rendered above the focus text
+  // ("DONE" / "TODAY'S FOCUS" / "PLANNED FOCUS").
+  focusLabel: string;
+  // The main focus text. For tentative days this is the original
+  // focusArea softened; for today it is the live state's focus.
+  focusText: string;
+  // One-line caption explaining tentative state ("Updates as the
+  // week unfolds"). Only set when confidence === "tentative".
+  tentativeCaption?: string;
+  // Whether to render the day's stamped adaptiveNote. False for
+  // tentative (extrapolated, contradiction risk) and for today
+  // (the hero already carries this signal on the Today tab).
+  showAdaptiveNote: boolean;
+}
+
+const FOCUS_LABEL_FOR_PRIMARY: Record<PrimaryFocus, string> = {
+  symptom_relief: "Symptom support",
+  continuity_support: "Steady support",
+  hydration: "Hydration focus",
+  fueling: "Fueling first",
+  recovery: "Recovery and rest",
+  movement: "Steady movement",
+  performance: "Stronger session",
+};
+
+// Words that imply firm prescription / intensity. Future-day copy
+// should not assert these because the recommendation may change once
+// today's signals come in. We replace them with calmer equivalents.
+const SOFTEN_REPLACEMENTS: Array<[RegExp, string]> = [
+  [/\bHeavy\b/gi, "Moderate"],
+  [/\bHIIT\b/g, "Conditioning"],
+  [/\bLong Run\b/gi, "Steady run"],
+  [/\bStrength\b/g, "Strength (planned)"],
+];
+
+function softenFocusForFuture(text: string): string {
+  let out = text;
+  for (const [pattern, replacement] of SOFTEN_REPLACEMENTS) {
+    out = out.replace(pattern, replacement);
+  }
+  return out;
+}
+
+export function selectWeeklyDayView(
+  day: WeeklyPlanDay,
+  todayIso: string,
+  state: DailyTreatmentState | null,
+): WeeklyDayView {
+  if (day.date < todayIso) {
+    return {
+      confidence: "past",
+      focusLabel: "Done",
+      focusText: day.focusArea,
+      showAdaptiveNote: !!day.adaptiveNote,
+    };
+  }
+  if (day.date === todayIso) {
+    // Live override: today's focus comes from the treatment state,
+    // never from the pre-stamped weekly value. The action list on
+    // the tile still mutates through toggleWeeklyAction (kept in
+    // sync with dailyPlan in AppContext), so only the framing copy
+    // changes here.
+    let focusText: string;
+    if (!state) {
+      focusText = day.focusArea;
+    } else if (state.dataSufficiency.insufficientForPlan) {
+      // Mirror the Today tab "Set up your day" framing so the two
+      // surfaces cannot disagree on the same calendar day.
+      focusText = "Awaiting today's check-in";
+    } else if (state.treatmentDailyState === "escalate") {
+      // Escalation deserves a firmer label than the generic
+      // symptom_relief mapping; keep it in lockstep with the Today
+      // chip ("Symptom check needed") tone.
+      focusText = "Symptom stabilization";
+    } else {
+      focusText = FOCUS_LABEL_FOR_PRIMARY[state.primaryFocus];
+    }
+    return {
+      confidence: "today",
+      focusLabel: "Today's focus",
+      focusText,
+      // The Today tab hero is the canonical place for today's note.
+      // Repeating it here (with potentially staler copy) creates the
+      // exact contradiction this slice is meant to remove.
+      showAdaptiveNote: false,
+    };
+  }
+  // Future days
+  return {
+    confidence: "tentative",
+    focusLabel: "Planned focus",
+    focusText: softenFocusForFuture(day.focusArea),
+    tentativeCaption: "Tentative. Updates as the week unfolds.",
+    showAdaptiveNote: false,
+  };
 }
