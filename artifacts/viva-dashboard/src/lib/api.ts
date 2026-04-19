@@ -61,7 +61,13 @@ export interface PatientRow {
 }
 
 export type TreatmentStatus = "active" | "stopped" | "unknown";
-export type StopReason = "side_effects" | "cost" | "other" | "unknown";
+export type StopReason =
+  | "side_effects"
+  | "cost_or_insurance"
+  | "lack_of_efficacy"
+  | "patient_choice_or_motivation"
+  | "other";
+export type StopTimingBucket = "early" | "mid" | "late" | "unknown";
 
 export interface PatientDetail {
   id: number;
@@ -76,6 +82,11 @@ export interface PatientDetail {
   stopReason: StopReason | null;
   stopNote: string | null;
   treatmentStatusUpdatedAt: string | null;
+  // Both derived server-side from (treatmentStatusUpdatedAt - startedOn)
+  // when treatmentStatus = 'stopped'. Bucket is "unknown" otherwise or
+  // when startedOn is missing.
+  stopTimingBucket: StopTimingBucket;
+  daysOnTreatment: number | null;
 }
 
 export interface Checkin {

@@ -12,6 +12,7 @@ import {
   doctorNotesTable,
   TREATMENT_STATUSES,
   STOP_REASONS,
+  deriveStopTiming,
 } from "@workspace/db";
 import { requireDoctor, type AuthedRequest } from "../middlewares/auth";
 import {
@@ -395,9 +396,20 @@ async function loadOwnedPatient(
   startedOn: string | null;
   treatmentStatus: "active" | "stopped" | "unknown";
   treatmentStatusSource: "doctor" | "patient" | "system" | null;
-  stopReason: "side_effects" | "cost" | "other" | "unknown" | null;
+  stopReason:
+    | "side_effects"
+    | "cost_or_insurance"
+    | "lack_of_efficacy"
+    | "patient_choice_or_motivation"
+    | "other"
+    | null;
   stopNote: string | null;
   treatmentStatusUpdatedAt: Date | null;
+  // Derived from (treatmentStatusUpdatedAt - startedOn). Both fields are
+  // sent so the dashboard can render "stopped 14 days after starting"
+  // without re-doing the math.
+  stopTimingBucket: "early" | "mid" | "late" | "unknown";
+  daysOnTreatment: number | null;
 } | null> {
   const [row] = await db
     .select({
@@ -420,6 +432,10 @@ async function loadOwnedPatient(
     .where(eq(patientsTable.userId, patientId))
     .limit(1);
   if (!row || row.doctorId !== doctorId) return null;
+  const timing =
+    row.treatmentStatus === "stopped"
+      ? deriveStopTiming(row.startedOn, row.treatmentStatusUpdatedAt)
+      : { bucket: "unknown" as const, daysOnTreatment: null };
   return {
     id: row.id,
     name: row.name,
@@ -433,6 +449,8 @@ async function loadOwnedPatient(
     stopReason: row.stopReason,
     stopNote: row.stopNote,
     treatmentStatusUpdatedAt: row.treatmentStatusUpdatedAt,
+    stopTimingBucket: timing.bucket,
+    daysOnTreatment: timing.daysOnTreatment,
   };
 }
 
@@ -486,7 +504,10 @@ router.patch("/:id/treatment-status", async (req, res: Response) => {
     .set({
       treatmentStatus: parsed.data.status,
       treatmentStatusSource: "doctor",
-      stopReason: isStop ? parsed.data.stopReason ?? "unknown" : null,
+      // Zod superRefine guarantees stopReason is present when isStop=true,
+      // so the assertion is safe; non-null assertion avoids the now-invalid
+      // "unknown" fallback after the taxonomy refresh.
+      stopReason: isStop ? parsed.data.stopReason! : null,
       stopNote: isStop ? parsed.data.stopNote ?? null : null,
       treatmentStatusUpdatedAt: new Date(),
       treatmentStatusUpdatedBy: doctorId,

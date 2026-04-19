@@ -5,6 +5,7 @@ import {
   usersTable,
   patientsTable,
   patientCheckinsTable,
+  deriveStopTiming,
 } from "@workspace/db";
 import { computeRisk, deriveAction } from "../lib/risk";
 import { logger } from "../lib/logger";
@@ -478,19 +479,72 @@ router.get(
       const pctStillOnTreatment =
         onTreatmentDenom > 0 ? statusCounts.active / onTreatmentDenom : 0;
 
-      const stopReasonRows = await db.execute(sql`
+      // Pull every stopped patient's reason + dates so we can derive
+      // both the stop-reason rollup and the timing rollup in one pass.
+      // We deliberately do this in JS instead of SQL because the
+      // 30/90-day thresholds live in @workspace/db (deriveStopTiming)
+      // and we want a single source of truth.
+      const stoppedRows = await db.execute(sql`
         select
-          coalesce(stop_reason, 'unknown') as reason,
-          cast(count(*) as int) as count
+          stop_reason,
+          started_on,
+          treatment_status_updated_at
         from patients
         where treatment_status = 'stopped'
-        group by stop_reason
-        order by count desc
-        limit 10
       `);
-      const topStopReasons = (
-        stopReasonRows.rows as Array<{ reason: string; count: number }>
-      ).map((r) => ({ reason: r.reason, count: Number(r.count) }));
+      type StoppedRow = {
+        stop_reason: string | null;
+        started_on: string | Date | null;
+        treatment_status_updated_at: string | Date | null;
+      };
+      const stoppedList = stoppedRows.rows as StoppedRow[];
+
+      const reasonCounts: Record<string, number> = {};
+      const timingCounts: Record<"early" | "mid" | "late" | "unknown", number> =
+        { early: 0, mid: 0, late: 0, unknown: 0 };
+      const reasonByTiming: Record<string, Record<string, number>> = {};
+      for (const r of stoppedList) {
+        const reason = r.stop_reason ?? "unknown";
+        reasonCounts[reason] = (reasonCounts[reason] ?? 0) + 1;
+        const { bucket } = deriveStopTiming(
+          r.started_on,
+          r.treatment_status_updated_at,
+        );
+        timingCounts[bucket] += 1;
+        reasonByTiming[reason] ??= { early: 0, mid: 0, late: 0, unknown: 0 };
+        reasonByTiming[reason][bucket] =
+          (reasonByTiming[reason][bucket] ?? 0) + 1;
+      }
+      const stoppedTotal = stoppedList.length;
+      const topStopReasons = Object.entries(reasonCounts)
+        .map(([reason, count]) => ({
+          reason,
+          count,
+          // Share of all stopped patients. Helps the pilot question
+          // "is churn mostly side-effect driven?" answer in one glance.
+          pct: stoppedTotal > 0 ? count / stoppedTotal : 0,
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10);
+      const stopTiming = {
+        early: timingCounts.early,
+        mid: timingCounts.mid,
+        late: timingCounts.late,
+        unknown: timingCounts.unknown,
+        // Pct relative to stopped patients with known timing -- otherwise
+        // missing startedOn data drags every bucket down equally.
+        knownDenom:
+          timingCounts.early + timingCounts.mid + timingCounts.late,
+      };
+      const stopReasonByTiming = Object.entries(reasonByTiming).map(
+        ([reason, buckets]) => ({
+          reason,
+          early: buckets.early ?? 0,
+          mid: buckets.mid ?? 0,
+          late: buckets.late ?? 0,
+          unknown: buckets.unknown ?? 0,
+        }),
+      );
 
       res.json({
         generatedAt: new Date().toISOString(),
@@ -528,6 +582,8 @@ router.get(
           unknown: statusCounts.unknown,
           pctStillOnTreatment,
           topStopReasons,
+          stopTiming,
+          stopReasonByTiming,
         },
         totals: {
           interventionEvents: links.length,

@@ -52,7 +52,13 @@ export const patientsTable = pgTable("patients", {
   // Only meaningful when treatmentStatus = 'stopped'. Cleared on any
   // transition back to active/unknown.
   stopReason: text("stop_reason", {
-    enum: ["side_effects", "cost", "other", "unknown"],
+    enum: [
+      "side_effects",
+      "cost_or_insurance",
+      "lack_of_efficacy",
+      "patient_choice_or_motivation",
+      "other",
+    ],
   }),
   // Optional free-text doctor note, capped at 500 chars at the API.
   stopNote: text("stop_note"),
@@ -66,13 +72,48 @@ export type TreatmentStatus = (typeof TREATMENT_STATUSES)[number];
 export const TREATMENT_STATUS_SOURCES = ["doctor", "patient", "system"] as const;
 export type TreatmentStatusSource = (typeof TREATMENT_STATUS_SOURCES)[number];
 
+// Stop-reason taxonomy. Deliberately small + flat: pilots need to know
+// "is churn mostly side-effect driven?" -- adding more buckets only
+// fragments the signal. Free-text stopNote covers nuance.
 export const STOP_REASONS = [
   "side_effects",
-  "cost",
+  "cost_or_insurance",
+  "lack_of_efficacy",
+  "patient_choice_or_motivation",
   "other",
-  "unknown",
 ] as const;
 export type StopReason = (typeof STOP_REASONS)[number];
+
+// Stop-timing buckets, derived from (treatmentStatusUpdatedAt - startedOn).
+// Not persisted: we recompute on read so backfills / corrections to
+// startedOn flow through automatically. Keep thresholds in one place
+// so server analytics and the UI agree.
+export const STOP_TIMING_EARLY_DAYS = 30;
+export const STOP_TIMING_MID_DAYS = 90;
+export type StopTiming = "early" | "mid" | "late" | "unknown";
+export function deriveStopTiming(
+  startedOn: string | Date | null | undefined,
+  stoppedAt: string | Date | null | undefined,
+): { bucket: StopTiming; daysOnTreatment: number | null } {
+  if (!startedOn || !stoppedAt) {
+    return { bucket: "unknown", daysOnTreatment: null };
+  }
+  const start =
+    startedOn instanceof Date ? startedOn : new Date(startedOn);
+  const stop = stoppedAt instanceof Date ? stoppedAt : new Date(stoppedAt);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(stop.getTime())) {
+    return { bucket: "unknown", daysOnTreatment: null };
+  }
+  const days = Math.max(
+    0,
+    Math.floor((stop.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)),
+  );
+  let bucket: StopTiming;
+  if (days <= STOP_TIMING_EARLY_DAYS) bucket = "early";
+  else if (days <= STOP_TIMING_MID_DAYS) bucket = "mid";
+  else bucket = "late";
+  return { bucket, daysOnTreatment: days };
+}
 
 export const insertPatientSchema = createInsertSchema(patientsTable);
 export type InsertPatient = z.infer<typeof insertPatientSchema>;

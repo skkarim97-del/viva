@@ -177,3 +177,13 @@ Simple raw-signal reporting layer on top of the measurement infrastructure. Live
 - KPI 3: top 3 interventions by usage -- `count(*) group by intervention_type order by count desc limit 3`.
 - KPI 4: symptom trend direction -- counts `symptom_trend_3d` improved/worsened/stable across all snapshots in window; reports `improving | worsening | flat | no_data`.
 - Surfaced as a "Is this actually working?" stat panel at the top of `/internal/analytics` (viva-dashboard), above the per-bucket attribution tables. 14-day window chosen because 7d collapses to noise at current cohort size.
+
+## Treatment Status MVP (April 2026)
+
+Doctor-owned source of truth for whether a patient is currently on GLP-1 therapy. Drives the retention KPIs and feeds future "is this patient at-risk" rules. Three states only (`active`, `stopped`, `unknown`); at-risk is derived in code, not stored.
+- Schema (`patients` table): `treatment_status` enum, `treatment_status_source` (`doctor|patient|system`), `stop_reason` enum, `stop_note`, `treatment_status_updated_at/_by`. Backfilled via direct SQL (43 active from activated, 9 unknown).
+- Stop-reason taxonomy: `side_effects | cost_or_insurance | lack_of_efficacy | patient_choice_or_motivation | other`. Required when `status='stopped'` (Zod superRefine). No `unknown` reason value -- if status is stopped a reason must be picked. Free-text `stop_note` (≤500 chars) covers nuance.
+- Stop-timing buckets are **derived, not stored**: `deriveStopTiming()` in `@workspace/db` returns `{ bucket: early|mid|late|unknown, daysOnTreatment }` from `(treatment_status_updated_at - started_on)`. Thresholds: ≤30d early, 31–90d mid, >90d late. Single source of truth shared by API analytics and the patient detail page.
+- Endpoints: `GET /patients` and `GET /patients/:id` extended with `treatmentStatus`/`stopReason`/`stopNote`/`stopTimingBucket`/`daysOnTreatment`. `PATCH /patients/:id/treatment-status` is doctor-only with atomic ownership re-check (`doctorId` in WHERE clause + rowcount check, not just the pre-read) to close the IDOR/TOCTOU window.
+- `/internal/analytics/summary` `treatmentStatus` block: `pctStillOnTreatment = active / (active + stopped)` (unknowns excluded so unconfirmed cohorts don't deflate retention), `topStopReasons` (count + pct of stopped), `stopTiming` (counts per bucket + `knownDenom` excluding unknown timing), `stopReasonByTiming` cross-tab.
+- Dashboard UI: `TreatmentStatusCard` on `PatientDetailPage` with read-mode chips + "Stopped X days after starting treatment · Early/Mid/Late" line + inline edit form. `TreatmentStatusPanel` on `/internal/analytics` shows retention stats, stop-reason list with %, timing block, and a reason×timing table. Mobile app untouched.

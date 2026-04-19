@@ -1,0 +1,111 @@
+Instruction for Replit agent
+
+Extend the existing treatment status MVP to capture why and when a patient stopped treatment, in a simple, high-signal way.
+
+Goal
+
+We want to understand:
+
+who stopped treatment
+why they stopped
+when they stopped (early vs late)
+
+This is for internal retention learning during pilots. Keep it lightweight and fast.
+
+Scope
+
+Add two things:
+
+Stop reason (required when stopped)
+Stop timing (derived, not manually entered)
+
+Do not expand beyond this.
+
+Feature 1: Stop reason (simple + structured)
+
+When a patient is marked stopped, require a reason.
+
+Allowed values:
+side_effects
+cost_or_insurance
+lack_of_efficacy
+patient_choice_or_motivation
+other
+Requirements:
+reason is required when status = stopped
+keep existing optional free-text note (important for nuance)
+do not add more categories
+do not nest or over-structure
+Feature 2: Stop timing (derived, not input)
+
+We want to know if churn happened early or late.
+
+Do NOT add a manual dropdown
+
+Instead, derive timing from:
+
+startedAt (or equivalent treatment start date)
+treatmentStatusUpdatedAt (when marked stopped)
+Compute:
+early → stopped within 30 days
+mid → 31–90 days
+late → 90+ days
+
+Store this as a derived field in analytics, not necessarily persisted unless easy.
+
+Feature 3: Analytics extension
+
+Extend the existing internal analytics dashboard to include:
+
+1. Stop reasons breakdown
+count + % by reason
+simple list or bar-style display
+2. Stop timing breakdown
+early vs mid vs late counts
+3. Combined view (if easy)
+example:
+side effects → mostly early
+cost → more mid/late
+
+Keep this simple. No need for complex charts.
+
+Feature 4: UI update (clinician dashboard)
+
+In the Treatment Status card:
+
+When status = stopped:
+
+show reason clearly
+show optional note
+show “stopped X days after starting treatment” or equivalent
+
+No redesign needed. Just extend current card.
+
+Guardrails
+do NOT modify mobile app flows unless trivial
+do NOT add new dependencies
+do NOT change API contracts unnecessarily
+do NOT build a full analytics system
+do NOT expand taxonomy beyond defined values
+do NOT introduce ML or complex inference
+
+This should be a small extension of the current system, not a new system.
+
+Deliverables
+
+After implementation, tell me:
+
+where stop reason is stored and validated
+how stop timing is calculated
+what changes were made to analytics endpoint
+what UI elements were updated
+whether anything affects iOS / EAS / build stability
+Product intent (important)
+
+We are trying to answer during pilots:
+
+is churn mostly side-effect driven?
+does churn happen early in treatment?
+are we targeting the right problem?
+
+Keep implementation focused on that.

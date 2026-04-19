@@ -35,7 +35,21 @@ interface TreatmentStatusBlock {
   stopped: number;
   unknown: number;
   pctStillOnTreatment: number;
-  topStopReasons: Array<{ reason: string; count: number }>;
+  topStopReasons: Array<{ reason: string; count: number; pct: number }>;
+  stopTiming: {
+    early: number;
+    mid: number;
+    late: number;
+    unknown: number;
+    knownDenom: number;
+  };
+  stopReasonByTiming: Array<{
+    reason: string;
+    early: number;
+    mid: number;
+    late: number;
+    unknown: number;
+  }>;
 }
 
 interface AnalyticsSummary {
@@ -501,9 +515,16 @@ export function InternalAnalyticsPage() {
 
 const STOP_REASON_DISPLAY: Record<string, string> = {
   side_effects: "Side effects",
-  cost: "Cost / coverage",
+  cost_or_insurance: "Cost or insurance",
+  lack_of_efficacy: "Lack of efficacy",
+  patient_choice_or_motivation: "Patient choice or motivation",
   other: "Other",
-  unknown: "Unknown",
+  unknown: "Unspecified",
+};
+const TIMING_DISPLAY: Record<"early" | "mid" | "late", string> = {
+  early: "Early (≤30d)",
+  mid: "Mid (31-90d)",
+  late: "Late (>90d)",
 };
 
 function TreatmentStatusPanel({ t }: { t: TreatmentStatusBlock }) {
@@ -554,28 +575,128 @@ function TreatmentStatusPanel({ t }: { t: TreatmentStatusBlock }) {
       </div>
       {t.topStopReasons.length > 0 && (
         <div style={{ marginTop: 14 }}>
-          <div
-            style={{
-              color: "#6b7280",
-              fontSize: 12,
-              fontWeight: 600,
-              marginBottom: 6,
-              textTransform: "uppercase",
-              letterSpacing: 0.4,
-            }}
-          >
-            Top stop reasons
-          </div>
+          <RetentionSubhead>Stop reasons</RetentionSubhead>
           <ul style={{ margin: 0, paddingLeft: 18, fontSize: 14 }}>
             {t.topStopReasons.map((r) => (
               <li key={r.reason}>
                 {STOP_REASON_DISPLAY[r.reason] ?? r.reason}
-                <span style={{ color: "#6b7280" }}> · {r.count}</span>
+                <span style={{ color: "#6b7280" }}>
+                  {" · "}
+                  {r.count} ({Math.round(r.pct * 100)}%)
+                </span>
               </li>
             ))}
           </ul>
         </div>
       )}
+
+      {t.stopTiming.knownDenom > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <RetentionSubhead>Stop timing</RetentionSubhead>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            {(["early", "mid", "late"] as const).map((k) => {
+              const n = t.stopTiming[k];
+              const pct =
+                t.stopTiming.knownDenom > 0
+                  ? Math.round((n / t.stopTiming.knownDenom) * 100)
+                  : 0;
+              return (
+                <Stat
+                  key={k}
+                  label={TIMING_DISPLAY[k]}
+                  value={String(n)}
+                  sub={`${pct}% of known`}
+                />
+              );
+            })}
+            {t.stopTiming.unknown > 0 && (
+              <Stat
+                label="Unknown timing"
+                value={String(t.stopTiming.unknown)}
+                sub="Missing start date"
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      {t.stopReasonByTiming.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <RetentionSubhead>Reason × timing</RetentionSubhead>
+          <table
+            style={{
+              width: "100%",
+              borderCollapse: "collapse",
+              fontSize: 13,
+            }}
+          >
+            <thead>
+              <tr style={{ textAlign: "left", color: "#6b7280" }}>
+                <th style={{ padding: "6px 8px" }}>Reason</th>
+                <th style={{ padding: "6px 8px", textAlign: "right" }}>
+                  Early
+                </th>
+                <th style={{ padding: "6px 8px", textAlign: "right" }}>
+                  Mid
+                </th>
+                <th style={{ padding: "6px 8px", textAlign: "right" }}>
+                  Late
+                </th>
+                <th style={{ padding: "6px 8px", textAlign: "right" }}>
+                  Unknown
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {t.stopReasonByTiming.map((row) => (
+                <tr
+                  key={row.reason}
+                  style={{ borderTop: "1px solid #f3f4f6" }}
+                >
+                  <td style={{ padding: "6px 8px" }}>
+                    {STOP_REASON_DISPLAY[row.reason] ?? row.reason}
+                  </td>
+                  <td style={{ padding: "6px 8px", textAlign: "right" }}>
+                    {row.early}
+                  </td>
+                  <td style={{ padding: "6px 8px", textAlign: "right" }}>
+                    {row.mid}
+                  </td>
+                  <td style={{ padding: "6px 8px", textAlign: "right" }}>
+                    {row.late}
+                  </td>
+                  <td
+                    style={{
+                      padding: "6px 8px",
+                      textAlign: "right",
+                      color: "#9ca3af",
+                    }}
+                  >
+                    {row.unknown}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
+  );
+}
+
+function RetentionSubhead({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        color: "#6b7280",
+        fontSize: 12,
+        fontWeight: 600,
+        marginBottom: 6,
+        textTransform: "uppercase",
+        letterSpacing: 0.4,
+      }}
+    >
+      {children}
+    </div>
   );
 }

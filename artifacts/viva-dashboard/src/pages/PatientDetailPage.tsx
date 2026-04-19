@@ -5,6 +5,7 @@ import {
   api,
   type Checkin,
   type StopReason,
+  type StopTimingBucket,
   type SymptomFlag,
   type TreatmentStatus,
 } from "@/lib/api";
@@ -259,6 +260,8 @@ export function PatientDetailPage({ id }: { id: number }) {
         source={p.treatmentStatusSource}
         stopReason={p.stopReason}
         stopNote={p.stopNote}
+        stopTimingBucket={p.stopTimingBucket}
+        daysOnTreatment={p.daysOnTreatment}
         updatedAt={p.treatmentStatusUpdatedAt}
         editing={statusEditOpen}
         onEdit={() => {
@@ -600,9 +603,10 @@ const STATUS_STYLE: Record<TreatmentStatus, { bg: string; fg: string }> = {
 };
 const STOP_REASON_LABEL: Record<StopReason, string> = {
   side_effects: "Side effects",
-  cost: "Cost / coverage",
+  cost_or_insurance: "Cost or insurance",
+  lack_of_efficacy: "Lack of efficacy",
+  patient_choice_or_motivation: "Patient choice or motivation",
   other: "Other",
-  unknown: "Unknown",
 };
 const SOURCE_LABEL: Record<"doctor" | "patient" | "system", string> = {
   doctor: "you",
@@ -610,11 +614,20 @@ const SOURCE_LABEL: Record<"doctor" | "patient" | "system", string> = {
   system: "system",
 };
 
+const STOP_TIMING_LABEL: Record<StopTimingBucket, string> = {
+  early: "Early (within 30 days)",
+  mid: "Mid (31 to 90 days)",
+  late: "Late (after 90 days)",
+  unknown: "",
+};
+
 function TreatmentStatusCard(props: {
   status: TreatmentStatus;
   source: "doctor" | "patient" | "system" | null;
   stopReason: StopReason | null;
   stopNote: string | null;
+  stopTimingBucket: StopTimingBucket;
+  daysOnTreatment: number | null;
   updatedAt: string | null;
   editing: boolean;
   onEdit: () => void;
@@ -668,6 +681,22 @@ function TreatmentStatusCard(props: {
 
       {!props.editing && (
         <>
+          {/* Stop timing line. Only meaningful when status='stopped' AND
+              we have both a startedOn date and an updatedAt date.
+              Server returns daysOnTreatment=null in any other case. */}
+          {props.status === "stopped" && props.daysOnTreatment !== null && (
+            <div className="text-sm text-foreground mt-3 font-medium">
+              Stopped {props.daysOnTreatment} day
+              {props.daysOnTreatment === 1 ? "" : "s"} after starting
+              treatment
+              {props.stopTimingBucket !== "unknown" && (
+                <span className="text-muted-foreground font-normal">
+                  {" · "}
+                  {STOP_TIMING_LABEL[props.stopTimingBucket]}
+                </span>
+              )}
+            </div>
+          )}
           {props.status === "stopped" && props.stopNote && (
             <p className="text-sm text-foreground mt-3 leading-relaxed">
               {props.stopNote}
