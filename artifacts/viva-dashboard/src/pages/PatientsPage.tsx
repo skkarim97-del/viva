@@ -155,11 +155,6 @@ export function PatientsPage() {
           </p>
         </div>
         <div className="flex items-center gap-4">
-          {q.data && (
-            <div className="text-sm text-muted-foreground font-medium">
-              {q.data.length} patient{q.data.length === 1 ? "" : "s"}
-            </div>
-          )}
           <button
             type="button"
             onClick={() => setShowInvite(true)}
