@@ -1,0 +1,178 @@
+Good catch. That’s exactly the right instinct — this is where things break in a pilot.
+
+But don’t just restart and move on. If the API crashed once, assume it’ll crash again at the worst possible time.
+
+Here’s the real issue
+
+“Stale port” is a symptom, not the root cause.
+
+In a pilot:
+
+* you won’t be there to restart it
+* one crash = broken experience = lost trust
+
+You need to harden this now.
+
+⸻
+
+What you should do next (no fluff)
+
+Paste this to Replit:
+
+⸻
+
+API Reliability Hardening (Pilot Critical)
+
+We just had an API crash due to a stale port. Restart fixed it, but this is not acceptable for pilot usage.
+
+Goal
+
+Ensure the API server is resilient and cannot silently fail during pilot usage.
+
+⸻
+
+1. Add auto-restart / process protection
+
+Ensure the API process:
+
+* automatically restarts if it crashes
+* does not fail silently
+
+If not already in place, use:
+
+* a simple process manager or restart wrapper
+* or ensure Replit workflow auto-restarts on failure
+
+⸻
+
+2. Add health check endpoint
+
+Create:
+
+GET /health
+
+Returns:
+
+{ "status": "ok" }
+
+This lets us:
+
+* verify server is alive
+* monitor uptime during pilot
+
+⸻
+
+3. Add server startup logging
+
+On boot, log clearly:
+
+* server started
+* port
+* timestamp
+
+Example:
+
+console.log(`API running on port ${PORT} at ${new Date().toISOString()}`);
+
+⸻
+
+4. Add basic error boundary (CRITICAL)
+
+Wrap the server with:
+
+process.on('uncaughtException', ...)
+process.on('unhandledRejection', ...)
+
+Log errors instead of crashing silently.
+
+⸻
+
+5. Add request-level logging (lightweight)
+
+For MVP, log:
+
+* endpoint
+* status code
+* errors
+
+Do NOT overbuild this. Just enough to debug.
+
+⸻
+
+6. Test failure scenarios
+
+Simulate:
+
+* bad request payload
+* missing auth token
+* server restart
+
+Confirm:
+
+* app does not hang
+* errors return cleanly
+* no infinite loading states
+
+⸻
+
+7. Confirm mobile fallback behavior
+
+If API fails:
+
+* app should not freeze
+* show lightweight message:
+    “Having trouble syncing — try again shortly”
+* allow local flow where possible
+
+⸻
+
+Output
+
+Show:
+
+1. how the API auto-recovers from failure
+2. example logs from startup + a failed request
+3. confirmation /health endpoint works
+4. confirmation mobile app does not hang if API is briefly down
+
+⸻
+
+My take
+
+You’re at the stage where:
+
+reliability > features
+
+You can have:
+
+* perfect UI
+* smart logic
+* great flows
+
+But if:
+
+* API fails once during a real patient session
+
+👉 you lose credibility immediately
+
+⸻
+
+Priority stack right now
+
+1. API stability
+2. invite activation working 100%
+3. check-in submission reliability
+4. notifications firing correctly
+
+Everything else is secondary.
+
+⸻
+
+Bottom line
+
+Restarting the server is fine for dev.
+
+For pilot:
+👉 you need it to never require manual intervention
+
+Fix that now before you onboard real users.

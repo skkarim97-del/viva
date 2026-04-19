@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type Express, type ErrorRequestHandler, type RequestHandler } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
@@ -51,6 +51,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(sessionMiddleware);
 
+// Root-level liveness probe. Mounted before the /api router so external
+// uptime monitors and load balancers can hit a stable, prefix-free URL
+// without authentication or any DB dependency. The detailed structured
+// equivalent stays at /api/healthz for in-app clients.
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok", uptimeSeconds: Math.round(process.uptime()) });
+});
+
 app.use("/api", router);
 // Public surfaces deliberately mounted at the root so the invite URL
 // the doctor shares is short (`/invite/<token>`) and so universal-link
@@ -59,5 +67,49 @@ app.use("/api", router);
 app.use("/api/invite", inviteJsonRouter);
 app.use("/invite", inviteHtmlRouter);
 app.use("/.well-known", wellKnownRouter);
+
+// 404 fallback for unknown API paths. Returns JSON instead of Express's
+// default HTML so mobile clients (which always JSON.parse the body)
+// surface a clean error to the user instead of a parse exception.
+const notFoundHandler: RequestHandler = (req, res) => {
+  res.status(404).json({ error: "not_found", path: req.originalUrl });
+};
+app.use(notFoundHandler);
+
+// Last-resort error handler. Without a 4-arg middleware, throws inside
+// route handlers either crash the process or hang the response. This
+// guarantees every error gets logged through the same pino pipeline as
+// regular requests (with secret redaction) and the client always sees
+// JSON. Production responses never leak internal messages or stacks.
+const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
+  // Status from common error shapes; default to 500. Anything <500 is
+  // a client error and not worth a `level=error` log line.
+  const rawStatus =
+    typeof (err as { status?: number })?.status === "number"
+      ? (err as { status: number }).status
+      : typeof (err as { statusCode?: number })?.statusCode === "number"
+        ? (err as { statusCode: number }).statusCode
+        : 500;
+  const status = Number.isInteger(rawStatus) && rawStatus >= 400 && rawStatus <= 599 ? rawStatus : 500;
+
+  if (status >= 500) {
+    logger.error({ err, path: req.originalUrl, method: req.method }, "request handler error");
+  } else {
+    logger.warn({ err, path: req.originalUrl, method: req.method, status }, "request rejected");
+  }
+
+  if (res.headersSent) {
+    // Express will close the connection; nothing safe left to do here.
+    return;
+  }
+
+  const isProd = process.env.NODE_ENV === "production";
+  const message =
+    status >= 500 && isProd
+      ? "internal_server_error"
+      : (err as { message?: string })?.message ?? "internal_server_error";
+  res.status(status).json({ error: message });
+};
+app.use(errorHandler);
 
 export default app;
