@@ -1005,6 +1005,16 @@ export function generateDailyPlan(
       pool = ["Digestion management", "GI support", "Gentle nutrition"];
     } else if (medicationProfile?.recentTitration) {
       pool = ["Titration week", "Dose adjustment", "Adaptation phase"];
+    } else if (dailyState === "recover") {
+      // Plan coherence guard: any path that landed in recover (stress
+      // override, moderate symptoms, recovery_declining, mental burnout,
+      // converging-negative-signals branch, etc.) must show a
+      // recovery-oriented tag. Otherwise downstream branches below
+      // (e.g. "Cleared to engage" when symptomsModerate is true) can
+      // contradict a "Rest is the right call today" headline. Hoisted
+      // above the signal-specific branches so it always wins on rest
+      // days, regardless of which signal drove the plan there.
+      pool = ["Recovery phase", "Repair day", "Stabilization"];
     } else if (wearableAvailable && sleepHours < 6) {
       pool = ["Sleep recovery", "Recovery priority", "Rest focus"];
     } else if (glp1Energy === "depleted" || glp1Energy === "tired" || energy === "low") {
