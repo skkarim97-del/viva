@@ -1,0 +1,125 @@
+Make the following UI and product logic fixes in the iOS app. Keep styling premium, clean, and clinically credible. Do not introduce regressions. After changes, tell me exactly which files were edited and summarize the logic changes.
+
+1) Onboarding hero copy
+Replace the onboarding headline:
+"Your AI Health Coach"
+
+With:
+"Support for Your GLP-1 Treatment"
+
+Replace the subcopy with:
+"Track symptoms, treatment progress, and daily patterns between visits so your care stays on course."
+
+Goal:
+This should feel more clinical and credible, less generic consumer wellness.
+
+2) Goal selection cards: equal heights
+On the screen:
+"What matters most during treatment?"
+
+Make every option card the exact same height and visually aligned.
+Current issue: cards vary in height because of wrapping and inconsistent content height.
+
+Requirements:
+- Use a fixed shared minHeight or exact height for all cards
+- Align icon and text consistently
+- Keep text vertically centered or top-aligned consistently across all cards
+- Preserve spacing and premium feel
+- Make sure the grid still looks good on iPhone screens
+
+Also shorten / standardize the labels to:
+- Lose weight
+- Improve metabolic health
+- Preserve muscle
+- Maintain energy
+- Stay on treatment
+- Support overall health
+
+3) Medication duration options: break out first 90 days
+On the onboarding screen:
+"How long have you been on this medication?"
+
+Replace the options with:
+- Less than 30 days
+- 30 to 60 days
+- 60 to 90 days
+- 3 to 6 months
+- 6 to 12 months
+- 1 to 2 years
+- 2+ years
+
+Reason:
+The first 90 days are critical for GLP-1 drop-off risk, so we need more granularity in the initial period.
+
+4) Daily insight banner must match plan recommendations
+Current issue:
+The top summary chip / banner says something like "Rest focus" while the daily plan recommends 30–40 mins of strength training. This breaks trust.
+
+Fix the logic so the top summary state, hero insight, and plan recommendations are derived from the same source of truth.
+
+Requirements:
+- If the plan recommends strength training, the banner should reflect that theme
+- If recovery / rest is the true priority, then the plan should reflect recovery-friendly recommendations
+- Do not allow contradictory states
+- The chip label, headline, and supporting summary should be logically consistent with the recommendations shown in the Plan / Today experience
+
+This is a product logic fix, not just copy.
+
+5) Weight input modal is not functioning
+Current issue:
+In Settings > Weekly weight > Log now, entering weight throws:
+"Please sign in again."
+
+Apple Health is synced, so this should not block local profile logging.
+Fix the weight input flow so it functions reliably.
+
+Requirements:
+- User should be able to manually log weekly weight without getting blocked by an auth/session failure unless the session is actually invalid
+- If the session is invalid, handle it gracefully with a real recovery path
+- Do not show a false auth error for a profile or local app action
+- Confirm whether weekly weight is saved locally, remotely, or both
+- If this action depends on backend auth, harden the save flow and surface the actual root cause
+- Make sure the modal closes and the Settings row updates after successful save
+
+Also improve the UX copy if needed:
+- Prefer concise validation / failure messaging
+- No vague or misleading auth errors
+
+6) Settings layout: reminders card is too low on page
+Current issue:
+The "Daily check-in reminders" section sits too far down the page, leaving too much dead space above it and forcing unnecessary scrolling.
+
+Tighten the Settings page vertical layout so reminders are visible earlier.
+
+Requirements:
+- Reduce excessive spacer / empty vertical space between Apple Health / disclaimer area and Reminders
+- Keep the page feeling breathable, but not wasteful
+- Make the key settings visible without needing to scroll so far
+- Maintain safe area and bottom tab spacing
+- Avoid crowding the legal disclaimer
+
+7) Home screen vertical spacing
+Current issue:
+The "Good evening" text is not sitting in a visually balanced position between the Viva logo above and the gray hero card below.
+
+Fix the vertical spacing so the greeting sits clearly between the logo and the hero card and the whole top section feels evenly distributed.
+
+Requirements:
+- Adjust top stack spacing so logo → greeting → hero card feels intentional and balanced
+- Do not let the greeting drift too close to the logo or too close to the card
+- Preserve the clean premium aesthetic
+- Make sure it still looks correct across common iPhone screen sizes
+
+8) General QA requirements
+- Keep all existing branding and visual language intact
+- Preserve iOS-safe spacing and responsiveness
+- No broken navigation
+- No regressions in onboarding, settings, home, or plan rendering
+- If any mock/demo data powers the top insight banner, refactor it so it is coherent with actual recommendations shown on screen
+
+9) Output required
+When done, provide:
+- Exact files changed
+- What caused the weight logging bug
+- What source of truth now drives the top daily insight + plan consistency
+- Any follow-up issues or tech debt you noticed
