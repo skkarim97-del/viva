@@ -126,7 +126,7 @@ export default function DashboardScreen() {
     saveDailyCheckIn, todayCheckIn, acknowledgeSymptomTip,
     recordSymptomTrend, requestClinicianForSymptom,
     guidanceAckHistory, clinicianRequestedToday,
-    checkinSyncStatus,
+    checkinSyncStatus, flushCheckinSync,
     appetite, setAppetite,
     nausea, setNausea,
     digestion, setDigestion,
@@ -1117,6 +1117,17 @@ export default function DashboardScreen() {
                 ? "Reflection saved · syncing…"
                 : "Reflection saved"}
             </Text>
+            {checkinSyncStatus === "failed" && (
+              <Pressable
+                onPress={() => { haptic(); void flushCheckinSync(); }}
+                hitSlop={8}
+                style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, marginLeft: 4 })}
+              >
+                <Text style={[styles.checkInDoneText, { color: c.accent, fontWeight: "600" }]}>
+                  Retry now
+                </Text>
+              </Pressable>
+            )}
           </View>
         )}
 

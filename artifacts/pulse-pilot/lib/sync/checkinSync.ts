@@ -230,6 +230,25 @@ export const checkinSync = {
     if (inflightFlush) return inflightFlush;
     inflightFlush = (async () => {
       const s = await load();
+      // Queue-depth telemetry. Logged on every flush attempt so we
+      // can spot pilot patients whose queues are backing up (network,
+      // auth, or server-side regression). Cheap counters only -- no
+      // payloads, no PHI.
+      const depthBefore = {
+        checkins: Object.keys(s.pendingCheckins).length,
+        guidanceAcks: s.pendingGuidanceAcks.length,
+        trendResponses: s.pendingTrendResponses.length,
+        clinicianRequests: s.pendingClinicianRequests.length,
+      };
+      const totalBefore =
+        depthBefore.checkins +
+        depthBefore.guidanceAcks +
+        depthBefore.trendResponses +
+        depthBefore.clinicianRequests;
+      if (totalBefore > 0) {
+        // eslint-disable-next-line no-console
+        console.log("[checkinSync] flush start", { total: totalBefore, ...depthBefore });
+      }
       if (!hasAnyPending(s)) {
         s.status = "synced";
         s.lastError = null;
