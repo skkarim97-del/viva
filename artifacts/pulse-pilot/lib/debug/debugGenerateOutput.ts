@@ -88,7 +88,7 @@ export function debugGenerateOutput(params: {
   let coachContext = null;
   if (todayMetrics && dailyPlan) {
     coachContext = buildCoachContext(
-      todayMetrics, metrics, profile, dailyPlan, insights,
+      todayMetrics, metrics, profile, null, insights,
       medicationLog,
       {
         energy: glp1Inputs?.energy ?? null,

@@ -1,7 +1,6 @@
 import type {
   UserProfile,
   HealthMetrics,
-  DailyPlan,
   MedicationLogEntry,
   FeelingType,
   EnergyLevel,
@@ -16,8 +15,25 @@ import type {
 } from "@/types";
 import type { DailyInsights } from "@/data/insights";
 import { buildTitrationContext } from "./titrationHelper";
-import { buildTierContext, summarizeTierForCoach, type DataTier, type Confidence } from "./dataTier";
+import type {
+  DailyTreatmentState,
+  TreatmentDailyState,
+  TreatmentStage,
+  DoseDayPosition,
+  RiskBand,
+  EscalationNeed,
+  AdherenceSignal,
+  PrimaryFocus,
+  ClaimsPolicy,
+} from "./dailyState";
+import { selectStatusChip, selectHero } from "./selectors";
 
+// CoachContext is now a projection of DailyTreatmentState plus the
+// raw inputs the coach prompt needs (profile, medication, history).
+// Anything the coach is allowed to *claim* about physiology is gated
+// through dailyState.claimsPolicy. There is no parallel tier
+// computation here -- the central state is the single source of
+// truth.
 export interface CoachContext {
   todayMetrics: {
     hrv: number | null;
@@ -56,8 +72,8 @@ export interface CoachContext {
     titrationIntensity?: "none" | "mild" | "moderate" | "peak";
   };
   recentDoseLog: { date: string; status: string; doseValue: number; doseUnit: string }[];
-  readinessScore?: number;
-  dailyState?: string;
+
+  // Self-report inputs (always allowed; not gated by claimsPolicy).
   userFeeling: FeelingType;
   userEnergy: EnergyLevel;
   userStress: StressLevel;
@@ -69,28 +85,42 @@ export interface CoachContext {
     nausea: NauseaLevel;
     digestion: DigestionStatus;
   };
-  sleepInsight?: string;
+
+  // Derived stats. Forwarded only when claimsPolicy permits the
+  // matching claim, so the model cannot reference them otherwise.
   hrvBaseline?: number;
   sleepDebt?: number;
   recoveryTrend?: "improving" | "declining" | "stable";
+  sleepInsight?: string;
+
   streakDays: number;
   weeklyCompletionRate: number;
   todayCompletionRate: number;
   patientSummary?: PatientSummary;
-  adaptiveState?: {
-    currentState: string;
-    recentPattern: string;
-    planAdjustment: string;
+
+  // Central treatment state, projected for the API server.
+  treatmentState?: {
+    treatmentDailyState: TreatmentDailyState;
+    primaryFocus: PrimaryFocus;
+    escalationNeed: EscalationNeed;
+    treatmentStage: TreatmentStage;
+    doseDayPosition: DoseDayPosition;
+    recentTitration: boolean;
+    daysSinceLastDose: number | null;
+    symptomBurden: RiskBand;
+    hydrationRisk: RiskBand;
+    fuelingRisk: RiskBand;
+    recoveryReadiness: RiskBand;
+    adherenceSignal: AdherenceSignal;
+    insufficientForPlan: boolean;
+    claimsPolicy: ClaimsPolicy;
+    dataTier: "self_report" | "phone_health" | "wearable";
+    statusChipLabel: string;
+    heroHeadline: string;
+    heroDrivers: string[];
+    interventionTitles: string[];
+    rationale: string[];
   };
-  // Tier-aware fields. The coach uses these to decide which physiological claims it can
-  // make. If a metric is missing/unusable, do not reference it in the response.
-  dataTier?: DataTier;
-  recommendationConfidence?: Confidence;
-  availableMetricTypes?: string[];
-  validBaselines?: { sleep7d: boolean; rhr14d: boolean; hrv14d: boolean; stepsWeekly: boolean };
-  freshness?: { hasFreshSleep: boolean; hasFreshSteps: boolean; hasFreshRhr: boolean; hasFreshHrv: boolean };
-  unavailableWearableMetrics?: string[];
-  basedOn?: "self_report_only" | "phone_health" | "wearable_enhanced";
 }
 
 export function computeHrvBaseline(metrics: HealthMetrics[]): number | undefined {
@@ -119,7 +149,7 @@ export function buildCoachContext(
   todayMetrics: HealthMetrics,
   metrics: HealthMetrics[],
   profile: UserProfile,
-  dailyPlan: DailyPlan | null,
+  dailyState: DailyTreatmentState | null,
   insights: DailyInsights | null,
   medicationLog: MedicationLogEntry[],
   glp1Inputs: {
@@ -139,33 +169,40 @@ export function buildCoachContext(
   weeklyConsistency: number,
   todayCompletionRate: number,
   patientSummary?: PatientSummary | null,
-  adaptiveState?: { currentState: string; recentPattern: string; planAdjustment: string } | null,
-  availableMetricTypes: string[] = [],
 ): CoachContext {
-  // Build the same tier context the planEngine uses, so the coach sees exactly the same
-  // view of data adequacy. We then strip any metric we can't trust from todayMetrics so the
-  // model can never reference it back to the user.
-  const hasSubjectiveInputs = !!(wellnessInputs.feeling || wellnessInputs.energy || wellnessInputs.stress || wellnessInputs.trainingIntent || glp1Inputs);
-  const tierCtx = buildTierContext(metrics, todayMetrics, availableMetricTypes, hasSubjectiveInputs, Date.now());
-  const summary = summarizeTierForCoach(tierCtx);
-  const tier = tierCtx.tier;
+  // Single source of truth: dailyState.claimsPolicy. If no state was
+  // computed yet (cold start before any check-in), treat as
+  // physiologically-blind self_report tier and let the API server
+  // surface "tell me how today is going" framing.
+  const policy: ClaimsPolicy = dailyState?.claimsPolicy ?? {
+    canCiteSleep: false,
+    canCiteHRV: false,
+    canCiteRecovery: false,
+    canCiteSteps: false,
+    canQuantifyReadiness: false,
+    physiologicalClaimsAllowed: false,
+    narrativeConfidence: "low",
+  };
+
+  const hrvBaseline = computeHrvBaseline(metrics);
+  const sleepDebt = computeSleepDebt(metrics);
+  const recoveryTrend = computeRecoveryTrend(metrics);
 
   return {
     todayMetrics: {
-      // Wearable metrics: only forward when the metric is genuinely usable. Otherwise null
-      // so the API server can suppress the line entirely.
-      hrv: tier === "wearable" && tierCtx.usableHrv ? todayMetrics.hrv : null,
-      restingHeartRate: tier === "wearable" && tierCtx.usableRhr ? todayMetrics.restingHeartRate : null,
-      // Phone/wearable shared:
-      sleepDuration: tierCtx.usableSleep ? todayMetrics.sleepDuration : 0,
-      sleepQuality: tier === "wearable" ? todayMetrics.sleepQuality : null,
-      steps: tierCtx.usableSteps ? todayMetrics.steps : 0,
-      // Derived/synthesized scores: only forward on wearable tier when usable; else null.
-      recoveryScore: tier === "wearable" && (tierCtx.usableHrv || tierCtx.usableRhr) ? todayMetrics.recoveryScore : null,
+      // Wearable / physiological metrics: only forward when claims
+      // policy explicitly permits citing them. Null on the wire =
+      // suppressed line in the prompt = model cannot reference.
+      hrv: policy.canCiteHRV ? todayMetrics.hrv : null,
+      restingHeartRate: policy.canCiteHRV ? todayMetrics.restingHeartRate : null,
+      sleepDuration: policy.canCiteSleep ? todayMetrics.sleepDuration : 0,
+      sleepQuality: policy.canCiteSleep && policy.physiologicalClaimsAllowed ? todayMetrics.sleepQuality : null,
+      steps: policy.canCiteSteps ? todayMetrics.steps : 0,
+      recoveryScore: policy.canCiteRecovery ? todayMetrics.recoveryScore : null,
       weight: todayMetrics.weight,
-      strain: tier === "wearable" ? todayMetrics.strain : null,
-      caloriesBurned: tierCtx.usableSteps ? todayMetrics.caloriesBurned : 0,
-      activeCalories: tierCtx.usableSteps ? todayMetrics.activeCalories : 0,
+      strain: policy.physiologicalClaimsAllowed ? todayMetrics.strain : null,
+      caloriesBurned: policy.canCiteSteps ? todayMetrics.caloriesBurned : 0,
+      activeCalories: policy.canCiteSteps ? todayMetrics.activeCalories : 0,
     },
     profile: {
       name: profile.name || undefined,
@@ -195,29 +232,45 @@ export function buildCoachContext(
       };
     })() : undefined,
     recentDoseLog: medicationLog.slice(-5).map(e => ({ date: e.date, status: e.status, doseValue: e.doseValue, doseUnit: e.doseUnit })),
-    readinessScore: dailyPlan?.readinessScore,
-    dailyState: dailyPlan?.dailyState,
     userFeeling: wellnessInputs.feeling,
     userEnergy: wellnessInputs.energy,
     userStress: wellnessInputs.stress,
     userHydration: wellnessInputs.hydration,
     userTrainingIntent: wellnessInputs.trainingIntent,
     glp1DailyInputs: glp1Inputs,
-    sleepInsight: insights?.sleepIntelligence?.insight,
-    hrvBaseline: computeHrvBaseline(metrics),
-    sleepDebt: computeSleepDebt(metrics),
-    recoveryTrend: computeRecoveryTrend(metrics),
+    sleepInsight: policy.canCiteSleep ? insights?.sleepIntelligence?.insight : undefined,
+    hrvBaseline: policy.canCiteHRV ? hrvBaseline : undefined,
+    sleepDebt: policy.canCiteSleep ? sleepDebt : undefined,
+    recoveryTrend: policy.canCiteRecovery ? recoveryTrend : undefined,
     streakDays,
     weeklyCompletionRate: weeklyConsistency,
     todayCompletionRate,
     patientSummary: patientSummary ?? undefined,
-    adaptiveState: adaptiveState ?? undefined,
-    dataTier: dailyPlan?.dataTier ?? tier,
-    recommendationConfidence: dailyPlan?.recommendationConfidence,
-    availableMetricTypes: summary.availableMetricTypes,
-    validBaselines: summary.validBaselines,
-    freshness: summary.freshness,
-    unavailableWearableMetrics: summary.unavailableWearableMetrics,
-    basedOn: summary.basedOn as "self_report_only" | "phone_health" | "wearable_enhanced",
+    treatmentState: dailyState ? (() => {
+      const chip = selectStatusChip(dailyState);
+      const hero = selectHero(dailyState);
+      return {
+        treatmentDailyState: dailyState.treatmentDailyState,
+        primaryFocus: dailyState.primaryFocus,
+        escalationNeed: dailyState.escalationNeed,
+        treatmentStage: dailyState.treatmentStage,
+        doseDayPosition: dailyState.doseDayPosition,
+        recentTitration: dailyState.recentTitration,
+        daysSinceLastDose: dailyState.daysSinceLastDose,
+        symptomBurden: dailyState.symptomBurden,
+        hydrationRisk: dailyState.hydrationRisk,
+        fuelingRisk: dailyState.fuelingRisk,
+        recoveryReadiness: dailyState.recoveryReadiness,
+        adherenceSignal: dailyState.adherenceSignal,
+        insufficientForPlan: dailyState.dataSufficiency.insufficientForPlan,
+        claimsPolicy: dailyState.claimsPolicy,
+        dataTier: dailyState.dataTier,
+        statusChipLabel: chip.label,
+        heroHeadline: hero.headline,
+        heroDrivers: hero.drivers,
+        interventionTitles: dailyState.interventions.slice(0, 2).map(i => i.title),
+        rationale: dailyState.rationale.slice(0, 6),
+      };
+    })() : undefined,
   };
 }

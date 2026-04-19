@@ -142,7 +142,7 @@ export function buildCoachViewModel(
   todayMetrics: HealthMetrics,
   metrics: HealthMetrics[],
   profile: UserProfile,
-  dailyPlan: DailyPlan | null,
+  dailyState: import("@/lib/engine/dailyState").DailyTreatmentState | null,
   insights: DailyInsights | null,
   medicationLog: MedicationLogEntry[],
   glp1Inputs: {
@@ -168,7 +168,7 @@ export function buildCoachViewModel(
       todayMetrics,
       metrics,
       profile,
-      dailyPlan,
+      dailyState,
       insights,
       medicationLog,
       glp1Inputs,

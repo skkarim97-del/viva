@@ -367,14 +367,12 @@ export default function DashboardScreen() {
     let healthContext: unknown;
     try {
       healthContext = buildCoachContext(
-        todayMetrics, metrics, profile, dailyPlan, insights,
+        todayMetrics, metrics, profile, dailyState, insights,
         medicationLog,
         { energy: glp1Energy, appetite, nausea, digestion },
         { feeling, energy, stress, hydration, trainingIntent },
         streakDays, weeklyConsistency, todayCompletionRate,
         null,
-        null,
-        availableMetricTypes,
       );
     } catch (e: any) {
       if (typeof __DEV__ !== "undefined" && __DEV__) console.log("[Coach] buildCoachContext threw:", e);

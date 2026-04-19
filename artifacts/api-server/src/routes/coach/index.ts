@@ -106,9 +106,57 @@ interface ChatRequestBody {
       sleepTrend: string;
       stepsTrend: string;
     };
-    readinessScore?: number;
-    readinessLabel?: string;
-    dailyState?: string;
+    treatmentState?: {
+      treatmentDailyState: "escalate" | "recover" | "support" | "maintain" | "build" | "push";
+      primaryFocus:
+        | "symptom_relief"
+        | "continuity_support"
+        | "hydration"
+        | "fueling"
+        | "recovery"
+        | "movement"
+        | "performance";
+      escalationNeed: "none" | "monitor" | "clinician";
+      treatmentStage:
+        | "first_30d"
+        | "30_60d"
+        | "60_90d"
+        | "3_6m"
+        | "6_12m"
+        | "1y_plus"
+        | "unknown";
+      doseDayPosition:
+        | "pre_dose"
+        | "dose_day"
+        | "day_1_post"
+        | "day_2_post"
+        | "day_3_post"
+        | "mid_cycle"
+        | "unknown";
+      recentTitration: boolean;
+      daysSinceLastDose: number | null;
+      symptomBurden: "low" | "moderate" | "high";
+      hydrationRisk: "low" | "moderate" | "high";
+      fuelingRisk: "low" | "moderate" | "high";
+      recoveryReadiness: "low" | "moderate" | "high";
+      adherenceSignal: "stable" | "attention" | "rising";
+      insufficientForPlan: boolean;
+      claimsPolicy: {
+        canCiteSleep: boolean;
+        canCiteHRV: boolean;
+        canCiteRecovery: boolean;
+        canCiteSteps: boolean;
+        canQuantifyReadiness: boolean;
+        physiologicalClaimsAllowed: boolean;
+        narrativeConfidence: "low" | "moderate" | "high";
+      };
+      dataTier: "self_report" | "phone_health" | "wearable";
+      statusChipLabel: string;
+      heroHeadline: string;
+      heroDrivers: string[];
+      interventionTitles: string[];
+      rationale: string[];
+    };
     userFeeling?: string;
     userEnergy?: string;
     userStress?: string;
@@ -211,11 +259,24 @@ router.post("/chat", async (req: Request, res: Response) => {
         }
       }
 
-      if (healthContext.readinessScore !== undefined) {
-        parts.push(`- Overall Readiness: ${healthContext.readinessScore}/100 (${healthContext.readinessLabel || ""})`);
-        if (healthContext.dailyState) {
-          parts.push(`- Today's State: ${healthContext.dailyState}`);
+      if (healthContext.treatmentState) {
+        const ts = healthContext.treatmentState;
+        const tsLines: string[] = [`\nTREATMENT STATE (single source of truth for what the rest of the app is showing this person right now):`];
+        tsLines.push(`- Status chip on Today: "${ts.statusChipLabel}"`);
+        tsLines.push(`- Hero headline on Today: "${ts.heroHeadline}"`);
+        if (ts.heroDrivers.length > 0) {
+          tsLines.push(`- Hero drivers: ${ts.heroDrivers.join(" | ")}`);
         }
+        tsLines.push(`- Daily state: ${ts.treatmentDailyState}`);
+        tsLines.push(`- Primary focus: ${ts.primaryFocus}`);
+        tsLines.push(`- Treatment stage: ${ts.treatmentStage}${ts.recentTitration ? " (recent dose change)" : ""}`);
+        tsLines.push(`- Dose-day position: ${ts.doseDayPosition}${typeof ts.daysSinceLastDose === "number" ? ` (day ${ts.daysSinceLastDose} since last dose)` : ""}`);
+        tsLines.push(`- Risk lenses: symptoms=${ts.symptomBurden}, hydration=${ts.hydrationRisk}, fueling=${ts.fuelingRisk}, recovery=${ts.recoveryReadiness}`);
+        tsLines.push(`- Escalation need: ${ts.escalationNeed}`);
+        if (ts.interventionTitles.length > 0) {
+          tsLines.push(`- Symptom interventions surfaced today: ${ts.interventionTitles.join(", ")}`);
+        }
+        parts.push(...tsLines);
       }
 
       const selfReported: string[] = [];
@@ -341,40 +402,110 @@ router.post("/chat", async (req: Request, res: Response) => {
         role: "system",
         content: `This is what you know about this person right now. Use it naturally. Don't list their stats back to them. Instead, interpret what the data means and talk to them like you understand their situation. Keep it human.${nameNote}\n\n${contextBlock}`,
       });
+    }
 
-      // Tier-aware guardrail: tell the model exactly what kind of data this user has so it
-      // does not invent physiological claims it cannot back up.
-      if (healthContext?.dataTier) {
-        const tier = healthContext.dataTier;
-        const conf = healthContext.recommendationConfidence ?? "moderate";
-        const missing = healthContext.unavailableWearableMetrics ?? [];
-        const validBaselines = healthContext.validBaselines;
-        const tierLines: string[] = [
-          `DATA TIER: ${tier} (basis: ${healthContext.basedOn ?? tier}). Internal recommendation confidence: ${conf}.`,
+    // Claims-policy guardrail. ALWAYS injected, regardless of whether a context
+    // block was rendered. The treatment state's claimsPolicy is the single source
+    // of truth for what the coach is allowed to assert. If a caller forgot to send
+    // treatmentState (or sent no healthContext at all), we fall back to a strict
+    // deny-all policy + insufficient-data tone so this endpoint can NEVER be
+    // jailbroken into making physiological claims by an unmigrated client.
+    {
+      const tsRaw = healthContext?.treatmentState;
+      const ts = tsRaw ?? {
+        treatmentDailyState: "support" as const,
+        primaryFocus: "continuity_support" as const,
+        escalationNeed: "none" as const,
+        treatmentStage: "unknown" as const,
+        doseDayPosition: "unknown" as const,
+        recentTitration: false,
+        daysSinceLastDose: null,
+        symptomBurden: "low" as const,
+        hydrationRisk: "low" as const,
+        fuelingRisk: "low" as const,
+        recoveryReadiness: "low" as const,
+        adherenceSignal: "stable" as const,
+        insufficientForPlan: true,
+        claimsPolicy: {
+          canCiteSleep: false,
+          canCiteHRV: false,
+          canCiteRecovery: false,
+          canCiteSteps: false,
+          canQuantifyReadiness: false,
+          physiologicalClaimsAllowed: false,
+          narrativeConfidence: "low" as const,
+        },
+        dataTier: "self_report" as const,
+        statusChipLabel: "Set up your day",
+        heroHeadline: "Tell us how today is going",
+        heroDrivers: [],
+        interventionTitles: [],
+        rationale: [],
+      };
+      {
+        const cp = ts.claimsPolicy;
+        const allowed: string[] = [];
+        const forbidden: string[] = [];
+        (cp.canCiteSleep ? allowed : forbidden).push("sleep duration");
+        (cp.canCiteSleep && cp.physiologicalClaimsAllowed ? allowed : forbidden).push("sleep quality");
+        (cp.canCiteHRV ? allowed : forbidden).push("HRV");
+        (cp.canCiteHRV ? allowed : forbidden).push("resting heart rate");
+        (cp.canCiteRecovery ? allowed : forbidden).push("recovery score");
+        (cp.canCiteSteps ? allowed : forbidden).push("steps and active calories");
+        (cp.physiologicalClaimsAllowed ? allowed : forbidden).push("readiness, body-is-responding-well, or other physiological-state claims");
+        (cp.canQuantifyReadiness ? allowed : forbidden).push("citing a numeric readiness score");
+
+        const cpLines: string[] = [
+          `CLAIMS POLICY (single source of truth, do not deviate):`,
+          `- ALLOWED to reference: ${allowed.length > 0 ? allowed.join(", ") : "none of the physiological signals below"}.`,
+          `- FORBIDDEN to reference, even if the user asks: ${forbidden.join(", ")}.`,
+          `- If the user asks about a forbidden signal, say plainly that the app does not have that data for them today and pivot to what they did report.`,
+          `- Narrative confidence: ${cp.narrativeConfidence}. Match your hedge level to this. "low" = "based on what you've shared today", "moderate" = practical without strong claims, "high" = direct and specific.`,
+          `- Data tier: ${ts.dataTier}. This is informational; the allow/deny list above governs what you can say.`,
         ];
-        if (healthContext.availableMetricTypes && healthContext.availableMetricTypes.length > 0) {
-          tierLines.push(`Available raw metrics: ${healthContext.availableMetricTypes.join(", ")}.`);
+        messages.push({ role: "system", content: cpLines.join("\n") });
+
+        // Treatment-state tone rules. These keep the coach aligned with what the Today
+        // and weekly surfaces are showing the patient right now.
+        const toneLines: string[] = [`TONE & FRAMING (must match the rest of the app this person is looking at):`];
+        if (ts.insufficientForPlan) {
+          toneLines.push(
+            `- The Today screen is showing "Set up your day" because there is not enough input yet to personalize. Do NOT pretend to know how they are doing physiologically. Acknowledge the gap warmly and guide them toward the single most useful next input (a quick check-in: how they feel, energy, appetite, any side effects). One concrete suggestion. Do not list multiple metrics to log.`,
+            `- Do not give detailed plan recommendations until they share a check-in.`,
+          );
         }
-        if (missing.length > 0) {
-          tierLines.push(`Wearable metrics NOT available: ${missing.join(", ")}. Do not reference these.`);
+        if (ts.escalationNeed === "clinician") {
+          toneLines.push(
+            `- Escalation level: clinician. This person's symptoms warrant talking to their care team. Be calm, supportive, and explicitly suggest they contact their prescriber or care team. Do NOT prescribe specific protocols, doses, or medical action. No performance language.`,
+          );
+        } else if (ts.escalationNeed === "monitor") {
+          toneLines.push(
+            `- Escalation level: monitor. Symptoms are stacking. Be careful and supportive, not performance-oriented. Hydration, rest, small bland meals come first. No training prescriptions today.`,
+          );
         }
-        if (validBaselines) {
-          const validList = Object.entries(validBaselines).filter(([, v]) => v).map(([k]) => k);
-          tierLines.push(validList.length > 0 ? `Valid baselines: ${validList.join(", ")}.` : `No personal baselines are valid yet.`);
+        if (ts.treatmentDailyState === "escalate") {
+          toneLines.push(`- The Today hero is "${ts.heroHeadline}". Echo that frame: stabilize first, performance later.`);
+        } else if (ts.treatmentDailyState === "support") {
+          toneLines.push(`- This is a support day, not a performance day. The Today screen is in "${ts.statusChipLabel}" mode. Lean into reassurance and small, doable steps.`);
+        } else if (ts.treatmentDailyState === "push" || ts.treatmentDailyState === "build") {
+          toneLines.push(`- This is a green-light day. Encourage the harder work the person is capable of, while staying within what their data supports.`);
         }
-        tierLines.push(
-          tier === "self_report"
-            ? `RULE: This person has no passive health data. Do not make HRV, resting heart rate, recovery score, or sleep-quality claims. Lean on what they reported (energy, appetite, nausea, digestion, stress, hydration) and treatment context.`
-            : tier === "phone_health"
-              ? `RULE: This person has phone-derived metrics only. You may reference sleep duration and steps when present. Do NOT make HRV, resting heart rate, recovery score, or strain claims. No physiological stress or recovery interpretations.`
-              : `RULE: Wearable-enhanced data is available. You may reference HRV/RHR/recovery only when they appear above and only relative to baseline when the matching baseline is marked valid.`
-        );
-        if (conf === "low") {
-          tierLines.push(`CONFIDENCE: low. Soften language. Frame suggestions as "based on what you've shared" rather than absolutes.`);
-        } else if (conf === "moderate") {
-          tierLines.push(`CONFIDENCE: moderate. Stay practical and avoid strong physiological claims.`);
+        if (ts.recentTitration || ts.treatmentStage === "first_30d") {
+          toneLines.push(`- Treatment context: ${ts.recentTitration ? "recent dose change" : "first 30 days of treatment"}. Extra patience. Normalize side effects without dismissing them.`);
         }
-        messages.push({ role: "system", content: tierLines.join("\n") });
+        if (ts.adherenceSignal === "rising" || ts.adherenceSignal === "attention") {
+          toneLines.push(`- Internal note (NEVER say to the user): adherence signal is "${ts.adherenceSignal}". Use a warmer, lower-pressure tone. Smaller asks. More reassurance. Do not mention compliance, dropout, or risk.`);
+        }
+        if (ts.primaryFocus === "hydration") {
+          toneLines.push(`- Primary focus today is hydration. Anchor your response there.`);
+        } else if (ts.primaryFocus === "fueling") {
+          toneLines.push(`- Primary focus today is fueling. Small, protein-forward portions.`);
+        } else if (ts.primaryFocus === "symptom_relief") {
+          toneLines.push(`- Primary focus today is symptom relief. Lead with the active intervention(s) listed above, not generic wellness advice.`);
+        } else if (ts.primaryFocus === "continuity_support") {
+          toneLines.push(`- Primary focus today is continuity support. Keep momentum without adding pressure.`);
+        }
+        messages.push({ role: "system", content: toneLines.join("\n") });
       }
     }
 
