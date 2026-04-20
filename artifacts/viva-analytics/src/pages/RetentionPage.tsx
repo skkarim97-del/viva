@@ -1,6 +1,6 @@
 import type { AnalyticsSummary } from "@/lib/types";
 import { pctStr } from "@/lib/format";
-import { STOP_REASON_DISPLAY, TIMING_DISPLAY } from "@/lib/types";
+import { STOP_REASON_DISPLAY } from "@/lib/types";
 import {
   Card,
   Chip,
@@ -99,47 +99,6 @@ export function RetentionPage({ data }: { data: AnalyticsSummary }) {
               ))}
             </div>
           </Card>
-        </>
-      )}
-
-      {t.stopTiming.knownDenom > 0 && (
-        <>
-          <SectionHead>Stop timing</SectionHead>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-            {(["early", "mid", "late"] as const).map((k) => {
-              const stopped = t.stopTiming[k];
-              // Cohort-level churn rate: stopped ÷ (active + stopped) in
-              // the same time bucket. Uses cohortRetention so the
-              // denominator includes patients who are still on treatment
-              // and didn't churn -- a real per-cohort churn signal, not
-              // just this bucket's share of total stops.
-              const cohort = t.cohortRetention?.buckets.find(
-                (b) => b.bucket === k,
-              );
-              const denom = cohort ? cohort.active + cohort.stopped : 0;
-              const churnPct = denom > 0 ? stopped / denom : null;
-              return (
-                <StatCard
-                  key={k}
-                  label={TIMING_DISPLAY[k]}
-                  value={stopped}
-                  sub={
-                    churnPct == null
-                      ? "patients stopped"
-                      : `${stopped} stopped • ${pctStr(churnPct)} churn in cohort`
-                  }
-                />
-              );
-            })}
-            {t.stopTiming.unknown > 0 && (
-              <StatCard
-                label="Unknown timing"
-                value={t.stopTiming.unknown}
-                sub="Missing start date"
-                accent="#6B7A90"
-              />
-            )}
-          </div>
         </>
       )}
 
