@@ -193,21 +193,39 @@ export function RetentionPage({ data }: { data: AnalyticsSummary }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {t.stopReasonByTiming.map((row) => (
-                    <tr key={row.reason} className="border-t border-border">
-                      <td className="px-2 py-2">
-                        {STOP_REASON_DISPLAY[row.reason] ?? row.reason}
-                      </td>
-                      <td className="px-2 py-2 text-right tabular-nums">{row.early}</td>
-                      <td className="px-2 py-2 text-right tabular-nums">{row.mid}</td>
-                      <td className="px-2 py-2 text-right tabular-nums">{row.late}</td>
-                      <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
-                        {row.unknown}
-                      </td>
-                    </tr>
-                  ))}
+                  {t.stopReasonByTiming.map((row) => {
+                    const rowTotal =
+                      row.early + row.mid + row.late + row.unknown;
+                    const fmt = (n: number) =>
+                      rowTotal === 0
+                        ? "—"
+                        : `${Math.round((n / rowTotal) * 100)}%`;
+                    return (
+                      <tr key={row.reason} className="border-t border-border">
+                        <td className="px-2 py-2">
+                          {STOP_REASON_DISPLAY[row.reason] ?? row.reason}
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums">
+                          {fmt(row.early)}
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums">
+                          {fmt(row.mid)}
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums">
+                          {fmt(row.late)}
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
+                          {fmt(row.unknown)}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
+            </div>
+            <div className="mt-2 text-[11px] text-muted-foreground">
+              Each row sums to 100% across the timing buckets, showing
+              when patients stopped for that reason. Empty rows show "—".
             </div>
           </Card>
         </>
