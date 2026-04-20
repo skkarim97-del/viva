@@ -282,13 +282,23 @@ export function PatientDetailPage({ id }: { id: number }) {
         )}
 
       {/* Header card */}
-      <div className="bg-card rounded-[20px] p-6">
-        <div className="flex items-start justify-between gap-6 flex-wrap">
-          <div className="min-w-0 flex-1">
-            <h1 className="font-display text-[28px] font-bold text-foreground leading-tight break-words">
+      <div className="bg-card rounded-[20px] p-4 sm:p-6">
+        {/* Header row stacks vertically on mobile so the name column
+            isn't squeezed to ~80px (which used to force the patient
+            name to wrap letter-by-letter). On sm+ it goes back to
+            the original two-column layout with Risk on the right. */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6 sm:flex-wrap">
+          <div className="min-w-0 sm:flex-1 w-full">
+            {/* `break-words` (overflow-wrap: break-word) only breaks
+                when a single token won't fit -- normal multi-word
+                names wrap by word. Avoid `break-all` here. */}
+            <h1 className="font-display text-[24px] sm:text-[28px] font-bold text-foreground leading-tight break-words">
               {p.name}
             </h1>
-            <div className="text-muted-foreground text-sm mt-1.5 font-medium break-all">
+            {/* Email/phone: prefer truncation on mobile so a long
+                ".synthetic" address doesn't take 4 lines; let it
+                wrap naturally on sm+ where there's room. */}
+            <div className="text-muted-foreground text-sm mt-1.5 font-medium truncate sm:whitespace-normal sm:break-words">
               {p.phone ?? p.email}
             </div>
             <div className="text-foreground text-sm mt-5 font-medium">
@@ -341,11 +351,11 @@ export function PatientDetailPage({ id }: { id: number }) {
             )}
           </div>
           {risk.data && (
-            <div className="text-right shrink-0">
+            <div className="sm:text-right sm:shrink-0">
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
                 Risk
               </div>
-              <div className="flex flex-wrap gap-2 justify-end">
+              <div className="flex flex-wrap gap-2 sm:justify-end">
                 <ActionBadge action={risk.data.action} size="md" />
                 <RiskBadge band={risk.data.band} score={risk.data.score} size="md" />
               </div>
@@ -357,16 +367,16 @@ export function PatientDetailPage({ id }: { id: number }) {
             doctor sees "what to do" before reading the rule list. */}
         {risk.data?.suggestedAction && (
           <div
-            className="mt-5 pt-5 border-t border-border flex items-start gap-3 text-sm font-semibold"
+            className="mt-5 pt-5 border-t border-border flex flex-col sm:flex-row sm:items-start gap-1.5 sm:gap-3 text-sm font-semibold"
             style={{ color: "#142240" }}
           >
             <span
-              className="text-[10px] uppercase tracking-wider font-semibold shrink-0 mt-0.5"
+              className="text-[10px] uppercase tracking-wider font-semibold shrink-0 sm:mt-0.5"
               style={{ color: "#6B7280" }}
             >
               Suggested
             </span>
-            <span>{risk.data.suggestedAction}</span>
+            <span className="break-words min-w-0">{risk.data.suggestedAction}</span>
           </div>
         )}
       </div>
@@ -838,9 +848,12 @@ function TreatmentStatusCard(props: {
 }) {
   const style = STATUS_STYLE[props.status];
   return (
-    <section className="bg-card rounded-[20px] p-6">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3 flex-wrap">
+    <section className="bg-card rounded-[20px] p-4 sm:p-6">
+      {/* Stack title/pills above the Update button on mobile so the
+          button doesn't get pushed onto a cramped second row sharing
+          space with a long status pill. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:flex-wrap">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap min-w-0">
           <h2 className="font-display text-[18px] font-semibold text-foreground">
             Treatment status
           </h2>
@@ -866,7 +879,7 @@ function TreatmentStatusCard(props: {
           <button
             type="button"
             onClick={props.onEdit}
-            className="text-sm font-semibold text-foreground bg-background hover:bg-muted rounded-lg px-3 py-1.5 transition-colors"
+            className="self-start sm:self-auto text-sm font-semibold text-foreground bg-background hover:bg-muted rounded-lg px-3 py-1.5 transition-colors"
           >
             Update
           </button>
