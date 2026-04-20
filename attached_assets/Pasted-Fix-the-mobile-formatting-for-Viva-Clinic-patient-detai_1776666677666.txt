@@ -1,0 +1,129 @@
+Fix the mobile formatting for Viva Clinic patient detail view. The current mobile layout is breaking badly and needs to be cleaned up without changing the desktop experience.
+
+Issue
+
+On mobile:
+
+* patient name is wrapping vertically letter-by-letter
+* email is wrapping awkwardly
+* pills / badges crowd the header
+* card spacing feels broken
+* the top summary card is not responsive
+
+The page should be readable and clean on mobile web.
+
+⸻
+
+Goal
+
+Make the patient detail page in Viva Clinic responsive and polished on mobile.
+
+Keep the same design language, but fix layout so:
+
+* name stays readable
+* pills wrap cleanly
+* text blocks do not break awkwardly
+* cards stack correctly
+* spacing feels intentional
+
+Do not redesign the page. Just fix mobile responsiveness.
+
+⸻
+
+Required fixes
+
+1. Patient name
+
+* prevent the name from breaking letter-by-letter vertically
+* allow normal line wrapping only if truly needed
+* prefer:
+    * word-break: normal
+    * overflow-wrap: break-word only as fallback
+* make sure long names wrap by word, not by character
+
+2. Email / secondary text
+
+* prevent ugly character-by-character wrapping
+* allow truncation or cleaner wrapping on small screens
+* keep it readable and subordinate to the patient name
+
+3. Header pills / badges
+
+The following items need to behave better on mobile:
+
+* “Needs follow-up”
+* “Risk 50%”
+* risk label / status chips
+
+Requirements:
+
+* allow them to wrap onto the next line if needed
+* keep consistent spacing between them
+* do not force everything into one crowded row
+* if needed, stack them under the patient name block on narrow screens
+
+4. Summary card layout
+
+The top patient summary card should:
+
+* use a mobile-first stacked layout
+* reduce horizontal crowding
+* keep medication / dose / started date readable
+* keep “Suggested” row readable
+* avoid giant empty space caused by broken flex/grid behavior
+
+5. Treatment status card
+
+* ensure the status pill and update button align cleanly on mobile
+* avoid awkward horizontal compression
+* stack elements vertically if needed
+
+6. General mobile spacing
+
+* tighten padding where needed
+* keep cards visually balanced
+* preserve current desktop styling
+* only change mobile / small-screen behavior
+
+⸻
+
+Implementation guidance
+
+Use responsive layout rules only. Prefer:
+
+* better flex-wrap behavior
+* mobile-specific stacking
+* min-width / max-width cleanup
+* text wrapping fixes
+* responsive typography adjustments only if necessary
+
+Do not:
+
+* change desktop layout materially
+* redesign the component hierarchy
+* change branding
+* touch analytics / backend / mobile app / iOS / EAS
+
+⸻
+
+Success criteria
+
+On mobile web, the patient detail page should:
+
+* look clean
+* read naturally
+* not have names broken vertically
+* not have crowded badges
+* not have oversized empty card space
+* still feel consistent with Viva Clinic design system
+
+⸻
+
+Deliverables
+
+After fixing, tell me:
+
+1. which files changed
+2. what caused the mobile breakage
+3. what responsive fixes were applied
+4. confirm desktop layout was preserved

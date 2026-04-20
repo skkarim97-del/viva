@@ -1505,4 +1505,116 @@ router.get(
   },
 );
 
+// ----------------------------------------------------------------------
+// GET /internal/care-loop/trend?days=30
+//
+// Daily time-series of the escalation -> follow-up loop. Three series
+// per day (UTC bucket):
+//   - escalations:    count of escalation_requested events that day
+//   - followUps:      count of follow_up_completed events that day
+//   - within24hPct:   for escalations on that day, fraction that were
+//                     followed up within 24h. Null when no escalations
+//                     happened that day so the chart can render gaps
+//                     instead of misleading 0%.
+//
+// All buckets are emitted, even empty ones, so the frontend can plot a
+// continuous axis without zip-filling on the client.
+// ----------------------------------------------------------------------
+
+router.get(
+  "/care-loop/trend",
+  requireInternalKey,
+  async (req: Request, res: Response) => {
+    const days = Math.max(
+      1,
+      Math.min(180, Number(req.query.days ?? 30) || 30),
+    );
+    try {
+      const rows = await db.execute(sql`
+        with days as (
+          select generate_series(
+            (current_date - (${days - 1})::int),
+            current_date,
+            interval '1 day'
+          )::date as day
+        ),
+        esc_by_day as (
+          select occurred_at::date as day,
+                 count(*)::int as n_escalations
+          from care_events
+          where type = 'escalation_requested'
+            and occurred_at >= current_date - (${days - 1})::int
+          group by occurred_at::date
+        ),
+        fu_by_day as (
+          select occurred_at::date as day,
+                 count(*)::int as n_follow_ups
+          from care_events
+          where type = 'follow_up_completed'
+            and occurred_at >= current_date - (${days - 1})::int
+          group by occurred_at::date
+        ),
+        -- For each escalation in the window, did its linked follow-up
+        -- (joined via trigger_event_id) happen within 24h? Bucket by
+        -- the escalation's day so the chart shows "speed of response"
+        -- on the day the patient asked for help.
+        esc_within_24h as (
+          select e.occurred_at::date as day,
+                 count(*)::int as n_escalations,
+                 count(case
+                   when ff.first_fu_at is not null
+                    and ff.first_fu_at <= e.occurred_at + interval '24 hours'
+                   then 1
+                 end)::int as n_within_24h
+          from care_events e
+          left join lateral (
+            select min(d.occurred_at) as first_fu_at
+            from care_events d
+            where d.type = 'follow_up_completed'
+              and d.trigger_event_id = e.id
+          ) ff on true
+          where e.type = 'escalation_requested'
+            and e.occurred_at >= current_date - (${days - 1})::int
+          group by e.occurred_at::date
+        )
+        select
+          d.day::text as day,
+          coalesce(eb.n_escalations, 0) as escalations,
+          coalesce(fb.n_follow_ups, 0) as follow_ups,
+          coalesce(ew.n_within_24h, 0) as within_24h_num,
+          coalesce(ew.n_escalations, 0) as within_24h_den
+        from days d
+        left join esc_by_day eb on eb.day = d.day
+        left join fu_by_day fb on fb.day = d.day
+        left join esc_within_24h ew on ew.day = d.day
+        order by d.day asc
+      `);
+
+      const points = rows.rows.map((r: Record<string, unknown>) => {
+        const num = Number(r["within_24h_num"] ?? 0);
+        const den = Number(r["within_24h_den"] ?? 0);
+        return {
+          day: String(r["day"]),
+          escalations: Number(r["escalations"] ?? 0),
+          followUps: Number(r["follow_ups"] ?? 0),
+          // Null when no escalations happened that day -- the chart
+          // renders that as a gap, which is the truthful thing to do.
+          within24hPct: den > 0 ? num / den : null,
+          within24hNumerator: num,
+          within24hDenominator: den,
+        };
+      });
+
+      res.json({
+        windowDays: days,
+        generatedAt: new Date().toISOString(),
+        points,
+      });
+    } catch (err) {
+      logger.error({ err }, "internal_care_loop_trend_failed");
+      res.status(500).json({ error: "care_loop_trend_failed" });
+    }
+  },
+);
+
 export default router;

@@ -1,6 +1,18 @@
 import { useEffect, useState } from "react";
+import {
+  CartesianGrid,
+  ComposedChart,
+  Bar,
+  Line,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { KEY_STORAGE } from "@/lib/api";
 import { useCareLoop } from "@/hooks/useCareLoop";
+import { useCareLoopTrend } from "@/hooks/useCareLoopTrend";
 import { pctStr } from "@/lib/format";
 import {
   Card,
@@ -28,6 +40,7 @@ export function CareLoopPage() {
     }
   }, []);
   const q = useCareLoop(key, 30);
+  const trend = useCareLoopTrend(key, 30);
 
   if (q.isLoading || !q.data) {
     return (
@@ -181,6 +194,25 @@ export function CareLoopPage() {
         />
       </div>
 
+      {/* Trend over time. The funnel cards above are point-in-time
+          snapshots; this section shows whether the loop is getting
+          tighter day-over-day. Bars are raw daily counts (escalations
+          and follow-ups), the line is the % of that day's escalations
+          that got followed up within 24h. Days with zero escalations
+          show no point on the line so we don't paint a misleading 0%. */}
+      <SectionHead hint="Daily counts and 24h response rate over the last 30 days">
+        Trend
+      </SectionHead>
+      <Card>
+        {trend.isLoading || !trend.data ? (
+          <div className="text-muted-foreground py-12 text-center text-sm">
+            {trend.isError ? "Failed to load trend." : "Loading trend…"}
+          </div>
+        ) : (
+          <CareLoopTrendChart points={trend.data.points} />
+        )}
+      </Card>
+
       {/* Layer 4: Outcomes. Did the loop work? */}
       <SectionHead hint="Did the loop produce a positive follow-through?">
         Outcomes
@@ -220,6 +252,116 @@ export function CareLoopPage() {
         </ul>
       </Card>
     </>
+  );
+}
+
+// Trend chart. Two bars (escalations + follow-ups) on the left axis,
+// one line (within-24h %) on the right axis. Recharts handles the
+// dual-axis bookkeeping; we just keep the colors aligned with the
+// rest of the page (orange = escalation, green = doctor / follow-up).
+function CareLoopTrendChart({
+  points,
+}: {
+  points: Array<{
+    day: string;
+    escalations: number;
+    followUps: number;
+    within24hPct: number | null;
+    within24hNumerator: number;
+    within24hDenominator: number;
+  }>;
+}) {
+  // Recharts skips Line points whose value is null, which gives us
+  // the truthful "no escalations that day" gap we want. We multiply
+  // by 100 here so the right axis can read 0..100 directly.
+  const data = points.map((p) => ({
+    ...p,
+    within24hPctDisplay:
+      p.within24hPct == null ? null : Math.round(p.within24hPct * 1000) / 10,
+    label: p.day.slice(5), // MM-DD -- 30 days fits cleanly
+  }));
+  return (
+    <div className="h-[280px] w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart
+          data={data}
+          margin={{ top: 8, right: 16, bottom: 0, left: -8 }}
+        >
+          <CartesianGrid stroke="#E5E7EB" strokeDasharray="3 3" vertical={false} />
+          <XAxis
+            dataKey="label"
+            tick={{ fontSize: 11, fill: "#6B7280" }}
+            tickLine={false}
+            axisLine={{ stroke: "#E5E7EB" }}
+            interval="preserveStartEnd"
+            minTickGap={16}
+          />
+          <YAxis
+            yAxisId="left"
+            allowDecimals={false}
+            tick={{ fontSize: 11, fill: "#6B7280" }}
+            tickLine={false}
+            axisLine={{ stroke: "#E5E7EB" }}
+            width={32}
+          />
+          <YAxis
+            yAxisId="right"
+            orientation="right"
+            domain={[0, 100]}
+            tick={{ fontSize: 11, fill: "#6B7280" }}
+            tickLine={false}
+            axisLine={{ stroke: "#E5E7EB" }}
+            tickFormatter={(v) => `${v}%`}
+            width={36}
+          />
+          <Tooltip
+            contentStyle={{
+              borderRadius: 12,
+              border: "1px solid #E5E7EB",
+              fontSize: 12,
+            }}
+            formatter={(value: unknown, name: string) => {
+              if (name === "Within 24h") {
+                return value == null ? ["—", name] : [`${value}%`, name];
+              }
+              return [String(value), name];
+            }}
+          />
+          <Legend
+            verticalAlign="top"
+            height={28}
+            iconType="circle"
+            wrapperStyle={{ fontSize: 12 }}
+          />
+          <Bar
+            yAxisId="left"
+            dataKey="escalations"
+            name="Escalations"
+            fill="#FF9500"
+            radius={[3, 3, 0, 0]}
+            maxBarSize={14}
+          />
+          <Bar
+            yAxisId="left"
+            dataKey="followUps"
+            name="Follow-ups"
+            fill="#34C759"
+            radius={[3, 3, 0, 0]}
+            maxBarSize={14}
+          />
+          <Line
+            yAxisId="right"
+            type="monotone"
+            dataKey="within24hPctDisplay"
+            name="Within 24h"
+            stroke="#142240"
+            strokeWidth={2}
+            dot={{ r: 3, fill: "#142240" }}
+            connectNulls={false}
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
   );
 }
 
