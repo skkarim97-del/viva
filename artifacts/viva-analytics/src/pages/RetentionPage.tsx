@@ -78,25 +78,39 @@ export function RetentionPage({ data }: { data: AnalyticsSummary }) {
 
       {t.topStopReasons.length > 0 && (
         <>
-          <SectionHead>Stop reasons</SectionHead>
+          <SectionHead>Stop reasons (share of total patients)</SectionHead>
           <Card>
+            <div className="mb-2.5 text-[11px] text-muted-foreground">
+              Each row's percentage is that reason's share of the full
+              panel of {t.totalPatients} patients (active + stopped +
+              unknown), not just the {t.stopped} who stopped.
+            </div>
             <div className="flex flex-col gap-2.5">
-              {t.topStopReasons.map((r) => (
-                <div key={r.reason} className="flex items-center gap-3 text-sm">
-                  <div className="flex-1 truncate">
-                    {STOP_REASON_DISPLAY[r.reason] ?? r.reason}
+              {t.topStopReasons.map((r) => {
+                // Backend's r.pct uses stoppedTotal as the denominator;
+                // recompute against totalPatients so the bar and label
+                // match the section heading. Falls back to the original
+                // pct only if totalPatients is 0 (which would already
+                // mean the page is empty).
+                const pctOfTotal =
+                  t.totalPatients > 0 ? r.count / t.totalPatients : r.pct;
+                return (
+                  <div key={r.reason} className="flex items-center gap-3 text-sm">
+                    <div className="flex-1 truncate">
+                      {STOP_REASON_DISPLAY[r.reason] ?? r.reason}
+                    </div>
+                    <div className="w-40 h-2 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className="h-full bg-primary"
+                        style={{ width: `${Math.round(pctOfTotal * 100)}%` }}
+                      />
+                    </div>
+                    <div className="w-40 text-right text-muted-foreground tabular-nums">
+                      {r.count} of {t.totalPatients} ({Math.round(pctOfTotal * 100)}%)
+                    </div>
                   </div>
-                  <div className="w-40 h-2 rounded-full bg-muted overflow-hidden">
-                    <div
-                      className="h-full bg-primary"
-                      style={{ width: `${Math.round(r.pct * 100)}%` }}
-                    />
-                  </div>
-                  <div className="w-24 text-right text-muted-foreground tabular-nums">
-                    {r.count} ({Math.round(r.pct * 100)}%)
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </Card>
         </>
