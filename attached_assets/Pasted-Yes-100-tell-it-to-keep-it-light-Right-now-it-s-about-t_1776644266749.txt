@@ -1,0 +1,143 @@
+Yes — 100% tell it to keep it light.
+
+Right now it’s about to overbuild. You don’t need a “simulation system.” You need a fast seed script that makes the dashboard look real.
+
+If you let it run as-is, you’ll get:
+
+* too many files
+* too much abstraction
+* slower iteration
+* stuff you won’t actually use
+
+⸻
+
+What you should say (copy this)
+
+⸻
+
+Keep this lightweight. Do NOT overengineer the simulation.
+
+Goal
+
+I only need a simple seed script that populates the system with realistic data so Viva Analytics looks believable.
+
+Scope constraints
+
+* DO NOT build a full simulation framework
+* DO NOT create complex abstractions or multiple layers
+* DO NOT over-modularize
+* Keep everything simple and easy to rerun
+
+⸻
+
+What to build instead
+
+Create one script:
+
+seedSyntheticPilot.ts
+
+That does:
+
+1. wipe existing synthetic data (safe cleanup)
+2. create:
+    * ~100 patients
+    * ~8–12 doctors
+3. assign patients to doctors
+4. generate:
+    * check-ins (last 30–60 days)
+    * treatment statuses (active / stopped / unknown)
+    * stop reasons
+    * stop timing (early / mid / late)
+    * some escalations (subset only)
+    * some doctor notes + reviews
+    * some care events
+5. ensure:
+    * DAU / WAU / MAU are non-zero
+    * churn metrics populate
+    * care loop funnel populates
+
+⸻
+
+Data quality requirements
+
+* Data should look believable at a glance in Viva Analytics
+* Prioritize coherent metrics, not perfect realism
+* Make sure:
+    * some patients active today
+    * some active this week only
+    * some inactive
+    * some churned early, mid, late
+
+⸻
+
+Apple Health
+
+* mark a subset (~30–40%) as wearable-connected using the existing logic
+* do NOT invent new flags
+
+⸻
+
+Care loop
+
+* include:
+    * some escalations
+    * some reviewed quickly
+    * some not reviewed
+* make funnel look realistic
+
+⸻
+
+Output
+
+After running, print:
+
+* total patients
+* active / stopped / unknown
+* escalations
+* reviewed
+* DAU / WAU / MAU
+* confirmation that data seeded
+
+⸻
+
+Commands
+
+Add:
+
+* npm run seed:pilot
+* npm run seed:reset
+
+⸻
+
+Important
+
+* Use existing tables and logic
+* Do not touch mobile / iOS / EAS
+* Keep it under a few hundred lines total if possible
+
+⸻
+
+Final note
+
+I care more that the dashboard looks real and coherent than building a perfect simulation system.
+
+⸻
+
+Why this matters
+
+You’re not building a simulator.
+You’re trying to answer:
+
+“If I show this to a clinic, does it look legit?”
+
+That’s it.
+
+⸻
+
+Bottom line
+
+* Yes, stop it from overbuilding
+* Force it into a lean seed script mindset
+* Optimize for speed and coherence
+
+This is a 1–2 hour task, not a full system build.
