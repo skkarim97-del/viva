@@ -240,46 +240,80 @@ export function PatientDetailPage({ id }: { id: number }) {
           can record the follow-up the moment it happens. After click,
           the button collapses into a quiet audit-trail line so the
           loop is closed visibly. */}
-      {care.data?.followUpPending && (
-        <div className="rounded-[16px] border border-border bg-card px-4 py-3 flex items-center gap-3 flex-wrap">
+      {/* Follow-up tracking — three rendered states so the doctor
+          always has a visible affordance:
+            (1) followUpPending=true  → prominent green call-to-action
+                ("Did you follow up?") with the primary button.
+            (2) recently followed up  → quiet audit line + a small
+                "Log another follow-up" button so they can record a
+                second touchpoint.
+            (3) no escalation history → small inline "Log follow-up"
+                button so doctors can record an ad-hoc check-in even
+                when the patient hasn't escalated. The backend stores
+                trigger_event_id=NULL in this case; analytics filter
+                those out of the funnel but include them in raw count.
+          The button always reaches the same POST endpoint. */}
+      {care.data?.followUpPending ? (
+        <div
+          className="rounded-[20px] px-5 py-4 flex items-center gap-4 flex-wrap"
+          style={{
+            backgroundColor: "rgba(52,199,89,0.10)",
+            color: "#1F6B36",
+          }}
+        >
+          <span aria-hidden className="text-lg">📞</span>
           <div className="flex-1 min-w-[200px]">
-            <div className="text-sm font-semibold text-foreground">
+            <div className="font-semibold text-sm">
               Did you follow up with this patient?
             </div>
-            <div className="text-xs text-muted-foreground mt-0.5">
-              Records a single doctor follow-up event on the most recent
-              escalation. Used to measure the escalation → follow-up loop.
+            <div className="text-xs mt-0.5 opacity-80 font-medium">
+              Records a doctor follow-up on the most recent escalation
+              ({relativeTime(care.data.lastEscalationAt!)}).
             </div>
           </div>
           <button
             type="button"
             onClick={() => markFollowUp.mutate()}
             disabled={markFollowUp.isPending}
-            className="rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-60 border border-border bg-background hover:bg-secondary transition-colors"
+            className="rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-60"
+            style={{ backgroundColor: "#1F6B36", color: "#fff" }}
           >
             {markFollowUp.isPending ? "Saving..." : "Follow-up completed"}
           </button>
         </div>
-      )}
-      {care.data &&
-        !care.data.followUpPending &&
-        care.data.lastFollowUpAt && (
-          <div className="text-xs text-muted-foreground font-medium">
-            {(() => {
-              const fu = care.data.events.find(
-                (e) =>
-                  e.type === "follow_up_completed" &&
-                  e.occurredAt === care.data!.lastFollowUpAt,
-              );
-              const who = fu?.actorName
-                ? `Dr. ${fu.actorName.split(" ").slice(-1)[0]}`
-                : "Care team";
-              return `Follow-up completed by ${who} · ${relativeTime(
-                care.data.lastFollowUpAt,
-              )}`;
-            })()}
-          </div>
-        )}
+      ) : care.data ? (
+        <div className="flex items-center justify-between gap-3 flex-wrap text-xs text-muted-foreground font-medium">
+          <span>
+            {care.data.lastFollowUpAt
+              ? (() => {
+                  const fu = care.data.events.find(
+                    (e) =>
+                      e.type === "follow_up_completed" &&
+                      e.occurredAt === care.data!.lastFollowUpAt,
+                  );
+                  const who = fu?.actorName
+                    ? `Dr. ${fu.actorName.split(" ").slice(-1)[0]}`
+                    : "Care team";
+                  return `Follow-up completed by ${who} · ${relativeTime(
+                    care.data.lastFollowUpAt,
+                  )}`;
+                })()
+              : "No follow-up logged yet for this patient."}
+          </span>
+          <button
+            type="button"
+            onClick={() => markFollowUp.mutate()}
+            disabled={markFollowUp.isPending}
+            className="rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-60 border border-border bg-card hover:bg-secondary text-foreground transition-colors"
+          >
+            {markFollowUp.isPending
+              ? "Saving..."
+              : care.data.lastFollowUpAt
+              ? "Log another follow-up"
+              : "Log follow-up"}
+          </button>
+        </div>
+      ) : null}
 
       {/* Header card */}
       <div className="bg-card rounded-[20px] p-4 sm:p-6">
