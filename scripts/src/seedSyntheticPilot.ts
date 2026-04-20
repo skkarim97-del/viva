@@ -16,6 +16,7 @@
  * so deleting the synthetic user rows wipes all derived rows in one go.
  */
 
+import bcrypt from "bcryptjs";
 import { sql } from "drizzle-orm";
 import {
   db,
@@ -32,11 +33,16 @@ import {
 // --------- tiny utilities --------------------------------------------
 
 const SUFFIX = "@viva.synthetic";
-// Bcrypt hash of "synthetic-pilot" (cost 10). These accounts are not
-// meant for interactive login; the column is NOT NULL so we need *some*
-// valid hash here.
-const PWHASH =
-  "$2b$10$wGZ6Or.0vF.VtkzN6Xn8w.VbmkyuFXwiu/4yYOmKsrlw9Ax3M5H7m";
+// Demo doctor login surfaced at the end of the seed run.
+const DEMO_DOCTOR = {
+  name: "Dr. Riley Kim",
+  email: `riley.kim${SUFFIX}`,
+  password: "viva-pilot",
+  clinicName: "Coastal GLP-1 Clinic",
+};
+// Computed once in main(); used for every synthetic user row.
+let PWHASH = "";
+let DEMO_PWHASH = "";
 
 // Mulberry32 — small, deterministic so reseeding is reproducible.
 function rng(seed: number) {
@@ -132,13 +138,30 @@ async function wipeSynthetic(): Promise<number> {
 // --------- seed ------------------------------------------------------
 
 async function seedDoctors(): Promise<number[]> {
-  const rows = Array.from({ length: 10 }, (_, i) => ({
-    email: `dr.${i + 1}.${Date.now().toString(36)}${SUFFIX}`,
-    passwordHash: PWHASH,
-    role: "doctor" as const,
-    name: `Dr. ${pick(LAST_NAMES)}`,
-    clinicName: pick(["Coastal GLP-1 Clinic", "Lakeside Metabolic", "Northwell Wellness"]),
-  }));
+  const rows: Array<typeof usersTable.$inferInsert> = [];
+  // Slot 0 is the demo doctor (Dr. Riley Kim) so anything that uses
+  // index 0 (e.g. the round-robin patient assignment) gives them a
+  // populated worklist.
+  rows.push({
+    email: DEMO_DOCTOR.email,
+    passwordHash: DEMO_PWHASH,
+    role: "doctor",
+    name: DEMO_DOCTOR.name,
+    clinicName: DEMO_DOCTOR.clinicName,
+  });
+  for (let i = 1; i < 10; i++) {
+    rows.push({
+      email: `dr.${i + 1}.${Date.now().toString(36)}${SUFFIX}`,
+      passwordHash: PWHASH,
+      role: "doctor",
+      name: `Dr. ${pick(LAST_NAMES)}`,
+      clinicName: pick([
+        "Coastal GLP-1 Clinic",
+        "Lakeside Metabolic",
+        "Northwell Wellness",
+      ]),
+    });
+  }
   const inserted = await db
     .insert(usersTable)
     .values(rows)
@@ -485,6 +508,44 @@ async function seedActivity(
     }
   }
 
+  // Guarantee the demo doctor (slot 0) has both an OPEN escalation
+  // (for the amber banner) and a REVIEWED one (for the audit trail),
+  // regardless of how the round-robin/cohort dice fell.
+  const demoDoctorId = doctorIds[0]!;
+  const demoPatients = patientIds.filter(
+    (id) => plans.get(id)!.doctorId === demoDoctorId,
+  );
+  if (demoPatients.length >= 2) {
+    const [openPid, reviewedPid] = demoPatients;
+    careEvents.push({
+      patientUserId: openPid!,
+      actorUserId: openPid!,
+      source: "patient",
+      type: "escalation_requested",
+      occurredAt: daysAgo(0), // ~ today, so banner reads "hours ago"
+      metadata: null,
+    });
+    escalations++;
+    careEvents.push({
+      patientUserId: reviewedPid!,
+      actorUserId: reviewedPid!,
+      source: "patient",
+      type: "escalation_requested",
+      occurredAt: daysAgo(2),
+      metadata: null,
+    });
+    careEvents.push({
+      patientUserId: reviewedPid!,
+      actorUserId: demoDoctorId,
+      source: "doctor",
+      type: "doctor_reviewed",
+      occurredAt: daysAgo(1),
+      metadata: null,
+    });
+    escalations++;
+    reviewed++;
+  }
+
   // Bulk insert in chunks so we don't overflow parameter limits.
   await chunkInsert(checkins, (xs) => db.insert(patientCheckinsTable).values(xs));
   await chunkInsert(interventions, (xs) => db.insert(interventionEventsTable).values(xs));
@@ -573,6 +634,12 @@ async function main() {
   console.log(`  deleted ${deleted} synthetic users (and their cascaded rows).`);
 
   if (!resetOnly) {
+    console.log("Hashing passwords…");
+    // Demo doctor gets the real plaintext; everyone else gets a throwaway
+    // hash they can't log in with (column is NOT NULL).
+    DEMO_PWHASH = await bcrypt.hash(DEMO_DOCTOR.password, 10);
+    PWHASH = await bcrypt.hash(`pilot-noop-${Date.now()}`, 10);
+
     console.log("Seeding synthetic pilot…");
     const doctorIds = await seedDoctors();
     console.log(`  inserted ${doctorIds.length} doctors.`);
@@ -589,6 +656,15 @@ async function main() {
   }
 
   await summary();
+
+  if (!resetOnly) {
+    console.log("=== Demo login (Viva Clinic) ===");
+    console.log(`  name:     ${DEMO_DOCTOR.name}`);
+    console.log(`  email:    ${DEMO_DOCTOR.email}`);
+    console.log(`  password: ${DEMO_DOCTOR.password}`);
+    console.log("================================\n");
+  }
+
   await pool.end();
 }
 
