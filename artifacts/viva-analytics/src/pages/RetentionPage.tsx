@@ -107,17 +107,27 @@ export function RetentionPage({ data }: { data: AnalyticsSummary }) {
           <SectionHead>Stop timing</SectionHead>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
             {(["early", "mid", "late"] as const).map((k) => {
-              const n = t.stopTiming[k];
-              const pct =
-                t.stopTiming.knownDenom > 0
-                  ? Math.round((n / t.stopTiming.knownDenom) * 100)
-                  : 0;
+              const stopped = t.stopTiming[k];
+              // Cohort-level churn rate: stopped ÷ (active + stopped) in
+              // the same time bucket. Uses cohortRetention so the
+              // denominator includes patients who are still on treatment
+              // and didn't churn -- a real per-cohort churn signal, not
+              // just this bucket's share of total stops.
+              const cohort = t.cohortRetention?.buckets.find(
+                (b) => b.bucket === k,
+              );
+              const denom = cohort ? cohort.active + cohort.stopped : 0;
+              const churnPct = denom > 0 ? stopped / denom : null;
               return (
                 <StatCard
                   key={k}
                   label={TIMING_DISPLAY[k]}
-                  value={n}
-                  sub={`${pct}% of known timing`}
+                  value={stopped}
+                  sub={
+                    churnPct == null
+                      ? "patients stopped"
+                      : `${stopped} stopped • ${pctStr(churnPct)} churn in cohort`
+                  }
                 />
               );
             })}
@@ -146,12 +156,14 @@ export function RetentionPage({ data }: { data: AnalyticsSummary }) {
                     <th className="text-right font-semibold px-2 py-1.5">Active</th>
                     <th className="text-right font-semibold px-2 py-1.5">Stopped</th>
                     <th className="text-right font-semibold px-2 py-1.5">% still active</th>
+                    <th className="text-right font-semibold px-2 py-1.5">% churned</th>
                   </tr>
                 </thead>
                 <tbody>
                   {t.cohortRetention.buckets.map((row) => {
                     const denom = row.active + row.stopped;
-                    const pct = denom > 0 ? row.active / denom : null;
+                    const activePct = denom > 0 ? row.active / denom : null;
+                    const churnPct = denom > 0 ? row.stopped / denom : null;
                     const label =
                       row.bucket === "unknown"
                         ? "Unknown (no start date)"
@@ -163,10 +175,17 @@ export function RetentionPage({ data }: { data: AnalyticsSummary }) {
                         <td className="px-2 py-2 text-right tabular-nums">{row.active}</td>
                         <td className="px-2 py-2 text-right tabular-nums">{row.stopped}</td>
                         <td className="px-2 py-2 text-right tabular-nums">
-                          {pct == null ? (
+                          {activePct == null ? (
                             <span className="text-muted-foreground">—</span>
                           ) : (
-                            pctStr(pct)
+                            pctStr(activePct)
+                          )}
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums">
+                          {churnPct == null ? (
+                            <span className="text-muted-foreground">—</span>
+                          ) : (
+                            pctStr(churnPct)
                           )}
                         </td>
                       </tr>
@@ -176,9 +195,10 @@ export function RetentionPage({ data }: { data: AnalyticsSummary }) {
               </table>
             </div>
             <div className="mt-2 text-[11px] text-muted-foreground">
-              % still active = active ÷ (active + stopped). Patients with
-              treatment status "unknown" are counted in Total but excluded
-              from the rate so they don't deflate it.
+              % still active and % churned both use active + stopped as the
+              denominator (they sum to 100%). Patients with treatment status
+              "unknown" are counted in Total but excluded from those rates
+              so they don't deflate either side.
             </div>
           </Card>
         </>
