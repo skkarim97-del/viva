@@ -34,6 +34,12 @@ export const CARE_EVENT_TYPES = [
   "doctor_reviewed",
   "doctor_note",
   "treatment_status_updated",
+  // Explicit doctor-side signal that a clinician completed real
+  // follow-up on a prior escalation. Distinct from doctor_reviewed
+  // (which only acknowledges that the escalation was seen). Carries
+  // triggerEventId pointing back at the escalation_requested row when
+  // one exists, so the analytics funnel can compute time-to-follow-up.
+  "follow_up_completed",
 ] as const;
 export type CareEventType = (typeof CARE_EVENT_TYPES)[number];
 
@@ -53,6 +59,12 @@ export const careEventsTable = pgTable(
     }),
     source: text("source", { enum: CARE_EVENT_SOURCES }).notNull(),
     type: text("type", { enum: CARE_EVENT_TYPES }).notNull(),
+    // Optional self-reference to the upstream trigger care_event (e.g.
+    // a follow_up_completed pointing back at the escalation_requested
+    // it answered). Self-FK kept loose: AnyPgColumn cast to avoid the
+    // circular type dance and ON DELETE SET NULL so deleting a trigger
+    // never cascades.
+    triggerEventId: integer("trigger_event_id"),
     occurredAt: timestamp("occurred_at").defaultNow().notNull(),
     // Free-form per-event payload. Examples: {status, stopReason} for
     // treatment_status_updated; {messageLength, mode} for coach_message;

@@ -107,6 +107,15 @@ export function PatientDetailPage({ id }: { id: number }) {
       qc.invalidateQueries({ queryKey: ["needs-review-ids"] });
     },
   });
+  // Explicit "I followed up" doctor signal -- distinct from review.
+  // Drives the closed-loop measurement (escalation -> follow-up
+  // -> outcome) in the analytics Care Loop page.
+  const markFollowUp = useMutation({
+    mutationFn: () => api.markPatientFollowUpCompleted(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["patient", id, "care-events"] });
+    },
+  });
 
   const [draft, setDraft] = useState("");
   // Local state for the treatment-status editor. We don't keep these in
@@ -222,6 +231,55 @@ export function PatientDetailPage({ id }: { id: number }) {
           })()}
         </div>
       )}
+
+      {/* Follow-up completed — explicit doctor signal that the patient
+          actually got a follow-up after escalating. Distinct from
+          "Mark as reviewed" (which only acknowledges the escalation
+          was seen). Shown when there's an open escalation that hasn't
+          been followed up yet, regardless of review state, so doctors
+          can record the follow-up the moment it happens. After click,
+          the button collapses into a quiet audit-trail line so the
+          loop is closed visibly. */}
+      {care.data?.followUpPending && (
+        <div className="rounded-[16px] border border-border bg-card px-4 py-3 flex items-center gap-3 flex-wrap">
+          <div className="flex-1 min-w-[200px]">
+            <div className="text-sm font-semibold text-foreground">
+              Did you follow up with this patient?
+            </div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              Records a single doctor follow-up event on the most recent
+              escalation. Used to measure the escalation → follow-up loop.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => markFollowUp.mutate()}
+            disabled={markFollowUp.isPending}
+            className="rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-60 border border-border bg-background hover:bg-secondary transition-colors"
+          >
+            {markFollowUp.isPending ? "Saving..." : "Follow-up completed"}
+          </button>
+        </div>
+      )}
+      {care.data &&
+        !care.data.followUpPending &&
+        care.data.lastFollowUpAt && (
+          <div className="text-xs text-muted-foreground font-medium">
+            {(() => {
+              const fu = care.data.events.find(
+                (e) =>
+                  e.type === "follow_up_completed" &&
+                  e.occurredAt === care.data!.lastFollowUpAt,
+              );
+              const who = fu?.actorName
+                ? `Dr. ${fu.actorName.split(" ").slice(-1)[0]}`
+                : "Care team";
+              return `Follow-up completed by ${who} · ${relativeTime(
+                care.data.lastFollowUpAt,
+              )}`;
+            })()}
+          </div>
+        )}
 
       {/* Header card */}
       <div className="bg-card rounded-[20px] p-6">

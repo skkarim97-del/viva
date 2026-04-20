@@ -144,6 +144,43 @@ export function CareLoopPage() {
         />
       </div>
 
+      {/* Follow-up sub-row. Separated visually from the four review/
+          note/status cards above because follow-up is the explicit
+          loop-closure signal (doctor actually contacted the patient),
+          while the four above are passive doctor activity. Numbers
+          are derived from follow_up_completed events linked back to
+          escalation_requested via trigger_event_id. */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mt-2.5">
+        <StatCard
+          label="Follow-up completed"
+          value={pctStr(d.doctor.followUpCompletedPct)}
+          sub={`${d.doctor.followUpCompletedNumerator}/${d.doctor.followUpCompletedDenominator} escalations`}
+          accent="#34C759"
+        />
+        <StatCard
+          label="Total follow-up events"
+          value={d.doctor.totalFollowUpEvents.toLocaleString()}
+          sub="raw count in window"
+          accent="#34C759"
+        />
+        <StatCard
+          label="Avg time to follow-up"
+          value={
+            d.doctor.avgMinutesEscalationToFollowUp == null
+              ? "—"
+              : formatMinutes(d.doctor.avgMinutesEscalationToFollowUp)
+          }
+          sub="escalation → follow-up"
+          accent="#34C759"
+        />
+        <StatCard
+          label="Followed up within 24h"
+          value={pctStr(d.doctor.followUpWithin24hPct)}
+          sub={`${d.doctor.followUpWithin24hNumerator}/${d.doctor.followUpWithin24hDenominator} followed up`}
+          accent="#34C759"
+        />
+      </div>
+
       {/* Layer 4: Outcomes. Did the loop work? */}
       <SectionHead hint="Did the loop produce a positive follow-through?">
         Outcomes

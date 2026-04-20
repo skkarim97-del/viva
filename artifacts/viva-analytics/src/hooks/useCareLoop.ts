@@ -27,6 +27,19 @@ export interface CareLoopSummary {
     avgMinutesEscalationToReview: number | null;
     withDoctorNotePct: number;
     withTreatmentStatusUpdatedPct: number;
+    // Explicit follow-up loop. followUpCompletedPct uses
+    // total escalations as the denominator (one escalation = one
+    // potential follow-up). totalFollowUpEvents is just the raw
+    // count of follow_up_completed rows in the window, useful as a
+    // sanity check for unlinked follow-ups.
+    followUpCompletedPct: number;
+    followUpCompletedNumerator: number;
+    followUpCompletedDenominator: number;
+    totalFollowUpEvents: number;
+    avgMinutesEscalationToFollowUp: number | null;
+    followUpWithin24hPct: number;
+    followUpWithin24hNumerator: number;
+    followUpWithin24hDenominator: number;
   };
   outcomes: {
     resolvedByVivaAlonePct: number;

@@ -110,6 +110,70 @@ async function ownsPatient(
   return rows.length > 0;
 }
 
+// ---- doctor: mark follow-up completed -------------------------------
+//
+// The explicit "I actually followed up with this patient" signal --
+// distinct from doctor_reviewed (which only acknowledges the
+// escalation was seen). We link the follow-up back to the most recent
+// escalation_requested for this patient via trigger_event_id so the
+// analytics funnel can compute time-to-follow-up. If the patient has
+// never escalated, we still log the event with trigger_event_id NULL
+// (the doctor may be following up on a non-escalation reason); the
+// analytics queries gate on the trigger so unlinked rows don't pollute
+// the time-to-follow-up averages.
+
+router.post(
+  "/:patientId/follow-up-completed",
+  requireDoctor,
+  async (req, res: Response) => {
+    const doctorId = (req as AuthedRequest).auth.userId;
+    const patientId = Number(req.params.patientId);
+    if (!Number.isFinite(patientId)) {
+      res.status(400).json({ error: "invalid_id" });
+      return;
+    }
+    if (!(await ownsPatient(doctorId, patientId))) {
+      res.status(404).json({ error: "not_found" });
+      return;
+    }
+    try {
+      // Find the most-recent escalation for linkage. We pick the
+      // newest escalation regardless of whether it was previously
+      // marked reviewed -- the doctor is following up on it now.
+      const triggerRows = await db
+        .select({ id: careEventsTable.id })
+        .from(careEventsTable)
+        .where(
+          and(
+            eq(careEventsTable.patientUserId, patientId),
+            eq(careEventsTable.type, "escalation_requested"),
+          ),
+        )
+        .orderBy(desc(careEventsTable.occurredAt))
+        .limit(1);
+      const triggerEventId = triggerRows[0]?.id ?? null;
+      const [created] = await db
+        .insert(careEventsTable)
+        .values({
+          patientUserId: patientId,
+          actorUserId: doctorId,
+          source: "doctor",
+          type: "follow_up_completed",
+          triggerEventId,
+          metadata: null,
+        })
+        .returning();
+      res.status(201).json(created);
+    } catch (err) {
+      logger.error(
+        { err, doctorId, patientId },
+        "care_events_follow_up_failed",
+      );
+      res.status(500).json({ error: "follow_up_failed" });
+    }
+  },
+);
+
 router.post(
   "/:patientId/reviewed",
   requireDoctor,
@@ -199,13 +263,15 @@ router.get("/:patientId", requireAuth, async (req, res: Response) => {
   const stateRows = await db.execute(sql`
     select
       max(case when type = 'escalation_requested' then occurred_at end) as last_escalation_at,
-      max(case when type = 'doctor_reviewed'      then occurred_at end) as last_review_at
+      max(case when type = 'doctor_reviewed'      then occurred_at end) as last_review_at,
+      max(case when type = 'follow_up_completed'  then occurred_at end) as last_follow_up_at
     from care_events
     where patient_user_id = ${patientId}
   `);
   const stateRow = (stateRows.rows?.[0] ?? {}) as {
     last_escalation_at?: string | Date | null;
     last_review_at?: string | Date | null;
+    last_follow_up_at?: string | Date | null;
   };
   const lastEscalationAt = stateRow.last_escalation_at
     ? new Date(stateRow.last_escalation_at)
@@ -213,14 +279,26 @@ router.get("/:patientId", requireAuth, async (req, res: Response) => {
   const lastReviewAt = stateRow.last_review_at
     ? new Date(stateRow.last_review_at)
     : null;
+  const lastFollowUpAt = stateRow.last_follow_up_at
+    ? new Date(stateRow.last_follow_up_at)
+    : null;
   const escalationOpen =
     !!lastEscalationAt &&
     (!lastReviewAt || lastReviewAt < lastEscalationAt);
+  // followUpPending = there's an escalation that hasn't been
+  // followed-up on yet. Drives whether we show the "Follow-up
+  // completed" button. Independent of reviewed state -- doctors
+  // routinely review (acknowledge) before the actual follow-up call.
+  const followUpPending =
+    !!lastEscalationAt &&
+    (!lastFollowUpAt || lastFollowUpAt < lastEscalationAt);
 
   res.json({
     escalationOpen,
     lastEscalationAt: lastEscalationAt?.toISOString() ?? null,
     lastReviewAt: lastReviewAt?.toISOString() ?? null,
+    lastFollowUpAt: lastFollowUpAt?.toISOString() ?? null,
+    followUpPending,
     events: rows,
   });
 });

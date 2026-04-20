@@ -184,7 +184,8 @@ export type CareEventType =
   | "escalation_requested"
   | "doctor_reviewed"
   | "doctor_note"
-  | "treatment_status_updated";
+  | "treatment_status_updated"
+  | "follow_up_completed";
 
 export interface CareEvent {
   id: number;
@@ -201,6 +202,15 @@ export interface CareEventsResponse {
   escalationOpen: boolean;
   lastEscalationAt: string | null;
   lastReviewAt: string | null;
+  // Most recent doctor "Follow-up completed" event timestamp (any
+  // escalation cycle, all-time). Drives the audit-trail line shown
+  // when the most recent escalation has already been followed up.
+  lastFollowUpAt: string | null;
+  // True iff there's an escalation that hasn't been followed-up on
+  // yet -- i.e. lastEscalationAt exists and is newer than
+  // lastFollowUpAt. Independent of escalationOpen because reviewed
+  // and followed-up are distinct doctor actions.
+  followUpPending: boolean;
   events: CareEvent[];
 }
 
@@ -293,6 +303,11 @@ export const api = {
     request<{ id: number; occurredAt: string }>(
       "POST",
       `/care-events/${id}/reviewed`,
+    ),
+  markPatientFollowUpCompleted: (id: number) =>
+    request<{ id: number; occurredAt: string; triggerEventId: number | null }>(
+      "POST",
+      `/care-events/${id}/follow-up-completed`,
     ),
   needsReviewIds: () =>
     request<{ ids: number[] }>("GET", `/care-events/_ids/needs-review`),

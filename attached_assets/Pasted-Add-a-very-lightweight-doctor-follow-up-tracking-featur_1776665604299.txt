@@ -1,0 +1,91 @@
+Add a very lightweight doctor follow-up tracking feature to Viva Clinic so we can measure whether escalated patients actually received follow-up.
+
+Goal
+
+Right now we can infer some doctor activity from notes or status updates, but we want one explicit, simple MVP signal that a doctor actually followed up on an escalated patient.
+
+Keep this very lightweight.
+
+We do not need messaging, tasks, or workflow infrastructure.
+
+What to build
+1. Add one doctor action button
+
+In the relevant patient detail view in Viva Clinic, add a simple button:
+
+“Follow-up completed”
+
+Behavior
+
+When clicked:
+
+log a doctor follow-up event
+timestamp it
+tie it to the escalation / trigger event if possible
+keep UX minimal and clean
+
+This should be a simple explicit action, not a new workflow.
+
+2. Event logging
+
+Create or extend the existing intervention / doctor event model so this action is recorded.
+
+Log:
+source = "doctor"
+type = "follow_up_completed"
+created_at
+patient_id
+If possible
+
+Also attach:
+
+trigger_event_id
+
+Use the most relevant escalation / trigger event if the linkage already exists or can be added cleanly.
+
+If exact linkage is not available, still log the follow-up event and document the limitation.
+
+3. Closed-loop logic
+
+This should let us measure a simple loop:
+
+escalation created
+doctor follow-up completed
+patient outcome afterward
+
+We are not trying to prove perfect causality. We just want an explicit doctor follow-up signal we can trust in pilots.
+
+4. Analytics
+
+Inside Viva Analytics, add a small doctor follow-up metric in the existing Care Loop / Doctor section.
+
+Show:
+total follow-up completed events
+% of escalated patients with follow-up completed
+avg time from escalation to follow-up completed
+
+If easy, also show:
+
+% followed up within 24h
+
+Keep this simple. No new page.
+
+5. Constraints
+lightweight MVP only
+no chat
+no messaging
+no task management
+no complex workflow engine
+no heavy dependencies
+keep calculations server-side
+do not touch mobile / iOS / EAS / native config
+6. Deliverables
+
+After implementation, tell me:
+
+what files changed
+where the follow-up event is logged
+whether trigger_event_id is supported
+how avg time to follow-up is calculated
+what Viva Analytics metrics were added
+confirm no impact to mobile / build stability

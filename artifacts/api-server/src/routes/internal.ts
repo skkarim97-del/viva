@@ -1252,23 +1252,56 @@ router.get(
            and d.type = 'treatment_status_updated'
            and d.occurred_at >= e.esc_at
           group by e.esc_id
+        ),
+        -- Follow-up uses the explicit trigger_event_id linkage written
+        -- by the POST /care-events/:patientId/follow-up-completed
+        -- route. We deliberately don't fall back to "any follow-up
+        -- after escalation date" because that would conflate generic
+        -- follow-ups with this specific escalation cycle.
+        first_followup as (
+          select e.esc_id, min(d.occurred_at) as ts
+          from esc e
+          join care_events d
+            on d.trigger_event_id = e.esc_id
+           and d.type = 'follow_up_completed'
+          group by e.esc_id
         )
         select
           (select count(*)::int from esc) as total_escalations,
           (select count(*)::int from first_review) as reviewed_count,
           (select count(*)::int from first_note) as noted_count,
           (select count(*)::int from first_status) as status_updated_count,
+          (select count(*)::int from first_followup) as follow_up_count,
           (
             select avg(extract(epoch from (fr.ts - e.esc_at)) / 60)::float
             from esc e join first_review fr on fr.esc_id = e.esc_id
-          ) as avg_minutes_to_review
+          ) as avg_minutes_to_review,
+          (
+            select avg(extract(epoch from (ff.ts - e.esc_at)) / 60)::float
+            from esc e join first_followup ff on ff.esc_id = e.esc_id
+          ) as avg_minutes_to_follow_up,
+          (
+            select count(*)::int
+            from esc e join first_followup ff on ff.esc_id = e.esc_id
+            where ff.ts <= e.esc_at + interval '24 hours'
+          ) as follow_up_within_24h_count,
+          (
+            select count(*)::int
+            from care_events
+            where type = 'follow_up_completed'
+              and occurred_at >= ${since.toISOString()}
+          ) as total_follow_up_events
       `);
       const doctorRow = (doctorJoinRows.rows[0] ?? {}) as {
         total_escalations?: number;
         reviewed_count?: number;
         noted_count?: number;
         status_updated_count?: number;
+        follow_up_count?: number;
         avg_minutes_to_review?: number | null;
+        avg_minutes_to_follow_up?: number | null;
+        follow_up_within_24h_count?: number;
+        total_follow_up_events?: number;
       };
 
       // ---- Outcomes -------------------------------------------------
@@ -1417,6 +1450,27 @@ router.get(
               : Number(doctorRow.avg_minutes_to_review),
           withDoctorNotePct: frac(docNoted, docTotalEsc),
           withTreatmentStatusUpdatedPct: frac(docStatus, docTotalEsc),
+          // Follow-up loop: explicit doctor "I followed up" signal,
+          // linked to escalation_requested via trigger_event_id.
+          followUpCompletedPct: frac(
+            Number(doctorRow.follow_up_count ?? 0),
+            docTotalEsc,
+          ),
+          followUpCompletedNumerator: Number(doctorRow.follow_up_count ?? 0),
+          followUpCompletedDenominator: docTotalEsc,
+          totalFollowUpEvents: Number(doctorRow.total_follow_up_events ?? 0),
+          avgMinutesEscalationToFollowUp:
+            doctorRow.avg_minutes_to_follow_up == null
+              ? null
+              : Number(doctorRow.avg_minutes_to_follow_up),
+          followUpWithin24hPct: frac(
+            Number(doctorRow.follow_up_within_24h_count ?? 0),
+            Number(doctorRow.follow_up_count ?? 0),
+          ),
+          followUpWithin24hNumerator: Number(
+            doctorRow.follow_up_within_24h_count ?? 0,
+          ),
+          followUpWithin24hDenominator: Number(doctorRow.follow_up_count ?? 0),
         },
         outcomes: {
           resolvedByVivaAlonePct: frac(resolvedNum, resolvedDen),
