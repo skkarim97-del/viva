@@ -281,36 +281,65 @@ export function PatientDetailPage({ id }: { id: number }) {
             {markFollowUp.isPending ? "Saving..." : "Follow-up completed"}
           </button>
         </div>
-      ) : care.data ? (
-        <div className="flex items-center justify-between gap-3 flex-wrap text-xs text-muted-foreground font-medium">
-          <span>
-            {care.data.lastFollowUpAt
-              ? (() => {
-                  const fu = care.data.events.find(
-                    (e) =>
-                      e.type === "follow_up_completed" &&
-                      e.occurredAt === care.data!.lastFollowUpAt,
-                  );
-                  const who = fu?.actorName
-                    ? `Dr. ${fu.actorName.split(" ").slice(-1)[0]}`
-                    : "Care team";
-                  return `Follow-up completed by ${who} · ${relativeTime(
-                    care.data.lastFollowUpAt,
-                  )}`;
-                })()
-              : "No follow-up logged yet for this patient."}
-          </span>
+      ) : care.data && care.data.lastFollowUpAt ? (
+        // State (2): a follow-up exists and there's no newer escalation.
+        // Quiet audit-trail card so the closed loop is visible without
+        // shouting, but doctors can still record an additional touchpoint.
+        <div className="rounded-[16px] border border-border bg-card px-4 py-3 flex items-center gap-3 flex-wrap">
+          <span aria-hidden className="text-base">✓</span>
+          <div className="flex-1 min-w-[200px]">
+            <div className="text-sm font-semibold text-foreground">
+              {(() => {
+                const fu = care.data.events.find(
+                  (e) =>
+                    e.type === "follow_up_completed" &&
+                    e.occurredAt === care.data!.lastFollowUpAt,
+                );
+                const who = fu?.actorName
+                  ? `Dr. ${fu.actorName.split(" ").slice(-1)[0]}`
+                  : "Care team";
+                return `Follow-up completed by ${who} · ${relativeTime(
+                  care.data.lastFollowUpAt!,
+                )}`;
+              })()}
+            </div>
+            <div className="text-xs text-muted-foreground mt-0.5 font-medium">
+              You can log another touchpoint anytime.
+            </div>
+          </div>
           <button
             type="button"
             onClick={() => markFollowUp.mutate()}
             disabled={markFollowUp.isPending}
-            className="rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-60 border border-border bg-card hover:bg-secondary text-foreground transition-colors"
+            className="rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-60 border border-border bg-background hover:bg-secondary transition-colors"
           >
-            {markFollowUp.isPending
-              ? "Saving..."
-              : care.data.lastFollowUpAt
-              ? "Log another follow-up"
-              : "Log follow-up"}
+            {markFollowUp.isPending ? "Saving..." : "Log another follow-up"}
+          </button>
+        </div>
+      ) : care.data ? (
+        // State (3): no follow-up history at all. Was previously a faint
+        // text line + tiny pill that nobody noticed. Now a full action
+        // row card matching the language and weight of the escalation
+        // banner -- still subtler than the green CTA but impossible
+        // to miss.
+        <div className="rounded-[20px] px-5 py-4 flex items-center gap-4 flex-wrap bg-card border border-border">
+          <span aria-hidden className="text-lg">📋</span>
+          <div className="flex-1 min-w-[200px]">
+            <div className="font-semibold text-sm text-foreground">
+              No follow-up logged yet
+            </div>
+            <div className="text-xs text-muted-foreground mt-0.5 font-medium">
+              Log a doctor follow-up the moment you call, message, or
+              check in on this patient. Feeds the closed-loop care metrics.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => markFollowUp.mutate()}
+            disabled={markFollowUp.isPending}
+            className="rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-60 bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
+          >
+            {markFollowUp.isPending ? "Saving..." : "Log follow-up"}
           </button>
         </div>
       ) : null}

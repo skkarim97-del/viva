@@ -397,6 +397,34 @@ interface CardProps {
 }
 
 function PatientCard({ p, needsReview, onAddNote }: CardProps) {
+  // Inline follow-up logger. Hits the SAME backend endpoint the
+  // detail page uses (api.markPatientFollowUpCompleted), so the
+  // resulting care-event is indistinguishable from one logged from
+  // the patient detail view -- analytics gets one consistent stream.
+  // Auto-links to the most recent escalation server-side via
+  // trigger_event_id when there's an open escalation; otherwise
+  // logs an unlinked follow-up (NULL trigger). We only render the
+  // button on operationally-relevant rows so it doesn't clutter
+  // the queue (see `showFollowUp` below).
+  const qc = useQueryClient();
+  const followUp = useMutation({
+    mutationFn: () => api.markPatientFollowUpCompleted(p.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["needs-review-ids"] });
+      qc.invalidateQueries({ queryKey: ["patient", p.id, "care-events"] });
+    },
+  });
+  // Visibility rule. Three triggers, all distinct operational signals:
+  //   - needsReview: patient has an open escalation (newer than the
+  //     last doctor_reviewed). The most important case -- this is the
+  //     CTA the closed-loop care model is built around.
+  //   - p.action === "needs_followup": queue has classified them as
+  //     needing a clinical touchpoint (silence, symptom flag, etc).
+  //   - p.inactive12d: 12+ day disengagement signal.
+  // Cards that match none of these stay clean.
+  const showFollowUp =
+    needsReview || p.action === "needs_followup" || p.inactive12d;
+
   const lastNote = p.lastNoteAt
     ? `Last note: ${relativeTime(p.lastNoteAt)}`
     : "No recent action";
@@ -506,6 +534,52 @@ function PatientCard({ p, needsReview, onAddNote }: CardProps) {
           >
             + Note
           </button>
+          {/* Inline follow-up logger. Same backend path as the detail
+              page button -- no separate logic. Color-shifts to green
+              on success so the doctor gets immediate feedback without
+              a toast (the row stays in place; reload of the queue
+              would be too disruptive while triaging). */}
+          {showFollowUp && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (followUp.isPending || followUp.isSuccess) return;
+                followUp.mutate();
+              }}
+              disabled={followUp.isPending || followUp.isSuccess}
+              title={
+                needsReview
+                  ? "Log doctor follow-up on this patient's open escalation"
+                  : "Log an ad-hoc doctor follow-up touchpoint"
+              }
+              className="px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors shrink-0 disabled:opacity-80"
+              style={
+                followUp.isSuccess
+                  ? {
+                      backgroundColor: "rgba(52,199,89,0.15)",
+                      color: "#1F6B36",
+                      borderColor: "rgba(52,199,89,0.30)",
+                    }
+                  : needsReview
+                  ? {
+                      backgroundColor: "#1F6B36",
+                      color: "#FFFFFF",
+                      borderColor: "#1F6B36",
+                    }
+                  : undefined
+              }
+            >
+              {followUp.isSuccess
+                ? "✓ Follow-up logged"
+                : followUp.isPending
+                ? "Saving..."
+                : needsReview
+                ? "Log follow-up"
+                : "+ Follow-up"}
+            </button>
+          )}
           <ActionBadge action={p.action} />
           {p.inactive12d && (
             <span

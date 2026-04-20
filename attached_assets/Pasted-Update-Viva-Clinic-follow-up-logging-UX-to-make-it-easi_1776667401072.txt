@@ -1,0 +1,64 @@
+Update Viva Clinic follow-up logging UX to make it easier to discover and faster to use.
+
+Goal
+
+Doctor follow-up is important to the closed-loop care model, so logging follow-up should be:
+
+easier to see
+easier to do
+available both from the patient detail page and the main dashboard queue
+1. Add follow-up action to the general Clinic dashboard
+
+Add a Log follow-up action directly on relevant patient cards in the main Viva Clinic dashboard.
+
+Show this action on patients who are:
+marked Needs follow-up
+have an open escalation
+are inactive / disengaged if that state is already available
+otherwise operationally relevant for follow-up
+
+Do not add it to every patient card if that creates unnecessary visual clutter.
+
+Behavior
+clicking it should log the same follow-up event as the patient detail page action
+reuse the same backend event logic
+if applicable, tie to trigger_event_id when there is an open escalation
+if not, allow ad-hoc follow-up logging with trigger_event_id = NULL
+2. Make the follow-up action more visually prominent on the patient detail page
+
+The current button is too easy to miss in non-escalation states.
+
+Update the patient detail page so:
+pending escalation state can remain a strong CTA
+“no follow-up logged yet” state becomes more visually obvious
+use a clearer action row or compact card instead of a faint line + tiny pill
+keep it consistent with Viva Clinic design language
+Goal
+
+Doctors should immediately notice that follow-up can be logged, even when the patient has not escalated yet.
+
+3. Keep behavior consistent
+
+Use the same underlying follow-up event system everywhere:
+
+dashboard card action
+patient detail action
+
+Do not create separate logic paths.
+
+Constraints
+keep this lightweight
+no redesign of the entire dashboard
+no new workflow engine
+no messaging
+no heavy dependencies
+do not touch mobile / iOS / EAS / native config
+Deliverables
+
+After implementation, tell me:
+
+where the dashboard follow-up action now appears
+which patient states show it
+how the patient detail page visibility / styling changed
+whether both surfaces use the same event logging path
+confirm no impact to mobile / build stability
