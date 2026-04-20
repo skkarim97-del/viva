@@ -481,6 +481,49 @@ router.get(
       const pctStillOnTreatment =
         onTreatmentDenom > 0 ? statusCounts.active / onTreatmentDenom : 0;
 
+      // ----- Disengagement (inactive 12+ days) --------------------------
+      // Derived flag, not a stored field. A patient counts as "inactive
+      // 12+ days" when:
+      //   - their treatment_status is still active or unknown (we
+      //     deliberately exclude 'stopped' so this metric never overlaps
+      //     with confirmed churn);
+      //   - they have actually activated their app account (activatedAt
+      //     set) and were activated at least 12 days ago, otherwise
+      //     "inactive" isn't meaningful yet;
+      //   - their most recent patient_checkins.date is >=12 days old, or
+      //     they have never checked in at all.
+      // This is a soft signal for outreach -- it does NOT change anyone's
+      // treatment_status and does NOT enter the % still on treatment math.
+      const disengagementRows = await db.execute(sql`
+        select
+          cast(count(*) filter (
+            where p.treatment_status in ('active', 'unknown')
+              and p.activated_at is not null
+              and p.activated_at <= now() - interval '12 days'
+              and (la.last_date is null or la.last_date <= (current_date - 12))
+          ) as int) as inactive,
+          cast(count(*) filter (
+            where p.treatment_status in ('active', 'unknown')
+              and p.activated_at is not null
+              and p.activated_at <= now() - interval '12 days'
+          ) as int) as considered
+        from patients p
+        left join (
+          select patient_user_id, max(date) as last_date
+          from patient_checkins
+          group by patient_user_id
+        ) la on la.patient_user_id = p.user_id
+      `);
+      const disengagementRow = (disengagementRows.rows?.[0] ?? {}) as {
+        inactive?: number;
+        considered?: number;
+      };
+      const disengagement = {
+        thresholdDays: 12,
+        inactive12d: Number(disengagementRow.inactive ?? 0),
+        considered: Number(disengagementRow.considered ?? 0),
+      };
+
       // Pull every stopped patient's reason + dates so we can derive
       // both the stop-reason rollup and the timing rollup in one pass.
       // We deliberately do this in JS instead of SQL because the
@@ -984,6 +1027,7 @@ router.get(
           stopTiming,
           stopReasonByTiming,
           cohortRetention,
+          disengagement,
         },
         operating: {
           windowDays: 30,

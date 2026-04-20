@@ -1,0 +1,139 @@
+Use this for Replit agent:
+
+---
+
+Add **explicit doctor response-time tracking** using a lightweight `trigger_event_id` linkage so we can measure how long doctors take to respond to escalated / flagged patients.
+
+## Goal
+
+Right now we have rough doctor action metrics, but we want a cleaner MVP metric:
+
+> **Doctor response time = time from patient trigger event → first doctor action**
+
+We want this to be explicit enough to trust in a pilot, but still lightweight.
+
+---
+
+## What to build
+
+### 1. Add optional `trigger_event_id` support to doctor intervention events
+
+Extend the doctor-side intervention event logging so a doctor action can optionally reference the event that caused the response.
+
+### Applies to doctor actions such as:
+
+* doctor note
+* mark as reviewed
+* treatment status update
+
+### Add field
+
+* `trigger_event_id` (nullable)
+
+This should point to the event that triggered the response, such as:
+
+* escalation_requested
+* risk flag event if available
+* other future trigger event types
+
+Do not overcomplicate this. Just make the linkage possible.
+
+---
+
+## 2. Use escalation as the MVP trigger
+
+For now, use this clean rule:
+
+### Trigger event
+
+* `escalation_requested`
+
+### Doctor response events
+
+* first doctor note after trigger
+* first mark-as-reviewed after trigger
+* first treatment-status update after trigger
+
+If multiple doctor actions happen after the same trigger, use the **earliest** one as the first response.
+
+---
+
+## 3. Compute doctor response-time metrics
+
+Inside Viva Analytics, compute and show:
+
+### Core metrics
+
+* average time to first doctor response
+* % responded within 24h
+* % responded within 48h
+* % with no doctor response yet
+
+These should be based on escalation-triggered cases with linked or inferable doctor response events.
+
+---
+
+## 4. Matching logic
+
+### Preferred logic
+
+If a doctor action includes `trigger_event_id`, use that explicit linkage.
+
+### Fallback logic
+
+If explicit linkage is missing, use:
+
+* first doctor action for that patient after the escalation timestamp
+
+Use this only as fallback and document it clearly.
+
+---
+
+## 5. UI placement
+
+Add these metrics in the existing **Care Loop → Doctor** section.
+
+Keep it simple:
+
+* cards or compact KPI row
+* no new page
+* no heavy charts
+
+---
+
+## 6. Constraints
+
+* lightweight MVP only
+* no complex workflow engine
+* no messaging system
+* no task assignment system
+* no heavy dependencies
+* keep all calculations server-side
+* do not touch mobile / iOS / EAS
+
+---
+
+## 7. Deliverables
+
+After implementation, tell me:
+
+1. what schema or event model changed
+2. where `trigger_event_id` is stored
+3. which doctor actions now support `trigger_event_id`
+4. how response time is calculated
+5. how fallback matching works if linkage is missing
+6. what new Viva Analytics metrics were added
+7. confirm no impact to mobile / build stability
+
+---
+
+## Build philosophy
+
+Keep it:
+
+* explicit
+* trustworthy
+* easy to explain
+* lightweight for pilot use
+
+Do not overbuild perfect attribution. Just make doctor response time clean enough to trust.

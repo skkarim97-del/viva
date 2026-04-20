@@ -58,6 +58,10 @@ export interface PatientRow {
   // Single-use activation token for pending patients so the dashboard
   // can render a copyable invite link inline. Null after activation.
   activationToken: string | null;
+  // Soft outreach signal: activated patient (active or unknown status)
+  // with no check-in in 12+ days. Always false for pending or stopped.
+  // Does not affect risk score or treatment status.
+  inactive12d?: boolean;
 }
 
 export type TreatmentStatus = "active" | "stopped" | "unknown";

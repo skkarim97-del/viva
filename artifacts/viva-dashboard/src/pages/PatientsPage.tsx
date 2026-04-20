@@ -507,6 +507,14 @@ function PatientCard({ p, needsReview, onAddNote }: CardProps) {
             + Note
           </button>
           <ActionBadge action={p.action} />
+          {p.inactive12d && (
+            <span
+              className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider border bg-amber-50 text-amber-700 border-amber-200"
+              title="No check-in for 12+ days"
+            >
+              Inactive 12d+
+            </span>
+          )}
           <RiskBadge band={p.riskBand} score={p.riskScore} />
           <span className="text-accent text-xl font-semibold leading-none hidden sm:inline">
             →

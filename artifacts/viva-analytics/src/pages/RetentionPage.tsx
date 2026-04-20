@@ -109,6 +109,35 @@ export function RetentionPage({ data }: { data: AnalyticsSummary }) {
         />
       </div>
 
+      {t.disengagement && t.disengagement.considered > 0 && (
+        <Card className="mt-2.5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-medium">
+                Inactive {t.disengagement.thresholdDays}+ days
+              </div>
+              <div className="text-[11px] text-muted-foreground mt-0.5">
+                Activated patients (active or unknown status) with no
+                check-in in {t.disengagement.thresholdDays}+ days. Soft
+                signal for outreach. Does not change treatment status or
+                churn math.
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-2xl font-semibold tabular-nums">
+                {t.disengagement.inactive12d}
+              </div>
+              <div className="text-[11px] text-muted-foreground tabular-nums">
+                of {t.disengagement.considered} eligible
+                {t.disengagement.considered > 0
+                  ? ` • ${pctStr(t.disengagement.inactive12d / t.disengagement.considered)}`
+                  : ""}
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {t.topStopReasons.length > 0 && (
         <>
           <SectionHead>Stop reasons (share of total patients)</SectionHead>

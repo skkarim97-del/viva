@@ -67,6 +67,15 @@ export interface TreatmentStatusBlock {
       unknown: number;
     }>;
   };
+  // Soft-signal disengagement: patients still considered active or
+  // unknown who have not checked in for >=12 days. Computed server-side
+  // from patient_checkins.date and patients.activated_at; never written
+  // back to treatment_status.
+  disengagement?: {
+    thresholdDays: number;
+    inactive12d: number;
+    considered: number;
+  };
 }
 
 export interface HealthBlock {

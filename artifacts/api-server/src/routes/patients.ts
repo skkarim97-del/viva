@@ -97,11 +97,61 @@ router.get("/", async (req, res: Response) => {
     if (r.last) lastNoteByPatient.set(r.patientUserId, r.last as string);
   }
 
+  // All-time most recent check-in per patient. Distinct from the
+  // 14-day risk window above because the 12+ day inactivity flag has
+  // to consider patients whose last check-in fell outside that window
+  // (or who never checked in at all). Source of truth shared with the
+  // /internal disengagement aggregate so the worklist pill and the
+  // analytics card cannot drift.
+  const lastCheckinAllRows =
+    patientIds.length === 0
+      ? []
+      : await db
+          .select({
+            patientUserId: patientCheckinsTable.patientUserId,
+            last: max(patientCheckinsTable.date),
+          })
+          .from(patientCheckinsTable)
+          .where(inArray(patientCheckinsTable.patientUserId, patientIds))
+          .groupBy(patientCheckinsTable.patientUserId);
+  const lastCheckinAllByPatient = new Map<number, string>();
+  for (const r of lastCheckinAllRows) {
+    if (r.last) lastCheckinAllByPatient.set(r.patientUserId, r.last as string);
+  }
+
+  // Single source of truth for the 12-day inactivity rule applied to
+  // every branch below.
+  const ACTIVITY_THRESHOLD_DAYS = 12;
+  const activityCutoff = new Date();
+  activityCutoff.setDate(activityCutoff.getDate() - ACTIVITY_THRESHOLD_DAYS);
+  const activityCutoffDateStr = activityCutoff.toISOString().split("T")[0]!;
+  const isInactive12d = (
+    treatmentStatus: string,
+    activatedAt: unknown,
+    lastCheckinDate: string | null | undefined,
+  ): boolean => {
+    if (treatmentStatus !== "active" && treatmentStatus !== "unknown") {
+      return false;
+    }
+    if (!activatedAt) return false;
+    const activatedTs = new Date(activatedAt as string).getTime();
+    if (activatedTs > activityCutoff.getTime()) return false;
+    // Never checked in or last check-in date <= the cutoff date.
+    return !lastCheckinDate || lastCheckinDate <= activityCutoffDateStr;
+  };
+
   const result = rows.map((p) => {
     // Pending patients have not yet claimed their account in the
     // mobile app, so risk and signals are not yet meaningful. We
     // surface them in their own dashboard bucket instead of scoring
     // empty data and falsely calling them "Stable".
+    const lastCheckinAllTime = lastCheckinAllByPatient.get(p.id) ?? null;
+    const inactive12d = isInactive12d(
+      p.treatmentStatus,
+      p.activatedAt,
+      lastCheckinAllTime,
+    );
+
     const pending = !p.activatedAt;
     if (pending) {
       return {
@@ -123,6 +173,7 @@ router.get("/", async (req, res: Response) => {
         activationToken: p.activationToken,
         treatmentStatus: p.treatmentStatus,
         stopReason: p.stopReason,
+        inactive12d,
       };
     }
     const cks = byPatient.get(p.id) ?? [];
@@ -160,6 +211,7 @@ router.get("/", async (req, res: Response) => {
         activationToken: null as string | null,
         treatmentStatus: p.treatmentStatus,
         stopReason: p.stopReason,
+        inactive12d,
       };
     }
     return {
@@ -192,6 +244,11 @@ router.get("/", async (req, res: Response) => {
       symptomSummary,
       treatmentStatus: p.treatmentStatus,
       stopReason: p.stopReason,
+      // Soft outreach signal -- treatment_status not affected. Uses
+      // the all-time max(date) lookup, not the truncated 14-day window
+      // above, so patients whose last check-in fell outside that
+      // window are still counted correctly.
+      inactive12d,
     };
   });
 

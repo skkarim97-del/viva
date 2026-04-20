@@ -1,0 +1,154 @@
+Use this for Replit agent:
+
+---
+
+Add a simple **inactivity / disengagement rule** to Viva, but do **not** treat inactivity as confirmed treatment stop.
+
+## Goal
+
+We need a clean MVP way to handle patients who disappear from the app without polluting retention analytics.
+
+A patient who has not logged in or checked in for 12+ days should **not** automatically be marked as stopped treatment.
+
+Instead, they should be treated as:
+
+* **at_risk**
+* **disengaged**
+* or **unknown**
+  depending on the current system design
+
+Keep **confirmed stopped** separate from inactivity-based inference.
+
+---
+
+## Rule to implement
+
+### Do NOT do this
+
+* do not automatically mark a patient as `stopped` just because they have no login / no check-in for 12 days
+
+### Do this instead
+
+If a patient has:
+
+* no app activity
+* and/or no check-in
+  for **12+ days**
+
+then mark or surface them as:
+
+* `at_risk`
+* or `disengaged`
+* or another lightweight non-final risk state
+
+Use the cleanest existing status / risk model already in place.
+
+If no explicit disengaged state exists yet, do not introduce a huge taxonomy. A simple derived flag is fine.
+
+---
+
+## What to build
+
+### 1. Add a derived inactivity flag
+
+Create a clean derived signal such as:
+
+* `inactive_12d = true/false`
+* or `disengaged = true/false`
+
+Use:
+
+* last app activity timestamp
+* or last check-in timestamp
+* whichever is already available and most reliable
+
+Document exactly what source is used.
+
+---
+
+### 2. Surface it in analytics
+
+In Viva Analytics, add a small metric in the relevant section:
+
+* patients inactive 12+ days
+* or patients flagged disengaged
+
+This should be separate from:
+
+* confirmed stopped
+* unknown
+* active
+
+Do not merge these categories.
+
+---
+
+### 3. Surface it in Viva Clinic if easy
+
+If easy, add a lightweight signal in the clinician dashboard or patient list:
+
+* “Inactive 12+ days”
+* or “Disengaged”
+
+This should help clinicians know who may need outreach.
+
+Do not redesign the workflow.
+
+---
+
+### 4. Keep confirmed churn clean
+
+Only treat patients as `stopped` when:
+
+* patient explicitly reports stopping
+* doctor explicitly marks stopped
+
+Do not let inactivity rewrite confirmed retention status.
+
+---
+
+## Optional extension if easy
+
+If current logic supports it cleanly, allow the inactivity flag to contribute to:
+
+* at-risk scoring
+* escalation logic
+* doctor review prioritization
+
+Only if it fits naturally into the current system.
+
+---
+
+## Constraints
+
+* keep this lightweight
+* no new complex churn state machine
+* no heavy dependencies
+* no mobile / iOS / EAS changes unless absolutely required
+* do not break current retention calculations
+* do not conflate disengagement with confirmed churn
+
+---
+
+## Deliverables
+
+After implementation, tell me:
+
+1. what inactivity rule was added
+2. what data source was used for inactivity
+3. whether this is a stored field or derived flag
+4. where it is surfaced in Viva Analytics and/or Viva Clinic
+5. confirm that inactive 12+ days does **not** mark a patient as stopped
+6. whether anything touched mobile / build stability
+
+---
+
+## Build philosophy
+
+Keep it:
+
+* honest
+* lightweight
+* operationally useful
+
+The goal is to identify disappearing patients without corrupting churn data.
