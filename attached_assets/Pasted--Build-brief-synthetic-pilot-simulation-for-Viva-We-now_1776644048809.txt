@@ -1,0 +1,444 @@
+⸻
+
+Build brief: synthetic pilot simulation for Viva
+
+We now need a synthetic data simulation system to pressure-test Viva end to end across:
+
+* viva care
+* viva clinic
+* Viva Analytics
+* retention logic
+* care-loop logic
+* doctor workflows
+* dashboard rollups
+
+This is for system validation only, not for external claims.
+
+The goal is to simulate a realistic pilot environment so we can verify that all data flows correctly, all dashboards populate meaningfully, and all metrics reconcile.
+
+⸻
+
+Goal
+
+Create a synthetic simulation that generates approximately 100 realistic fake patients plus associated doctor activity and care-loop events.
+
+The simulation should populate the system with believable usage, churn, escalation, and clinician response patterns so we can validate:
+
+1. operating metrics
+2. retention & churn analytics
+3. care-loop funnel analytics
+4. patient / doctor drill-down tables
+5. audit trails and status logic
+6. reconciliation of dashboard numbers vs raw rows
+
+⸻
+
+Scope
+
+Build a seed + simulate + reset workflow.
+
+Required deliverables
+
+* a script to seed fake data
+* a script or option to clear seeded simulation data
+* documentation for how to run it
+* clear distributions for patient behavior, churn, and doctor activity
+* confirmation that Viva Analytics metrics reconcile correctly
+
+Do not build a giant simulator. Keep it practical.
+
+⸻
+
+Core simulation design
+
+Simulate around 100 patients across 8–12 doctors.
+
+Simulate:
+
+* patient profiles
+* assigned doctors
+* medication + treatment start dates
+* daily / weekly check-ins
+* treatment status changes
+* stop reasons
+* stop timing
+* care events
+* doctor notes
+* escalations
+* review actions
+* intervention exposure
+* Apple Health connected vs not connected
+
+⸻
+
+Patient cohorts / archetypes
+
+Use a few realistic patient archetypes so the data feels believable.
+
+1. Stable active patients
+
+These should be the largest bucket.
+
+Characteristics:
+
+* regular check-ins
+* moderate app engagement
+* low / mild symptoms
+* no escalation
+* remain active on treatment
+
+2. Side-effect risk patients
+
+Characteristics:
+
+* increased nausea / low energy after dose changes
+* somewhat weaker adherence
+* higher likelihood of escalation
+* some early churn
+* stop reason often side_effects
+
+3. Disengaging patients
+
+Characteristics:
+
+* declining check-in frequency
+* weaker product engagement over time
+* lower intervention interaction
+* some become unknown
+* some stop later
+
+4. Cost / motivation churn patients
+
+Characteristics:
+
+* not necessarily high symptoms
+* may look relatively stable early
+* stop mid or late
+* stop reason often cost_or_insurance or patient_choice_or_motivation
+
+5. Low efficacy patients
+
+Smaller bucket.
+
+Characteristics:
+
+* stay on treatment for a while
+* continue checking in
+* eventually stop because it is not working
+* stop reason lack_of_efficacy
+
+⸻
+
+Recommended rough distribution
+
+Use something like:
+
+* 40 stable active
+* 25 side-effect risk
+* 15 disengaging
+* 15 cost / motivation churn
+* 5 low efficacy
+
+This does not need to be exact, but it should produce realistic variation.
+
+⸻
+
+Treatment status outcomes
+
+Make sure the final seeded dataset includes a realistic mix of:
+
+* active
+* stopped
+* unknown
+
+If at_risk already exists cleanly, include some.
+
+Stopped patients
+
+Include all major stop reasons:
+
+* side_effects
+* cost_or_insurance
+* lack_of_efficacy
+* patient_choice_or_motivation
+* other
+
+Stop timing mix
+
+Make sure the simulation includes:
+
+* early churn (<= 30 days)
+* mid churn (31–90 days)
+* late churn (> 90 days)
+
+Important:
+
+* side_effects should skew earlier
+* cost should skew more mid / late
+* lack_of_efficacy should skew later
+* motivation can be mixed
+
+⸻
+
+Activity windows
+
+Simulate realistic time windows so DAU / WAU / MAU actually work.
+
+Create patient activity over the last 30–90 days.
+
+Requirements
+
+Some patients should:
+
+* be active today
+* have been active this week but not today
+* have been active this month but not this week
+* have gone inactive
+
+This should make:
+
+* DAU
+* WAU
+* MAU
+* check-in completion rates
+* intervention engagement
+
+all look realistic in Viva Analytics.
+
+⸻
+
+Patient-side events to simulate
+
+Generate a believable set of patient-side events, using existing tables / flows wherever possible.
+
+Simulate:
+
+* daily check-ins
+* symptom values
+* energy / appetite / nausea / digestion patterns
+* treatment start date
+* treatment status
+* recommendation shown events
+* coach interactions if already logged
+* “Need more support” escalations for a subset
+* Apple Health connected vs not connected
+* wearable-backed activity for a subset
+
+Important
+
+Do not invent a totally separate fake data model. Use the real data model / real endpoints / real tables where possible.
+
+⸻
+
+Doctor-side simulation
+
+Simulate 8–12 doctors with different levels of activity.
+
+Include:
+
+* some highly engaged doctors
+* some moderately engaged doctors
+* some low-engagement doctors
+
+Simulate doctor activity such as:
+
+* viewing / reviewing patients
+* writing notes
+* updating treatment status
+* marking escalations reviewed
+* documenting stopped patients
+
+This should populate:
+
+* doctor DAU / WAU / MAU
+* notes written
+* treatment statuses updated
+* patient ownership tables
+* care-loop response funnel
+
+⸻
+
+Care-loop simulation
+
+We need the new care-loop system to populate meaningfully.
+
+Include:
+
+* patients who escalate using “Need more support”
+* some escalations reviewed by doctors quickly
+* some reviewed late
+* some left open
+* corresponding doctor notes for many of these
+* treatment status changes for a subset after escalation
+
+Goal
+
+The funnel in Viva Analytics should show believable movement across:
+
+* Viva
+* Escalation
+* Doctor
+* Outcomes
+
+⸻
+
+Apple Health / wearable simulation
+
+Very important: make sure this part is represented so the dashboard does not stay at zero unless that is intentional.
+
+Include:
+
+* a subset of patients with wearable-connected / Apple Health-style data
+* a subset without it
+
+If the current system derives wearable status from specific event payloads or data-tier fields, use those same real pathways so the metric lights up correctly.
+
+Do not fake a new flag if the real logic already exists.
+
+⸻
+
+Internal dashboard validation requirements
+
+After seeding, Viva Analytics should visibly populate across all major sections:
+
+Operating
+
+* patient DAU / WAU / MAU
+* doctor DAU / WAU / MAU
+* Apple Health connected %
+* check-in completion %
+* notes written
+* status updates
+* patients reviewed
+
+Retention & churn
+
+* active / stopped / unknown
+* % still on treatment
+* stop reasons
+* stop timing
+* reason × timing table
+
+System behavior
+
+* next-day check-in after intervention
+* engagement improving
+* symptom trend direction
+* top interventions
+
+Care loop
+
+* escalations
+* doctor review
+* outcomes funnel
+
+Drill-down
+
+* patient rows
+* doctor rows
+
+⸻
+
+Reconciliation requirements
+
+This is a must.
+
+After the simulation runs, verify that dashboard numbers reconcile against raw data.
+
+Examples:
+
+* total patients = active + stopped + unknown
+* stopped patients = sum of stop reasons
+* stopped patients = stop timing buckets + unknown timing if applicable
+* patient counts by doctor sum correctly
+* care-loop funnel counts are internally coherent
+
+Add a simple verification output from the script if useful.
+
+⸻
+
+Technical requirements
+
+Build:
+
+* one command to seed simulation data
+* one command to wipe simulation data
+* one command or option to reseed cleanly
+
+Prefer:
+
+* idempotent / safe reseeding
+* seeded randomness so output is reproducible if easy
+* clear tagging of synthetic data so it can be distinguished and cleaned safely
+
+Important:
+
+* do not touch mobile / iOS / EAS / native config
+* do not introduce heavy dependencies
+* do not refactor core app flows unnecessarily
+* keep this contained to backend / data / internal tooling
+
+⸻
+
+Implementation preference
+
+Use the real backend models and event flows as much as possible.
+
+Best case:
+
+* write directly to real DB tables where appropriate
+* or hit internal server-side creation flows if that is cleaner
+
+Do not create a parallel analytics-only fake store.
+
+The point is to validate the actual system.
+
+⸻
+
+Documentation
+
+After implementation, tell me:
+
+1. which files were added or changed
+2. how to run the seed script
+3. how to clear the seeded data
+4. how many doctors and patients were created
+5. what patient cohorts were simulated
+6. what churn distribution was simulated
+7. what care-loop patterns were simulated
+8. whether Apple Health / wearable metrics are now populated
+9. whether dashboard numbers reconcile cleanly
+10. whether anything touched mobile / iOS / EAS stability
+
+⸻
+
+Product intent
+
+This simulation should help us answer:
+
+* does the full Viva system work end to end?
+* does Viva Analytics tell a coherent story?
+* do churn, escalation, clinician action, and engagement all show up correctly?
+* are we ready to show this in a pilot or demo?
+
+This is not about fake validation. It is about verifying the machine works.
+
+⸻
+
+Final instruction
+
+Optimize for:
+
+* realistic enough
+* coherent
+* pressure-tested
+* easy to rerun
+* easy to inspect
+
+Do not optimize for:
+
+* perfect realism
+* massive complexity
+* advanced modeling
+
+We want a believable synthetic pilot environment, not a research simulator.
