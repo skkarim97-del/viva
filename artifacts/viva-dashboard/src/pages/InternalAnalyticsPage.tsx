@@ -37,17 +37,19 @@ interface TreatmentStatusBlock {
   pctStillOnTreatment: number;
   topStopReasons: Array<{ reason: string; count: number; pct: number }>;
   stopTiming: {
-    early: number;
-    mid: number;
-    late: number;
+    d0_30: number;
+    d31_60: number;
+    d61_90: number;
+    d90_plus: number;
     unknown: number;
     knownDenom: number;
   };
   stopReasonByTiming: Array<{
     reason: string;
-    early: number;
-    mid: number;
-    late: number;
+    d0_30: number;
+    d31_60: number;
+    d61_90: number;
+    d90_plus: number;
     unknown: number;
   }>;
 }
@@ -521,10 +523,14 @@ const STOP_REASON_DISPLAY: Record<string, string> = {
   other: "Other",
   unknown: "Unspecified",
 };
-const TIMING_DISPLAY: Record<"early" | "mid" | "late", string> = {
-  early: "Early (≤30d)",
-  mid: "Mid (31-90d)",
-  late: "Late (>90d)",
+const TIMING_DISPLAY: Record<
+  "d0_30" | "d31_60" | "d61_90" | "d90_plus",
+  string
+> = {
+  d0_30: "0–30 days",
+  d31_60: "31–60 days",
+  d61_90: "61–90 days",
+  d90_plus: ">90 days",
 };
 
 function TreatmentStatusPanel({ t }: { t: TreatmentStatusBlock }) {
@@ -594,7 +600,7 @@ function TreatmentStatusPanel({ t }: { t: TreatmentStatusBlock }) {
         <div style={{ marginTop: 14 }}>
           <RetentionSubhead>Stop timing</RetentionSubhead>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            {(["early", "mid", "late"] as const).map((k) => {
+            {(["d0_30", "d31_60", "d61_90", "d90_plus"] as const).map((k) => {
               const n = t.stopTiming[k];
               const pct =
                 t.stopTiming.knownDenom > 0
@@ -633,15 +639,16 @@ function TreatmentStatusPanel({ t }: { t: TreatmentStatusBlock }) {
             <thead>
               <tr style={{ textAlign: "left", color: "#6b7280" }}>
                 <th style={{ padding: "6px 8px" }}>Reason</th>
-                <th style={{ padding: "6px 8px", textAlign: "right" }}>
-                  Early
-                </th>
-                <th style={{ padding: "6px 8px", textAlign: "right" }}>
-                  Mid
-                </th>
-                <th style={{ padding: "6px 8px", textAlign: "right" }}>
-                  Late
-                </th>
+                {(
+                  ["d0_30", "d31_60", "d61_90", "d90_plus"] as const
+                ).map((k) => (
+                  <th
+                    key={k}
+                    style={{ padding: "6px 8px", textAlign: "right" }}
+                  >
+                    {TIMING_DISPLAY[k]}
+                  </th>
+                ))}
                 <th style={{ padding: "6px 8px", textAlign: "right" }}>
                   Unknown
                 </th>
@@ -656,15 +663,16 @@ function TreatmentStatusPanel({ t }: { t: TreatmentStatusBlock }) {
                   <td style={{ padding: "6px 8px" }}>
                     {STOP_REASON_DISPLAY[row.reason] ?? row.reason}
                   </td>
-                  <td style={{ padding: "6px 8px", textAlign: "right" }}>
-                    {row.early}
-                  </td>
-                  <td style={{ padding: "6px 8px", textAlign: "right" }}>
-                    {row.mid}
-                  </td>
-                  <td style={{ padding: "6px 8px", textAlign: "right" }}>
-                    {row.late}
-                  </td>
+                  {(
+                    ["d0_30", "d31_60", "d61_90", "d90_plus"] as const
+                  ).map((k) => (
+                    <td
+                      key={k}
+                      style={{ padding: "6px 8px", textAlign: "right" }}
+                    >
+                      {row[k]}
+                    </td>
+                  ))}
                   <td
                     style={{
                       padding: "6px 8px",

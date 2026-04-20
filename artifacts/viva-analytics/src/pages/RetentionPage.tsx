@@ -11,15 +11,22 @@ import {
 } from "@/components/primitives";
 
 // Day-range labels for the "Churn by cohort" table. We label by exact
-// day ranges (not Early/Mid/Late) so the cohort meaning is explicit on
-// the page where churn is being read.
-// Day ranges match deriveStopTiming exactly: early ≤30, mid ≤90, late >90.
-// Day 90 lives in mid, so the late column says ">90" (not "90+") to stay
-// consistent with TIMING_DISPLAY ("Late (>90d)") elsewhere on the page.
-const COHORT_LABEL: Record<"early" | "mid" | "late", string> = {
-  early: "0–30 days",
-  mid: "31–90 days",
-  late: ">90 days",
+// day ranges so the cohort meaning is explicit on the page where churn
+// is being read. Ranges match deriveStopTiming exactly: ≤30, ≤60, ≤90,
+// then >90. Day 30 lives in d0_30, day 60 in d31_60, day 90 in d61_90;
+// anything past 90 lands in d90_plus.
+type CohortKey = "d0_30" | "d31_60" | "d61_90" | "d90_plus";
+const COHORT_KEYS: readonly CohortKey[] = [
+  "d0_30",
+  "d31_60",
+  "d61_90",
+  "d90_plus",
+] as const;
+const COHORT_LABEL: Record<CohortKey, string> = {
+  d0_30: "0–30 days",
+  d31_60: "31–60 days",
+  d61_90: "61–90 days",
+  d90_plus: ">90 days",
 };
 
 /**
@@ -186,16 +193,25 @@ export function RetentionPage({ data }: { data: AnalyticsSummary }) {
                 <thead>
                   <tr className="text-muted-foreground text-[11px] uppercase tracking-wide">
                     <th className="text-left font-semibold px-2 py-1.5">Reason</th>
-                    <th className="text-right font-semibold px-2 py-1.5">0–30d</th>
-                    <th className="text-right font-semibold px-2 py-1.5">31–90d</th>
-                    <th className="text-right font-semibold px-2 py-1.5">90+d</th>
+                    {COHORT_KEYS.map((k) => (
+                      <th
+                        key={k}
+                        className="text-right font-semibold px-2 py-1.5"
+                      >
+                        {COHORT_LABEL[k]}
+                      </th>
+                    ))}
                     <th className="text-right font-semibold px-2 py-1.5">Unknown</th>
                   </tr>
                 </thead>
                 <tbody>
                   {t.stopReasonByTiming.map((row) => {
                     const rowTotal =
-                      row.early + row.mid + row.late + row.unknown;
+                      row.d0_30 +
+                      row.d31_60 +
+                      row.d61_90 +
+                      row.d90_plus +
+                      row.unknown;
                     const fmt = (n: number) =>
                       rowTotal === 0
                         ? "—"
@@ -205,15 +221,14 @@ export function RetentionPage({ data }: { data: AnalyticsSummary }) {
                         <td className="px-2 py-2">
                           {STOP_REASON_DISPLAY[row.reason] ?? row.reason}
                         </td>
-                        <td className="px-2 py-2 text-right tabular-nums">
-                          {fmt(row.early)}
-                        </td>
-                        <td className="px-2 py-2 text-right tabular-nums">
-                          {fmt(row.mid)}
-                        </td>
-                        <td className="px-2 py-2 text-right tabular-nums">
-                          {fmt(row.late)}
-                        </td>
+                        {COHORT_KEYS.map((k) => (
+                          <td
+                            key={k}
+                            className="px-2 py-2 text-right tabular-nums"
+                          >
+                            {fmt(row[k])}
+                          </td>
+                        ))}
                         <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
                           {fmt(row.unknown)}
                         </td>

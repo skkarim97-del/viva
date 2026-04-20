@@ -67,7 +67,12 @@ export type StopReason =
   | "lack_of_efficacy"
   | "patient_choice_or_motivation"
   | "other";
-export type StopTimingBucket = "early" | "mid" | "late" | "unknown";
+export type StopTimingBucket =
+  | "d0_30"
+  | "d31_60"
+  | "d61_90"
+  | "d90_plus"
+  | "unknown";
 
 export interface PatientDetail {
   id: number;

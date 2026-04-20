@@ -43,22 +43,24 @@ export interface TreatmentStatusBlock {
   pctStillOnTreatment: number;
   topStopReasons: Array<{ reason: string; count: number; pct: number }>;
   stopTiming: {
-    early: number;
-    mid: number;
-    late: number;
+    d0_30: number;
+    d31_60: number;
+    d61_90: number;
+    d90_plus: number;
     unknown: number;
     knownDenom: number;
   };
   stopReasonByTiming: Array<{
     reason: string;
-    early: number;
-    mid: number;
-    late: number;
+    d0_30: number;
+    d31_60: number;
+    d61_90: number;
+    d90_plus: number;
     unknown: number;
   }>;
   cohortRetention?: {
     buckets: Array<{
-      bucket: "early" | "mid" | "late" | "unknown";
+      bucket: "d0_30" | "d31_60" | "d61_90" | "d90_plus" | "unknown";
       total: number;
       active: number;
       stopped: number;
@@ -88,7 +90,7 @@ export interface PatientDrillRow {
   doctorId: number;
   treatmentStatus: "active" | "stopped" | "unknown";
   stopReason: string | null;
-  stopTimingBucket: "early" | "mid" | "late" | "unknown";
+  stopTimingBucket: "d0_30" | "d31_60" | "d61_90" | "d90_plus" | "unknown";
   daysOnTreatment: number | null;
   lastCheckin: string | null;
   appleHealthConnected: boolean;
@@ -140,8 +142,12 @@ export const STOP_REASON_DISPLAY: Record<string, string> = {
   unknown: "Unspecified",
 };
 
-export const TIMING_DISPLAY: Record<"early" | "mid" | "late", string> = {
-  early: "Early (≤30d)",
-  mid: "Mid (31–90d)",
-  late: "Late (>90d)",
+export const TIMING_DISPLAY: Record<
+  "d0_30" | "d31_60" | "d61_90" | "d90_plus",
+  string
+> = {
+  d0_30: "0–30 days",
+  d31_60: "31–60 days",
+  d61_90: "61–90 days",
+  d90_plus: ">90 days",
 };

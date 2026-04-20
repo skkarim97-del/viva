@@ -502,8 +502,10 @@ router.get(
       const stoppedList = stoppedRows.rows as StoppedRow[];
 
       const reasonCounts: Record<string, number> = {};
-      const timingCounts: Record<"early" | "mid" | "late" | "unknown", number> =
-        { early: 0, mid: 0, late: 0, unknown: 0 };
+      const timingCounts: Record<
+        "d0_30" | "d31_60" | "d61_90" | "d90_plus" | "unknown",
+        number
+      > = { d0_30: 0, d31_60: 0, d61_90: 0, d90_plus: 0, unknown: 0 };
       const reasonByTiming: Record<string, Record<string, number>> = {};
       for (const r of stoppedList) {
         const reason = r.stop_reason ?? "unknown";
@@ -513,7 +515,13 @@ router.get(
           r.treatment_status_updated_at,
         );
         timingCounts[bucket] += 1;
-        reasonByTiming[reason] ??= { early: 0, mid: 0, late: 0, unknown: 0 };
+        reasonByTiming[reason] ??= {
+          d0_30: 0,
+          d31_60: 0,
+          d61_90: 0,
+          d90_plus: 0,
+          unknown: 0,
+        };
         reasonByTiming[reason][bucket] =
           (reasonByTiming[reason][bucket] ?? 0) + 1;
       }
@@ -529,14 +537,18 @@ router.get(
         .sort((a, b) => b.count - a.count)
         .slice(0, 10);
       const stopTiming = {
-        early: timingCounts.early,
-        mid: timingCounts.mid,
-        late: timingCounts.late,
+        d0_30: timingCounts.d0_30,
+        d31_60: timingCounts.d31_60,
+        d61_90: timingCounts.d61_90,
+        d90_plus: timingCounts.d90_plus,
         unknown: timingCounts.unknown,
         // Pct relative to stopped patients with known timing -- otherwise
         // missing startedOn data drags every bucket down equally.
         knownDenom:
-          timingCounts.early + timingCounts.mid + timingCounts.late,
+          timingCounts.d0_30 +
+          timingCounts.d31_60 +
+          timingCounts.d61_90 +
+          timingCounts.d90_plus,
       };
       // Always emit the canonical reason set so the "Stop reasons by
       // cohort" table on Retention has a stable row order regardless of
@@ -558,9 +570,10 @@ router.get(
         const buckets = reasonByTiming[reason] ?? {};
         return {
           reason,
-          early: buckets.early ?? 0,
-          mid: buckets.mid ?? 0,
-          late: buckets.late ?? 0,
+          d0_30: buckets.d0_30 ?? 0,
+          d31_60: buckets.d31_60 ?? 0,
+          d61_90: buckets.d61_90 ?? 0,
+          d90_plus: buckets.d90_plus ?? 0,
           unknown: buckets.unknown ?? 0,
         };
       });
@@ -586,17 +599,18 @@ router.get(
         treatment_status_updated_at: string | Date | null;
       };
       const cohortBuckets: Record<
-        "early" | "mid" | "late" | "unknown",
+        "d0_30" | "d31_60" | "d61_90" | "d90_plus" | "unknown",
         { total: number; active: number; stopped: number; unknown: number }
       > = {
-        early: { total: 0, active: 0, stopped: 0, unknown: 0 },
-        mid: { total: 0, active: 0, stopped: 0, unknown: 0 },
-        late: { total: 0, active: 0, stopped: 0, unknown: 0 },
+        d0_30: { total: 0, active: 0, stopped: 0, unknown: 0 },
+        d31_60: { total: 0, active: 0, stopped: 0, unknown: 0 },
+        d61_90: { total: 0, active: 0, stopped: 0, unknown: 0 },
+        d90_plus: { total: 0, active: 0, stopped: 0, unknown: 0 },
         unknown: { total: 0, active: 0, stopped: 0, unknown: 0 },
       };
       const nowMs = Date.now();
       for (const r of (cohortRows.rows ?? []) as CohortRow[]) {
-        let bucket: "early" | "mid" | "late" | "unknown";
+        let bucket: "d0_30" | "d31_60" | "d61_90" | "d90_plus" | "unknown";
         if (!r.started_on) {
           bucket = "unknown";
         } else if (r.treatment_status === "stopped") {
@@ -609,13 +623,22 @@ router.get(
           // see a cohort even though they haven't stopped yet.
           const start = new Date(r.started_on as string | Date).getTime();
           const days = Math.floor((nowMs - start) / 86_400_000);
-          bucket = days <= 30 ? "early" : days <= 90 ? "mid" : "late";
+          bucket =
+            days <= 30
+              ? "d0_30"
+              : days <= 60
+              ? "d31_60"
+              : days <= 90
+              ? "d61_90"
+              : "d90_plus";
         }
         cohortBuckets[bucket].total += 1;
         cohortBuckets[bucket][r.treatment_status] += 1;
       }
       const cohortRetention = {
-        buckets: (["early", "mid", "late", "unknown"] as const).map((b) => ({
+        buckets: (
+          ["d0_30", "d31_60", "d61_90", "d90_plus", "unknown"] as const
+        ).map((b) => ({
           bucket: b,
           total: cohortBuckets[b].total,
           active: cohortBuckets[b].active,
@@ -903,9 +926,10 @@ router.get(
         0,
       );
       const stoppedTimingSum =
-        timingCounts.early +
-        timingCounts.mid +
-        timingCounts.late +
+        timingCounts.d0_30 +
+        timingCounts.d31_60 +
+        timingCounts.d61_90 +
+        timingCounts.d90_plus +
         timingCounts.unknown;
       const dataSanity = {
         totalPatientsRow: totalPatients,

@@ -88,9 +88,18 @@ export type StopReason = (typeof STOP_REASONS)[number];
 // Not persisted: we recompute on read so backfills / corrections to
 // startedOn flow through automatically. Keep thresholds in one place
 // so server analytics and the UI agree.
-export const STOP_TIMING_EARLY_DAYS = 30;
-export const STOP_TIMING_MID_DAYS = 90;
-export type StopTiming = "early" | "mid" | "late" | "unknown";
+// Buckets: 0-30, 31-60, 61-90, >90 days, plus unknown when start or stop
+// is missing.
+export const STOP_TIMING_BUCKET_30_DAYS = 30;
+export const STOP_TIMING_BUCKET_60_DAYS = 60;
+export const STOP_TIMING_BUCKET_90_DAYS = 90;
+export type StopTiming = "d0_30" | "d31_60" | "d61_90" | "d90_plus" | "unknown";
+export const STOP_TIMING_BUCKETS: readonly Exclude<StopTiming, "unknown">[] = [
+  "d0_30",
+  "d31_60",
+  "d61_90",
+  "d90_plus",
+] as const;
 export function deriveStopTiming(
   startedOn: string | Date | null | undefined,
   stoppedAt: string | Date | null | undefined,
@@ -109,9 +118,10 @@ export function deriveStopTiming(
     Math.floor((stop.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)),
   );
   let bucket: StopTiming;
-  if (days <= STOP_TIMING_EARLY_DAYS) bucket = "early";
-  else if (days <= STOP_TIMING_MID_DAYS) bucket = "mid";
-  else bucket = "late";
+  if (days <= STOP_TIMING_BUCKET_30_DAYS) bucket = "d0_30";
+  else if (days <= STOP_TIMING_BUCKET_60_DAYS) bucket = "d31_60";
+  else if (days <= STOP_TIMING_BUCKET_90_DAYS) bucket = "d61_90";
+  else bucket = "d90_plus";
   return { bucket, daysOnTreatment: days };
 }
 

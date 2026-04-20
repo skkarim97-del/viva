@@ -750,9 +750,10 @@ const SOURCE_LABEL: Record<"doctor" | "patient" | "system", string> = {
 };
 
 const STOP_TIMING_LABEL: Record<StopTimingBucket, string> = {
-  early: "Early (within 30 days)",
-  mid: "Mid (31 to 90 days)",
-  late: "Late (after 90 days)",
+  d0_30: "0 to 30 days",
+  d31_60: "31 to 60 days",
+  d61_90: "61 to 90 days",
+  d90_plus: "More than 90 days",
   unknown: "",
 };
 
