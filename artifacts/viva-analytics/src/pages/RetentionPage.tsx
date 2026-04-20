@@ -72,15 +72,41 @@ export function RetentionPage({ data }: { data: AnalyticsSummary }) {
       <SectionHead>Treatment status</SectionHead>
       <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5">
         <StatCard
+          label="% churned"
+          value={
+            onTreatmentDenom > 0
+              ? pctStr(1 - t.pctStillOnTreatment)
+              : "—"
+          }
+          sub={`${t.stopped} of ${onTreatmentDenom} confirmed`}
+          accent="#FF3B30"
+        />
+        <StatCard
+          label="Total churned"
+          value={t.stopped}
+          sub="Off treatment"
+          accent="#FF3B30"
+        />
+        <StatCard
           label="% still on treatment"
-          value={pctStr(t.pctStillOnTreatment)}
+          value={
+            onTreatmentDenom > 0 ? pctStr(t.pctStillOnTreatment) : "—"
+          }
           sub={`${t.active} of ${onTreatmentDenom} confirmed`}
           accent={accent}
         />
-        <StatCard label="On treatment" value={t.active} sub="Currently active" accent="#34C759" />
-        <StatCard label="Stopped" value={t.stopped} sub="Off treatment" accent="#FF3B30" />
-        <StatCard label="Unknown" value={t.unknown} sub="Pending confirmation" accent="#6B7A90" />
-        <StatCard label="Total panel" value={t.totalPatients} accent="#38B6FF" />
+        <StatCard
+          label="Active patients"
+          value={t.active}
+          sub="Currently on treatment"
+          accent="#34C759"
+        />
+        <StatCard
+          label="Total panel"
+          value={t.totalPatients}
+          sub={`${t.unknown} unconfirmed`}
+          accent="#38B6FF"
+        />
       </div>
 
       {t.topStopReasons.length > 0 && (
