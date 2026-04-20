@@ -538,15 +538,91 @@ router.get(
         knownDenom:
           timingCounts.early + timingCounts.mid + timingCounts.late,
       };
-      const stopReasonByTiming = Object.entries(reasonByTiming).map(
-        ([reason, buckets]) => ({
+      // Always emit the canonical reason set so the "Stop reasons by
+      // cohort" table on Retention has a stable row order regardless of
+      // which reasons happen to have non-zero counts this week.
+      const CANONICAL_STOP_REASONS = [
+        "side_effects",
+        "cost_or_insurance",
+        "lack_of_efficacy",
+        "patient_choice_or_motivation",
+        "other",
+      ] as const;
+      const seenReasons = new Set(Object.keys(reasonByTiming));
+      const stopReasonByTiming = [
+        ...CANONICAL_STOP_REASONS,
+        ...Object.keys(reasonByTiming).filter(
+          (r) => !CANONICAL_STOP_REASONS.includes(r as never),
+        ),
+      ].map((reason) => {
+        const buckets = reasonByTiming[reason] ?? {};
+        return {
           reason,
           early: buckets.early ?? 0,
           mid: buckets.mid ?? 0,
           late: buckets.late ?? 0,
           unknown: buckets.unknown ?? 0,
-        }),
-      );
+        };
+      });
+      void seenReasons;
+
+      // ----- Churn by cohort (time on treatment) ------------------------
+      // Bucket EVERY patient (active + stopped + unknown) by how long
+      // they have been on treatment. For active/unknown patients that's
+      // (today - started_on); for stopped patients it's the existing
+      // stop-timing derivation. Patients with no started_on land in the
+      // "unknown" cohort. % still active is computed front-end side from
+      // active / (active + stopped) so unknowns don't deflate the rate.
+      const cohortRows = await db.execute(sql`
+        select
+          treatment_status,
+          started_on,
+          treatment_status_updated_at
+        from patients
+      `);
+      type CohortRow = {
+        treatment_status: "active" | "stopped" | "unknown";
+        started_on: string | Date | null;
+        treatment_status_updated_at: string | Date | null;
+      };
+      const cohortBuckets: Record<
+        "early" | "mid" | "late" | "unknown",
+        { total: number; active: number; stopped: number; unknown: number }
+      > = {
+        early: { total: 0, active: 0, stopped: 0, unknown: 0 },
+        mid: { total: 0, active: 0, stopped: 0, unknown: 0 },
+        late: { total: 0, active: 0, stopped: 0, unknown: 0 },
+        unknown: { total: 0, active: 0, stopped: 0, unknown: 0 },
+      };
+      const nowMs = Date.now();
+      for (const r of (cohortRows.rows ?? []) as CohortRow[]) {
+        let bucket: "early" | "mid" | "late" | "unknown";
+        if (!r.started_on) {
+          bucket = "unknown";
+        } else if (r.treatment_status === "stopped") {
+          bucket = deriveStopTiming(
+            r.started_on,
+            r.treatment_status_updated_at,
+          ).bucket;
+        } else {
+          // Active / unknown status: project to "today" so we can still
+          // see a cohort even though they haven't stopped yet.
+          const start = new Date(r.started_on as string | Date).getTime();
+          const days = Math.floor((nowMs - start) / 86_400_000);
+          bucket = days <= 30 ? "early" : days <= 90 ? "mid" : "late";
+        }
+        cohortBuckets[bucket].total += 1;
+        cohortBuckets[bucket][r.treatment_status] += 1;
+      }
+      const cohortRetention = {
+        buckets: (["early", "mid", "late", "unknown"] as const).map((b) => ({
+          bucket: b,
+          total: cohortBuckets[b].total,
+          active: cohortBuckets[b].active,
+          stopped: cohortBuckets[b].stopped,
+          unknown: cohortBuckets[b].unknown,
+        })),
+      };
 
       // ----- Operating metrics (viva care + viva clinic) ----------------
       // Activity is derived from existing tables; we don't track an
@@ -883,6 +959,7 @@ router.get(
           topStopReasons,
           stopTiming,
           stopReasonByTiming,
+          cohortRetention,
         },
         operating: {
           windowDays: 30,

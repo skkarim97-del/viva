@@ -1,0 +1,97 @@
+Add two simple cohort tables inside the existing Retention section of Viva Analytics.
+
+Goal
+
+We already show:
+
+treatment status
+stop reasons
+stop timing
+reason × timing
+
+Now add one lightweight cohort layer so we can understand where churn is happening by time-on-treatment.
+
+This should stay inside the existing Retention page / section.
+Do not create a new page.
+
+Add 1: Churn by cohort table
+
+Create a simple table inside Retention called:
+
+Churn by cohort
+
+Cohort definition
+
+Use time-on-treatment buckets:
+
+0–30 days
+31–90 days
+90+ days
+
+Use the patient’s treatment start date and current / stopped status to bucket them.
+
+Columns
+
+Show:
+
+Cohort
+Total patients
+Active
+Stopped
+% still active
+Logic
+% still active = active / (active + stopped)
+exclude unknown from the denominator if needed, but be explicit and consistent
+if unknowns are excluded, still show total patients clearly
+Goal
+
+This table should answer:
+
+where churn is happening
+whether early churn is the main issue
+Add 2: Stop reasons by cohort table
+
+Create a second simple table inside Retention called:
+
+Stop reasons by cohort
+
+Rows
+
+Use the existing stop reasons:
+
+side_effects
+cost_or_insurance
+lack_of_efficacy
+patient_choice_or_motivation
+other
+Columns
+
+Show:
+
+Reason
+0–30 days
+31–90 days
+90+ days
+
+Use counts, not percentages, unless percentages are very easy and clean to add.
+
+Goal
+
+This table should answer:
+
+which reasons dominate early churn
+which reasons show up later in treatment
+Constraints
+keep both tables inside the existing Retention section/page
+do not create a new page
+do not add complex filtering UI
+do not add charts unless trivially easy
+keep UI simple and consistent with the current Viva Analytics design system
+extend the existing analytics endpoint where possible
+no heavy dependencies
+no changes to mobile / iOS / EAS
+Implementation guidance
+derive the cohort buckets server-side
+reuse the existing treatment status and stop reason logic
+keep calculations centralized in the analytics endpoint
+make sure the new tables reconcile with current retention numbers

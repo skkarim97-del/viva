@@ -56,6 +56,15 @@ export interface TreatmentStatusBlock {
     late: number;
     unknown: number;
   }>;
+  cohortRetention?: {
+    buckets: Array<{
+      bucket: "early" | "mid" | "late" | "unknown";
+      total: number;
+      active: number;
+      stopped: number;
+      unknown: number;
+    }>;
+  };
 }
 
 export interface HealthBlock {

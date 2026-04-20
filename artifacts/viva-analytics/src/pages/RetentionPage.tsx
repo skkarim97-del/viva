@@ -10,6 +10,18 @@ import {
   StatCard,
 } from "@/components/primitives";
 
+// Day-range labels for the "Churn by cohort" table. We label by exact
+// day ranges (not Early/Mid/Late) so the cohort meaning is explicit on
+// the page where churn is being read.
+// Day ranges match deriveStopTiming exactly: early ≤30, mid ≤90, late >90.
+// Day 90 lives in mid, so the late column says ">90" (not "90+") to stay
+// consistent with TIMING_DISPLAY ("Late (>90d)") elsewhere on the page.
+const COHORT_LABEL: Record<"early" | "mid" | "late", string> = {
+  early: "0–30 days",
+  mid: "31–90 days",
+  late: ">90 days",
+};
+
 /**
  * Retention page. Active vs stopped vs unknown across the whole panel.
  * % still on treatment excludes unknowns from the denominator so
@@ -121,18 +133,69 @@ export function RetentionPage({ data }: { data: AnalyticsSummary }) {
         </>
       )}
 
-      {t.stopReasonByTiming.length > 0 && (
+      {t.cohortRetention && t.cohortRetention.buckets.length > 0 && (
         <>
-          <SectionHead>Reason × timing</SectionHead>
+          <SectionHead>Churn by cohort</SectionHead>
+          <Card>
+            <div className="overflow-x-auto -mx-2">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="text-muted-foreground text-[11px] uppercase tracking-wide">
+                    <th className="text-left font-semibold px-2 py-1.5">Cohort</th>
+                    <th className="text-right font-semibold px-2 py-1.5">Total patients</th>
+                    <th className="text-right font-semibold px-2 py-1.5">Active</th>
+                    <th className="text-right font-semibold px-2 py-1.5">Stopped</th>
+                    <th className="text-right font-semibold px-2 py-1.5">% still active</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {t.cohortRetention.buckets.map((row) => {
+                    const denom = row.active + row.stopped;
+                    const pct = denom > 0 ? row.active / denom : null;
+                    const label =
+                      row.bucket === "unknown"
+                        ? "Unknown (no start date)"
+                        : COHORT_LABEL[row.bucket];
+                    return (
+                      <tr key={row.bucket} className="border-t border-border">
+                        <td className="px-2 py-2">{label}</td>
+                        <td className="px-2 py-2 text-right tabular-nums">{row.total}</td>
+                        <td className="px-2 py-2 text-right tabular-nums">{row.active}</td>
+                        <td className="px-2 py-2 text-right tabular-nums">{row.stopped}</td>
+                        <td className="px-2 py-2 text-right tabular-nums">
+                          {pct == null ? (
+                            <span className="text-muted-foreground">—</span>
+                          ) : (
+                            pctStr(pct)
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-2 text-[11px] text-muted-foreground">
+              % still active = active ÷ (active + stopped). Patients with
+              treatment status "unknown" are counted in Total but excluded
+              from the rate so they don't deflate it.
+            </div>
+          </Card>
+        </>
+      )}
+
+      {t.stopped > 0 && t.stopReasonByTiming.length > 0 && (
+        <>
+          <SectionHead>Stop reasons by cohort</SectionHead>
           <Card>
             <div className="overflow-x-auto -mx-2">
               <table className="min-w-full text-sm">
                 <thead>
                   <tr className="text-muted-foreground text-[11px] uppercase tracking-wide">
                     <th className="text-left font-semibold px-2 py-1.5">Reason</th>
-                    <th className="text-right font-semibold px-2 py-1.5">Early</th>
-                    <th className="text-right font-semibold px-2 py-1.5">Mid</th>
-                    <th className="text-right font-semibold px-2 py-1.5">Late</th>
+                    <th className="text-right font-semibold px-2 py-1.5">0–30d</th>
+                    <th className="text-right font-semibold px-2 py-1.5">31–90d</th>
+                    <th className="text-right font-semibold px-2 py-1.5">90+d</th>
                     <th className="text-right font-semibold px-2 py-1.5">Unknown</th>
                   </tr>
                 </thead>
