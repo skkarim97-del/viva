@@ -58,13 +58,24 @@ export interface SymptomTip {
   // multi-suggestion body so a single decision stays in front of the
   // patient.
   urgency: string;
-  // Highly specific, immediate verb-led CTA the patient can finish in
-  // <2 minutes ("Drink 5 sips now"). Tapping marks the symptom action
-  // as done for the day and mirrors the choice to the server.
+  // Single clear sentence the patient can act on, written in the
+  // present tense and grounded in standard units (cup / glass /
+  // minutes) so there's no ambiguity. Pairs with `example` to make
+  // the action easy to picture without lengthening the sentence.
   cta: string;
-  // Microcopy shown after the CTA is tapped, before the card is
-  // dismissed. Warm, not gamified.
+  // One short, parenthetical example line giving 2-4 familiar items
+  // or behaviors so the action is easier to visualize. Rendered
+  // beneath the action sentence in the same card -- no extra
+  // interaction. Optional only for back-compat; new copy should
+  // always supply one.
+  example?: string;
+  // Microcopy shown after the CTA ("Done") is tapped, before the
+  // card is dismissed. Warm, not gamified.
   ctaCompleted: string;
+  // Generic confirmation label for the action button. Always reads
+  // "Done" per the refreshed micro-intervention spec -- the action
+  // sentence above carries the specifics.
+  ctaLabel?: string;
   // The handful of contributing factors driving this tip. Rendered as
   // small chips so the patient understands the "why".
   factors: string[];
@@ -103,14 +114,18 @@ export function deriveSymptomTips(input: SymptomInputs): SymptomTip[] {
     tips.push({
       symptom: "nausea",
       severity: severe ? 3 : input.nausea === "moderate" ? 2 : 1,
-      title: severe
-        ? "Settle severe nausea (active)"
-        : "Ease nausea now (active)",
+      title: severe ? "Settle your stomach" : "Ease your nausea",
       urgency: severe
         ? "Do this in the next 15 minutes to settle your stomach."
-        : "Do this now to ease nausea faster.",
-      cta: severe ? "Sip water + cracker now" : "Drink at least 5 sips of water now",
-      ctaCompleted: severe ? "Nice -- sips + cracker logged" : "Nice -- sips logged",
+        : "Try this in the next few minutes to feel better faster.",
+      cta: severe
+        ? "Sip about ½ cup of water and have one bland snack over the next 10-15 minutes."
+        : "Sip about ½ cup of water slowly over the next 10-15 minutes.",
+      example: severe
+        ? "(example: plain crackers, dry toast, banana, or rice)"
+        : "(example: still water, room-temperature water, or weak ginger tea)",
+      ctaLabel: "Done",
+      ctaCompleted: severe ? "Logged. Nice work." : "Logged. Nice work.",
       factors,
     });
   }
@@ -133,20 +148,20 @@ export function deriveSymptomTips(input: SymptomInputs): SymptomTip[] {
     const plan = input.planActivity ?? "normal_activity";
     const cta =
       plan === "full_rest"
-        ? "Stand and stretch for 2 minutes"
+        ? "Stand up and stretch gently for about 2 minutes."
         : plan === "light_activity"
-        ? "Walk 5 minutes gently"
-        : "Walk 10 minutes now";
+        ? "Take a gentle 5 minute walk in the next hour."
+        : "Take a 10 minute walk in the next hour.";
+    const example =
+      plan === "full_rest"
+        ? "(example: shoulder rolls, gentle side bends, or a slow walk around the room)"
+        : "(example: a loop around the block, a hallway at work, or pacing during a phone call)";
     const urgency =
       plan === "full_rest"
-        ? "Gentle movement only as tolerated -- it can still help things move."
+        ? "Gentle movement is enough today -- it can still help things move."
         : plan === "light_activity"
-        ? "Do this within the next hour at an easy pace."
+        ? "Do this within the next hour at an easy, comfortable pace."
         : "Do this within the next hour to help things move.";
-    const ctaCompleted =
-      plan === "full_rest"
-        ? "Nice -- gentle movement logged"
-        : "Nice -- walk logged";
     tips.push({
       symptom: "constipation",
       // Subjective "feels constipated" is treated as moderate;
@@ -156,10 +171,12 @@ export function deriveSymptomTips(input: SymptomInputs): SymptomTip[] {
         input.digestion === "constipated"
           ? 2
           : 1,
-      title: "Get things moving (active)",
+      title: "Get things moving",
       urgency,
       cta,
-      ctaCompleted,
+      example,
+      ctaLabel: "Done",
+      ctaCompleted: "Logged. Nice work.",
       factors,
     });
   }
@@ -174,10 +191,12 @@ export function deriveSymptomTips(input: SymptomInputs): SymptomTip[] {
     tips.push({
       symptom: "low_appetite",
       severity: input.appetite === "very_low" ? 2 : 1,
-      title: "Steady your appetite (active)",
-      urgency: "Do this now to support your energy today.",
-      cta: "Eat 2 tbsp yogurt or nuts now",
-      ctaCompleted: "Nice -- snack logged",
+      title: "Steady your appetite",
+      urgency: "Do this in the next 15 minutes to support your energy.",
+      cta: "Eat about ½ cup of a protein-rich food in the next 15 minutes.",
+      example: "(example: ½ cup yogurt, 1 hard-boiled egg, a small handful of nuts, or a protein shake)",
+      ctaLabel: "Done",
+      ctaCompleted: "Logged. Nice work.",
       factors,
     });
   }

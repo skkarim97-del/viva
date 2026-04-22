@@ -221,6 +221,26 @@ export function SymptomTipCard(props: SymptomTipCardProps) {
           : tip.urgency}
       </Text>
 
+      {/* Action sentence + a parenthetical example line. The action
+          sentence is the specific thing to do (with standard units);
+          the example line gives 2-4 familiar items so the action is
+          easy to picture. Rendered together so there's no extra UI
+          step before the patient hits Done. Example only appears in
+          ack mode -- the followup branch is asking a different
+          question entirely. */}
+      {mode === "ack" && (
+        <View style={styles.actionBlock}>
+          <Text style={[styles.actionSentence, { color: navy }]}>
+            {tip.cta}
+          </Text>
+          {tip.example && (
+            <Text style={[styles.exampleLine, { color: mutedForeground }]}>
+              {tip.example}
+            </Text>
+          )}
+        </View>
+      )}
+
       {/* Factor chips: only on the primary card. Secondary tips stay
           minimal so the page doesn't feel cluttered. */}
       {mode === "ack" && isPrimary && tip.factors.length > 0 && (
@@ -304,7 +324,7 @@ export function SymptomTipCard(props: SymptomTipCardProps) {
           >
             <Feather name="check-circle" size={15} color="#FFFFFF" />
             <Text style={styles.ctaPrimaryText}>
-              {tip.cta}
+              {tip.ctaLabel ?? "Done"}
             </Text>
           </Pressable>
           {/* Quiet accountability subtext under the primary CTA only.
@@ -326,7 +346,7 @@ export function SymptomTipCard(props: SymptomTipCardProps) {
         >
           <Feather name="check-circle" size={13} color={navy} />
           <Text style={[styles.ctaSecondaryText, { color: navy }]}>
-            {tip.cta}
+            {tip.ctaLabel ?? "Done"}
           </Text>
         </Pressable>
       )}
@@ -386,7 +406,22 @@ const styles = StyleSheet.create({
   urgency: {
     fontFamily: "Montserrat_500Medium",
     lineHeight: 18,
+    marginBottom: 10,
+  },
+  actionBlock: {
     marginBottom: 12,
+  },
+  actionSentence: {
+    fontFamily: "Montserrat_600SemiBold",
+    fontSize: 14,
+    lineHeight: 19,
+  },
+  exampleLine: {
+    fontFamily: "Montserrat_500Medium",
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 4,
+    fontStyle: "italic",
   },
   factors: {
     flexDirection: "row",
