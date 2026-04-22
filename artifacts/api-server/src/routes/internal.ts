@@ -1193,19 +1193,38 @@ router.get(
         );
       const escRow = escAgg[0] ?? { total: 0, distinctPatients: 0 };
 
-      const escBySource = await db
-        .select({
-          source: careEventsTable.source,
-          count: sql<number>`count(*)::int`,
-        })
-        .from(careEventsTable)
-        .where(
-          and(
-            eq(careEventsTable.type, "escalation_requested"),
-            gte(careEventsTable.occurredAt, since),
-          ),
+      // Group by metadata->>'source' (the surface the patient tapped:
+      // coach / today / settings). The legacy `from` key written by
+      // earlier builds is folded in via coalesce so historical rows
+      // still bucket meaningfully. Rows with neither (e.g. doctor-
+      // initiated escalations) bucket under 'other'.
+      const escBySourceRows = await db.execute(sql`
+        with raw as (
+          select coalesce(
+            metadata->>'source',
+            metadata->>'from',
+            'other'
+          ) as src
+          from care_events
+          where type = 'escalation_requested'
+            and occurred_at >= ${since.toISOString()}
         )
-        .groupBy(careEventsTable.source);
+        select
+          case
+            -- Normalize legacy surface labels written by earlier
+            -- builds so coach/today/settings buckets stay clean
+            -- across the full window even after the rename.
+            when src = 'coach_tab' then 'coach'
+            when src in ('coach', 'today', 'settings') then src
+            else 'other'
+          end as source,
+          count(*)::int as count
+        from raw
+        group by 1
+      `);
+      const escBySource = (escBySourceRows.rows as Array<Record<string, unknown>>).map(
+        (r) => ({ source: String(r.source ?? "other"), count: Number(r.count ?? 0) }),
+      );
 
       const totalActivePatientsRow = await db
         .select({ count: sql<number>`count(*)::int` })
@@ -1439,6 +1458,12 @@ router.get(
         escalation: {
           totalEscalations: totalEsc,
           distinctPatients: escDistinct,
+          // % of the total panel that has sent at least one escalation
+          // in the window. Pilot-grade adoption signal for the patient
+          // -> doctor request path.
+          pctOfPatients: frac(escDistinct, totalActivePatients),
+          pctOfPatientsNumerator: escDistinct,
+          pctOfPatientsDenominator: totalActivePatients,
           bySource,
         },
         doctor: {

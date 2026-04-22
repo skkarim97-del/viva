@@ -1,0 +1,80 @@
+Implement a lightweight patient-to-doctor escalation flow for Viva Care and Viva Clinic, and ensure it is captured in analytics.
+
+Goal
+Make it easy for patients to request help, ensure doctors see it clearly, and track it as a core pilot metric.
+
+Keep this simple and MVP-ready. Do not overengineer.
+
+1. Coach tab (primary entry)
+- Add a clear CTA at the bottom of the Coach screen:
+  "Need more support?"
+  Button: "Request care team review"
+- On tap:
+  - immediately trigger escalation event
+  - show simple confirmation message:
+    "Your care team has been notified"
+
+No complex modal required.
+
+2. Today tab (contextual entry)
+- Show a CTA only when relevant signals are present (reuse existing signals):
+  - poor check-in
+  - worsening symptoms
+  - repeated negative inputs
+- Copy:
+  "Want us to flag this for your doctor?"
+  Button: "Request review"
+- Same behavior as Coach:
+  - trigger escalation event
+  - show confirmation
+
+Do not show this CTA all the time.
+
+3. Settings tab (fallback)
+- Replace any existing dev/debug escalation entry with:
+  "Request care team review"
+- Keep it simple, no extra UI work
+
+4. Escalation event
+- When triggered from any surface:
+  - create a single escalation event in existing system
+  - include a simple source field if easy:
+    coach / today / settings
+- Prevent rapid duplicate submissions if easy (reuse existing dedupe)
+
+5. Viva Clinic behavior
+- Ensure escalated patients appear in:
+  - existing "needs review" / escalation state
+- Add label if easy:
+  "Patient requested review"
+- Do not redesign dashboard
+
+6. Analytics (important)
+Make escalation a core tracked metric.
+
+Track:
+- escalation_requested
+- escalation_source (if available)
+- escalation_reviewed (already exists)
+- time_to_review
+- follow_up_completed
+
+Ensure these feed into:
+- Care Loop page
+- Usage / core metrics if applicable
+
+Add or confirm these derived metrics:
+- % of patients who escalated
+- % of escalations reviewed
+- median / avg time to review
+- % of escalations with follow-up
+
+Do not build new analytics pages. Just ensure these show up in existing Care Loop / top metrics.
+
+7. Deliverables
+- where Coach CTA was added
+- what logic controls Today CTA
+- Settings change
+- escalation event creation
+- how it appears in Viva Clinic
+- which analytics fields are captured

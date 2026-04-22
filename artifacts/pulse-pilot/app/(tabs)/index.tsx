@@ -14,6 +14,7 @@ import {
   KeyboardAvoidingView,
   Modal,
   Animated,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -24,7 +25,7 @@ import { SymptomTipCard } from "@/components/SymptomTipCard";
 import WeightLogModal from "@/components/WeightLogModal";
 import { sessionApi } from "@/lib/api/sessionClient";
 import { logIntervention, type InterventionType } from "@/lib/intervention/logger";
-import { logCareEventDeduped } from "@/lib/care-events/client";
+import { logCareEventDeduped, logCareEventImmediate } from "@/lib/care-events/client";
 import { useApp } from "@/context/AppContext";
 import { type SymptomKind } from "@/lib/symptomTips";
 import { generateCoachInsight } from "@/data/insights";
@@ -332,6 +333,67 @@ export default function DashboardScreen() {
     }
   }, [dailyState, symptomTips]);
 
+  // Today-tab contextual escalation CTA. Shown only when the daily
+  // state surfaces a clinician-grade signal (escalationNeed clinician
+  // OR symptomBurden high) and the patient hasn't already requested
+  // a review this session. One-shot per session keeps the screen calm
+  // after the patient has already pinged the care team. Backend dedupe
+  // is the source of truth across sessions; this is just UI quieting.
+  const [todayEscalationSent, setTodayEscalationSent] = React.useState(false);
+  const showTodayEscalationCta = React.useMemo(() => {
+    if (!dailyState) return false;
+    if (todayEscalationSent) return false;
+    return (
+      dailyState.escalationNeed === "clinician" ||
+      dailyState.symptomBurden === "high"
+    );
+  }, [dailyState, todayEscalationSent]);
+  const requestTodayReview = React.useCallback(() => {
+    const fire = async () => {
+      const ok = await logCareEventImmediate("escalation_requested", {
+        source: "today",
+      });
+      // Only quiet the CTA on success. On failure we leave it visible
+      // so the patient can retry without re-triggering the underlying
+      // dailyState condition. Server-side dedupe still protects against
+      // a true double-tap inside the same minute.
+      if (ok) setTodayEscalationSent(true);
+      if (Platform.OS !== "web") {
+        try {
+          Haptics.notificationAsync(
+            ok
+              ? Haptics.NotificationFeedbackType.Success
+              : Haptics.NotificationFeedbackType.Warning,
+          );
+        } catch {}
+      }
+      const title = ok ? "Care team notified" : "Could not send right now";
+      const body = ok
+        ? "Your care team has been notified and will follow up soon."
+        : "We couldn't reach the server. Please try again in a moment.";
+      if (Platform.OS === "web") {
+        try { (globalThis as any).alert?.(`${title}\n\n${body}`); } catch {}
+      } else {
+        Alert.alert(title, body);
+      }
+    };
+    if (Platform.OS === "web") {
+      const yes = (globalThis as any).confirm?.(
+        "Flag this for your doctor?",
+      );
+      if (yes) void fire();
+      return;
+    }
+    Alert.alert(
+      "Want us to flag this for your doctor?",
+      "We'll let your care team know what you're seeing today. They'll follow up with you.",
+      [
+        { text: "Not now", style: "cancel" },
+        { text: "Request review", onPress: () => void fire() },
+      ],
+    );
+  }, []);
+
   const onAckSymptomTip = React.useCallback(
     (symptom: SymptomKind) => {
       // Snapshot the current severity at ack time so the re-trigger
@@ -581,6 +643,50 @@ export default function DashboardScreen() {
             </View>
           )}
         </View>
+
+        {/* Contextual care-team CTA. Renders only when the daily
+            state shows a clinician-grade signal (escalationNeed or
+            high symptom burden) so it doesn't sit on the screen
+            every day. After the patient taps it once this session
+            it auto-hides; backend dedupe still applies cross-session. */}
+        {showTodayEscalationCta && (
+          <View
+            style={{
+              marginHorizontal: 20,
+              marginBottom: 12,
+              padding: 14,
+              borderRadius: 16,
+              backgroundColor: "#FF950018",
+              borderWidth: 1,
+              borderColor: "#FF950033",
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
+              <Feather name="alert-circle" size={14} color="#B8650A" />
+              <Text style={{ color: "#B8650A", fontFamily: "Montserrat_700Bold", fontSize: 12, letterSpacing: 0.4, textTransform: "uppercase" }}>
+                Heads up
+              </Text>
+            </View>
+            <Text style={{ color: c.foreground, fontFamily: "Montserrat_600SemiBold", fontSize: 14, marginBottom: 10 }}>
+              Want us to flag this for your doctor?
+            </Text>
+            <Pressable
+              onPress={requestTodayReview}
+              style={({ pressed }) => ({
+                alignSelf: "flex-start",
+                paddingHorizontal: 14,
+                paddingVertical: 9,
+                borderRadius: 999,
+                backgroundColor: "#B8650A",
+                opacity: pressed ? 0.85 : 1,
+              })}
+            >
+              <Text style={{ color: "#FFFFFF", fontFamily: "Montserrat_700Bold", fontSize: 13 }}>
+                Request review
+              </Text>
+            </Pressable>
+          </View>
+        )}
 
         {profile.medicationProfile && (() => {
           const mp = profile.medicationProfile!;

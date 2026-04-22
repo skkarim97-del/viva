@@ -72,7 +72,7 @@ export function CareLoopPage() {
           (follow-up + next-day check-in lift). Pulled from across
           the Viva / Escalation / Doctor layers so the pilot
           question can be answered without scrolling. */}
-      <SectionHead hint="The six numbers that say whether the loop is working">
+      <SectionHead hint="The numbers that say whether the loop is working">
         Primary metrics · is the loop working?
       </SectionHead>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5">
@@ -81,6 +81,12 @@ export function CareLoopPage() {
           value={d.viva.distinctPatients.toLocaleString()}
           sub="distinct in window"
           accent="#5AC8FA"
+        />
+        <StatCard
+          label="% of patients who escalated"
+          value={pctStr(d.escalation.pctOfPatients)}
+          sub={`${d.escalation.pctOfPatientsNumerator}/${d.escalation.pctOfPatientsDenominator} in panel`}
+          accent="#FF9500"
         />
         <StatCard
           label="Total escalations"

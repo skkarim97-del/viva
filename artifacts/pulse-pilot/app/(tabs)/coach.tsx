@@ -236,7 +236,7 @@ export default function CoachScreen() {
   const requestCareTeamReview = useCallback(() => {
     const fire = async () => {
       const ok = await logCareEventImmediate("escalation_requested", {
-        from: "coach_tab",
+        source: "coach",
       });
       if (Platform.OS !== "web") {
         try {

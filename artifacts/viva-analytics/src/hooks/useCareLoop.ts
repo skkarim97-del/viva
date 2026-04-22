@@ -18,6 +18,9 @@ export interface CareLoopSummary {
   escalation: {
     totalEscalations: number;
     distinctPatients: number;
+    pctOfPatients: number;
+    pctOfPatientsNumerator: number;
+    pctOfPatientsDenominator: number;
     bySource: Record<string, number>;
   };
   doctor: {

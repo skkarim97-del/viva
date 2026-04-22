@@ -836,7 +836,7 @@ function CareTeamReviewSection() {
       setBusy(true);
       try {
         const ok = await logCareEventImmediate("escalation_requested", {
-          from: "settings",
+          source: "settings",
         });
         const title = ok ? "Care team notified" : "Could not send right now";
         const body = ok

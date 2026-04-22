@@ -522,9 +522,9 @@ function PatientCard({ p, needsReview, onAddNote }: CardProps) {
               <span
                 className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full shrink-0"
                 style={{ backgroundColor: "#FF9500", color: "#FFFFFF" }}
-                title="Patient requested more support"
+                title="Patient requested review"
               >
-                Needs review
+                Patient requested review
               </span>
             )}
             {/* Arrow rides with the name on mobile so the pill row
