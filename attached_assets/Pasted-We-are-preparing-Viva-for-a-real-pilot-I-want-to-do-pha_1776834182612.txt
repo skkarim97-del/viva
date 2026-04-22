@@ -1,0 +1,248 @@
+We are preparing Viva for a real pilot. I want to do phases 1 through 7 first, then a broader pre-pilot scrub after. Please audit the current codebase, identify what already exists, and then implement the cleanest production-ready version with minimal complexity. Prioritize correctness, security, and clean onboarding over new features.
+
+CONTEXT
+Viva has:
+1. Viva Clinic = doctor-facing web dashboard
+2. Viva Care = patient-facing mobile app
+3. Backend/API + database connecting both
+
+The immediate goal is to make sure:
+- each doctor can ONLY see and act on their own patients
+- patient data is reliably linked to the correct doctor
+- onboarding/invites are simple and low-friction
+- end-to-end data flow between the mobile app, backend, and clinician dashboard is clean and trustworthy
+- doctors are clearly notified when invited patients have not activated within 48 hours so follow-up is encouraged
+- the onboarding flow works cleanly even if the mobile app is distributed via an external TestFlight group
+
+Do NOT overengineer this. Build the simplest secure pilot-ready architecture.
+
+PHASE 1: LOCK DOWN DOCTOR-TO-PATIENT DATA ISOLATION
+Audit all clinician-facing routes, queries, loaders, actions, and APIs.
+
+Requirements:
+- Every patient must belong to a specific doctor via doctor_id
+- Every clinician-facing query must be scoped by the authenticated doctor session
+- No doctor should ever be able to access another doctor’s patients by changing URL params, patient IDs, or request payloads
+- The backend must not trust raw patient IDs alone for dashboard access
+
+Enforce this rule everywhere:
+- patient list
+- patient detail
+- patient check-ins
+- notes
+- escalations / follow-ups
+- risk summaries
+- invite status
+- any dashboard metrics
+
+Implementation rule:
+Whenever a doctor is requesting patient data, scope access using the authenticated doctor session and patient ownership, effectively:
+patients.doctor_id == authenticated_doctor.id
+
+Please:
+1. Find every place this is currently enforced
+2. Find every place it is missing or weak
+3. Fix all of them
+4. Add tests for cross-doctor access denial
+
+PHASE 2: CLEAN ONBOARDING AROUND INVITE TOKENS
+I want onboarding to be driven by secure doctor-created invite tokens, not by loose matching on phone or email.
+
+Desired flow:
+1. Doctor logs into Viva Clinic
+2. Doctor clicks Invite Patient
+3. Backend creates an invite tied to that doctor
+4. Invite generates a secure activation link
+5. Patient opens link
+6. App or activation page validates token with backend
+7. Backend creates or links the patient record to that specific doctor
+8. All future patient data is attached to that patient and visible only to that doctor
+
+Please inspect what exists today and refactor toward this model.
+
+Add or clean up an invites table/model with fields like:
+- id
+- doctor_id
+- patient_id nullable until activation
+- phone nullable
+- email nullable
+- token_hash or secure token storage approach
+- status: pending / redeemed / expired / revoked
+- expires_at
+- redeemed_at
+- created_at
+- updated_at
+
+Requirements:
+- invite token must be unique and secure
+- token should expire
+- token should be revocable
+- redeemed tokens should not be endlessly reusable unless explicitly intended
+- patient-doctor linking should come from the invite token, not inferred primarily from email/phone
+
+PHASE 3: AUDIT END-TO-END DATA FLOW ACROSS ALL THREE APPS/SURFACES
+Trace the full lifecycle of data across:
+- Viva Care mobile app
+- backend / API
+- database
+- Viva Clinic doctor dashboard
+
+I need confidence that all core flows are working cleanly.
+
+Please verify:
+- patient activation correctly creates or links a patient
+- patient check-ins save correctly
+- patient biometrics / symptom data link to the correct patient
+- risk scoring / flags link to the correct patient
+- clinician notes attach to the correct patient
+- follow-ups / escalations attach to the correct patient
+- dashboard summaries render the correct data for the correct doctor
+- no stale demo data, fake data, or orphaned records are polluting the views
+
+If there are mock paths, demo shortcuts, temporary IDs, or loose assumptions, flag and clean them up.
+
+PHASE 4: DO NOT INFER DOCTOR-PATIENT LINKING FROM EMAIL OR PHONE ALONE
+Phone and email can help with:
+- prefilling invite info
+- duplicate detection
+- resend logic
+
+But they should NOT be the main source of truth for ownership.
+
+Please make the invite token and backend linkage the source of truth.
+
+If the current system uses phone or email to associate patients to doctors in a fragile way, refactor it.
+
+PHASE 5: BACKEND GUARDRAILS + TEST COVERAGE
+Add guardrails and tests for pilot safety.
+
+Minimum tests / validations:
+- Doctor A cannot fetch Doctor B’s patient list
+- Doctor A cannot fetch Doctor B’s patient detail
+- Doctor A cannot add notes to Doctor B’s patient
+- Doctor A cannot trigger follow-up actions on Doctor B’s patient
+- Patient auth token cannot access clinician routes
+- Expired invite token is rejected
+- Revoked invite token is rejected
+- Redeemed invite token behaves correctly based on intended one-time logic
+- Every saved patient check-in has a valid patient_id
+- Every dashboard patient record belongs to the authenticated doctor
+- No orphaned core records are silently accepted
+
+If there is not yet a clean test structure, add pragmatic integration tests for the critical flows.
+
+PHASE 6: MAKE ONBOARDING STUPID SIMPLE
+I want low-friction onboarding for both doctors and patients.
+
+For doctors in Viva Clinic:
+- Add a clear Invite Patient flow
+- Support SMS-friendly invite link copy
+- Support email invite copy if easy
+- Support one-click copy-link
+- Show invite status clearly:
+  - pending
+  - opened if trackable
+  - activated / redeemed
+  - expired
+  - revoked
+- Show activation progress if possible:
+  - invited
+  - activated
+  - first check-in complete
+
+For patients in Viva Care:
+- Activation link should deep link into the app if installed
+- There should be a clean fallback if the app is not installed
+- Signup / activation should be minimal friction
+- The app should know which doctor/clinic the patient belongs to from the token validation response
+- After activation, all future data sync should be tied to that patient identity
+
+Please propose and implement the cleanest practical pilot-ready UX, not a bloated one.
+
+TESTFLIGHT-AWARE ACTIVATION FLOW
+Assume patient distribution may occur through an external TestFlight group. Do not rely on TestFlight identity, App Store Connect tester metadata, or public-link enrollment data to link a patient to a doctor.
+
+The source of truth for doctor-patient association must be Viva’s own secure activation token.
+
+Design the onboarding flow so that:
+- a Viva invite link can open the app directly if installed
+- otherwise it falls back to a web landing page
+- that landing page can instruct the patient to install Viva Care via TestFlight external testing
+- after install, the patient can continue activation using the same backend-issued secure token or a recoverable token/session approach
+- the activation flow remains reliable even if the patient installs the app after first opening the invite link in browser
+
+Please audit whether current deep linking and activation flow supports this. If not, implement the cleanest pilot-ready flow.
+
+PHASE 7: ADD ACTIVATION STATUS VISIBILITY IN VIVA CLINIC
+Doctors need lightweight visibility into onboarding progress.
+
+Add an onboarding / activation status view for invited patients:
+- invite created
+- invite redeemed / app activated
+- first check-in complete
+- recent engagement status if available
+
+This can be simple, but it should help a doctor or operator understand whether onboarding is actually working.
+
+Also add onboarding follow-up alerts in Viva Clinic for patients who have not activated the app within 48 hours of invite creation.
+
+Requirements:
+- If invite status is still pending and 48 hours have passed since created_at, mark the patient as onboarding overdue
+- Surface this clearly in Viva Clinic with a doctor-facing alert, badge, or queue item
+- The UI should encourage doctor follow-up, not just passively show status
+- Add easy actions:
+  - resend invite
+  - copy invite link
+  - send reminder text/email copy
+  - mark follow-up completed if applicable
+- If possible, track:
+  - invite created
+  - activated
+  - first check-in complete
+  - onboarding overdue after 48 hours
+- Make this visible in the doctor dashboard and/or patient list so overdue onboarding is hard to miss
+
+Implementation guidance:
+- This can be computed from invites.created_at plus invite status rather than requiring a complex job system
+- Keep it simple and pilot-ready
+- The goal is to make doctor follow-up behavior more likely and to separate activation failure from true product engagement failure
+
+IMPORTANT IMPLEMENTATION RULES
+- Preserve existing working functionality where possible
+- Do not break the current app architecture unless necessary
+- Prefer small clean refactors over a giant rewrite
+- Keep naming and code organization consistent
+- Do not add unnecessary abstractions
+- Keep pilot scope tight
+
+DELIVERABLES I WANT FROM YOU
+1. A short audit summary of current state:
+   - what already exists
+   - what is broken or risky
+   - what you changed
+
+2. A list of all doctor-patient isolation fixes made
+
+3. A summary of the new invite / activation architecture
+
+4. A summary of all data flow issues found and fixed
+
+5. A summary of the TestFlight-compatible onboarding flow and any deep link / fallback changes made
+
+6. A list of tests added
+
+7. A list of any remaining risks or recommended follow-up items before pilot
+
+EXECUTION ORDER
+Please do the work in this order:
+1. Doctor-patient data isolation audit and fixes
+2. Invite-token architecture cleanup
+3. End-to-end data flow audit and fixes
+4. Backend guardrails and tests
+5. Onboarding UX cleanup including TestFlight-aware activation fallback
+6. Activation status visibility in Viva Clinic including 48-hour overdue follow-up prompts
+
+As you work, explain concrete changes made, file by file where relevant. Do not just give me generic recommendations. I want actual implementation and a clear report.
+
+IMPORTANT WORKSTYLE NOTE
+Start with an audit before changing code. Do not jump straight into implementation without first identifying what already exists, what is missing, and what is risky.
