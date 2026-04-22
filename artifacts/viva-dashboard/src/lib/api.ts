@@ -223,7 +223,15 @@ export interface CareEventsResponse {
   events: CareEvent[];
 }
 
-const BASE = "/api";
+// API base URL is configurable at build time via VITE_API_BASE_URL.
+// In dev (and any same-origin deployment) this defaults to "/api" so
+// nothing changes. In a split deployment where the dashboard is served
+// on a different domain than the API server, point this at the api
+// server's full URL, e.g. "https://api.example.com/api". The trailing
+// "/api" prefix is included here so request paths can stay relative
+// (e.g. fetch("/patients") -> "<BASE>/patients").
+const BASE =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "/api";
 
 class HttpError extends Error {
   status: number;
