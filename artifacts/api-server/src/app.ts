@@ -59,14 +59,6 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", uptimeSeconds: Math.round(process.uptime()) });
 });
 
-// Root-path convenience redirect. Only matches the literal "/" path so
-// it cannot shadow /api/*, /invite/*, /.well-known/*, /health, or any
-// other prefix-mounted route below. 302 (temporary) keeps the door open
-// to changing the landing target later without cached redirects sticking.
-app.get("/", (_req, res) => {
-  res.redirect(302, "/viva-dashboard");
-});
-
 app.use("/api", router);
 // Public surfaces deliberately mounted at the root so the invite URL
 // the doctor shares is short (`/invite/<token>`) and so universal-link

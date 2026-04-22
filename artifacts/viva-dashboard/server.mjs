@@ -27,6 +27,15 @@ app.get("/healthz", (_req, res) => {
   res.json({ ok: true });
 });
 
+// Root-path convenience redirect. Matches only the literal "/" path so
+// it cannot shadow /api/* (proxied to upstream), /healthz, the static
+// asset middleware, or the SPA fallback. 302 keeps the redirect
+// non-permanent so the landing target can change without cached
+// redirects sticking in clients.
+app.get("/", (_req, res) => {
+  res.redirect(302, "/viva-dashboard");
+});
+
 app.use(
   createProxyMiddleware({
     target: API_ORIGIN,
