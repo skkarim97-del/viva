@@ -1670,7 +1670,7 @@ router.get(
           SELECT
             user_type,
             user_id,
-            COALESCE(session_id, 'evt-' || MIN(id)::text) AS sid,
+            COALESCE(session_id, 'evt-' || id::text) AS sid,
             MIN(created_at) AS started_at,
             EXTRACT(EPOCH FROM (MAX(created_at) - MIN(created_at)))::float AS secs,
             COUNT(*)::int AS event_count,
@@ -1681,7 +1681,7 @@ router.get(
             MAX(timezone) AS representative_tz
           FROM ${analyticsEventsTable}
           WHERE created_at >= ${since}
-          GROUP BY user_type, user_id, COALESCE(session_id, id::text)
+          GROUP BY user_type, user_id, COALESCE(session_id, 'evt-' || id::text)
         )
         SELECT
           user_type,
