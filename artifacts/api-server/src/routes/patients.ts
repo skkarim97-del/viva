@@ -47,6 +47,7 @@ router.get("/", async (req, res: Response) => {
       startedOn: patientsTable.startedOn,
       activatedAt: patientsTable.activatedAt,
       activationToken: patientsTable.activationToken,
+      activationTokenIssuedAt: patientsTable.activationTokenIssuedAt,
       treatmentStatus: patientsTable.treatmentStatus,
       stopReason: patientsTable.stopReason,
     })
@@ -154,6 +155,22 @@ router.get("/", async (req, res: Response) => {
 
     const pending = !p.activatedAt;
     if (pending) {
+      // Surface a stale-invite signal so the doctor can see at a
+      // glance which invites are sitting unclaimed past 48h. The
+      // hours value is exposed so the UI can render the precise age
+      // (e.g. "Sent 3d ago") without re-deriving from the issuance
+      // timestamp on the client.
+      const issuedRaw = p.activationTokenIssuedAt
+        ? new Date(p.activationTokenIssuedAt as unknown as string).getTime()
+        : NaN;
+      // Clamp at >= 0 and treat invalid/missing timestamps as null so a
+      // bad row never serializes as NaN or trips the stale chip with a
+      // negative age.
+      const inviteAgeHours = Number.isFinite(issuedRaw)
+        ? Math.max(0, Math.floor((Date.now() - issuedRaw) / (1000 * 60 * 60)))
+        : null;
+      const staleInvite =
+        inviteAgeHours !== null && inviteAgeHours >= 48;
       return {
         id: p.id,
         name: p.name,
@@ -174,6 +191,8 @@ router.get("/", async (req, res: Response) => {
         treatmentStatus: p.treatmentStatus,
         stopReason: p.stopReason,
         inactive12d,
+        inviteAgeHours,
+        staleInvite,
       };
     }
     const cks = byPatient.get(p.id) ?? [];

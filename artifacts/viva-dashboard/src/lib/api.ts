@@ -62,6 +62,15 @@ export interface PatientRow {
   // with no check-in in 12+ days. Always false for pending or stopped.
   // Does not affect risk score or treatment status.
   inactive12d?: boolean;
+  // Hours since the activation token was issued. Only present on
+  // pending+invited rows; null for activated patients or when the
+  // issuance timestamp is missing on legacy seed rows.
+  inviteAgeHours?: number | null;
+  // True when the invite was issued 48+ hours ago and the patient
+  // still has not claimed their account. Drives the amber nudge on
+  // the pending card so doctors can see at a glance which invites
+  // are stuck.
+  staleInvite?: boolean;
 }
 
 export type TreatmentStatus = "active" | "stopped" | "unknown";

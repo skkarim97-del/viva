@@ -335,6 +335,17 @@ function PendingCard({ p }: { p: PatientRow }) {
   const subtitle = isInvited
     ? "Awaiting account activation. Resend the link if needed."
     : "Connected. Awaiting first check-in.";
+  // Stale-invite nudge: shows once the invite is 48h old and still
+  // unclaimed. Renders the precise age so doctors can prioritise the
+  // longest-stuck patients first ("Sent 4d ago" vs "Sent 2d ago").
+  const showStale = isInvited && p.staleInvite === true;
+  const inviteAge = p.inviteAgeHours ?? null;
+  const staleLabel =
+    inviteAge === null
+      ? "Sent 48h+ ago"
+      : inviteAge >= 48
+        ? `Sent ${Math.floor(inviteAge / 24)}d ago`
+        : `Sent ${inviteAge}h ago`;
   return (
     <div className="bg-card rounded-[20px] p-5 opacity-95">
       <div className="flex items-start justify-between gap-4">
@@ -351,6 +362,17 @@ function PendingCard({ p }: { p: PatientRow }) {
         </div>
         <ActionBadge action="pending" />
       </div>
+      {showStale && (
+        <div
+          className="mt-3 rounded-lg px-3 py-2 text-xs font-semibold flex items-center gap-2"
+          style={{ color: "#B8650A", backgroundColor: "rgba(255,149,0,0.10)" }}
+          role="status"
+          aria-label="Invite has not been activated for 48 hours or more"
+        >
+          <span aria-hidden>⏳</span>
+          <span>Not activated yet · {staleLabel} · nudge the patient</span>
+        </div>
+      )}
       {isInvited && (
         <div className="mt-4 pt-4 border-t border-border flex items-stretch gap-2">
           <input
