@@ -27,3 +27,8 @@ timeoutMs = 20000
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+VIVA_TESTFLIGHT_URL = "https://testflight.apple.com/join/bhWwckPn"
