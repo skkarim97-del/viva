@@ -224,12 +224,13 @@ export interface CareEventsResponse {
 }
 
 // API base URL is configurable at build time via VITE_API_BASE_URL.
-// In dev (and any same-origin deployment) this defaults to "/api" so
-// nothing changes. In a split deployment where the dashboard is served
-// on a different domain than the API server, point this at the api
-// server's full URL, e.g. "https://api.example.com/api". The trailing
-// "/api" prefix is included here so request paths can stay relative
-// (e.g. fetch("/patients") -> "<BASE>/patients").
+// Default "/api" is what we use in production today: the clinic
+// deployment proxies same-origin /api/* requests to the api-server,
+// which keeps the session cookie same-origin. Overriding this to a
+// cross-origin URL is NOT cookie-compatible with the current api-server
+// session config (sameSite: "lax"); changing it is only safe if the
+// auth model is moved off cookies or the cookie SameSite policy is
+// updated on api-server.
 const BASE =
   (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "/api";
 

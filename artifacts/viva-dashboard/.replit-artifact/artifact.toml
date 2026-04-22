@@ -17,14 +17,23 @@ localPort = 18616
 [services.development]
 run = "pnpm --filter @workspace/viva-dashboard run dev"
 
-[services.production]
-build = [ "pnpm", "--filter", "@workspace/viva-dashboard", "run", "build" ]
-publicDir = "artifacts/viva-dashboard/dist/public"
-serve = "static"
+[services.production.build]
+args = [ "pnpm", "--filter", "@workspace/viva-dashboard", "run", "build" ]
 
-[[services.production.rewrites]]
-from = "/*"
-to = "/index.html"
+[services.production.build.env]
+NODE_ENV = "production"
+BASE_PATH = "/"
+
+[services.production.run]
+args = [ "node", "artifacts/viva-dashboard/server.mjs" ]
+
+[services.production.run.env]
+PORT = "18616"
+NODE_ENV = "production"
+API_ORIGIN = "https://viva-ai.replit.app"
+
+[services.production.health.startup]
+path = "/healthz"
 
 [services.env]
 PORT = "18616"
