@@ -45,10 +45,15 @@ export function BehaviorPage({ data }: { data: AnalyticsSummary }) {
     <>
       <PageHeader
         title="System behavior"
-        subtitle={`Behavioral signals attributed to interventions across the whole population. ${h.windowDays}-day window.`}
+        subtitle={`Directional evidence that interventions are associated with better follow-through or symptom trajectory. ${h.windowDays}-day window.`}
       />
 
-      <SectionHead>Behavioral lift</SectionHead>
+      {/* PRIMARY -- the three directional lift signals. Read these as
+          "is something happening after interventions that we want to
+          see more of". Not causal, but worth tracking weekly. */}
+      <SectionHead hint="Directional lift signals after intervention">
+        Primary metrics · behavioral lift
+      </SectionHead>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
         <StatCard
           label="Next-day check-in after intervention"
@@ -70,7 +75,11 @@ export function BehaviorPage({ data }: { data: AnalyticsSummary }) {
         />
       </div>
 
-      <SectionHead>Top intervention types</SectionHead>
+      {/* SECONDARY -- what the product is actually firing. Useful to
+          spot drift in the intervention mix. */}
+      <SectionHead hint="What the product is firing — context for the lift signals above">
+        Secondary metrics · top intervention types
+      </SectionHead>
       <Card>
         {h.topInterventions.length === 0 ? (
           <Empty>No interventions logged in this window.</Empty>

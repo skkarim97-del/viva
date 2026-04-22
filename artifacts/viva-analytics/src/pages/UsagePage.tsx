@@ -67,16 +67,14 @@ export function UsagePage() {
     <>
       <PageHeader
         title="Usage"
-        subtitle={`Product activity over the last ${d.windowDays} days, sourced from the analytics stream.`}
+        subtitle={`Engagement and usage timing over the last ${d.windowDays} days, sourced from the analytics stream.`}
       />
 
-      {/* Meaningful action up top. This is the headline number for
-          "did the session produce real product value", which is what
-          we actually care about -- session length on its own can be
-          misleading (a 10s check-in is a win, a 5min wandering session
-          is not). */}
+      {/* PRIMARY -- pilot question: are patients and doctors actually
+          using the apps in a way that produces value? Meaningful % is
+          the headline; raw session counts give context (denominator). */}
       <SectionHead hint="Sessions that completed a key action (patient: check-in · doctor: opened a patient)">
-        Meaningful sessions
+        Primary metrics · meaningful engagement
       </SectionHead>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
         <StatCard
@@ -86,41 +84,15 @@ export function UsagePage() {
           accent="#34C759"
         />
         <StatCard
-          label="Patient meaningful avg length"
-          value={fmtSecs(patientLen.avgSecsMeaningful)}
-          sub="check-in sessions only"
-          accent="#34C759"
-        />
-        <StatCard
           label="Doctor meaningful %"
           value={pctStr(doctorLen.meaningfulPct)}
           sub={`${doctorLen.meaningfulSessions.toLocaleString()}/${doctorLen.sessions.toLocaleString()} sessions`}
           accent="#34C759"
         />
         <StatCard
-          label="Doctor meaningful avg length"
-          value={fmtSecs(doctorLen.avgSecsMeaningful)}
-          sub="patient-view sessions only"
-          accent="#34C759"
-        />
-      </div>
-
-      {/* Descriptive session length stats. Explicitly NOT framed as a
-          success metric -- the note below the cards calls that out. */}
-      <SectionHead hint="Descriptive only — not a success metric (see note below)">
-        Session length
-      </SectionHead>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-        <StatCard
           label="Patient sessions"
           value={patientLen.sessions.toLocaleString()}
           sub="distinct in window"
-          accent="#5AC8FA"
-        />
-        <StatCard
-          label="Patient length"
-          value={fmtSecs(patientLen.avgSecs)}
-          sub={`median ${fmtSecs(patientLen.medianSecs)} · p95 ${fmtSecs(patientLen.p95Secs)}`}
           accent="#5AC8FA"
         />
         <StatCard
@@ -129,26 +101,13 @@ export function UsagePage() {
           sub="distinct in window"
           accent="#142240"
         />
-        <StatCard
-          label="Doctor length"
-          value={fmtSecs(doctorLen.avgSecs)}
-          sub={`median ${fmtSecs(doctorLen.medianSecs)} · p95 ${fmtSecs(doctorLen.p95Secs)}`}
-          accent="#142240"
-        />
       </div>
-      <Card>
-        <div className="text-sm text-muted-foreground">
-          Session length is approximate. Short sessions can still be successful if
-          a key action was completed (see the meaningful-sessions cards above).
-        </div>
-      </Card>
 
-      {/* Hour-of-day bars. Two charts, same axis, so the operator can
-          compare patient vs doctor opening patterns at a glance.
-          Bucketed by session-start in the user's local timezone when
-          the client reported one; otherwise UTC. */}
+      {/* SECONDARY -- usage timing and concentration. Helpful for
+          operating decisions (when to staff coverage, who the heaviest
+          users are) but not pilot-defining on their own. */}
       <SectionHead hint={`Sessions per start hour · ${tzLabel}`}>
-        When the apps are opened
+        Secondary metrics · when the apps are opened
       </SectionHead>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
         <Card>
@@ -175,6 +134,48 @@ export function UsagePage() {
         <TopUsersList title="Patients" rows={d.topUsers.patients} />
         <TopUsersList title="Doctors" rows={d.topUsers.doctors} />
       </div>
+
+      {/* TERTIARY -- diagnostic. Session length is descriptive only;
+          a 10s session that lands a check-in is a win, a 5min wander
+          is not. Event flow helps spot a client that stopped firing.
+          Timezone coverage is just for transparency on the chart axis. */}
+      <SectionHead hint="Descriptive only — not a success metric">
+        Diagnostic metrics · session length
+      </SectionHead>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+        <StatCard
+          label="Patient avg length"
+          value={fmtSecs(patientLen.avgSecs)}
+          sub={`median ${fmtSecs(patientLen.medianSecs)} · p95 ${fmtSecs(patientLen.p95Secs)}`}
+          accent="#5AC8FA"
+        />
+        <StatCard
+          label="Patient meaningful avg length"
+          value={fmtSecs(patientLen.avgSecsMeaningful)}
+          sub="check-in sessions only"
+          accent="#5AC8FA"
+        />
+        <StatCard
+          label="Doctor avg length"
+          value={fmtSecs(doctorLen.avgSecs)}
+          sub={`median ${fmtSecs(doctorLen.medianSecs)} · p95 ${fmtSecs(doctorLen.p95Secs)}`}
+          accent="#142240"
+        />
+        <StatCard
+          label="Doctor meaningful avg length"
+          value={fmtSecs(doctorLen.avgSecsMeaningful)}
+          sub="patient-view sessions only"
+          accent="#142240"
+        />
+      </div>
+      <Card>
+        <div className="text-sm text-muted-foreground">
+          Session length is approximate and descriptive only. Short sessions can
+          still be successful if a key action was completed (see the meaningful
+          engagement cards above). Treat avg/median as descriptive, not a
+          success metric.
+        </div>
+      </Card>
 
       {/* Event-name flow check. Helps spot the case where one of the
           clients silently stopped firing a particular event. */}

@@ -24,7 +24,7 @@ export function OverviewPage({ data }: { data: AnalyticsSummary }) {
     <>
       <PageHeader
         title="Today at Viva"
-        subtitle="The headline numbers, refreshed every minute. Pick a section in the sidebar to dig deeper."
+        subtitle="Pilot executive summary, refreshed every minute. Pick a section below to dig deeper."
         right={
           sanity ? (
             <Chip tone={sanity.ok ? "good" : "bad"}>
@@ -34,30 +34,24 @@ export function OverviewPage({ data }: { data: AnalyticsSummary }) {
         }
       />
 
-      <SectionHead hint="Across the whole panel">
-        Headline
+      {/* PRIMARY -- the four numbers a pilot operator should read
+          first. Plus total panel for context (so the others aren't
+          read in a vacuum). */}
+      <SectionHead hint="Across the whole panel — the numbers to read first">
+        Primary metrics · pilot health
       </SectionHead>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
         <StatCard
-          label="Total patients"
-          value={op?.patients.total ?? "—"}
-          sub={
-            op
-              ? `${op.patients.activated} activated`
-              : undefined
-          }
-          accent="#38B6FF"
-        />
-        <StatCard
-          label="Active today"
-          value={op?.patients.activeToday ?? "—"}
-          sub="Check-in or app intervention"
+          label="Weekly active patients"
+          value={op?.patients.wau ?? "—"}
+          sub={op ? `${op.patients.activated} activated` : "Last 7 days"}
           accent="#34C759"
         />
         <StatCard
-          label="WAU patients"
-          value={op?.patients.wau ?? "—"}
-          sub="Last 7 days"
+          label="Doctors active 7d"
+          value={op?.doctors.wau ?? "—"}
+          sub={op ? `${op.doctors.withPanel} with a panel` : undefined}
+          accent="#142240"
         />
         <StatCard
           label="On treatment"
@@ -70,34 +64,54 @@ export function OverviewPage({ data }: { data: AnalyticsSummary }) {
           accent="#34C759"
         />
         <StatCard
-          label="Doctors active 7d"
-          value={op?.doctors.wau ?? "—"}
-          sub={op ? `${op.doctors.withPanel} with a panel` : undefined}
-          accent="#142240"
+          label="Patients reviewed (30d)"
+          value={op?.doctors.patientsReviewed ?? "—"}
+          sub={
+            op
+              ? `Avg ${op.doctors.avgPatientsReviewedPerDoctor.toFixed(1)} / doctor`
+              : undefined
+          }
+          accent="#38B6FF"
         />
         <StatCard
-          label="Notes (30d)"
-          value={op?.doctors.notesWritten ?? "—"}
-          sub={op ? `${op.doctors.treatmentStatusesUpdated} status updates` : undefined}
+          label="Total patients"
+          value={op?.patients.total ?? "—"}
+          sub={op ? `${op.patients.activated} activated` : undefined}
+          accent="#38B6FF"
         />
       </div>
 
-      <SectionHead>Jump in</SectionHead>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* SECONDARY -- jump-off into the deep-dive pages. Care loop
+          and Usage are the two newer pilot-critical surfaces, so they
+          lead. */}
+      <SectionHead hint="Deep-dive into a specific signal">
+        Secondary · jump in
+      </SectionHead>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        <JumpCard
+          to="/care-loop"
+          label="Care loop"
+          desc="Did Viva signals lead to doctor action and patient follow-through? Patients touched, escalations, % reviewed, time to review, follow-up rate."
+        />
         <JumpCard
           to="/operating"
           label="Operating"
-          desc="DAU · WAU · MAU. Apple Health, check-ins, coaching adoption. Doctor activity."
+          desc="Activation, weekly active patients, completing check-ins, coach engagement. Doctor activity and write volume."
         />
         <JumpCard
           to="/retention"
-          label="Retention & churn"
-          desc="% still on treatment, top stop reasons, when patients stop, reason × timing matrix."
+          label="Retention"
+          desc="% still on treatment, total churned, inactive 12+d, stop reasons, churn by cohort."
         />
         <JumpCard
           to="/behavior"
           label="System behavior"
-          desc="Next-day check-in lift after intervention, engagement uplift, top intervention types."
+          desc="Next-day check-in lift after intervention, engagement uplift, symptom trend, top intervention types."
+        />
+        <JumpCard
+          to="/usage"
+          label="Usage"
+          desc="Meaningful sessions, when the apps are opened, top users, session length (descriptive)."
         />
         <JumpCard
           to="/patients"
@@ -108,7 +122,7 @@ export function OverviewPage({ data }: { data: AnalyticsSummary }) {
 
       {sanity && (
         <>
-          <SectionHead>Data reconciliation</SectionHead>
+          <SectionHead>Diagnostic · data reconciliation</SectionHead>
           <Card>
             <div className="text-sm flex flex-wrap items-center gap-x-5 gap-y-1.5">
               <Stat label="Total panel" value={sanity.totalPatientsRow} />

@@ -59,7 +59,7 @@ export function RetentionPage({ data }: { data: AnalyticsSummary }) {
     <>
       <PageHeader
         title="Retention"
-        subtitle="Treatment status, stop reasons, and when patients stop. The denominator for % still on treatment excludes unknowns, so unconfirmed cohorts don't deflate the rate."
+        subtitle="Directional treatment continuity and stop reasons. The denominator for % still on treatment excludes unknowns, so unconfirmed cohorts don't deflate the rate. Treat as directional, not as proof of retention lift."
         right={
           sanity ? (
             <Chip tone={sanity.ok ? "good" : "bad"}>
@@ -69,24 +69,14 @@ export function RetentionPage({ data }: { data: AnalyticsSummary }) {
         }
       />
 
-      <SectionHead>Treatment status</SectionHead>
+      {/* PRIMARY -- treatment continuity. % still on treatment is the
+          headline; total churned and active count give it weight; the
+          inactive 12+d card sits in the same tier because it's the
+          earliest leading indicator of churn. */}
+      <SectionHead hint="Directional treatment continuity, not proof of lift">
+        Primary metrics · treatment status
+      </SectionHead>
       <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5">
-        <StatCard
-          label="% churned"
-          value={
-            onTreatmentDenom > 0
-              ? pctStr(1 - t.pctStillOnTreatment)
-              : "—"
-          }
-          sub={`${t.stopped} of ${onTreatmentDenom} confirmed`}
-          accent="#FF3B30"
-        />
-        <StatCard
-          label="Total churned"
-          value={t.stopped}
-          sub="Off treatment"
-          accent="#FF3B30"
-        />
         <StatCard
           label="% still on treatment"
           value={
@@ -96,10 +86,26 @@ export function RetentionPage({ data }: { data: AnalyticsSummary }) {
           accent={accent}
         />
         <StatCard
+          label="Total churned"
+          value={t.stopped}
+          sub="Off treatment"
+          accent="#FF3B30"
+        />
+        <StatCard
           label="Active patients"
           value={t.active}
           sub="Currently on treatment"
           accent="#34C759"
+        />
+        <StatCard
+          label="Inactive 12+ days"
+          value={t.disengagement?.inactive12d ?? "—"}
+          sub={
+            t.disengagement && t.disengagement.considered > 0
+              ? `of ${t.disengagement.considered} eligible · ${pctStr(t.disengagement.inactive12d / t.disengagement.considered)}`
+              : "Soft outreach signal"
+          }
+          accent="#FF9500"
         />
         <StatCard
           label="Total panel"
@@ -110,37 +116,23 @@ export function RetentionPage({ data }: { data: AnalyticsSummary }) {
       </div>
 
       {t.disengagement && t.disengagement.considered > 0 && (
-        <Card className="mt-2.5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-sm font-medium">
-                Inactive {t.disengagement.thresholdDays}+ days
-              </div>
-              <div className="text-[11px] text-muted-foreground mt-0.5">
-                Activated patients (active or unknown status) with no
-                check-in in {t.disengagement.thresholdDays}+ days. Soft
-                signal for outreach. Does not change treatment status or
-                churn math.
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-2xl font-semibold tabular-nums">
-                {t.disengagement.inactive12d}
-              </div>
-              <div className="text-[11px] text-muted-foreground tabular-nums">
-                of {t.disengagement.considered} eligible
-                {t.disengagement.considered > 0
-                  ? ` • ${pctStr(t.disengagement.inactive12d / t.disengagement.considered)}`
-                  : ""}
-              </div>
-            </div>
+        <Card>
+          <div className="text-[11px] text-muted-foreground">
+            "Inactive 12+ days" counts activated patients (active or unknown
+            status) with no check-in in {t.disengagement.thresholdDays}+ days.
+            Soft signal for outreach; does not change treatment status or
+            churn math.
           </div>
         </Card>
       )}
 
+      {/* SECONDARY -- stop reasons and timing breakdowns. The "why"
+          and "when" behind the headline churn number. */}
       {t.topStopReasons.length > 0 && (
         <>
-          <SectionHead>Stop reasons (share of total patients)</SectionHead>
+          <SectionHead hint="Share of the full panel by stop reason">
+            Secondary metrics · stop reasons
+          </SectionHead>
           <Card>
             <div className="mb-2.5 text-[11px] text-muted-foreground">
               Each row's percentage is that reason's share of the full
@@ -180,7 +172,9 @@ export function RetentionPage({ data }: { data: AnalyticsSummary }) {
 
       {t.cohortRetention && t.cohortRetention.buckets.length > 0 && (
         <>
-          <SectionHead>Churn by cohort</SectionHead>
+          <SectionHead hint="Active vs stopped, split by days since treatment start">
+            Churn by cohort
+          </SectionHead>
           <Card>
             <div className="overflow-x-auto -mx-2">
               <table className="min-w-full text-sm">
@@ -241,7 +235,9 @@ export function RetentionPage({ data }: { data: AnalyticsSummary }) {
 
       {t.stopped > 0 && t.stopReasonByTiming.length > 0 && (
         <>
-          <SectionHead>Stop reasons by cohort</SectionHead>
+          <SectionHead hint="Lower-signal: distribution of each reason across cohorts">
+            Diagnostic metrics · stop reasons by cohort
+          </SectionHead>
           <Card>
             <div className="overflow-x-auto -mx-2">
               <table className="min-w-full text-sm">

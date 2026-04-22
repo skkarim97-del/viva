@@ -1,0 +1,182 @@
+Reorganize the Viva Analytics dashboard for pilot-stage KPI prioritization. Do not redesign the visual system. Keep the current style and components. This is a content hierarchy and layout prioritization pass.
+
+Goal
+Make each page clearly reflect:
+1. primary metrics at the top
+2. secondary metrics in the middle
+3. tertiary / diagnostic metrics at the bottom
+
+The dashboard should feel less like a generic dashboard and more like a pilot operating view focused on whether Viva is driving patient engagement, doctor action, and early outcome signals.
+
+Core principle
+For pilot, the most important questions are:
+- are patients using Viva consistently
+- are doctors engaging with the system and acting on signals
+- are those actions associated with better follow-through or directional outcome improvement
+
+Do not present all metrics equally. Strongly prioritize the metrics that matter most for pilot validation.
+
+Global rules
+- Keep existing page routes
+- Keep current design language
+- Reorder and relabel sections/cards where needed
+- Add short section labels like Primary metrics, Secondary metrics, Diagnostic metrics where helpful
+- Keep calculation logic unchanged unless needed for relabeling
+- If a metric is not yet available, leave it out rather than inventing it
+- Avoid duplication across pages
+- If a metric is clearly secondary or tertiary, move it lower on the page
+
+1. Usage page
+This page should focus first on actual pilot usage and engagement, not session mechanics.
+
+Primary metrics at top:
+- patient meaningful %
+- doctor meaningful %
+- patient sessions
+- doctor sessions
+- patient check-in completion proxy if already represented by meaningful sessions
+- doctor patient-viewed proxy if already represented by meaningful sessions
+
+Secondary metrics in middle:
+- patient usage by hour of day
+- doctor usage by hour of day
+- top users
+- sessions per start hour
+- any frequency / timing visuals already present
+
+Tertiary metrics at bottom:
+- average session length
+- median session length
+- meaningful average session length
+- event flow table
+- timezone coverage note
+- any raw event-count or instrumentation detail
+
+Important:
+- session length must be visually de-emphasized and clearly described as descriptive only
+- meaningful sessions should remain the headline concept
+- if there is a note about short sessions still being successful, keep it visible near session metrics
+
+2. Care loop page
+This page should be the strongest page in the dashboard because it shows whether the loop is actually working.
+
+Primary metrics at top:
+- patients touched
+- total escalations
+- % escalations reviewed
+- avg or median time to review
+- % follow-up completed
+- next-day check-in after intervention
+
+Secondary metrics in middle:
+- trend chart
+- source breakdown
+- doctor note rate
+- treatment status changed
+- follow-up within 24h
+- avg time to follow-up
+
+Tertiary metrics at bottom:
+- explanatory methodology text
+- detailed computation notes
+- any lower-value raw counts that are not central to pilot success
+
+3. Operating page
+This page should focus on high-level pilot adoption and engagement, not broad ops metrics.
+
+Primary metrics at top:
+- total activated patients
+- weekly active patients
+- completing check-ins
+- engaging with coach
+- weekly active doctors
+- patients reviewed
+- avg patients reviewed per doctor
+
+Secondary metrics in middle:
+- total patients
+- active today
+- DAU
+- MAU
+- notes written
+- status updates
+
+Tertiary metrics at bottom:
+- Apple Health connected
+- any supporting adoption detail that is nice to know but not central to pilot validation
+
+4. Retention page
+This page should focus on directional treatment continuity and stop reasons, without overstating proof of retention lift.
+
+Primary metrics at top:
+- % still on treatment
+- total churned
+- active patients / currently on treatment
+- inactive 12+ days
+- total panel if useful for context
+
+Secondary metrics in middle:
+- stop reasons
+- stop reason shares
+- churn by cohort
+- timing-related churn breakdown
+
+Tertiary metrics at bottom:
+- stop reasons by cohort
+- detailed denominator notes
+- methodology / caveat text
+
+5. System behavior page
+This page should focus on directional evidence that interventions are associated with better follow-through or symptom trajectory.
+
+Primary metrics at top:
+- next-day check-in after intervention
+- engagement improving
+- symptom trend / worsening vs improving if already available
+
+Secondary metrics in middle:
+- top intervention types
+- other directional behavioral lift metrics already computed
+
+Tertiary metrics at bottom:
+- lower-signal or supporting breakdowns
+- methodology notes if present
+
+6. Overview page
+This page should become a concise executive summary for the pilot.
+
+Primary metrics at top:
+- total patients
+- weekly active patients
+- doctors active 7d
+- on treatment %
+- notes / reviewed patients only if clearly tied to doctor engagement
+- keep total panel if useful for context
+
+Secondary metrics in middle:
+- jump-in cards to the most important pages:
+  - Operating
+  - Retention
+  - System behavior
+  - Care loop
+  - Usage
+
+Tertiary metrics at bottom:
+- reconciliation / supporting summary details
+
+7. Labeling and framing updates
+Make the page framing more pilot-relevant.
+
+Examples:
+- replace generic wording like “headline numbers” with more purposeful language
+- usage page should emphasize “engagement and usage timing”
+- care loop should emphasize “did signals lead to doctor action and patient follow-through”
+- session length should be labeled as descriptive, not a success metric
+- avoid overstating retention causality on the retention page
+
+8. Deliverables
+When done, provide:
+- exact pages changed
+- what metrics were moved into primary, secondary, tertiary tiers on each page
+- any labels or section headings changed
+- any metrics removed from top sections because they were not pilot-critical

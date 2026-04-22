@@ -26,9 +26,11 @@ import {
  * to patients, what got escalated to a doctor, what the doctors did
  * about it, and what the outcome looked like.
  *
- * Reads its own endpoint (not the bundled summary) so the queries
- * stay independent and we can iterate on the funnel SQL without
- * regenerating the rest of analytics.
+ * Layout is tiered for the pilot operator:
+ *   Primary    -- "is the loop working?" reach + response + closure
+ *   Secondary  -- trend over time, source breakdown, doctor detail
+ *   Outcomes   -- did the loop produce a positive follow-through?
+ *   Diagnostic -- methodology / proxy notes
  */
 export function CareLoopPage() {
   const [key, setKey] = useState<string | null>(null);
@@ -47,7 +49,7 @@ export function CareLoopPage() {
       <>
         <PageHeader
           title="Care loop"
-          subtitle="Viva → escalation → doctor → outcome, last 30 days."
+          subtitle="Did signals lead to doctor action and patient follow-through?"
         />
         <div className="text-muted-foreground py-16 text-center">
           {q.isError ? "Failed to load." : "Loading care loop…"}
@@ -61,20 +63,19 @@ export function CareLoopPage() {
     <>
       <PageHeader
         title="Care loop"
-        subtitle={`Viva → escalation → doctor → outcome, last ${d.windowDays} days.`}
+        subtitle={`Did signals lead to doctor action and patient follow-through? Last ${d.windowDays} days.`}
       />
 
-      {/* Layer 1: Viva. What the AI did. */}
-      <SectionHead hint="Viva-Care, the patient-facing layer">
-        Viva
+      {/* PRIMARY -- the six numbers that say whether the loop is
+          actually working. Reach (patients touched + escalations),
+          response (% reviewed + time to review), and closure
+          (follow-up + next-day check-in lift). Pulled from across
+          the Viva / Escalation / Doctor layers so the pilot
+          question can be answered without scrolling. */}
+      <SectionHead hint="The six numbers that say whether the loop is working">
+        Primary metrics · is the loop working?
       </SectionHead>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5">
-        <StatCard
-          label="Total Viva events"
-          value={d.viva.totalEvents.toLocaleString()}
-          sub="coach + recommendations"
-          accent="#5AC8FA"
-        />
         <StatCard
           label="Patients touched"
           value={d.viva.distinctPatients.toLocaleString()}
@@ -82,53 +83,13 @@ export function CareLoopPage() {
           accent="#5AC8FA"
         />
         <StatCard
-          label="Next-day check-in"
-          value={pctStr(d.viva.nextDayCheckinPctOfTouchedPatients)}
-          sub={`${d.viva.nextDayCheckinNumerator}/${d.viva.nextDayCheckinDenominator} touched`}
-          accent="#34C759"
-        />
-      </div>
-
-      {/* Layer 2: Escalation. Where Viva was not enough. */}
-      <SectionHead hint='"Need more support" or system-driven escalations'>
-        Escalation
-      </SectionHead>
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5">
-        <StatCard
           label="Total escalations"
           value={d.escalation.totalEscalations.toLocaleString()}
+          sub={`${d.escalation.distinctPatients.toLocaleString()} patients escalated`}
           accent="#FF9500"
         />
         <StatCard
-          label="Patients escalated"
-          value={d.escalation.distinctPatients.toLocaleString()}
-          accent="#FF9500"
-        />
-        <Card>
-          <div className="text-[12px] uppercase tracking-wider text-muted-foreground font-bold mb-2">
-            By source
-          </div>
-          {Object.entries(d.escalation.bySource).length === 0 && (
-            <div className="text-sm text-muted-foreground">No escalations.</div>
-          )}
-          <ul className="space-y-1 text-sm font-medium">
-            {Object.entries(d.escalation.bySource).map(([src, n]) => (
-              <li key={src} className="flex items-center justify-between">
-                <span className="capitalize text-foreground">{src}</span>
-                <span className="tabular-nums text-foreground">{n}</span>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      </div>
-
-      {/* Layer 3: Doctor. The clinician response. */}
-      <SectionHead hint="What clinicians did with the escalations">
-        Doctor
-      </SectionHead>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-        <StatCard
-          label="Reviewed in window"
+          label="% escalations reviewed"
           value={pctStr(d.doctor.reviewedPct)}
           sub={`${d.doctor.reviewedNumerator}/${d.doctor.reviewedDenominator}`}
           accent="#142240"
@@ -144,6 +105,57 @@ export function CareLoopPage() {
           accent="#142240"
         />
         <StatCard
+          label="% follow-up completed"
+          value={pctStr(d.doctor.followUpCompletedPct)}
+          sub={`${d.doctor.followUpCompletedNumerator}/${d.doctor.followUpCompletedDenominator} escalations`}
+          accent="#34C759"
+        />
+        <StatCard
+          label="Next-day check-in"
+          value={pctStr(d.viva.nextDayCheckinPctOfTouchedPatients)}
+          sub={`${d.viva.nextDayCheckinNumerator}/${d.viva.nextDayCheckinDenominator} touched patients`}
+          accent="#34C759"
+        />
+      </div>
+
+      {/* SECONDARY -- movement over time leads, since the trend chart
+          is the most operationally useful view (is the loop getting
+          tighter day by day?). Then source breakdown and the
+          clinician-side detail (notes, status, 24h response). */}
+      <SectionHead hint="Daily counts and 24h response rate over the last 30 days">
+        Secondary metrics · trend over time
+      </SectionHead>
+      <Card>
+        {trend.isLoading || !trend.data ? (
+          <div className="text-muted-foreground py-12 text-center text-sm">
+            {trend.isError ? "Failed to load trend." : "Loading trend…"}
+          </div>
+        ) : (
+          <CareLoopTrendChart points={trend.data.points} />
+        )}
+      </Card>
+
+      <SectionHead hint="Where escalations come from and what doctors do with them">
+        Loop detail · sources and doctor response
+      </SectionHead>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+        <Card>
+          <div className="text-[12px] uppercase tracking-wider text-muted-foreground font-bold mb-2">
+            Escalations by source
+          </div>
+          {Object.entries(d.escalation.bySource).length === 0 && (
+            <div className="text-sm text-muted-foreground">No escalations.</div>
+          )}
+          <ul className="space-y-1 text-sm font-medium">
+            {Object.entries(d.escalation.bySource).map(([src, n]) => (
+              <li key={src} className="flex items-center justify-between">
+                <span className="capitalize text-foreground">{src}</span>
+                <span className="tabular-nums text-foreground">{n}</span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+        <StatCard
           label="With doctor note"
           value={pctStr(d.doctor.withDoctorNotePct)}
           sub="of escalations"
@@ -155,25 +167,10 @@ export function CareLoopPage() {
           sub="of escalations"
           accent="#142240"
         />
-      </div>
-
-      {/* Follow-up sub-row. Separated visually from the four review/
-          note/status cards above because follow-up is the explicit
-          loop-closure signal (doctor actually contacted the patient),
-          while the four above are passive doctor activity. Numbers
-          are derived from follow_up_completed events linked back to
-          escalation_requested via trigger_event_id. */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mt-2.5">
         <StatCard
-          label="Follow-up completed"
-          value={pctStr(d.doctor.followUpCompletedPct)}
-          sub={`${d.doctor.followUpCompletedNumerator}/${d.doctor.followUpCompletedDenominator} escalations`}
-          accent="#34C759"
-        />
-        <StatCard
-          label="Total follow-up events"
-          value={d.doctor.totalFollowUpEvents.toLocaleString()}
-          sub="raw count in window"
+          label="Followed up within 24h"
+          value={pctStr(d.doctor.followUpWithin24hPct)}
+          sub={`${d.doctor.followUpWithin24hNumerator}/${d.doctor.followUpWithin24hDenominator} followed up`}
           accent="#34C759"
         />
         <StatCard
@@ -186,34 +183,8 @@ export function CareLoopPage() {
           sub="escalation → follow-up"
           accent="#34C759"
         />
-        <StatCard
-          label="Followed up within 24h"
-          value={pctStr(d.doctor.followUpWithin24hPct)}
-          sub={`${d.doctor.followUpWithin24hNumerator}/${d.doctor.followUpWithin24hDenominator} followed up`}
-          accent="#34C759"
-        />
       </div>
 
-      {/* Trend over time. The funnel cards above are point-in-time
-          snapshots; this section shows whether the loop is getting
-          tighter day-over-day. Bars are raw daily counts (escalations
-          and follow-ups), the line is the % of that day's escalations
-          that got followed up within 24h. Days with zero escalations
-          show no point on the line so we don't paint a misleading 0%. */}
-      <SectionHead hint="Daily counts and 24h response rate over the last 30 days">
-        Trend
-      </SectionHead>
-      <Card>
-        {trend.isLoading || !trend.data ? (
-          <div className="text-muted-foreground py-12 text-center text-sm">
-            {trend.isError ? "Failed to load trend." : "Loading trend…"}
-          </div>
-        ) : (
-          <CareLoopTrendChart points={trend.data.points} />
-        )}
-      </Card>
-
-      {/* Layer 4: Outcomes. Did the loop work? */}
       <SectionHead hint="Did the loop produce a positive follow-through?">
         Outcomes
       </SectionHead>
@@ -238,9 +209,25 @@ export function CareLoopPage() {
         />
       </div>
 
-      {/* Proxy notes -- so the operator who reads these numbers knows
-          exactly what each percent is computed from. Unsexy, essential. */}
-      <SectionHead>How these are computed</SectionHead>
+      {/* TERTIARY -- raw counts and methodology. Diagnostic only;
+          essential for trust but not for glance-and-go reading. */}
+      <SectionHead hint="Lower-signal raw event volumes">
+        Diagnostic metrics · raw counts
+      </SectionHead>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5">
+        <StatCard
+          label="Total Viva events"
+          value={d.viva.totalEvents.toLocaleString()}
+          sub="coach + recommendations"
+        />
+        <StatCard
+          label="Total follow-up events"
+          value={d.doctor.totalFollowUpEvents.toLocaleString()}
+          sub="raw count in window"
+        />
+      </div>
+
+      <SectionHead>Diagnostic · how these are computed</SectionHead>
       <Card>
         <ul className="space-y-2 text-sm text-muted-foreground">
           {Object.entries(d.notes).map(([k, v]) => (
