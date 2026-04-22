@@ -30,12 +30,33 @@ const JSON_ROUTER: Router = Router();
 
 // iOS App Store ID for com.sullyk97.vivaai. Hard-coded because there
 // is exactly one app and changing it requires a coordinated App Store
-// Connect change anyway.
+// Connect change anyway. Used as the apple-itunes-app meta target and
+// as the fallback when no TestFlight URL has been configured.
 const IOS_APP_STORE_URL = "https://apps.apple.com/app/id6762158265";
-// Android: even if the Play listing isn't live yet, the link resolves
-// gracefully to a "coming soon" page rather than a hard error.
-const ANDROID_PLAY_STORE_URL =
-  "https://play.google.com/store/apps/details?id=com.sullyk97.vivaai";
+// TestFlight install URL for the closed pilot. Configurable via
+// VIVA_TESTFLIGHT_URL so the link can be rotated without a code
+// deploy when a new build family is published. Falls back to the
+// App Store listing so the CTA never points at a dead URL even if
+// the env var is unset.
+const TESTFLIGHT_URL =
+  process.env.VIVA_TESTFLIGHT_URL || IOS_APP_STORE_URL;
+if (!process.env.VIVA_TESTFLIGHT_URL) {
+  // Loud at boot so a deploy that forgets to set the pilot TestFlight
+  // link doesn't silently funnel patients into the public App Store
+  // listing (where the build isn't published yet).
+  console.warn(
+    "[invite] VIVA_TESTFLIGHT_URL is not set; falling back to App Store listing.",
+  );
+}
+// Simple UA-based iOS detection. Server-side so the non-iOS visitor
+// never sees the install / deep-link CTAs (and never has the auto
+// viva:// redirect fired at them). iPadOS 13+ reports as Macintosh
+// with touch -- we treat "iPad" UA only; the dashboard sign-in path
+// covers desktop users who land here by mistake.
+function isIosUserAgent(ua: string | undefined): boolean {
+  if (!ua) return false;
+  return /iPhone|iPad|iPod/i.test(ua);
+}
 
 interface InvitePreview {
   patientName: string;
@@ -148,6 +169,39 @@ ${HEAD_LINKS}
 </html>`;
 }
 
+// Non-iOS visitors get a single message, no install CTAs and no
+// auto deep-link redirect. iOS-only TestFlight pilot -- nothing on
+// Android or desktop will work, so showing CTAs would just generate
+// dead-end taps.
+function renderNonIosPage(): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Open this link on your iPhone - Viva</title>
+${HEAD_LINKS}
+<style>${PAGE_CSS}</style>
+</head>
+<body>
+  <main class="shell">
+    <div class="brand-row">
+      <img class="brand-logo" src="${VIVA_LOGO_URL}" alt="Viva" width="132" height="44" draggable="false" />
+      <p class="brand-caption">Patient activation</p>
+    </div>
+    <section class="card">
+      <h1>Open this link on your iPhone</h1>
+      <p class="lede">
+        Viva is currently available on iPhone only. Please open this link
+        on your iPhone to continue setting up your account.
+      </p>
+    </section>
+    <p class="legal">Viva is a clinician-monitored support platform.</p>
+  </main>
+</body>
+</html>`;
+}
+
 function renderInvitePage(token: string, preview: InvitePreview): string {
   const safeToken = esc(token);
   const firstName = preview.patientName.split(" ")[0] || preview.patientName;
@@ -183,34 +237,29 @@ ${HEAD_LINKS}
       <p class="eyebrow">You're invited</p>
       <h1>Welcome, ${safePatient}.</h1>
       <p class="lede">
-        Your clinician has set up a Viva account for you. Continue on your
-        phone to choose a password and start submitting daily check-ins.
+        Your clinician has set up a Viva account for you. Install the app
+        via TestFlight on your iPhone, then choose a password and start
+        submitting daily check-ins.
       </p>
 
       ${clinicMeta}
 
-      <a class="btn btn-primary" id="open-app" href="viva://invite/${safeToken}">
-        Continue in the Viva app
+      <a class="btn btn-primary" href="${TESTFLIGHT_URL}">
+        Install via TestFlight
       </a>
-      <p class="hint">If the app is installed, this will open it directly.</p>
+      <a class="btn btn-secondary" id="open-app" href="viva://invite/${safeToken}">
+        Continue Setup
+      </a>
+      <p class="hint">Install first, then tap Continue Setup to open the app.</p>
     </section>
 
     <section class="card card-muted">
-      <p class="eyebrow">Don't have the app yet?</p>
-      <p class="lede compact">
-        Install Viva on your phone, then return to this page and tap
-        Continue to finish setting up your account.
-      </p>
-      <div class="store-row">
-        <a class="btn btn-store" href="${IOS_APP_STORE_URL}">
-          <span class="store-platform">iPhone</span>
-          <span class="store-action">App Store</span>
-        </a>
-        <a class="btn btn-store" href="${ANDROID_PLAY_STORE_URL}">
-          <span class="store-platform">Android</span>
-          <span class="store-action">Google Play</span>
-        </a>
-      </div>
+      <p class="eyebrow">How it works</p>
+      <ol class="steps">
+        <li><span class="step-num">1</span><span class="step-text">Install Viva via TestFlight.</span></li>
+        <li><span class="step-num">2</span><span class="step-text">Open the Viva app on your iPhone.</span></li>
+        <li><span class="step-num">3</span><span class="step-text">Tap "Continue Setup" to finish activating your account.</span></li>
+      </ol>
     </section>
 
     <p class="legal">
@@ -383,7 +432,7 @@ const PAGE_CSS = `
     background: transparent;
     color: var(--foreground);
     border-color: var(--border);
-    margin-top: 24px;
+    margin-top: 12px;
   }
   .hint {
     margin: 12px 0 0 0;
@@ -392,34 +441,38 @@ const PAGE_CSS = `
     font-size: 12px;
     font-weight: 500;
   }
-  .store-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    margin-top: 18px;
+  .steps {
+    list-style: none;
+    margin: 14px 0 0 0;
+    padding: 0;
   }
-  .btn-store {
-    background: var(--background);
-    color: var(--foreground);
-    border-color: var(--border);
-    padding: 12px 14px;
+  .steps li {
     display: flex;
-    flex-direction: column;
     align-items: flex-start;
-    gap: 2px;
-    text-align: left;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
   }
-  .store-platform {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--muted-foreground);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-  }
-  .store-action {
-    font-size: 14px;
+  .steps li:last-child { border-bottom: none; }
+  .step-num {
+    flex: 0 0 24px;
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    background: var(--navy);
+    color: #FFFFFF;
+    font-size: 12px;
     font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .step-text {
     color: var(--foreground);
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.45;
+    padding-top: 3px;
   }
   .legal {
     margin: 24px 4px 0 4px;
@@ -439,8 +492,22 @@ HTML_ROUTER.get("/:token", async (req: Request, res: Response) => {
   // patient who activates and re-visits sees the "no longer valid"
   // page rather than a stale cached invite landing.
   res.setHeader("Cache-Control", "no-store");
+  // Vary on User-Agent because the rendered HTML now branches on it
+  // (iOS install flow vs non-iOS message). Belt-and-suspenders with
+  // no-store for any shared cache that ignores the latter.
+  res.setHeader("Vary", "User-Agent");
   if (!preview) {
     res.status(404).send(renderInvalidPage());
+    return;
+  }
+  // iOS-only TestFlight pilot: any non-iOS visitor (Android, desktop,
+  // bots) gets the "open this on your iPhone" message instead of the
+  // install + deep-link flow. The token itself stays valid -- the
+  // patient can simply re-open the same link on their iPhone. We do
+  // NOT short-circuit cache headers here because the response is
+  // already no-store.
+  if (!isIosUserAgent(req.get("user-agent") ?? undefined)) {
+    res.status(200).send(renderNonIosPage());
     return;
   }
   res.status(200).send(renderInvitePage(token, preview));
