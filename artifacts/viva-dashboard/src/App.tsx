@@ -2,6 +2,7 @@ import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { logEvent as logAnalytics } from "@/lib/analytics";
 import { Shell } from "@/components/Shell";
 import { LoginPage } from "@/pages/LoginPage";
 import { SignUpPage } from "@/pages/SignUpPage";
@@ -33,6 +34,12 @@ function NotFound() {
 }
 
 function ProtectedRoutes() {
+  // Pilot analytics: every authenticated dashboard mount counts as
+  // one `dashboard_opened`. ensureSession() (called inside logEvent)
+  // also fires `session_start` once per browser tab.
+  useEffect(() => {
+    logAnalytics("dashboard_opened");
+  }, []);
   return (
     <Shell>
       <Switch>

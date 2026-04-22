@@ -1,0 +1,74 @@
+Implement a very lightweight analytics framework for viva care, viva clinic, and viva analytics so we can track when users are active and roughly how long they use the product during the pilot.
+
+Goal
+We only need enough analytics to answer:
+- what time of day patients use viva care
+- what time of day doctors use viva clinic
+- how many sessions each user has
+- rough session length
+
+Keep this very simple. Do not overengineer.
+
+1. Create a Postgres table called analytics_events with:
+- id
+- created_at timestamptz default now()
+- user_type text not null      -- 'patient' or 'doctor'
+- user_id integer not null
+- event_name text not null
+- session_id text null
+- platform text null           -- ios, web, unknown
+
+Add indexes on:
+- created_at
+- user_type, user_id, created_at desc
+- event_name, created_at desc
+- session_id
+
+2. Only track these events for now:
+Patient / viva care
+- session_start
+- app_open
+- checkin_completed
+
+Doctor / viva clinic
+- session_start
+- dashboard_opened
+- patient_viewed
+
+3. Create a simple analytics helper that inserts events into analytics_events.
+Requirements:
+- should never break product flows if analytics fails
+- log errors safely
+- accept session_id when present
+
+4. Session logic
+- when viva care or viva clinic opens, generate a session_id and fire session_start
+- reuse the same session_id for all events during that usage period
+- if possible, persist session_id while the app/web session remains active
+- do not overcomplicate end-of-session logic
+- for reporting, define session length as:
+  max(created_at) - min(created_at) for each session_id
+
+5. Add instrumentation
+Viva care:
+- fire session_start and app_open when app enters foreground
+- fire checkin_completed when a check-in is successfully submitted
+
+Viva clinic:
+- fire session_start and dashboard_opened when dashboard loads
+- fire patient_viewed when a doctor opens a patient profile
+
+6. Add a simple Usage & Activity section to viva analytics with:
+- patient activity by hour of day
+- doctor activity by hour of day
+- sessions per user over last 7 days
+- average session length by user type over last 7 days
+
+7. Deliverables
+When done, provide:
+- schema changes
+- files edited
+- where events are fired
+- how session_id is generated
+- how session length is calculated
+- what was added to viva analytics

@@ -21,6 +21,7 @@ import { AppState, type AppStateStatus } from "react-native";
 import { router } from "expo-router";
 import { extractInviteToken } from "@/lib/api/sessionClient";
 import { getRemindersEnabled, rescheduleReminders } from "@/lib/reminders";
+import { ensureSession, logEvent } from "@/lib/analytics/client";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 // Fade the native splash out so it cross-fades into the JS screen instead of
@@ -184,11 +185,36 @@ function useReminderScheduler() {
   }, [user, hasCheckedInToday]);
 }
 
+// Pilot analytics: fire `session_start` (via ensureSession, which only
+// emits when actually opening a fresh session) and `app_open` whenever
+// the app comes to the foreground OR mounts for the first time. We
+// gate on user presence so anonymous launches (pre-activate) don't
+// post events with a missing bearer token.
+function useAnalyticsTracker() {
+  const { user } = useAuth();
+  useEffect(() => {
+    if (!user) return;
+    void (async () => {
+      await ensureSession();
+      void logEvent("app_open");
+    })();
+    const sub = AppState.addEventListener("change", (state: AppStateStatus) => {
+      if (state !== "active") return;
+      void (async () => {
+        await ensureSession();
+        void logEvent("app_open");
+      })();
+    });
+    return () => sub.remove();
+  }, [user]);
+}
+
 function RootLayoutNav() {
   const { profile } = useApp();
   const { user } = useAuth();
   useInviteDeepLink();
   useReminderScheduler();
+  useAnalyticsTracker();
   // Auth gate decided ONCE at first render, same pattern as before:
   //   no session         -> /connect (paste invite or sign in)
   //   session, no profile-> /onboarding (local profile wizard)

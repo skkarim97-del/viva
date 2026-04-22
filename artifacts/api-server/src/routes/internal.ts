@@ -9,6 +9,7 @@ import {
   interventionEventsTable,
   careEventsTable,
   outcomeSnapshotsTable,
+  analyticsEventsTable,
   deriveStopTiming,
 } from "@workspace/db";
 import { computeRisk, deriveAction } from "../lib/risk";
@@ -1616,5 +1617,213 @@ router.get(
     }
   },
 );
+
+// ----------------------------------------------------------------------
+// GET /internal/analytics/usage?days=7
+//
+// Pilot product-usage summary. Reads only the analytics_events stream
+// -- nothing here joins back to the clinical tables, so an analytics
+// outage cannot affect any product number on the rest of the page.
+//
+// Returns four blocks:
+//   patientsByHour / doctorsByHour : 24-bucket hour-of-day histogram
+//     of distinct sessions, useful for "when do patients actually
+//     open the app".
+//   topUsers : the busiest user_ids (per role) by session count, so
+//     ops can spot heavy users without exposing raw event tables.
+//   sessionLengthByRole : avg / p50 / p95 session length in seconds
+//     for patients vs doctors.
+//   eventCounts : raw count per event_name, lets us sanity-check that
+//     all expected event types are flowing.
+// ----------------------------------------------------------------------
+router.get(
+  "/analytics/usage",
+  requireInternalKey,
+  async (req: Request, res: Response) => {
+    const days = Math.min(
+      Math.max(Number.parseInt(String(req.query.days ?? "7"), 10) || 7, 1),
+      90,
+    );
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    try {
+      // Hour-of-day histogram (server local hour, 0..23) of sessions
+      // *opened* in that hour. We bucket on MIN(created_at) per
+      // session so a long session that spans 14:55 - 15:30 counts
+      // once at 14, not in both 14 and 15. Without this the 'When
+      // the apps are opened' chart double-counts and reads as if the
+      // load is flatter than it really is. Null-session events get
+      // a synthetic single-row session via COALESCE so they still
+      // contribute (rare in practice -- the client always supplies
+      // a session_id once ensureSession has resolved).
+      const hourly = await db.execute(sql`
+        WITH session_starts AS (
+          SELECT
+            user_type,
+            COALESCE(session_id, 'evt-' || id::text) AS sid,
+            MIN(created_at) AS started_at
+          FROM ${analyticsEventsTable}
+          WHERE created_at >= ${since}
+          GROUP BY user_type, COALESCE(session_id, 'evt-' || id::text)
+        )
+        SELECT
+          user_type,
+          EXTRACT(HOUR FROM started_at)::int AS hour,
+          COUNT(*)::int AS sessions
+        FROM session_starts
+        GROUP BY user_type, EXTRACT(HOUR FROM started_at)::int
+        ORDER BY user_type, hour
+      `);
+      const patientsByHour: number[] = Array(24).fill(0);
+      const doctorsByHour: number[] = Array(24).fill(0);
+      for (const row of hourly.rows as Array<{
+        user_type: string;
+        hour: number;
+        sessions: number;
+      }>) {
+        const arr =
+          row.user_type === "patient"
+            ? patientsByHour
+            : row.user_type === "doctor"
+              ? doctorsByHour
+              : null;
+        if (arr) arr[row.hour] = row.sessions;
+      }
+
+      // Top users by session count. Limited to 10 per role -- this is
+      // a pilot view, not an admin tool. Returns user_id only; the UI
+      // can join to a name via the existing /patients or /doctors
+      // endpoints if it wants to.
+      const topRows = await db.execute(sql`
+        WITH sessions AS (
+          SELECT
+            user_type,
+            user_id,
+            session_id,
+            MIN(created_at) AS started_at
+          FROM ${analyticsEventsTable}
+          WHERE created_at >= ${since} AND session_id IS NOT NULL
+          GROUP BY user_type, user_id, session_id
+        )
+        SELECT user_type, user_id, COUNT(*)::int AS sessions,
+               MAX(started_at) AS last_seen_at
+        FROM sessions
+        GROUP BY user_type, user_id
+        ORDER BY sessions DESC
+        LIMIT 40
+      `);
+      type TopRow = {
+        user_type: string;
+        user_id: number;
+        sessions: number;
+        last_seen_at: string;
+      };
+      const allTop = (topRows.rows as TopRow[]).map((r) => ({
+        userType: r.user_type,
+        userId: r.user_id,
+        sessions: r.sessions,
+        lastSeenAt: r.last_seen_at,
+      }));
+      const topUsers = {
+        patients: allTop.filter((r) => r.userType === "patient").slice(0, 10),
+        doctors: allTop.filter((r) => r.userType === "doctor").slice(0, 10),
+      };
+
+      // Session length: per session, max(created_at) - min(created_at).
+      // Single-event sessions become 0s and we keep them -- otherwise
+      // a "patient opens app, does nothing" session disappears, which
+      // is exactly the behavior we want to be able to count.
+      const sessionLenRows = await db.execute(sql`
+        WITH per_session AS (
+          SELECT
+            user_type,
+            session_id,
+            EXTRACT(EPOCH FROM (MAX(created_at) - MIN(created_at)))::float AS secs
+          FROM ${analyticsEventsTable}
+          WHERE created_at >= ${since} AND session_id IS NOT NULL
+          GROUP BY user_type, session_id
+        )
+        SELECT
+          user_type,
+          COUNT(*)::int AS sessions,
+          AVG(secs)::float AS avg_secs,
+          PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY secs)::float AS p50_secs,
+          PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY secs)::float AS p95_secs
+        FROM per_session
+        GROUP BY user_type
+      `);
+      const sessionLengthByRole = {
+        patient: emptyLen(),
+        doctor: emptyLen(),
+      } as Record<
+        "patient" | "doctor",
+        { sessions: number; avgSecs: number; p50Secs: number; p95Secs: number }
+      >;
+      for (const r of sessionLenRows.rows as Array<{
+        user_type: string;
+        sessions: number;
+        avg_secs: number | null;
+        p50_secs: number | null;
+        p95_secs: number | null;
+      }>) {
+        const role = r.user_type === "doctor" ? "doctor" : "patient";
+        sessionLengthByRole[role] = {
+          sessions: r.sessions,
+          avgSecs: Math.round(r.avg_secs ?? 0),
+          p50Secs: Math.round(r.p50_secs ?? 0),
+          p95Secs: Math.round(r.p95_secs ?? 0),
+        };
+      }
+
+      // Raw counts per event_name so the operator can confirm that the
+      // mobile and dashboard clients are actually flushing events.
+      const eventRows = await db.execute(sql`
+        SELECT event_name, user_type, COUNT(*)::int AS n
+        FROM ${analyticsEventsTable}
+        WHERE created_at >= ${since}
+        GROUP BY event_name, user_type
+        ORDER BY n DESC
+      `);
+      const eventCounts = (eventRows.rows as Array<{
+        event_name: string;
+        user_type: string;
+        n: number;
+      }>).map((r) => ({
+        eventName: r.event_name,
+        userType: r.user_type,
+        count: r.n,
+      }));
+
+      res.json({
+        windowDays: days,
+        generatedAt: new Date().toISOString(),
+        patientsByHour,
+        doctorsByHour,
+        topUsers,
+        sessionLengthByRole,
+        eventCounts,
+        notes: {
+          patientsByHour:
+            "Patient sessions bucketed by start hour (server local), last N days. Long sessions count once at their start hour, not in every hour they touch.",
+          doctorsByHour:
+            "Doctor sessions bucketed by start hour (server local), last N days. Long sessions count once at their start hour, not in every hour they touch.",
+          topUsers:
+            "Top 10 users per role by session count. user_id only; join client-side if a name is needed.",
+          sessionLengthByRole:
+            "Per-session length = max(created_at) - min(created_at). Single-event sessions count as 0s.",
+          eventCounts:
+            "Raw event volumes per event_name + user_type. Use this to verify clients are firing.",
+        },
+      });
+    } catch (err) {
+      logger.error({ err }, "internal_analytics_usage_failed");
+      res.status(500).json({ error: "analytics_usage_failed" });
+    }
+  },
+);
+
+function emptyLen() {
+  return { sessions: 0, avgSecs: 0, p50Secs: 0, p95Secs: 0 };
+}
 
 export default router;

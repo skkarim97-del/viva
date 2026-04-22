@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { logEvent as logAnalytics } from "@/lib/analytics";
 import {
   api,
   type CareEvent,
@@ -73,6 +74,12 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 export function PatientDetailPage({ id }: { id: number }) {
   const qc = useQueryClient();
+  // Pilot analytics: one `patient_viewed` per (patient, mount). Re-
+  // fires when the doctor navigates between patient detail pages
+  // because the id dep changes.
+  useEffect(() => {
+    logAnalytics("patient_viewed");
+  }, [id]);
   const patient = useQuery({
     queryKey: ["patient", id],
     queryFn: () => api.patient(id),

@@ -1380,6 +1380,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       });
     }
 
+    // Pilot analytics: record that a check-in was successfully
+    // submitted from the patient's perspective. Imported lazily so a
+    // stripped-down test environment (no fetch / no AsyncStorage)
+    // doesn't pull the analytics module just to render AppContext.
+    try {
+      const analytics = await import("@/lib/analytics/client");
+      void analytics.logEvent("checkin_completed");
+    } catch {
+      /* analytics module unavailable */
+    }
+
     // Recompute the local reminder schedule. Today's check-in just
     // landed, so the noon and 7pm slots should drop off the queue.
     // Imported lazily so unit-test environments without expo-notifications
