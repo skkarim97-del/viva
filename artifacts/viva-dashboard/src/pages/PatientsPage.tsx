@@ -90,7 +90,13 @@ export function PatientsPage() {
   const needsReview = useQuery({
     queryKey: ["needs-review-ids"],
     queryFn: api.needsReviewIds,
+    // Poll on a 30s cadence so a doctor sitting on the worklist
+    // sees a new "Patient requested review" pill appear within
+    // half a minute of the patient tapping the CTA, without
+    // requiring a manual refresh. Cheap query (returns just ids).
     staleTime: 30_000,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
   });
   const needsReviewSet = useMemo(
     () => new Set(needsReview.data?.ids ?? []),
