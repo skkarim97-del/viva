@@ -41,6 +41,12 @@ export const analyticsEventsTable = pgTable(
     // 'ios' | 'android' | 'web' | 'unknown'. Free-text for the same
     // forward-compat reason as userType.
     platform: text("platform"),
+    // IANA timezone name as reported by the client at event time
+    // (e.g. 'America/Los_Angeles'). Nullable because old rows did not
+    // capture it and a privacy-restricted browser may withhold it.
+    // Used by the hourly usage chart to bucket on the patient's
+    // local hour rather than server time when available.
+    timezone: text("timezone"),
   },
   (t) => ({
     byCreated: index("analytics_events_created_idx").on(t.createdAt),

@@ -44,6 +44,18 @@ function platform(): "ios" | "android" | "web" | "unknown" {
   return "unknown";
 }
 
+// Best-effort IANA timezone capture. Hermes/JSC both ship Intl now,
+// but a stripped-down OS or a privacy-restricted device can still throw
+// or return undefined -- we'd rather log a null timezone than crash a
+// fire-and-forget analytics call.
+function timezone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Returns the current session id, generating a fresh one if no
  * session exists yet OR the previous session has been idle longer
@@ -52,30 +64,74 @@ function platform(): "ios" | "android" | "web" | "unknown" {
  *
  * Always safe to call -- never throws, never blocks the caller's UI.
  */
+// In-memory mirror of the persisted last-active timestamp. We keep this
+// alongside the cached id so an app that lives in the background for an
+// hour without being evicted from memory still expires its session on
+// the next foreground call (the previous version reused cachedSessionId
+// indefinitely once warm, missing the idle-timeout case).
+let cachedLastActive = 0;
+
+type MintReason = "no_existing_session" | "idle_timeout" | "cold_start";
+
+function logMint(reason: MintReason, sid: string) {
+  // Console-only, dev-friendly. Never surfaces in product UI.
+  if (__DEV__) {
+    // eslint-disable-next-line no-console
+    console.log(`[analytics] new session minted: ${reason} → ${sid}`);
+  }
+}
+
 export async function ensureSession(): Promise<string> {
+  const now = Date.now();
+  // Warm path: reuse the cached session unless it has gone idle in
+  // memory (e.g. backgrounded for >30 min without OS eviction). This
+  // is the fix for the "warm idle" case -- previously cachedSessionId
+  // was reused forever once set.
   if (cachedSessionId) {
-    void touchLastActive();
-    return cachedSessionId;
+    if (now - cachedLastActive < SESSION_IDLE_MS) {
+      cachedLastActive = now;
+      void touchLastActive();
+      return cachedSessionId;
+    }
+    // In-memory session has gone stale. Drop it and fall through to
+    // mint a fresh one with the idle_timeout reason.
+    cachedSessionId = null;
   }
   if (pendingSession) return pendingSession;
   pendingSession = (async () => {
+    let reason: MintReason = "no_existing_session";
     try {
       const [storedSession, storedLastActive] = await Promise.all([
         AsyncStorage.getItem(SESSION_KEY),
         AsyncStorage.getItem(LAST_ACTIVE_KEY),
       ]);
       const lastActive = storedLastActive ? Number(storedLastActive) : 0;
-      const now = Date.now();
-      if (storedSession && now - lastActive < SESSION_IDLE_MS) {
-        cachedSessionId = storedSession;
-        void touchLastActive();
-        return cachedSessionId;
+      if (storedSession) {
+        if (Date.now() - lastActive < SESSION_IDLE_MS) {
+          // Within the idle window -- cold-start resume. Reuse.
+          cachedSessionId = storedSession;
+          cachedLastActive = Date.now();
+          void touchLastActive();
+          return cachedSessionId;
+        }
+        // Stored session exists but went idle while the app was killed.
+        reason = "cold_start";
+      } else {
+        // Nothing on disk -- truly fresh.
+        reason = "no_existing_session";
       }
     } catch {
       /* fall through to fresh session */
     }
+    // If we got here via the warm-idle branch above, the cached path
+    // already reset cachedSessionId. Override the reason to reflect
+    // that this was an in-memory idle expiry, not a cold start.
+    if (cachedLastActive && Date.now() - cachedLastActive >= SESSION_IDLE_MS) {
+      reason = "idle_timeout";
+    }
     const sid = newSessionId();
     cachedSessionId = sid;
+    cachedLastActive = Date.now();
     try {
       await Promise.all([
         AsyncStorage.setItem(SESSION_KEY, sid),
@@ -84,6 +140,7 @@ export async function ensureSession(): Promise<string> {
     } catch {
       /* fine: cachedSessionId still drives this process */
     }
+    logMint(reason, sid);
     // Fire the session_start row for this brand-new session. We do NOT
     // await it -- the session id is already valid for downstream events.
     void postEvent("session_start", sid);
@@ -117,7 +174,14 @@ async function postEvent(eventName: string, sessionId: string): Promise<void> {
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
-        events: [{ eventName, sessionId, platform: platform() }],
+        events: [
+          {
+            eventName,
+            sessionId,
+            platform: platform(),
+            timezone: timezone(),
+          },
+        ],
       }),
     });
   } catch {

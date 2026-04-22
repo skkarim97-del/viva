@@ -17,8 +17,13 @@ export interface UsageTopUser {
 export interface UsageSessionLength {
   sessions: number;
   avgSecs: number;
+  medianSecs: number;
   p50Secs: number;
   p95Secs: number;
+  meaningfulSessions: number;
+  // 0..1
+  meaningfulPct: number;
+  avgSecsMeaningful: number;
 }
 
 export interface UsageEventCount {
@@ -41,6 +46,12 @@ export interface UsageSummary {
     doctor: UsageSessionLength;
   };
   eventCounts: UsageEventCount[];
+  timezoneCoverage: {
+    sessionsWithTz: number;
+    sessionsWithoutTz: number;
+    // 0..1, or null if there were zero sessions in the window.
+    coveragePct: number | null;
+  };
   notes: Record<string, string>;
 }
 

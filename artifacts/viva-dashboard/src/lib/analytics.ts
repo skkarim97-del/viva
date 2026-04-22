@@ -19,6 +19,16 @@ function newSessionId(): string {
   return `${Date.now().toString(36)}-${rand}`;
 }
 
+// Best-effort IANA timezone string. Returns null in privacy-restricted
+// browsers where Intl is unavailable or returns an empty zone.
+function timezone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    return null;
+  }
+}
+
 function readStoredSession(): string | null {
   try {
     return window.sessionStorage.getItem(SESSION_KEY);
@@ -53,6 +63,12 @@ export function ensureSession(): string {
   writeStoredSession(sid);
   if (!startedSessionThisLoad) {
     startedSessionThisLoad = true;
+    if (import.meta.env.DEV) {
+      // Lightweight visibility into when (and why) we minted a fresh
+      // tab session. Dev-only -- never lands in a production console.
+      // eslint-disable-next-line no-console
+      console.log(`[analytics] new session minted: no_existing_session → ${sid}`);
+    }
     void postEvent("session_start", sid);
   }
   return sid;
@@ -65,7 +81,9 @@ async function postEvent(eventName: string, sessionId: string): Promise<void> {
       credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        events: [{ eventName, sessionId, platform: "web" }],
+        events: [
+          { eventName, sessionId, platform: "web", timezone: timezone() },
+        ],
       }),
       // keepalive lets the request survive a tab-close in modern
       // browsers, so a "patient_viewed" fired from a row click that

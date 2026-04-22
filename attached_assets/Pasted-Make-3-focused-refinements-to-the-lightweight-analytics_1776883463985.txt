@@ -1,0 +1,109 @@
+Make 3 focused refinements to the lightweight analytics framework already shipped. Do not expand scope. Keep this pilot-friendly.
+
+Goal
+Tighten the current implementation so:
+1. session length is interpreted correctly
+2. usage timing is shown in local time or clearly labeled
+3. session IDs are not resetting too aggressively
+
+Do not redesign the analytics system. Only make the minimum changes needed.
+
+1. Session length interpretation and reporting
+
+Current issue
+Session length is only an approximation and should not be treated as a direct proxy for value. A short session can still be successful if the user completed a meaningful action like a check-in. A long session may indicate confusion or friction.
+
+Required changes
+- Keep the current session length calculation logic
+- Do not change the underlying session duration math unless necessary
+- Add meaningful session interpretation into the usage endpoint and analytics page
+
+For each session, derive:
+- session_length_seconds
+- event_count
+- meaningful_event_count
+- has_meaningful_action boolean
+
+Meaningful patient events:
+- checkin_completed
+
+Meaningful doctor events:
+- patient_viewed
+
+In the internal usage endpoint and analytics page:
+- add a metric for percent of sessions with a meaningful action
+- add a metric for average session length only as a descriptive metric, not a success metric
+- add a note in the UI making clear:
+  "Session length is approximate. Short sessions can still be successful if a key action was completed."
+
+If easy, also add:
+- median session length
+- average session length for meaningful sessions only
+
+2. Local time handling for usage charts
+
+Current issue
+If charts are using raw UTC timestamps, hour-of-day usage may be misleading.
+
+Required changes
+Prefer local time conversion if we already have enough information. If not, label charts clearly.
+
+Implement the best pilot-friendly option:
+Option A preferred:
+- use local_timezone if already present or easy to capture from client
+- convert session-start timestamps into local hour before bucketing charts
+
+If Option A is not already practical across current events, then do Option B:
+- keep current bucketing logic
+- clearly label charts as UTC or server time
+- add a visible note on the analytics page such as:
+  "Hour-of-day charts are currently shown in UTC" or "shown in server time"
+
+Also:
+- if patient mobile app can easily send local timezone via Intl or device APIs, add it to analytics event payloads going forward
+- if viva clinic web can easily send browser timezone, add it too
+- do not backfill old data
+- do not build a full timezone normalization layer
+
+3. Session ID stability
+
+Current issue
+Session IDs may be resetting too aggressively, especially on mobile, which could make session counts noisy.
+
+Required changes
+Review and tighten mobile session behavior:
+- keep current 30-minute idle reset unless there is a clear bug
+- do not create a brand new session_id on every foreground/background transition if the app was only inactive briefly
+- resuming after a short pause should reuse the current session_id
+- opening from a notification shortly after prior activity should reuse the session if within idle threshold
+- only mint a new session_id when:
+  - there is no active session_id
+  - idle threshold has been exceeded
+  - app was fully cold-started and prior session is stale
+
+Review and tighten web session behavior:
+- keep per-tab sessionStorage approach unless broken
+- do not regenerate session_id on minor rerenders or route changes within the same active tab session
+- dashboard_opened and patient_viewed within the same active tab session should reuse the same session_id
+
+Add lightweight debug visibility if easy:
+- log or expose when a new session_id is minted and why
+- reasons might include: no_existing_session, idle_timeout, cold_start
+
+Do not add noisy client logging in production UI. Console/debug logging or internal comments are enough.
+
+4. Deliverables
+
+When done, provide:
+- exact files changed
+- whether charts now use local time or are explicitly labeled with timezone
+- how meaningful sessions are defined and surfaced
+- what session stability logic was changed on mobile and web
+- any remaining limitations or approximations
+
+Success criteria
+After this change:
+- a 10-second check-in session is clearly counted as meaningful
+- session duration is not presented as the main proxy for success
+- hour-of-day charts are either locally adjusted or clearly labeled by timezone
+- quick app resumes do not create noisy duplicate sessions

@@ -1647,136 +1647,131 @@ router.get(
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
     try {
-      // Hour-of-day histogram (server local hour, 0..23) of sessions
-      // *opened* in that hour. We bucket on MIN(created_at) per
-      // session so a long session that spans 14:55 - 15:30 counts
-      // once at 14, not in both 14 and 15. Without this the 'When
-      // the apps are opened' chart double-counts and reads as if the
-      // load is flatter than it really is. Null-session events get
-      // a synthetic single-row session via COALESCE so they still
-      // contribute (rare in practice -- the client always supplies
-      // a session_id once ensureSession has resolved).
-      const hourly = await db.execute(sql`
-        WITH session_starts AS (
-          SELECT
-            user_type,
-            COALESCE(session_id, 'evt-' || id::text) AS sid,
-            MIN(created_at) AS started_at
-          FROM ${analyticsEventsTable}
-          WHERE created_at >= ${since}
-          GROUP BY user_type, COALESCE(session_id, 'evt-' || id::text)
-        )
-        SELECT
-          user_type,
-          EXTRACT(HOUR FROM started_at)::int AS hour,
-          COUNT(*)::int AS sessions
-        FROM session_starts
-        GROUP BY user_type, EXTRACT(HOUR FROM started_at)::int
-        ORDER BY user_type, hour
-      `);
-      const patientsByHour: number[] = Array(24).fill(0);
-      const doctorsByHour: number[] = Array(24).fill(0);
-      for (const row of hourly.rows as Array<{
-        user_type: string;
-        hour: number;
-        sessions: number;
-      }>) {
-        const arr =
-          row.user_type === "patient"
-            ? patientsByHour
-            : row.user_type === "doctor"
-              ? doctorsByHour
-              : null;
-        if (arr) arr[row.hour] = row.sessions;
-      }
-
-      // Top users by session count. Limited to 10 per role -- this is
-      // a pilot view, not an admin tool. Returns user_id only; the UI
-      // can join to a name via the existing /patients or /doctors
-      // endpoints if it wants to.
-      const topRows = await db.execute(sql`
-        WITH sessions AS (
+      // One unified per-session CTE. Every metric on this endpoint
+      // builds on the same shape so the numbers stay internally
+      // consistent (e.g. the meaningful-action % and the session
+      // length stats can never disagree about what counts as a
+      // session). Null session_id events fall back to a synthetic
+      // 1-event session keyed by row id.
+      //
+      // "Meaningful" = a session that completed an action with real
+      // product value. Per the pilot definition:
+      //   patient → 'checkin_completed'
+      //   doctor  → 'patient_viewed'
+      // A 10s patient session that lands a check-in counts as
+      // meaningful even though its duration is tiny.
+      //
+      // representative_tz = MAX(timezone) chosen as a stable picker
+      // when a session has multiple non-null tz values (rare; only
+      // happens if the patient travels mid-session). MAX is stable
+      // and deterministic, which is what we want for charts.
+      const sessionRows = await db.execute(sql`
+        WITH per_session AS (
           SELECT
             user_type,
             user_id,
-            session_id,
-            MIN(created_at) AS started_at
+            COALESCE(session_id, 'evt-' || MIN(id)::text) AS sid,
+            MIN(created_at) AS started_at,
+            EXTRACT(EPOCH FROM (MAX(created_at) - MIN(created_at)))::float AS secs,
+            COUNT(*)::int AS event_count,
+            SUM(CASE
+              WHEN (user_type = 'patient' AND event_name = 'checkin_completed')
+                OR (user_type = 'doctor'  AND event_name = 'patient_viewed')
+              THEN 1 ELSE 0 END)::int AS meaningful_event_count,
+            MAX(timezone) AS representative_tz
           FROM ${analyticsEventsTable}
-          WHERE created_at >= ${since} AND session_id IS NOT NULL
-          GROUP BY user_type, user_id, session_id
+          WHERE created_at >= ${since}
+          GROUP BY user_type, user_id, COALESCE(session_id, id::text)
         )
-        SELECT user_type, user_id, COUNT(*)::int AS sessions,
-               MAX(started_at) AS last_seen_at
-        FROM sessions
-        GROUP BY user_type, user_id
-        ORDER BY sessions DESC
-        LIMIT 40
+        SELECT
+          user_type,
+          user_id,
+          sid,
+          started_at,
+          secs,
+          event_count,
+          meaningful_event_count,
+          (meaningful_event_count > 0) AS has_meaningful_action,
+          representative_tz
+        FROM per_session
       `);
-      type TopRow = {
+      type SessionRow = {
         user_type: string;
         user_id: number;
-        sessions: number;
-        last_seen_at: string;
+        sid: string;
+        started_at: string;
+        secs: number;
+        event_count: number;
+        meaningful_event_count: number;
+        has_meaningful_action: boolean;
+        representative_tz: string | null;
       };
-      const allTop = (topRows.rows as TopRow[]).map((r) => ({
-        userType: r.user_type,
-        userId: r.user_id,
-        sessions: r.sessions,
-        lastSeenAt: r.last_seen_at,
-      }));
+      const sessions = sessionRows.rows as SessionRow[];
+
+      // Hour-of-day histogram, bucketed by the session START in the
+      // user's local timezone when we have one. AT TIME ZONE on a
+      // timestamptz returns a wall-clock timestamp in the named zone,
+      // so EXTRACT(HOUR ...) gives the right local hour. Sessions
+      // missing a tz fall back to UTC and are tallied separately so
+      // the UI can warn the operator about coverage.
+      const patientsByHour: number[] = Array(24).fill(0);
+      const doctorsByHour: number[] = Array(24).fill(0);
+      let sessionsWithTz = 0;
+      let sessionsWithoutTz = 0;
+      for (const s of sessions) {
+        const tz = s.representative_tz || "UTC";
+        if (s.representative_tz) sessionsWithTz += 1;
+        else sessionsWithoutTz += 1;
+        const hour = localHour(s.started_at, tz);
+        if (hour == null) continue;
+        if (s.user_type === "patient") patientsByHour[hour] += 1;
+        else if (s.user_type === "doctor") doctorsByHour[hour] += 1;
+      }
+
+      // Per-user session counts → top 10 per role.
+      const userCounts = new Map<string, { sessions: number; lastSeen: string }>();
+      for (const s of sessions) {
+        const k = `${s.user_type}:${s.user_id}`;
+        const cur = userCounts.get(k);
+        if (cur) {
+          cur.sessions += 1;
+          if (s.started_at > cur.lastSeen) cur.lastSeen = s.started_at;
+        } else {
+          userCounts.set(k, { sessions: 1, lastSeen: s.started_at });
+        }
+      }
+      const allTop = Array.from(userCounts.entries())
+        .map(([k, v]) => {
+          const [userType, idStr] = k.split(":");
+          return {
+            userType: userType!,
+            userId: Number(idStr),
+            sessions: v.sessions,
+            lastSeenAt: v.lastSeen,
+          };
+        })
+        .sort((a, b) => b.sessions - a.sessions);
       const topUsers = {
         patients: allTop.filter((r) => r.userType === "patient").slice(0, 10),
         doctors: allTop.filter((r) => r.userType === "doctor").slice(0, 10),
       };
 
-      // Session length: per session, max(created_at) - min(created_at).
-      // Single-event sessions become 0s and we keep them -- otherwise
-      // a "patient opens app, does nothing" session disappears, which
-      // is exactly the behavior we want to be able to count.
-      const sessionLenRows = await db.execute(sql`
-        WITH per_session AS (
-          SELECT
-            user_type,
-            session_id,
-            EXTRACT(EPOCH FROM (MAX(created_at) - MIN(created_at)))::float AS secs
-          FROM ${analyticsEventsTable}
-          WHERE created_at >= ${since} AND session_id IS NOT NULL
-          GROUP BY user_type, session_id
-        )
-        SELECT
-          user_type,
-          COUNT(*)::int AS sessions,
-          AVG(secs)::float AS avg_secs,
-          PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY secs)::float AS p50_secs,
-          PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY secs)::float AS p95_secs
-        FROM per_session
-        GROUP BY user_type
-      `);
+      // Per-role session length + meaningful-action stats. Includes a
+      // separate average computed only over meaningful sessions so the
+      // operator can see "do successful sessions tend to be longer or
+      // shorter than the overall pool?" without being misled.
       const sessionLengthByRole = {
         patient: emptyLen(),
         doctor: emptyLen(),
-      } as Record<
-        "patient" | "doctor",
-        { sessions: number; avgSecs: number; p50Secs: number; p95Secs: number }
-      >;
-      for (const r of sessionLenRows.rows as Array<{
-        user_type: string;
-        sessions: number;
-        avg_secs: number | null;
-        p50_secs: number | null;
-        p95_secs: number | null;
-      }>) {
-        const role = r.user_type === "doctor" ? "doctor" : "patient";
-        sessionLengthByRole[role] = {
-          sessions: r.sessions,
-          avgSecs: Math.round(r.avg_secs ?? 0),
-          p50Secs: Math.round(r.p50_secs ?? 0),
-          p95Secs: Math.round(r.p95_secs ?? 0),
-        };
+      } as Record<"patient" | "doctor", SessionStats>;
+      for (const role of ["patient", "doctor"] as const) {
+        const roleSessions = sessions.filter((s) => s.user_type === role);
+        sessionLengthByRole[role] = computeSessionStats(roleSessions);
       }
 
-      // Raw counts per event_name so the operator can confirm that the
-      // mobile and dashboard clients are actually flushing events.
+      // Raw counts per event_name. Comes straight off the events
+      // table, not the per-session CTE, so an event firing without a
+      // session_id still shows up here.
       const eventRows = await db.execute(sql`
         SELECT event_name, user_type, COUNT(*)::int AS n
         FROM ${analyticsEventsTable}
@@ -1794,6 +1789,11 @@ router.get(
         count: r.n,
       }));
 
+      const tzCoverage =
+        sessionsWithTz + sessionsWithoutTz === 0
+          ? null
+          : sessionsWithTz / (sessionsWithTz + sessionsWithoutTz);
+
       res.json({
         windowDays: days,
         generatedAt: new Date().toISOString(),
@@ -1802,17 +1802,26 @@ router.get(
         topUsers,
         sessionLengthByRole,
         eventCounts,
+        timezoneCoverage: {
+          sessionsWithTz,
+          sessionsWithoutTz,
+          coveragePct: tzCoverage,
+        },
         notes: {
+          meaningfulAction:
+            "Patient = checkin_completed. Doctor = patient_viewed. A short session that lands a meaningful action still counts as successful.",
+          sessionLength:
+            "Session length is approximate. Short sessions can still be successful if a key action was completed; treat avg/median as descriptive, not a success metric.",
           patientsByHour:
-            "Patient sessions bucketed by start hour (server local), last N days. Long sessions count once at their start hour, not in every hour they touch.",
+            "Patient sessions bucketed by START hour. Local time used when the client reported a timezone; otherwise UTC.",
           doctorsByHour:
-            "Doctor sessions bucketed by start hour (server local), last N days. Long sessions count once at their start hour, not in every hour they touch.",
+            "Doctor sessions bucketed by START hour. Local time used when the client reported a timezone; otherwise UTC.",
           topUsers:
             "Top 10 users per role by session count. user_id only; join client-side if a name is needed.",
-          sessionLengthByRole:
-            "Per-session length = max(created_at) - min(created_at). Single-event sessions count as 0s.",
           eventCounts:
             "Raw event volumes per event_name + user_type. Use this to verify clients are firing.",
+          timezoneCoverage:
+            "Share of sessions in the window that reported a client timezone. New builds capture it; older rows are bucketed in UTC.",
         },
       });
     } catch (err) {
@@ -1822,8 +1831,98 @@ router.get(
   },
 );
 
-function emptyLen() {
-  return { sessions: 0, avgSecs: 0, p50Secs: 0, p95Secs: 0 };
+interface SessionStats {
+  sessions: number;
+  avgSecs: number;
+  medianSecs: number;
+  p50Secs: number;
+  p95Secs: number;
+  meaningfulSessions: number;
+  meaningfulPct: number;
+  avgSecsMeaningful: number;
+}
+
+function emptyLen(): SessionStats {
+  return {
+    sessions: 0,
+    avgSecs: 0,
+    medianSecs: 0,
+    p50Secs: 0,
+    p95Secs: 0,
+    meaningfulSessions: 0,
+    meaningfulPct: 0,
+    avgSecsMeaningful: 0,
+  };
+}
+
+// Aggregate one role's session rows into the descriptive stats the UI
+// needs. Done in JS rather than another SQL pass because we already
+// have the rows in memory and a single pass keeps the endpoint fast.
+function computeSessionStats(
+  rows: Array<{ secs: number; has_meaningful_action: boolean }>,
+): SessionStats {
+  if (rows.length === 0) return emptyLen();
+  const lengths = rows.map((r) => r.secs).sort((a, b) => a - b);
+  const meaningful = rows.filter((r) => r.has_meaningful_action);
+  const median = percentile(lengths, 0.5);
+  return {
+    sessions: rows.length,
+    avgSecs: Math.round(avg(lengths)),
+    medianSecs: Math.round(median),
+    p50Secs: Math.round(median),
+    p95Secs: Math.round(percentile(lengths, 0.95)),
+    meaningfulSessions: meaningful.length,
+    meaningfulPct: meaningful.length / rows.length,
+    avgSecsMeaningful:
+      meaningful.length === 0
+        ? 0
+        : Math.round(avg(meaningful.map((r) => r.secs))),
+  };
+}
+
+function avg(xs: number[]): number {
+  if (xs.length === 0) return 0;
+  let total = 0;
+  for (const x of xs) total += x;
+  return total / xs.length;
+}
+
+// Linear-interpolation percentile over a SORTED array. Matches the
+// PERCENTILE_CONT semantics we used in the previous SQL version so
+// numbers stay comparable session-to-session.
+function percentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  if (sorted.length === 1) return sorted[0]!;
+  const idx = (sorted.length - 1) * p;
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo]!;
+  const frac = idx - lo;
+  return sorted[lo]! * (1 - frac) + sorted[hi]! * frac;
+}
+
+// Convert a postgres timestamptz string into the local hour-of-day in
+// the given IANA timezone. Returns null on any parse failure (which
+// would only happen if the row is corrupt or the tz string is bogus).
+function localHour(timestamptz: string, tz: string): number | null {
+  try {
+    const d = new Date(timestamptz);
+    if (Number.isNaN(d.getTime())) return null;
+    const fmt = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      hour: "numeric",
+      hour12: false,
+    });
+    const parts = fmt.formatToParts(d);
+    const hourPart = parts.find((p) => p.type === "hour");
+    if (!hourPart) return null;
+    const h = Number.parseInt(hourPart.value, 10);
+    if (Number.isNaN(h)) return null;
+    // Intl returns 24 for midnight in some locales; normalize to 0.
+    return h === 24 ? 0 : h;
+  } catch {
+    return null;
+  }
 }
 
 export default router;

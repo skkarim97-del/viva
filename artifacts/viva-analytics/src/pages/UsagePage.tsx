@@ -10,6 +10,7 @@ import {
 } from "recharts";
 import { KEY_STORAGE } from "@/lib/api";
 import { useUsage, type UsageTopUser } from "@/hooks/useUsage";
+import { pctStr } from "@/lib/format";
 import {
   Card,
   PageHeader,
@@ -52,6 +53,15 @@ export function UsagePage() {
   const d = q.data;
   const patientLen = d.sessionLengthByRole.patient;
   const doctorLen = d.sessionLengthByRole.doctor;
+  const tzCov = d.timezoneCoverage;
+  const tzLabel =
+    tzCov.coveragePct == null
+      ? "no sessions yet"
+      : tzCov.coveragePct >= 0.999
+        ? "local time"
+        : tzCov.coveragePct <= 0.001
+          ? "UTC (no client tz reported yet)"
+          : `${pctStr(tzCov.coveragePct)} local · rest UTC`;
 
   return (
     <>
@@ -60,11 +70,45 @@ export function UsagePage() {
         subtitle={`Product activity over the last ${d.windowDays} days, sourced from the analytics stream.`}
       />
 
-      {/* Session length summary up top -- this is the headline number
-          for "are people actually using the product or just opening it
-          and bouncing". */}
-      <SectionHead hint="Per-role session length and totals">
-        Sessions
+      {/* Meaningful action up top. This is the headline number for
+          "did the session produce real product value", which is what
+          we actually care about -- session length on its own can be
+          misleading (a 10s check-in is a win, a 5min wandering session
+          is not). */}
+      <SectionHead hint="Sessions that completed a key action (patient: check-in · doctor: opened a patient)">
+        Meaningful sessions
+      </SectionHead>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+        <StatCard
+          label="Patient meaningful %"
+          value={pctStr(patientLen.meaningfulPct)}
+          sub={`${patientLen.meaningfulSessions.toLocaleString()}/${patientLen.sessions.toLocaleString()} sessions`}
+          accent="#34C759"
+        />
+        <StatCard
+          label="Patient meaningful avg length"
+          value={fmtSecs(patientLen.avgSecsMeaningful)}
+          sub="check-in sessions only"
+          accent="#34C759"
+        />
+        <StatCard
+          label="Doctor meaningful %"
+          value={pctStr(doctorLen.meaningfulPct)}
+          sub={`${doctorLen.meaningfulSessions.toLocaleString()}/${doctorLen.sessions.toLocaleString()} sessions`}
+          accent="#34C759"
+        />
+        <StatCard
+          label="Doctor meaningful avg length"
+          value={fmtSecs(doctorLen.avgSecsMeaningful)}
+          sub="patient-view sessions only"
+          accent="#34C759"
+        />
+      </div>
+
+      {/* Descriptive session length stats. Explicitly NOT framed as a
+          success metric -- the note below the cards calls that out. */}
+      <SectionHead hint="Descriptive only — not a success metric (see note below)">
+        Session length
       </SectionHead>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
         <StatCard
@@ -74,9 +118,9 @@ export function UsagePage() {
           accent="#5AC8FA"
         />
         <StatCard
-          label="Patient avg length"
+          label="Patient length"
           value={fmtSecs(patientLen.avgSecs)}
-          sub={`p50 ${fmtSecs(patientLen.p50Secs)} · p95 ${fmtSecs(patientLen.p95Secs)}`}
+          sub={`median ${fmtSecs(patientLen.medianSecs)} · p95 ${fmtSecs(patientLen.p95Secs)}`}
           accent="#5AC8FA"
         />
         <StatCard
@@ -86,18 +130,24 @@ export function UsagePage() {
           accent="#142240"
         />
         <StatCard
-          label="Doctor avg length"
+          label="Doctor length"
           value={fmtSecs(doctorLen.avgSecs)}
-          sub={`p50 ${fmtSecs(doctorLen.p50Secs)} · p95 ${fmtSecs(doctorLen.p95Secs)}`}
+          sub={`median ${fmtSecs(doctorLen.medianSecs)} · p95 ${fmtSecs(doctorLen.p95Secs)}`}
           accent="#142240"
         />
       </div>
+      <Card>
+        <div className="text-sm text-muted-foreground">
+          Session length is approximate. Short sessions can still be successful if
+          a key action was completed (see the meaningful-sessions cards above).
+        </div>
+      </Card>
 
       {/* Hour-of-day bars. Two charts, same axis, so the operator can
           compare patient vs doctor opening patterns at a glance.
-          Server-local hour because that's how the team will read it
-          ("doctors open it after lunch"). */}
-      <SectionHead hint="Distinct sessions per hour-of-day (server local)">
+          Bucketed by session-start in the user's local timezone when
+          the client reported one; otherwise UTC. */}
+      <SectionHead hint={`Sessions per start hour · ${tzLabel}`}>
         When the apps are opened
       </SectionHead>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">

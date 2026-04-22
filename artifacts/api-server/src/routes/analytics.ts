@@ -22,6 +22,11 @@ const eventSchema = z.object({
   eventName: z.string().min(1).max(64),
   sessionId: z.string().min(1).max(64).nullish(),
   platform: z.enum(PLATFORMS).nullish(),
+  // IANA timezone string from Intl.DateTimeFormat. Loosely validated
+  // (max 64 chars) -- we never index on it and it lands in a free-text
+  // column. Older client builds won't send this; the column is null
+  // for those rows and the server falls back to UTC at query time.
+  timezone: z.string().min(1).max(64).nullish(),
 });
 
 const batchSchema = z.object({
@@ -44,6 +49,7 @@ router.post("/events", requireAuth, async (req, res: Response) => {
       eventName: e.eventName,
       sessionId: e.sessionId ?? null,
       platform: e.platform ?? null,
+      timezone: e.timezone ?? null,
     }));
     await db.insert(analyticsEventsTable).values(rows);
     res.json({ ok: true, inserted: rows.length });
