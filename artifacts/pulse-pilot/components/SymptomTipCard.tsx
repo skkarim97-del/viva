@@ -109,10 +109,11 @@ export function SymptomTipCard(props: SymptomTipCardProps) {
       ? ("activity" as const)
       : ("coffee" as const);
 
-  const followupTitle =
-    tip.symptom === "constipation"
-      ? "How are things today?"
-      : "How are you feeling today?";
+  // Single, intervention-anchored question across all symptoms. Ties
+  // the answer to the specific tip the patient just tried, which is
+  // the cleanest way to learn whether THIS suggestion worked rather
+  // than collecting a generic mood read.
+  const followupTitle = "After trying this, how do you feel?";
 
   const handleCtaPress = () => {
     if (completed) return;

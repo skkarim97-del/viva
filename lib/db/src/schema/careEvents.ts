@@ -40,6 +40,13 @@ export const CARE_EVENT_TYPES = [
   // triggerEventId pointing back at the escalation_requested row when
   // one exists, so the analytics funnel can compute time-to-follow-up.
   "follow_up_completed",
+  // Patient self-reports how they feel after trying a specific
+  // micro-intervention (Today symptom tip). Carries
+  // metadata.intervention_id (e.g. "nausea") and
+  // metadata.response ("better"|"same"|"worse"). Lightweight signal
+  // used to nudge the risk score and to give the doctor a sense of
+  // whether self-management is working.
+  "intervention_feedback",
 ] as const;
 export type CareEventType = (typeof CARE_EVENT_TYPES)[number];
 

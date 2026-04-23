@@ -42,6 +42,9 @@ const PATIENT_EVENT_TYPES = [
   "coach_message",
   "recommendation_shown",
   "escalation_requested",
+  // Patient self-report after trying a Today symptom tip. Source is
+  // forced to "patient" so the actor attribution stays honest.
+  "intervention_feedback",
 ] as const;
 type PatientEventType = (typeof PATIENT_EVENT_TYPES)[number];
 
@@ -49,6 +52,7 @@ const SOURCE_BY_TYPE: Record<PatientEventType, "viva" | "patient"> = {
   coach_message: "viva",
   recommendation_shown: "viva",
   escalation_requested: "patient",
+  intervention_feedback: "patient",
 };
 
 const patientEventSchema = z.object({

@@ -12,7 +12,8 @@ import { sessionApi } from "@/lib/api/sessionClient";
 export type PatientCareEventType =
   | "coach_message"
   | "recommendation_shown"
-  | "escalation_requested";
+  | "escalation_requested"
+  | "intervention_feedback";
 
 interface QueuedEvent {
   type: PatientCareEventType;

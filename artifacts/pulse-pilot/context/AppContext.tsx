@@ -58,6 +58,7 @@ import type {
 import { API_BASE } from "@/lib/apiConfig";
 import { sessionApi } from "@/lib/api/sessionClient";
 import { checkinSync, type SyncStatus } from "@/lib/sync/checkinSync";
+import { logCareEventImmediate } from "@/lib/care-events/client";
 
 interface AppContextType {
   profile: UserProfile;
@@ -175,6 +176,18 @@ const GLP1_INPUTS_KEY = "@viva_glp1_inputs";
 const GLP1_HISTORY_KEY = "@viva_glp1_history";
 const MED_LOG_KEY = "@viva_med_log";
 const GUIDANCE_ACK_HISTORY_KEY = "@viva_guidance_ack_history";
+// Per-symptom most-recent intervention feedback (better/same/worse)
+// plus its timestamp. Used by the local risk engine to apply a
+// small +/-5 nudge on the score so the patient sees their own
+// signal reflected in the support headline.
+const LAST_INTERVENTION_FEEDBACK_KEY = "@viva_last_intervention_feedback";
+type InterventionFeedbackResponse = "better" | "same" | "worse";
+type LastInterventionFeedbackMap = Partial<
+  Record<
+    import("@/lib/symptomTips").SymptomKind,
+    { response: InterventionFeedbackResponse; ts: number }
+  >
+>;
 const CLINICIAN_REQUESTED_DATES_KEY = "@viva_clinician_requested_dates";
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
@@ -251,6 +264,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [clinicianRequestedDates, setClinicianRequestedDates] = useState<
     Partial<Record<import("@/lib/symptomTips").SymptomKind, string>>
   >({});
+  const [lastInterventionFeedback, setLastInterventionFeedback] =
+    useState<LastInterventionFeedbackMap>({});
 
   // Keep the weekly plan's "today" day in sync with the actual daily plan.
   // generateWeeklyPlan() uses a static rotation that is disconnected from
@@ -454,13 +469,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   };
 
+  // Snapshot of the latest per-symptom feedback. Held in a ref so
+  // `computeRisk` (whose stable identity matters for downstream
+  // useEffect deps) can read the freshest value without us having
+  // to thread it through every call site.
+  const lastInterventionFeedbackRef = useRef<LastInterventionFeedbackMap>({});
+  useEffect(() => {
+    lastInterventionFeedbackRef.current = lastInterventionFeedback;
+  }, [lastInterventionFeedback]);
+
   const computeRisk = useCallback((allMetrics: HealthMetrics[], inputHistory: GLP1DailyInputs[], history: CompletionRecord[], medProfile?: MedicationProfile) => {
     try {
+      // Pick the freshest feedback across all symptoms, but only if
+      // it's recent enough to still be relevant (24h window). Older
+      // answers shouldn't keep nudging today's score.
+      const FEEDBACK_TTL_MS = 24 * 60 * 60 * 1000;
+      const now = Date.now();
+      let freshest: { response: InterventionFeedbackResponse; ts: number } | null = null;
+      for (const v of Object.values(lastInterventionFeedbackRef.current)) {
+        if (!v) continue;
+        if (now - v.ts > FEEDBACK_TTL_MS) continue;
+        if (!freshest || v.ts > freshest.ts) freshest = v;
+      }
       const result = calculateDropoutRisk({
         recentMetrics: allMetrics,
         dailyInputs: inputHistory,
         completionHistory: history,
         medicationProfile: medProfile,
+        lastInterventionFeedback: freshest?.response ?? null,
       });
       setRiskResult(result);
     } catch {}
@@ -512,6 +548,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (savedAckHist) setGuidanceAckHistory(JSON.parse(savedAckHist));
         const savedClinReq = await AsyncStorage.getItem(CLINICIAN_REQUESTED_DATES_KEY);
         if (savedClinReq) setClinicianRequestedDates(JSON.parse(savedClinReq));
+        const savedFb = await AsyncStorage.getItem(LAST_INTERVENTION_FEEDBACK_KEY);
+        if (savedFb) setLastInterventionFeedback(JSON.parse(savedFb));
       } catch { /* ignore corrupt cache */ }
 
       if (savedWellness) {
@@ -1313,6 +1351,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       });
       void checkinSync.enqueueTrendResponse(today, symptom, response);
       void checkinSync.enqueueGuidanceAck(today, symptom);
+      // Persist the per-intervention feedback as a care_event row so
+      // the care team can see how each suggestion is landing and so
+      // the local risk engine can apply a small nudge. Fire and
+      // forget -- failure does not block the UX dismissal above.
+      void logCareEventImmediate("intervention_feedback", {
+        intervention_id: symptom,
+        response,
+        source: "today",
+      });
+      // Cache the latest answer (per symptom) so the next risk
+      // recompute can apply the better/same/worse nudge without
+      // having to round-trip through the server.
+      setLastInterventionFeedback((prev) => {
+        const next = { ...prev, [symptom]: { response, ts: Date.now() } };
+        AsyncStorage.setItem(LAST_INTERVENTION_FEEDBACK_KEY, JSON.stringify(next)).catch(() => {});
+        return next;
+      });
     },
     [],
   );

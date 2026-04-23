@@ -15,7 +15,20 @@ interface RiskEngineInput {
   dailyInputs: GLP1DailyInputs[];
   completionHistory: CompletionRecord[];
   medicationProfile?: MedicationProfile;
+  // Most recent self-report after trying a Today symptom tip.
+  // "better" trims a small amount off the score (the patient told
+  // us the suggestion is working); "worse" adds a small amount
+  // (the patient told us it isn't); "same" is no-op. Intentionally
+  // small (+/-5) so feedback nudges, never overrides, the
+  // physiology-driven drivers above.
+  lastInterventionFeedback?: "better" | "same" | "worse" | null;
 }
+
+// Magnitude of the feedback nudge. Capped low so a single
+// self-report can't, on its own, flip the user from elevated to
+// low or vice versa -- it just leans the score in the direction
+// the patient told us.
+const INTERVENTION_FEEDBACK_NUDGE = 5;
 
 function computeBaseline(values: (number | null | undefined)[]): number {
   const filtered = values.filter((v): v is number => typeof v === "number");
@@ -173,7 +186,18 @@ export function calculateDropoutRisk(input: RiskEngineInput): DropoutRiskResult 
   const consistencyDriver = checkConsistencyBreakdown(input.completionHistory, input.dailyInputs);
   if (consistencyDriver) drivers.push(consistencyDriver);
 
-  const riskScore = drivers.reduce((sum, d) => sum + d.score, 0);
+  const baseScore = drivers.reduce((sum, d) => sum + d.score, 0);
+
+  // Apply the patient's most recent intervention feedback as a small,
+  // bounded nudge. "better" trims the score, "worse" adds to it,
+  // "same" / null does nothing. Clamped to [0, 100] so the band
+  // thresholds below still mean what they mean.
+  let riskScore = baseScore;
+  if (input.lastInterventionFeedback === "better") {
+    riskScore = Math.max(0, baseScore - INTERVENTION_FEEDBACK_NUDGE);
+  } else if (input.lastInterventionFeedback === "worse") {
+    riskScore = Math.min(100, baseScore + INTERVENTION_FEEDBACK_NUDGE);
+  }
 
   let riskLevel: RiskLevel = "low";
   if (riskScore >= 71) riskLevel = "high";
