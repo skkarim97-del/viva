@@ -279,16 +279,16 @@ function computeIntelligence(i: IntelligenceInputs): Intelligence {
   if (issueType === "combined") {
     if (topFlag && i.silentDays !== null && i.silentDays >= 3) {
       summary = `Patient reported ${symptomDir} ${symptomName} and then stopped checking in.`;
-      nextAction = `Call patient and review ${symptomName} severity together.`;
+      nextAction = `Contact patient and review ${symptomName} severity together.`;
     } else if (topFlag && i.escalationOpen) {
       summary = `Patient flagged ${symptomDir} ${symptomName} and requested clinician review.`;
-      nextAction = `Call patient and address requested review of ${symptomName}.`;
+      nextAction = `Contact patient and address requested review of ${symptomName}.`;
     } else if (topFlag) {
       summary = `Recent ${symptomName} concerns are now paired with declining engagement.`;
-      nextAction = `Call patient and review ${symptomName} and treatment tolerance.`;
+      nextAction = `Contact patient and review ${symptomName} and treatment tolerance.`;
     } else {
       summary = "Patient may be struggling with both treatment tolerance and follow-through.";
-      nextAction = "Call patient and assess treatment tolerance and re-engagement.";
+      nextAction = "Contact patient and assess treatment tolerance and re-engagement.";
     }
   } else if (issueType === "clinical") {
     if (topFlag && topFlag.persistence === "worsening") {
@@ -296,7 +296,7 @@ function computeIntelligence(i: IntelligenceInputs): Intelligence {
       nextAction = `Review ${symptomName} severity and treatment tolerance.`;
     } else if (topFlag && topFlag.severity === "severe") {
       summary = `Patient is reporting severe ${symptomName}; clinician review is recommended.`;
-      nextAction = `Call patient and assess ${symptomName} severity today.`;
+      nextAction = `Contact patient and assess ${symptomName} severity today.`;
     } else if (topFlag) {
       summary = `Symptoms appear ${symptomDir}; clinician review may be appropriate.`;
       nextAction = `Review ${symptomName} in recent check-ins and decide on follow-up.`;
@@ -319,7 +319,7 @@ function computeIntelligence(i: IntelligenceInputs): Intelligence {
       nextAction = "Log the follow-up touchpoint with this patient today.";
     } else if (i.silentDays !== null && i.silentDays >= 7) {
       summary = `Patient has not checked in for ${i.silentDays} days and may be disengaging.`;
-      nextAction = "Call patient and assess re-engagement barriers.";
+      nextAction = "Contact patient and assess re-engagement barriers.";
     } else if (i.silentDays !== null && i.silentDays >= 3) {
       summary = "Engagement has slowed and follow-up may be needed.";
       nextAction = "Send a check-in nudge today; call if no response within 24h.";

@@ -174,7 +174,7 @@ export function rowIntelligence(
     } else {
       summary = "Treatment concern paired with engagement drop.";
     }
-    nextAction = "Call today";
+    nextAction = "Contact today";
   } else if (issueType === "clinical") {
     if (p.symptomEscalating && symptom) {
       summary = `${capitalize(symptom)} may need treatment support.`;
@@ -195,10 +195,10 @@ export function rowIntelligence(
       nextAction = "Acknowledge & call";
     } else if (silent !== null && silent >= 10) {
       summary = `May be disengaging after ${silent} days without check-in.`;
-      nextAction = "Call today";
+      nextAction = "Contact today";
     } else if (silent !== null && silent >= 7) {
       summary = `No check-in for ${silent} days. Engagement slipping.`;
-      nextAction = "Call today";
+      nextAction = "Contact today";
     } else if (silent !== null && silent >= 3) {
       summary = `Engagement slowing. Last check-in ${silent}d ago.`;
       nextAction = "Send nudge";
@@ -207,7 +207,7 @@ export function rowIntelligence(
       nextAction = "Send nudge";
     } else if (p.inactive12d) {
       summary = "Inactive for 12+ days. Possible disengagement.";
-      nextAction = "Call today";
+      nextAction = "Contact today";
     } else {
       summary = "Follow-up pending with this patient.";
       nextAction = "Log follow-up";
