@@ -103,6 +103,20 @@ export function PatientsPage() {
     [needsReview.data],
   );
   const [, setLocation] = useLocation();
+  // Worklist composition.
+  //
+  // "Patient requested review" is treated as an ORDERING priority, not
+  // a risk-score input. We pull every row whose id is in needsReviewSet
+  // out of its normal action bucket and surface them all in a dedicated
+  // top section. The treatment-risk score on each card is rendered
+  // unchanged -- the ordering override lives entirely here, in the
+  // grouping step, and never mutates `p.riskScore` or `p.riskBand`.
+  //
+  // Patients without an open review request continue to flow through
+  // the existing action buckets (needs_followup -> monitor -> stable
+  // -> pending) sorted by riskScore desc with longest-silent tiebreak,
+  // so clearing a review request returns a patient to their natural
+  // position with no score side-effects.
   const grouped = useMemo(() => {
     const buckets: Record<Action, PatientRow[]> = {
       needs_followup: [],
@@ -110,25 +124,34 @@ export function PatientsPage() {
       stable: [],
       pending: [],
     };
+    const requestedReview: PatientRow[] = [];
     if (q.data) {
-      for (const p of q.data) buckets[p.action].push(p);
+      for (const p of q.data) {
+        if (needsReviewSet.has(p.id) && !p.pending) {
+          requestedReview.push(p);
+        } else {
+          buckets[p.action].push(p);
+        }
+      }
       for (const k of ACTION_ORDER) buckets[k] = sortRows(buckets[k]);
     }
-    return buckets;
-  }, [q.data]);
+    return { buckets, requestedReview: sortRows(requestedReview) };
+  }, [q.data, needsReviewSet]);
 
   const [noteTarget, setNoteTarget] = useState<NoteTarget | null>(null);
   const [showInvite, setShowInvite] = useState(false);
 
   // Group open-state lifted into the page so the SummaryBar can focus
   // a section (force-open + scroll) when a stat card is clicked.
-  // Defaults match the focus-mode brief: only Needs follow-up open.
+  // Defaults: the priority "Patient requested review" section and
+  // "Needs follow-up" both open; the rest collapsed.
   const [openGroups, setOpenGroups] = useState<Record<Action, boolean>>({
     needs_followup: true,
     monitor: false,
     stable: false,
     pending: false,
   });
+  const [reviewGroupOpen, setReviewGroupOpen] = useState(true);
   const groupRefs = useRef<Record<Action, HTMLElement | null>>({
     needs_followup: null,
     monitor: null,
@@ -217,7 +240,7 @@ export function PatientsPage() {
         </div>
       )}
 
-      {q.data && grouped.pending.length > 0 && (
+      {q.data && grouped.buckets.pending.length > 0 && (
         <div
           className="rounded-2xl px-4 py-3 mb-5 text-sm font-medium leading-relaxed"
           style={{ color: "#142240", backgroundColor: "rgba(56,182,255,0.12)" }}
@@ -229,7 +252,7 @@ export function PatientsPage() {
 
       {q.data && q.data.length > 0 && (
         <SummaryBar
-          needsFollowupCount={grouped.needs_followup.length}
+          needsFollowupCount={grouped.buckets.needs_followup.length}
           silentCount={silentCount}
           totalPatients={q.data.length}
           onFocusNeedsFollowup={() => focusGroup("needs_followup")}
@@ -237,9 +260,65 @@ export function PatientsPage() {
         />
       )}
 
+      {/* Priority section: any patient who has tapped "Notify care
+          team" and whose escalation hasn't been followed up yet. This
+          section is intentionally rendered ABOVE the action buckets
+          regardless of each patient's underlying action / risk band.
+          Risk score on each card stays whatever the model produced --
+          the priority lives in the row's POSITION, not its score. */}
+      {q.data && q.data.length > 0 && grouped.requestedReview.length > 0 && (
+        <section data-group="requested_review" className="scroll-mt-6">
+          <button
+            type="button"
+            onClick={() => setReviewGroupOpen((v) => !v)}
+            className="w-full flex items-center gap-3 px-1 py-2 mb-2 group"
+          >
+            <span
+              className="inline-block w-2.5 h-2.5 rounded-full shrink-0"
+              style={{ backgroundColor: "#FF9500" }}
+              aria-hidden
+            />
+            <span className="font-display text-[15px] font-bold text-foreground">
+              Patient requested review
+            </span>
+            <span
+              className="text-xs font-semibold rounded-full px-2.5 py-0.5"
+              style={{
+                backgroundColor: "rgba(255,149,0,0.15)",
+                color: "#9A5A00",
+              }}
+            >
+              {grouped.requestedReview.length}
+            </span>
+            <span className="flex-1" />
+            <span
+              className="text-muted-foreground text-sm font-semibold transition-transform"
+              style={{
+                transform: reviewGroupOpen ? "rotate(90deg)" : "rotate(0deg)",
+              }}
+              aria-hidden
+            >
+              ›
+            </span>
+          </button>
+          {reviewGroupOpen && (
+            <div className="space-y-3 mb-6">
+              {grouped.requestedReview.map((p) => (
+                <PatientCard
+                  key={p.id}
+                  p={p}
+                  needsReview
+                  onAddNote={() => setNoteTarget({ id: p.id, name: p.name })}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
       {q.data && q.data.length > 0 &&
         ACTION_ORDER.map((action) => {
-          const rows = grouped[action];
+          const rows = grouped.buckets[action];
           if (rows.length === 0) return null;
           return (
             <PatientGroup
