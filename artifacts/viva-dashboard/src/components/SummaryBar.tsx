@@ -13,12 +13,14 @@ interface Props {
   needsFollowupCount: number;
   silentCount: number;
   totalPatients: number;
+  requestedReviewCount: number;
   // Called when the doctor clicks a stat that should focus a queue
   // section. The parent page handles both expanding the matching group
   // and scrolling to it so the click "lands" even when the section was
   // collapsed.
   onFocusNeedsFollowup: () => void;
   onFocusSilent: () => void;
+  onFocusRequestedReview: () => void;
 }
 
 interface Stat {
@@ -32,13 +34,25 @@ export function SummaryBar({
   needsFollowupCount,
   silentCount,
   totalPatients,
+  requestedReviewCount,
   onFocusNeedsFollowup,
   onFocusSilent,
+  onFocusRequestedReview,
 }: Props) {
   const stats = useQuery({ queryKey: ["doctor-stats"], queryFn: api.doctorStats });
   const actionsToday = stats.data?.actionsToday ?? 0;
 
   const items: Stat[] = [
+    // Patient-requested review tile mirrors the orange dot/pill styling
+    // used for the priority section header below, so the visual link
+    // between tile and section is unmistakable. The count is driven by
+    // the same dataset that produces the section, so they stay aligned.
+    {
+      label: "Patient requested review",
+      value: requestedReviewCount,
+      accent: "#FF9500",
+      onClick: onFocusRequestedReview,
+    },
     {
       label: "Needs follow-up",
       value: needsFollowupCount,
@@ -48,7 +62,7 @@ export function SummaryBar({
     {
       label: "No check-in (3+ days)",
       value: silentCount,
-      accent: "#FF9500",
+      accent: "#FFB23B",
       onClick: onFocusSilent,
     },
     {
@@ -64,7 +78,7 @@ export function SummaryBar({
   ];
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-7">
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-7">
       {items.map((s) => {
         const interactive = !!s.onClick;
         const Tag = interactive ? "button" : "div";

@@ -275,26 +275,74 @@ router.get("/", async (req, res: Response) => {
 });
 
 // GET /patients/stats -- one-shot panel-health snapshot for the
-// dashboard summary bar. We only need the metric the queue itself
-// can't compute client-side: how many notes the doctor wrote today.
-// (The other three summary numbers -- needs-follow-up count, 3+ day
-// silence count, total patients -- are derived from /patients on the
-// client to avoid a duplicate query.) Defined BEFORE /:id so Express
-// doesn't route "stats" through the param handler.
+// dashboard summary bar. Returns metrics the queue itself can't
+// compute client-side. (Needs-follow-up count, 3+ day silence count,
+// total patients, and requested-review count are derived from
+// /patients + /care-events/needs-review-ids on the client to avoid
+// duplicate queries.) Defined BEFORE /:id so Express doesn't route
+// "stats" through the param handler.
+//
+// `actionsToday` is the count of clinician/patient triage events that
+// occurred today within this doctor's panel:
+//   - doctor notes written by this doctor                (clinician)
+//   - follow_up_completed care_events by this doctor     (clinician)
+//   - escalation_requested care_events on this doctor's
+//     patients (patient-initiated, but a real triage event
+//     the doctor needs to count toward today's activity)
+// All three are unioned on date; we don't dedupe across types because
+// a note + a follow-up logged for the same incident are two distinct
+// recorded actions in the audit trail.
 router.get("/stats", async (req, res: Response) => {
   const doctorId = (req as AuthedRequest).auth.userId;
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
-  const todays = await db
-    .select({ id: doctorNotesTable.id })
-    .from(doctorNotesTable)
-    .where(
-      and(
-        eq(doctorNotesTable.doctorUserId, doctorId),
-        gte(doctorNotesTable.createdAt, startOfToday),
+
+  // Patient ids in this doctor's panel -- needed to scope
+  // patient-initiated escalations to the right doctor.
+  const panelRows = await db
+    .select({ userId: patientsTable.userId })
+    .from(patientsTable)
+    .where(eq(patientsTable.doctorId, doctorId));
+  const panelPatientIds = panelRows.map((r) => r.userId);
+
+  const [notesToday, followUpsToday, escalationsToday] = await Promise.all([
+    db
+      .select({ id: doctorNotesTable.id })
+      .from(doctorNotesTable)
+      .where(
+        and(
+          eq(doctorNotesTable.doctorUserId, doctorId),
+          gte(doctorNotesTable.createdAt, startOfToday),
+        ),
       ),
-    );
-  res.json({ actionsToday: todays.length });
+    db
+      .select({ id: careEventsTable.id })
+      .from(careEventsTable)
+      .where(
+        and(
+          eq(careEventsTable.type, "follow_up_completed"),
+          eq(careEventsTable.actorUserId, doctorId),
+          gte(careEventsTable.occurredAt, startOfToday),
+        ),
+      ),
+    panelPatientIds.length === 0
+      ? Promise.resolve([] as { id: number }[])
+      : db
+          .select({ id: careEventsTable.id })
+          .from(careEventsTable)
+          .where(
+            and(
+              eq(careEventsTable.type, "escalation_requested"),
+              inArray(careEventsTable.patientUserId, panelPatientIds),
+              gte(careEventsTable.occurredAt, startOfToday),
+            ),
+          ),
+  ]);
+
+  res.json({
+    actionsToday:
+      notesToday.length + followUpsToday.length + escalationsToday.length,
+  });
 });
 
 // PUT /patients/clinic -- set the calling doctor's clinic name. Captured

@@ -158,12 +158,22 @@ export function PatientsPage() {
     stable: null,
     pending: null,
   });
+  const requestedReviewRef = useRef<HTMLElement | null>(null);
   const focusGroup = (action: Action) => {
     setOpenGroups((g) => ({ ...g, [action]: true }));
     // Defer scroll until after expansion paints so the section's full
     // height is in the layout when we measure.
     requestAnimationFrame(() => {
       groupRefs.current[action]?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  };
+  const focusRequestedReview = () => {
+    setReviewGroupOpen(true);
+    requestAnimationFrame(() => {
+      requestedReviewRef.current?.scrollIntoView({
         behavior: "smooth",
         block: "start",
       });
@@ -255,8 +265,10 @@ export function PatientsPage() {
           needsFollowupCount={grouped.buckets.needs_followup.length}
           silentCount={silentCount}
           totalPatients={q.data.length}
+          requestedReviewCount={grouped.requestedReview.length}
           onFocusNeedsFollowup={() => focusGroup("needs_followup")}
           onFocusSilent={() => focusGroup("needs_followup")}
+          onFocusRequestedReview={focusRequestedReview}
         />
       )}
 
@@ -267,7 +279,13 @@ export function PatientsPage() {
           Risk score on each card stays whatever the model produced --
           the priority lives in the row's POSITION, not its score. */}
       {q.data && q.data.length > 0 && grouped.requestedReview.length > 0 && (
-        <section data-group="requested_review" className="scroll-mt-6">
+        <section
+          data-group="requested_review"
+          className="scroll-mt-6"
+          ref={(el) => {
+            requestedReviewRef.current = el;
+          }}
+        >
           <button
             type="button"
             onClick={() => setReviewGroupOpen((v) => !v)}
@@ -519,6 +537,10 @@ function PatientCard({ p, needsReview, onAddNote }: CardProps) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["needs-review-ids"] });
       qc.invalidateQueries({ queryKey: ["patient", p.id, "care-events"] });
+      // follow_up_completed now feeds the "Actions taken today" tile,
+      // so refresh the panel-stats query immediately rather than
+      // waiting for the next mount.
+      qc.invalidateQueries({ queryKey: ["doctor-stats"] });
     },
   });
   // Visibility rule. Three triggers, all distinct operational signals:

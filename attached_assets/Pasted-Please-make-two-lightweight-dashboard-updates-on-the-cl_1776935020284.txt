@@ -1,0 +1,52 @@
+Please make two lightweight dashboard updates on the clinician worklist page.
+
+## 1) Add a SummaryBar tile for “Patient requested review”
+
+I want a new SummaryBar tile labeled **Patient requested review** that reflects the count of patients currently in that top requested-review section.
+
+Requirements:
+
+* The tile should appear alongside the existing SummaryBar tiles on the patients worklist page
+* It should use the same interaction pattern as the other tiles
+* Clicking it should jump / scroll the clinician directly to the **Patient requested review** section
+* Reuse the existing scroll / focus wiring if possible, since I believe `groupRefs` or similar is already in place
+* Keep styling consistent with the dashboard
+* Use the same requested-review dataset that is currently driving the top requested-review section, so the count and scroll target stay aligned
+
+Acceptance criteria:
+
+* The tile count matches the number of patients in the requested-review section
+* Clicking the tile scrolls to the requested-review section reliably
+* No impact to existing tile behavior
+
+## 2) Expand “actions taken” logic
+
+I also want **actions taken** to include more than just follow-up logging.
+
+Specifically, the actions taken count / logic should include:
+
+* when a clinician clicks the **follow-up logging** button
+* when the patient has **escalated / requested review** via the patient escalation flow
+
+In other words, if either of those events exists, it should count toward actions taken.
+
+Implementation guidance:
+
+* Keep this lightweight and consistent with existing data/event definitions
+* Do not rename product concepts unless necessary
+* If the current logic is event-based, update the event aggregation/filtering so both event types are included
+* If there is any distinction between clinician action and patient-triggered escalation in the UI copy, preserve that nuance where appropriate, but make sure the “actions taken” metric reflects both
+
+Acceptance criteria:
+
+* Follow-up logging still counts toward actions taken
+* Patient escalation / requested review also counts toward actions taken
+* The updated total is reflected anywhere the dashboard currently surfaces “actions taken”
+* No change to treatment risk calculation or patient ordering logic
+
+After making the change, please report back with:
+
+1. which file(s) you updated
+2. how the SummaryBar tile count is computed
+3. what exact event types / conditions now count as “actions taken”
+4. anywhere else in the dashboard where the updated actions taken logic now appears
