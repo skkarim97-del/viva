@@ -72,6 +72,250 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
+// ----------------------------------------------------------------------
+// Patient summary intelligence layer.
+//
+// Synthesizes the existing rule-based signals (risk, care events,
+// check-in recency, symptom flags, treatment status) into a single
+// clinician-facing reading: action priority, plain-English summary,
+// recommended next action, and 2-4 reason pills explaining why this
+// patient is being surfaced.
+//
+// Design intent: this is interpretation, not new model. Everything
+// here is derived from values already on the page; we just promote
+// them to the top so the doctor doesn't have to reconstruct the
+// story themselves.
+// ----------------------------------------------------------------------
+
+type ActionPriority = "review_now" | "follow_up_today" | "monitor" | "stable";
+
+const PRIORITY_LABEL: Record<ActionPriority, string> = {
+  review_now: "Review now",
+  follow_up_today: "Follow up today",
+  monitor: "Monitor",
+  stable: "Stable",
+};
+
+const PRIORITY_STYLE: Record<
+  ActionPriority,
+  { bg: string; fg: string; dot: string }
+> = {
+  review_now: {
+    bg: "rgba(255,59,48,0.12)",
+    fg: "#B5251D",
+    dot: "#FF3B30",
+  },
+  follow_up_today: {
+    bg: "rgba(255,149,0,0.14)",
+    fg: "#9A5B00",
+    dot: "#FF9500",
+  },
+  monitor: {
+    bg: "rgba(56,182,255,0.14)",
+    fg: "#0B6FAA",
+    dot: "#38B6FF",
+  },
+  stable: {
+    bg: "rgba(30,142,62,0.12)",
+    fg: "#1E8E3E",
+    dot: "#34C759",
+  },
+};
+
+interface IntelligenceInputs {
+  treatmentStatus: TreatmentStatus;
+  silentDays: number | null;
+  hasAnyCheckin: boolean;
+  riskBand?: "low" | "medium" | "high";
+  riskAction?: "needs_followup" | "monitor" | "stable" | "pending";
+  symptomFlags: SymptomFlag[];
+  escalationOpen: boolean;
+  followUpPending: boolean;
+  lastEscalationAt: string | null;
+  recentLowMood: boolean;
+  recentNegativeTrend: boolean;
+}
+
+interface Intelligence {
+  priority: ActionPriority;
+  summary: string;
+  nextAction: string;
+  reasons: string[];
+}
+
+function computeIntelligence(i: IntelligenceInputs): Intelligence {
+  const reasons: string[] = [];
+  if (i.escalationOpen) reasons.push("Patient requested review");
+  if (i.followUpPending) reasons.push("Follow-up pending");
+  if (i.silentDays !== null && i.silentDays >= 3) {
+    reasons.push(`No check-in ${i.silentDays} days`);
+  } else if (!i.hasAnyCheckin) {
+    reasons.push("No check-ins logged");
+  }
+  // Surface the most concerning symptom flag, if any.
+  const topFlag = [...i.symptomFlags].sort((a, b) => {
+    const sevRank = { severe: 3, moderate: 2, mild: 1 } as const;
+    const persRank = { worsening: 3, persistent: 2, transient: 1 } as const;
+    const aScore = sevRank[a.severity] * 10 + persRank[a.persistence];
+    const bScore = sevRank[b.severity] * 10 + persRank[b.persistence];
+    return bScore - aScore;
+  })[0];
+  if (topFlag) {
+    const symptomLabel = SYMPTOM_LABEL[topFlag.symptom];
+    const persistenceWord =
+      topFlag.persistence === "worsening"
+        ? "worsening"
+        : topFlag.persistence === "persistent"
+          ? "persistent"
+          : SEVERITY_LABEL[topFlag.severity].toLowerCase();
+    reasons.push(`${symptomLabel} ${persistenceWord}`);
+  }
+  if (i.recentLowMood) reasons.push("Last check-in negative");
+  if (i.riskBand === "high") reasons.push("Treatment risk elevated");
+  if (i.treatmentStatus === "stopped") reasons.push("Treatment stopped");
+
+  // Cap at 4 to keep the row compact.
+  const trimmedReasons = reasons.slice(0, 4);
+
+  // Priority + summary + next action — checked in operational severity
+  // order. The first matching branch wins so we never bury an
+  // escalation under a lesser signal.
+  let priority: ActionPriority = "stable";
+  let summary = "Patient appears stable with consistent engagement.";
+  let nextAction = "Continue monitoring, no action needed.";
+
+  if (i.escalationOpen && i.followUpPending) {
+    priority = "review_now";
+    summary =
+      "Patient requested clinician review and a follow-up has not been logged yet.";
+    nextAction = "Call patient to address the requested review.";
+  } else if (i.escalationOpen) {
+    priority = "review_now";
+    summary = "Patient requested clinician review — acknowledge and respond.";
+    nextAction = "Mark as reviewed, then call or message the patient.";
+  } else if (i.followUpPending) {
+    priority = "follow_up_today";
+    summary = "An open escalation is still awaiting a logged follow-up.";
+    nextAction = "Log the follow-up touchpoint with this patient today.";
+  } else if (i.silentDays !== null && i.silentDays >= 7) {
+    priority = "follow_up_today";
+    summary = `Patient has not checked in for ${i.silentDays} days and likely needs follow-up.`;
+    nextAction = "Reach out to re-engage this patient.";
+  } else if (topFlag && topFlag.severity === "severe") {
+    priority = "follow_up_today";
+    summary = `${SYMPTOM_LABEL[topFlag.symptom]} is ${
+      topFlag.persistence === "worsening" ? "worsening" : "severe"
+    }; follow-up may be appropriate.`;
+    nextAction = "Review side effects and check treatment tolerance.";
+  } else if (i.riskAction === "needs_followup") {
+    priority = "follow_up_today";
+    summary =
+      "Recent signals suggest this patient warrants a clinical touchpoint.";
+    nextAction = "Review recent check-ins and reach out as appropriate.";
+  } else if (i.silentDays !== null && i.silentDays >= 3) {
+    priority = "monitor";
+    summary = `Engagement has slowed — last check-in was ${i.silentDays} days ago.`;
+    nextAction = "Continue monitoring; reach out if no check-in within 24h.";
+  } else if (i.treatmentStatus === "stopped") {
+    priority = "monitor";
+    summary =
+      "Treatment is currently stopped — monitor for re-engagement signals.";
+    nextAction = "Confirm stop reason is still accurate.";
+  } else if (topFlag) {
+    priority = "monitor";
+    summary = `${SYMPTOM_LABEL[topFlag.symptom]} ${
+      topFlag.persistence === "worsening"
+        ? "is mildly worsening"
+        : `is ${SEVERITY_LABEL[topFlag.severity].toLowerCase()}`
+    } — keep an eye on it.`;
+    nextAction = "Continue monitoring; revisit if symptoms intensify.";
+  } else if (i.riskAction === "monitor" || i.riskBand === "medium") {
+    priority = "monitor";
+    summary =
+      "Patient appears mostly stable, but a minor signal is worth watching.";
+    nextAction = "Continue monitoring; no immediate action required.";
+  } else if (!i.hasAnyCheckin) {
+    priority = "monitor";
+    summary = "No check-ins logged yet — encourage onboarding completion.";
+    nextAction = "Confirm patient has activated the Viva Care app.";
+  }
+
+  return { priority, summary, nextAction, reasons: trimmedReasons };
+}
+
+function PatientSummaryCard({ intel }: { intel: Intelligence }) {
+  const style = PRIORITY_STYLE[intel.priority];
+  return (
+    <div className="bg-card rounded-[20px] p-5 sm:p-6">
+      {/* Header row: section eyebrow + action priority pill on the
+          right. Keeps the card scannable at a glance. */}
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+          Patient summary
+        </div>
+        <div
+          className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap"
+          style={{ backgroundColor: style.bg, color: style.fg }}
+          aria-label={`Action priority: ${PRIORITY_LABEL[intel.priority]}`}
+        >
+          <span
+            aria-hidden
+            className="inline-block w-2 h-2 rounded-full"
+            style={{ backgroundColor: style.dot }}
+          />
+          {PRIORITY_LABEL[intel.priority]}
+        </div>
+      </div>
+
+      {/* The headline sentence. Sized like the page's primary copy
+          but slightly heavier so it reads as the answer to "what is
+          going on with this patient right now". */}
+      <p className="font-display text-[17px] sm:text-[18px] font-semibold text-foreground leading-snug mt-3">
+        {intel.summary}
+      </p>
+
+      {/* Recommended next action. Same visual treatment as the existing
+          "Suggested" line in the header card — eyebrow + value — so the
+          two pieces of guidance feel like one design system. */}
+      <div className="mt-4 pt-4 border-t border-border flex flex-col sm:flex-row sm:items-start gap-1.5 sm:gap-3 text-sm">
+        <span
+          className="text-[10px] uppercase tracking-wider font-semibold shrink-0 sm:mt-0.5"
+          style={{ color: "#6B7280" }}
+        >
+          Next action
+        </span>
+        <span
+          className="font-semibold break-words min-w-0"
+          style={{ color: "#142240" }}
+        >
+          {intel.nextAction}
+        </span>
+      </div>
+
+      {/* Why surfaced. Compact pill row -- 2 to 4 short reasons,
+          ranked by clinical priority above. Hidden entirely if there
+          are no reasons (the stable case), so the card stays clean. */}
+      {intel.reasons.length > 0 && (
+        <div className="mt-4">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+            Why this patient is surfaced
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {intel.reasons.map((r) => (
+              <span
+                key={r}
+                className="px-2.5 py-1 rounded-lg text-xs text-foreground bg-background font-semibold"
+              >
+                {r}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function PatientDetailPage({ id }: { id: number }) {
   const qc = useQueryClient();
   // Pilot analytics: one `patient_viewed` per (patient, mount). Re-
@@ -181,6 +425,31 @@ export function PatientDetailPage({ id }: { id: number }) {
 
   const p = patient.data;
 
+  // Compute the intelligence layer once per render. Inputs are pulled
+  // entirely from values already rendered elsewhere on this page so
+  // the summary can never disagree with the supporting cards below.
+  const silentDays =
+    checkins.data && checkins.data.length > 0
+      ? daysSince(checkins.data[0]!.date)
+      : null;
+  const recentLowMood =
+    !!checkins.data &&
+    checkins.data.length > 0 &&
+    checkins.data.slice(0, 3).some((c) => c.mood <= 2);
+  const intel = computeIntelligence({
+    treatmentStatus: p.treatmentStatus,
+    silentDays,
+    hasAnyCheckin: !!checkins.data && checkins.data.length > 0,
+    riskBand: risk.data?.band,
+    riskAction: risk.data?.action,
+    symptomFlags: risk.data?.symptomFlags ?? [],
+    escalationOpen: !!care.data?.escalationOpen,
+    followUpPending: !!care.data?.followUpPending,
+    lastEscalationAt: care.data?.lastEscalationAt ?? null,
+    recentLowMood,
+    recentNegativeTrend: false,
+  });
+
   return (
     <div className="space-y-5">
       <Link
@@ -189,6 +458,85 @@ export function PatientDetailPage({ id }: { id: number }) {
       >
         ← All patients
       </Link>
+
+      {/* Patient identity header — anchors the top of the page. The
+          intelligence summary sits directly below it; the existing
+          escalation / follow-up CTAs and supporting cards live further
+          down as the evidence layer. */}
+      <div className="bg-card rounded-[20px] p-4 sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6 sm:flex-wrap">
+          <div className="min-w-0 sm:flex-1 w-full">
+            <h1 className="font-display text-[24px] sm:text-[28px] font-bold text-foreground leading-tight break-words">
+              {p.name}
+            </h1>
+            <div className="text-muted-foreground text-sm mt-1.5 font-medium truncate sm:whitespace-normal sm:break-words">
+              {p.phone ?? p.email}
+            </div>
+            <div className="text-foreground text-sm mt-5 font-medium">
+              {p.glp1Drug ?? "No drug recorded"}
+              {p.dose && (
+                <span className="text-muted-foreground font-normal">
+                  {" · "}{p.dose}
+                </span>
+              )}
+              {p.startedOn && (
+                <span className="text-muted-foreground font-normal">
+                  {" · started "}{fmtDate(p.startedOn)}
+                </span>
+              )}
+            </div>
+            {weight.data?.latest && (
+              <div
+                className="text-muted-foreground text-xs mt-2 font-medium flex items-center gap-2"
+                aria-label="Latest weight"
+              >
+                <span className="text-foreground font-semibold">
+                  {Math.round(weight.data.latest.weightLbs)} lbs
+                </span>
+                <span aria-hidden="true">·</span>
+                <span>
+                  {weight.data.daysSinceLast === 0
+                    ? "logged today"
+                    : weight.data.daysSinceLast === 1
+                    ? "1 day ago"
+                    : `${weight.data.daysSinceLast} days ago`}
+                </span>
+                {(weight.data.trend === "up" || weight.data.trend === "down") &&
+                  weight.data.prior && (
+                    <span className="text-muted-foreground">
+                      {weight.data.trend === "up" ? "↑" : "↓"}{" "}
+                      {Math.abs(
+                        Math.round(
+                          weight.data.latest.weightLbs -
+                            weight.data.prior.weightLbs,
+                        ),
+                      )}{" "}
+                      lbs
+                    </span>
+                  )}
+              </div>
+            )}
+          </div>
+          {risk.data && (
+            <div className="sm:text-right sm:shrink-0">
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+                Treatment risk
+              </div>
+              <div className="flex flex-wrap gap-2 sm:justify-end">
+                <ActionBadge action={risk.data.action} size="md" />
+                <RiskBadge band={risk.data.band} score={risk.data.score} size="md" />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Intelligence summary card — Patient summary, action priority,
+          recommended next action, and "why surfaced" reason pills.
+          Pure interpretation of values already on this page (risk,
+          care events, check-in recency, symptom flags, treatment
+          status). */}
+      <PatientSummaryCard intel={intel} />
 
       {/* Escalation banner. Renders amber + CTA when the patient has
           requested care-team review and no doctor_reviewed event has
@@ -350,106 +698,6 @@ export function PatientDetailPage({ id }: { id: number }) {
           </button>
         </div>
       ) : null}
-
-      {/* Header card */}
-      <div className="bg-card rounded-[20px] p-4 sm:p-6">
-        {/* Header row stacks vertically on mobile so the name column
-            isn't squeezed to ~80px (which used to force the patient
-            name to wrap letter-by-letter). On sm+ it goes back to
-            the original two-column layout with Risk on the right. */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6 sm:flex-wrap">
-          <div className="min-w-0 sm:flex-1 w-full">
-            {/* `break-words` (overflow-wrap: break-word) only breaks
-                when a single token won't fit -- normal multi-word
-                names wrap by word. Avoid `break-all` here. */}
-            <h1 className="font-display text-[24px] sm:text-[28px] font-bold text-foreground leading-tight break-words">
-              {p.name}
-            </h1>
-            {/* Email/phone: prefer truncation on mobile so a long
-                ".synthetic" address doesn't take 4 lines; let it
-                wrap naturally on sm+ where there's room. */}
-            <div className="text-muted-foreground text-sm mt-1.5 font-medium truncate sm:whitespace-normal sm:break-words">
-              {p.phone ?? p.email}
-            </div>
-            <div className="text-foreground text-sm mt-5 font-medium">
-              {p.glp1Drug ?? "No drug recorded"}
-              {p.dose && (
-                <span className="text-muted-foreground font-normal">
-                  {" · "}{p.dose}
-                </span>
-              )}
-              {p.startedOn && (
-                <span className="text-muted-foreground font-normal">
-                  {" · started "}{fmtDate(p.startedOn)}
-                </span>
-              )}
-            </div>
-            {weight.data?.latest && (
-              <div
-                className="text-muted-foreground text-xs mt-2 font-medium flex items-center gap-2"
-                aria-label="Latest weight"
-              >
-                <span className="text-foreground font-semibold">
-                  {Math.round(weight.data.latest.weightLbs)} lbs
-                </span>
-                <span aria-hidden="true">·</span>
-                <span>
-                  {weight.data.daysSinceLast === 0
-                    ? "logged today"
-                    : weight.data.daysSinceLast === 1
-                    ? "1 day ago"
-                    : `${weight.data.daysSinceLast} days ago`}
-                </span>
-                {/* Direction + amount only -- intentionally neutral
-                    styling. We don't render up = bad / down = good
-                    color cues; weight change is clinical context for
-                    the doctor, not a value judgment. */}
-                {(weight.data.trend === "up" || weight.data.trend === "down") &&
-                  weight.data.prior && (
-                    <span className="text-muted-foreground">
-                      {weight.data.trend === "up" ? "↑" : "↓"}{" "}
-                      {Math.abs(
-                        Math.round(
-                          weight.data.latest.weightLbs -
-                            weight.data.prior.weightLbs,
-                        ),
-                      )}{" "}
-                      lbs
-                    </span>
-                  )}
-              </div>
-            )}
-          </div>
-          {risk.data && (
-            <div className="sm:text-right sm:shrink-0">
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
-                Risk
-              </div>
-              <div className="flex flex-wrap gap-2 sm:justify-end">
-                <ActionBadge action={risk.data.action} size="md" />
-                <RiskBadge band={risk.data.band} score={risk.data.score} size="md" />
-              </div>
-            </div>
-          )}
-        </div>
-        {/* Suggested action line: turns the diagnosis into a verb. Lives
-            inside the header card directly under the risk pills so the
-            doctor sees "what to do" before reading the rule list. */}
-        {risk.data?.suggestedAction && (
-          <div
-            className="mt-5 pt-5 border-t border-border flex flex-col sm:flex-row sm:items-start gap-1.5 sm:gap-3 text-sm font-semibold"
-            style={{ color: "#142240" }}
-          >
-            <span
-              className="text-[10px] uppercase tracking-wider font-semibold shrink-0 sm:mt-0.5"
-              style={{ color: "#6B7280" }}
-            >
-              Suggested
-            </span>
-            <span className="break-words min-w-0">{risk.data.suggestedAction}</span>
-          </div>
-        )}
-      </div>
 
       {/* Treatment status. Doctor-owned source of truth for whether
           this patient is currently on GLP-1 therapy. Drives whether

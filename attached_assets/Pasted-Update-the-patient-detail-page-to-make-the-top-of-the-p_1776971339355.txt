@@ -1,0 +1,494 @@
+Update the patient detail page to make the top of the page more intelligent, more action-oriented, and easier for a clinician to understand immediately. This is not a full redesign. Keep most of the existing patient page and raw data sections. The main goal is to reshuffle the current layout and add a few smart summary blocks at the top so the page feels like a decision-support workflow rather than just raw tracking.
+Core product goal
+When a clinician opens a patient page, the top of the page should answer these 3 questions within 5 seconds:
+
+
+What is going on with this patient right now?
+
+
+Why is this patient being surfaced?
+
+
+What should I do next?
+
+
+The current lower-page detail sections are still useful and should remain as supporting evidence.
+Important constraints
+
+
+Do not remove the existing lower-level cards like:
+
+
+Treatment status
+
+
+Recent check-ins
+
+
+Why this risk band
+
+
+any existing raw trend / tracking / detail modules
+
+
+
+
+Do not add complicated new backend AI infrastructure
+
+
+Use existing page data and existing rule-based logic to populate the new intelligent sections
+
+
+This is primarily an information hierarchy + UX improvement
+
+
+Keep the page clean, light, and highly scannable
+
+
+Do not add lots of charts or verbose text
+
+
+Do not make the top feel cluttered
+
+
+What to change exactly
+1. Keep the existing patient header, but use it as the starting anchor
+Keep the top header area with:
+
+
+patient name
+
+
+patient email / identifier
+
+
+medication + dosage + start date
+
+
+existing relevant badges if helpful
+
+
+Do not overcomplicate this area. This stays as the patient identity row.
+2. Add a new top card directly below the patient header called:
+Patient summary
+This should be a prominent, clean, clinician-facing summary card placed near the top of the page.
+Purpose:
+
+
+Provide a 1-sentence plain-English intelligent summary of what is happening with the patient right now
+
+
+Examples of the style:
+
+
+“Patient has not checked in for 10 days and likely needs follow-up.”
+
+
+“Patient requested clinician review after a recent treatment update.”
+
+
+“Patient appears stable overall, but engagement has dropped recently.”
+
+
+“Symptoms are mildly worsening and follow-up may be appropriate.”
+
+
+Implementation guidance:
+
+
+This does not need true AI backend logic yet
+
+
+Generate this from existing signals already available on the page and from current rules
+
+
+Prefer concise summary logic based on:
+
+
+days since last check-in
+
+
+patient requested review
+
+
+follow-up pending
+
+
+current risk bucket / treatment risk
+
+
+recent symptom trend if available
+
+
+treatment status if relevant
+
+
+
+
+Tone:
+
+
+plain English
+
+
+clinical but simple
+
+
+not robotic
+
+
+not overly verbose
+
+
+3. Add a new small badge / label near the Patient summary card:
+Action priority
+This should be a stronger operational label than the current raw risk badge.
+Use only these values:
+
+
+Review now
+
+
+Follow up today
+
+
+Monitor
+
+
+Stable
+
+
+Purpose:
+
+
+tell the clinician how urgently this patient deserves attention
+
+
+Suggested logic:
+
+
+Review now if patient requested review or there is a very strong unresolved concern
+
+
+Follow up today if no check-in for a meaningful threshold, follow-up pending, or similar engagement concern
+
+
+Monitor if there is mild concern but no urgent action required
+
+
+Stable if patient appears on track with no meaningful concerns
+
+
+Important:
+
+
+This is not the same as treatment risk %
+
+
+Keep treatment risk if it already exists, but action priority should be more prominent and easier to act on
+
+
+4. Add a top section called:
+Recommended next action
+Place this near the Patient summary and Action priority.
+Purpose:
+
+
+tell the clinician the single clearest next step
+
+
+Examples:
+
+
+Call patient to re-engage
+
+
+Review side effects and adherence
+
+
+Log follow-up and monitor response
+
+
+Continue monitoring, no action needed
+
+
+Check in on treatment tolerance
+
+
+Implementation guidance:
+
+
+one primary recommendation only
+
+
+short and plain-English
+
+
+derived from current page state and existing rules
+
+
+this should feel like the page is guiding a decision, not just displaying data
+
+
+5. Add a compact row called:
+Why this patient is surfaced
+This should sit near the top and include 2 to 4 short reason pills.
+Purpose:
+
+
+explain the drivers behind the current summary / priority / recommendation
+
+
+Examples of pills:
+
+
+No check-in 10 days
+
+
+Patient requested review
+
+
+Follow-up pending
+
+
+Recent dose change
+
+
+Nausea worsened
+
+
+Low engagement
+
+
+Treatment risk elevated
+
+
+Last check-in negative
+
+
+Symptoms worsening
+
+
+Implementation guidance:
+
+
+use existing available data and rules
+
+
+keep each pill short
+
+
+prioritize the most meaningful reasons only
+
+
+do not overload with too many pills
+
+
+this should make the clinician instantly trust why the patient is being highlighted
+
+
+6. Reorder the top half of the page to this exact hierarchy
+After the patient identity/header section, the page should flow like this:
+
+
+Patient summary card
+
+
+Action priority label and Recommended next action
+
+
+Why this patient is surfaced reason pills
+
+
+Then the existing supporting modules below
+
+
+The current page appears to have things like:
+
+
+treatment status
+
+
+alert bar for last check-in
+
+
+why this risk band
+
+
+recent check-ins
+
+
+Those should remain, but they should now sit under the more intelligent summary/action layer.
+7. Keep and reposition the current “Last check-in” alert
+The current “Last check-in: 10 days ago” style alert is useful.
+Keep it, but treat it as supporting context just below the new top summary/action layer or integrated just under it.
+It should still be visible, because recency is important, but it should no longer be the main intelligence element by itself.
+8. Keep the current “Treatment status” card lower down
+The current Treatment status card is still useful and should remain.
+Do not remove it.
+It should sit below the new summary/action area as supporting patient context.
+9. Keep the current “Why this risk band” card lower down
+The current “Why this risk band” section is also still useful.
+Do not remove it.
+It should remain lower on the page as the more detailed, explanatory breakdown for the current risk calculation.
+The new top summary should feel like the plain-English interpretation of this deeper card.
+10. Keep the current “Recent check-ins” card lower down
+The recent check-ins list is helpful and should remain.
+Do not move it to the very top.
+It should stay lower as supporting detail that the clinician can review after understanding the summary and recommendation.
+11. Make the page feel more like a decision workflow
+The top should feel like:
+
+
+summary
+
+
+urgency
+
+
+recommendation
+
+
+why
+
+
+The bottom should feel like:
+
+
+evidence
+
+
+history
+
+
+detail
+
+
+raw tracking
+
+
+That distinction is important.
+12. Use the current data model and heuristics, not new infrastructure
+For this pass, do not build a heavy AI system.
+Instead, build the top intelligently from the data you already have on the page.
+You can use existing values such as:
+
+
+current risk label / treatment risk %
+
+
+risk reasons already shown in “Why this risk band”
+
+
+patient requested review status
+
+
+follow-up pending status
+
+
+time since last check-in
+
+
+recent engagement pattern
+
+
+recent symptom pattern if present
+
+
+treatment status
+
+
+recent follow-up logged
+
+
+Think of it as:
+existing structured data → smarter clinician-facing summary layer
+13. Keep visual design minimal and premium
+Design guidance:
+
+
+clean cards
+
+
+plenty of whitespace
+
+
+no clutter
+
+
+no giant blocks of text
+
+
+no excessive badges
+
+
+no unnecessary color overload
+
+
+maintain existing Viva Clinic aesthetic
+
+
+make it look like a subtle intelligence upgrade, not a noisy dashboard expansion
+
+
+14. If helpful, reuse existing logic to draft top summary text
+For example:
+
+
+if patient requested review → summary should mention that first
+
+
+else if follow-up pending → summary should mention unresolved follow-up
+
+
+else if no recent check-in → summary should mention engagement drop
+
+
+else if stable → summary should reflect stability
+
+
+then recommended action should match that state
+
+
+So the summary logic should prioritize the most actionable issue first.
+15. Specific outcome to optimize for
+After this change, when opening a patient page like Sam Rivera, a clinician should immediately understand something like:
+
+
+this patient has not checked in for 10 days
+
+
+the main issue is engagement / follow-up
+
+
+the recommended action is to call or re-engage
+
+
+the lower cards still provide proof and recent history
+
+
+That is the exact outcome we want.
+Final instruction summary
+Do not redesign the whole page.
+Do not remove the current lower cards.
+Instead:
+
+
+add a new intelligent summary layer at the top
+
+
+promote action and interpretation above raw detail
+
+
+keep the raw detail cards lower as supporting evidence
+
+
+make the page much easier to scan and act on
+
+
+If helpful, use the current page’s existing cards and data as inputs, but change the hierarchy so the page leads with:
+Patient summary → Action priority → Recommended next action → Why surfaced
+and only then shows:
+Treatment status → Last check-in alert → Why this risk band → Recent check-ins
+Here’s a tighter final line you can add at the bottom for the agent:
+This should feel like a smart reshuffle of the existing patient page, not a rebuild. Most of the value should come from better hierarchy, a new top summary card, and clearer clinician guidance using current data already available on the page.
