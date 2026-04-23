@@ -334,10 +334,21 @@ export const CATEGORY_OPTIONS: Record<ActionCategory, CategoryOption[]> = {
     { id: "fuel_minimal", title: "Light meals + easy digestion", subtitle: "Your body still needs fuel", category: "fuel", stateTag: "stressed", planTier: "minimal", supportText: ["Under-eating slows your metabolism", "Protein shakes can help when appetite is low"] },
   ],
   hydrate: [
+    // Order is least → most intensive so the card reads like a natural
+    // ladder. Default selection is driven by stateTag mapping:
+    //   great   -> Standard hydration (typical good day)
+    //   good    -> Light hydration    (falls through to options[1])
+    //   tired   -> Boost hydration    (tired days often signal symptoms,
+    //                                  electrolytes help GLP-1 side effects)
+    //   stressed-> Steady sipping     (overwhelmed: just stay consistent)
+    // Boost is intentionally NOT the default for high-readiness days --
+    // it only surfaces when symptoms or tiredness justify it. Symptom-
+    // driven overrides (hydrate_side_effects in patternEngine) can still
+    // promote Boost when the rule fires.
     { id: "hydrate_steady", title: "Steady sipping", subtitle: "Stay consistent today", category: "hydrate", stateTag: "stressed", planTier: "minimal", supportText: ["Dehydration makes everything harder", "Set reminders if needed"] },
-    { id: "hydrate_light", title: "Light hydration", subtitle: "~5–6 cups on a lower activity day", category: "hydrate", stateTag: "tired", planTier: "low", supportText: ["Front-load fluids before noon", "One glass with each meal"] },
-    { id: "hydrate_standard", title: "Standard hydration", subtitle: "~6–8 cups for a typical day", category: "hydrate", stateTag: "good", planTier: "moderate", supportText: ["Sip throughout the day", "One glass with each meal helps you stay on pace"] },
-    { id: "hydrate_high", title: "Boost hydration", subtitle: "~6–8 cups + electrolytes for symptoms or activity", category: "hydrate", stateTag: "great", planTier: "high", supportText: ["Electrolytes help with GLP-1 side effects", "Add electrolytes if feeling dizzy"] },
+    { id: "hydrate_light", title: "Light hydration", subtitle: "~5–6 cups on a lower activity day", category: "hydrate", stateTag: "good", planTier: "low", supportText: ["Front-load fluids before noon", "One glass with each meal"] },
+    { id: "hydrate_standard", title: "Standard hydration", subtitle: "~6–8 cups for a typical day", category: "hydrate", stateTag: "great", planTier: "moderate", supportText: ["Sip throughout the day", "One glass with each meal helps you stay on pace"] },
+    { id: "hydrate_high", title: "Boost hydration", subtitle: "~6–8 cups + electrolytes for symptoms or activity", category: "hydrate", stateTag: "tired", planTier: "high", supportText: ["Electrolytes help with GLP-1 side effects", "Add electrolytes if feeling dizzy"] },
   ],
   recover: [
     { id: "recover_rest", title: "Early wind-down + 8+ hours", subtitle: "Full reset mode", category: "recover", stateTag: "stressed", planTier: "high", supportText: ["Your body needs extra recovery", "Prioritize sleep above everything"] },
