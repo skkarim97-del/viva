@@ -72,6 +72,12 @@ export interface SymptomTip {
   // Microcopy shown after the CTA ("Done") is tapped, before the
   // card is dismissed. Warm, not gamified.
   ctaCompleted: string;
+  // Short, natural recap (gerund phrase, no period) used as the
+  // followup card subtext the next day. Ex: "Sipping water over
+  // 10-15 min". Deliberately briefer than `cta` so the followup
+  // reads like a quick check-in rather than re-presenting the
+  // full instruction.
+  followupSummary: string;
   // Generic confirmation label for the action button. Always reads
   // "Done" per the refreshed micro-intervention spec -- the action
   // sentence above carries the specifics.
@@ -126,6 +132,9 @@ export function deriveSymptomTips(input: SymptomInputs): SymptomTip[] {
         : "(example: still water, room-temperature water, or weak ginger tea)",
       ctaLabel: "Done",
       ctaCompleted: severe ? "Logged. Nice work." : "Logged. Nice work.",
+      followupSummary: severe
+        ? "Water + a bland snack over 10-15 min"
+        : "Sipping water over 10-15 min",
       factors,
     });
   }
@@ -177,6 +186,12 @@ export function deriveSymptomTips(input: SymptomInputs): SymptomTip[] {
       example,
       ctaLabel: "Done",
       ctaCompleted: "Logged. Nice work.",
+      followupSummary:
+        plan === "full_rest"
+          ? "A 2 min gentle stretch"
+          : plan === "light_activity"
+          ? "A gentle 5 min walk"
+          : "A 10 min walk",
       factors,
     });
   }
@@ -197,6 +212,7 @@ export function deriveSymptomTips(input: SymptomInputs): SymptomTip[] {
       example: "(example: ½ cup yogurt, 1 hard-boiled egg, a small handful of nuts, or a protein shake)",
       ctaLabel: "Done",
       ctaCompleted: "Logged. Nice work.",
+      followupSummary: "Half a cup of protein in 15 min",
       factors,
     });
   }
