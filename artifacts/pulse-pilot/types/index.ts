@@ -343,7 +343,7 @@ export const CATEGORY_OPTIONS: Record<ActionCategory, CategoryOption[]> = {
     { id: "recover_rest", title: "Early wind-down + 8+ hours", subtitle: "Full reset mode", category: "recover", stateTag: "stressed", planTier: "high", supportText: ["Your body needs extra recovery", "Prioritize sleep above everything"] },
     { id: "recover_extended", title: "8+ hours sleep", subtitle: "Your body needs extra rest", category: "recover", stateTag: "tired", planTier: "moderate", supportText: ["Start winding down early", "Prioritize sleep above all else tonight"] },
     { id: "recover_solid", title: "7-8 hours sleep", subtitle: "Solid recovery target", category: "recover", stateTag: "good", planTier: "low", supportText: ["Screen-free 30 min before bed", "Keep the room cool and dark"] },
-    { id: "recover_maintain", title: "Under 7 hours sleep", subtitle: "Maintain your sleep quality", category: "recover", stateTag: "great", planTier: "minimal", supportText: ["Consistent sleep supports treatment", "Keep a consistent wake time"] },
+    { id: "recover_maintain", title: "At least 7 hours of sleep", subtitle: "Maintain your sleep quality", category: "recover", stateTag: "great", planTier: "minimal", supportText: ["Consistent sleep supports treatment", "Keep a consistent wake time"] },
   ],
   consistent: [
     { id: "consistent_great", title: "Complete your daily check-in", subtitle: "Keep the momentum going", category: "consistent", stateTag: "great", planTier: "high", supportText: ["Consistency compounds over time", "You're building a strong habit"] },
