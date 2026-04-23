@@ -1,0 +1,34 @@
+Refine the patient detail page from strong MVP to polished pilot-ready. Do not add new major features. Focus on tightening, simplifying, and unifying the page so it feels like one intelligent clinician workflow.
+
+Rename the lower card title “Why this risk band” to “Key drivers” or “Why this patient is flagged”. The current title feels outdated relative to the new summary layer. Prefer “Key drivers.”
+De-emphasize the current “Treatment risk 30%” badge in the patient identity header. It feels too abstract versus the clearer action-oriented summary. Replace the percentage display with a simpler severity label such as:
+Low
+Moderate
+Elevated
+Or rename it to “Treatment concern” if needed. Keep it visually secondary to the new summary/action layer.
+Tighten the top-of-page design so the patient identity header and the new summary layer feel more unified. The top should feel like one cohesive intelligence block, not several separate stacked modules. Keep:
+patient name / med / dose
+issue type
+action priority
+summary sentence
+recommended next action
+reason pills
+But visually compress and unify them.
+Rename “Patient summary” to “Care summary” if it improves the feel. Goal is to make the top card sound more clinician-facing and premium.
+Make the Recommended next action text more operational and concrete. Avoid generic phrasing. It should sound like an immediate clinician action. Examples:
+Call patient and assess re-engagement barriers
+Review nausea severity and treatment tolerance
+Confirm need for clinical follow-up
+Monitor only, no action needed today
+Keep the issue type labels exactly:
+Engagement
+Clinical
+Combined
+Stable
+These should remain subtle but clear and should continue to drive the summary logic.
+Reduce visual duplication and noise in the lower supporting sections where possible. Do not remove useful cards, but make the evidence layer feel more compact and secondary to the top decision layer.
+Make sure the page narrative is fully consistent:
+top = what type of issue this is, what is happening, what to do next
+bottom = supporting evidence and history
+Preserve the current logic separating engagement risk from clinical risk. Do not regress on that. That distinction is critical.
+Goal: make the page feel like a polished clinical command view rather than a raw dashboard with stacked cards.

@@ -6,13 +6,14 @@ import {
   api,
   type CareEvent,
   type Checkin,
+  type PatientDetail,
+  type PatientWeightSummary,
+  type Risk,
   type StopReason,
   type StopTimingBucket,
   type SymptomFlag,
   type TreatmentStatus,
 } from "@/lib/api";
-import { RiskBadge } from "@/components/RiskBadge";
-import { ActionBadge } from "@/components/ActionBadge";
 import { relativeTime, daysSince } from "@/lib/relativeTime";
 
 const SYMPTOM_LABEL: Record<SymptomFlag["symptom"], string> = {
@@ -273,49 +274,55 @@ function computeIntelligence(i: IntelligenceInputs): Intelligence {
     : null;
 
   let summary = "Patient appears stable with no immediate follow-up needed.";
-  let nextAction = "Continue monitoring, no action needed.";
+  let nextAction = "Monitor only, no action needed today.";
 
   if (issueType === "combined") {
     if (topFlag && i.silentDays !== null && i.silentDays >= 3) {
       summary = `Patient reported ${symptomDir} ${symptomName} and then stopped checking in.`;
+      nextAction = `Call patient and review ${symptomName} severity together.`;
     } else if (topFlag && i.escalationOpen) {
       summary = `Patient flagged ${symptomDir} ${symptomName} and requested clinician review.`;
+      nextAction = `Call patient and address requested review of ${symptomName}.`;
     } else if (topFlag) {
       summary = `Recent ${symptomName} concerns are now paired with declining engagement.`;
+      nextAction = `Call patient and review ${symptomName} and treatment tolerance.`;
     } else {
       summary = "Patient may be struggling with both treatment tolerance and follow-through.";
+      nextAction = "Call patient and assess treatment tolerance and re-engagement.";
     }
-    nextAction = "Reach out to the patient and review symptoms together.";
   } else if (issueType === "clinical") {
     if (topFlag && topFlag.persistence === "worsening") {
       summary = `Patient is reporting worsening ${symptomName} and may need treatment support.`;
-      nextAction = "Review side effects and check treatment tolerance.";
+      nextAction = `Review ${symptomName} severity and treatment tolerance.`;
+    } else if (topFlag && topFlag.severity === "severe") {
+      summary = `Patient is reporting severe ${symptomName}; clinician review is recommended.`;
+      nextAction = `Call patient and assess ${symptomName} severity today.`;
     } else if (topFlag) {
       summary = `Symptoms appear ${symptomDir}; clinician review may be appropriate.`;
-      nextAction = "Review recent check-ins and reach out as appropriate.";
+      nextAction = `Review ${symptomName} in recent check-ins and decide on follow-up.`;
     } else if (i.treatmentStatus === "stopped") {
       summary = "Treatment is currently stopped — confirm clinical context is still accurate.";
       nextAction = "Confirm stop reason and decide on next clinical step.";
     } else if (i.recentLowMood) {
       summary = "Recent check-ins suggest treatment tolerance may be declining.";
-      nextAction = "Review recent check-ins and consider a clinical touchpoint.";
+      nextAction = "Review recent check-ins and confirm need for clinical follow-up.";
     } else {
       summary = "Clinical signals warrant a closer look at this patient's recent reports.";
-      nextAction = "Review the symptom and risk drivers below.";
+      nextAction = "Review symptom flags and confirm need for clinical follow-up.";
     }
   } else if (issueType === "engagement") {
     if (i.escalationOpen) {
       summary = "Patient requested follow-up — acknowledge and re-engage.";
-      nextAction = "Mark as reviewed, then call or message the patient.";
+      nextAction = "Mark reviewed, then call patient to address the request.";
     } else if (i.followUpPending) {
       summary = "Patient requested follow-up and has not yet re-engaged.";
-      nextAction = "Log the follow-up touchpoint with this patient.";
+      nextAction = "Log the follow-up touchpoint with this patient today.";
     } else if (i.silentDays !== null && i.silentDays >= 7) {
       summary = `Patient has not checked in for ${i.silentDays} days and may be disengaging.`;
-      nextAction = "Reach out to re-engage this patient.";
+      nextAction = "Call patient and assess re-engagement barriers.";
     } else if (i.silentDays !== null && i.silentDays >= 3) {
       summary = "Engagement has slowed and follow-up may be needed.";
-      nextAction = "Continue monitoring; reach out if no check-in within 24h.";
+      nextAction = "Send a check-in nudge today; call if no response within 24h.";
     } else if (!i.hasAnyCheckin) {
       summary = "No check-ins logged yet — encourage onboarding completion.";
       nextAction = "Confirm patient has activated the Viva Care app.";
@@ -325,29 +332,96 @@ function computeIntelligence(i: IntelligenceInputs): Intelligence {
   return { issueType, priority, summary, nextAction, reasons: trimmedReasons };
 }
 
-function PatientSummaryCard({ intel }: { intel: Intelligence }) {
+// Treatment-concern severity label. We deliberately move away from
+// raw "Treatment risk 30%" — the percentage is abstract and competes
+// with the action-priority pill. A three-step word scale (Low /
+// Moderate / Elevated) is easier to read at a glance and stays
+// visually secondary to the care summary.
+const RISK_BAND_LABEL: Record<"low" | "medium" | "high", string> = {
+  low: "Low",
+  medium: "Moderate",
+  high: "Elevated",
+};
+const RISK_BAND_DOT: Record<"low" | "medium" | "high", string> = {
+  low: "#1E8E3E",
+  medium: "#B8650A",
+  high: "#B5251D",
+};
+
+function PatientSummaryCard({
+  intel,
+  patient,
+  weight,
+  risk,
+}: {
+  intel: Intelligence;
+  patient: PatientDetail;
+  weight: PatientWeightSummary | undefined;
+  risk: Risk | null;
+}) {
   const style = PRIORITY_STYLE[intel.priority];
   const issueStyle = ISSUE_STYLE[intel.issueType];
   return (
     <div className="bg-card rounded-[20px] p-5 sm:p-6">
-      {/* Header row: section eyebrow + issue-type chip on the left,
-          action priority pill on the right. Issue type classifies the
-          situation; priority tells the doctor how urgently to act. */}
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-            Patient summary
+      {/* --- Identity row -------------------------------------------
+          Patient name + drug/dose on the left, action-priority pill
+          on the right. The priority pill replaces the old "Risk 30%"
+          badge as the dominant header signal because it tells the
+          doctor what to *do*, not just a number. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+        <div className="min-w-0 sm:flex-1 w-full">
+          <h1 className="font-display text-[24px] sm:text-[28px] font-bold text-foreground leading-tight break-words">
+            {patient.name}
+          </h1>
+          <div className="text-muted-foreground text-sm mt-1.5 font-medium truncate sm:whitespace-normal sm:break-words">
+            {patient.phone ?? patient.email}
           </div>
-          <div
-            className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] uppercase tracking-wider font-semibold whitespace-nowrap"
-            style={{ backgroundColor: issueStyle.bg, color: issueStyle.fg }}
-            aria-label={`Issue type: ${ISSUE_LABEL[intel.issueType]}`}
-          >
-            {ISSUE_LABEL[intel.issueType]}
+          <div className="text-foreground text-sm mt-3 font-medium">
+            {patient.glp1Drug ?? "No drug recorded"}
+            {patient.dose && (
+              <span className="text-muted-foreground font-normal">
+                {" · "}{patient.dose}
+              </span>
+            )}
+            {patient.startedOn && (
+              <span className="text-muted-foreground font-normal">
+                {" · started "}{fmtDate(patient.startedOn)}
+              </span>
+            )}
           </div>
+          {weight?.latest && (
+            <div
+              className="text-muted-foreground text-xs mt-1.5 font-medium flex items-center gap-2"
+              aria-label="Latest weight"
+            >
+              <span className="text-foreground font-semibold">
+                {Math.round(weight.latest.weightLbs)} lbs
+              </span>
+              <span aria-hidden="true">·</span>
+              <span>
+                {weight.daysSinceLast === 0
+                  ? "logged today"
+                  : weight.daysSinceLast === 1
+                  ? "1 day ago"
+                  : `${weight.daysSinceLast} days ago`}
+              </span>
+              {(weight.trend === "up" || weight.trend === "down") &&
+                weight.prior && (
+                  <span className="text-muted-foreground">
+                    {weight.trend === "up" ? "↑" : "↓"}{" "}
+                    {Math.abs(
+                      Math.round(
+                        weight.latest.weightLbs - weight.prior.weightLbs,
+                      ),
+                    )}{" "}
+                    lbs
+                  </span>
+                )}
+            </div>
+          )}
         </div>
         <div
-          className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap"
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap self-start"
           style={{ backgroundColor: style.bg, color: style.fg }}
           aria-label={`Action priority: ${PRIORITY_LABEL[intel.priority]}`}
         >
@@ -360,49 +434,90 @@ function PatientSummaryCard({ intel }: { intel: Intelligence }) {
         </div>
       </div>
 
-      {/* The headline sentence. Sized like the page's primary copy
-          but slightly heavier so it reads as the answer to "what is
-          going on with this patient right now". */}
-      <p className="font-display text-[17px] sm:text-[18px] font-semibold text-foreground leading-snug mt-3">
-        {intel.summary}
-      </p>
-
-      {/* Recommended next action. Same visual treatment as the existing
-          "Suggested" line in the header card — eyebrow + value — so the
-          two pieces of guidance feel like one design system. */}
-      <div className="mt-4 pt-4 border-t border-border flex flex-col sm:flex-row sm:items-start gap-1.5 sm:gap-3 text-sm">
-        <span
-          className="text-[10px] uppercase tracking-wider font-semibold shrink-0 sm:mt-0.5"
-          style={{ color: "#6B7280" }}
-        >
-          Next action
-        </span>
-        <span
-          className="font-semibold break-words min-w-0"
-          style={{ color: "#142240" }}
-        >
-          {intel.nextAction}
-        </span>
+      {/* --- Care summary block -------------------------------------
+          Eyebrow + issue-type chip, then the headline sentence and
+          the recommended next action. Sits inside the same card as
+          the identity row, separated only by a hairline so the top
+          reads as one cohesive intelligence block. */}
+      <div className="mt-5 pt-5 border-t border-border">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+            Care summary
+          </div>
+          <div
+            className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] uppercase tracking-wider font-semibold whitespace-nowrap"
+            style={{ backgroundColor: issueStyle.bg, color: issueStyle.fg }}
+            aria-label={`Issue type: ${ISSUE_LABEL[intel.issueType]}`}
+          >
+            {ISSUE_LABEL[intel.issueType]}
+          </div>
+        </div>
+        <p className="font-display text-[17px] sm:text-[18px] font-semibold text-foreground leading-snug mt-3">
+          {intel.summary}
+        </p>
+        <div className="mt-4 flex flex-col sm:flex-row sm:items-start gap-1.5 sm:gap-3 text-sm">
+          <span
+            className="text-[10px] uppercase tracking-wider font-semibold shrink-0 sm:mt-0.5"
+            style={{ color: "#6B7280" }}
+          >
+            Next action
+          </span>
+          <span
+            className="font-semibold break-words min-w-0"
+            style={{ color: "#142240" }}
+          >
+            {intel.nextAction}
+          </span>
+        </div>
       </div>
 
-      {/* Why surfaced. Compact pill row -- 2 to 4 short reasons,
-          ranked by clinical priority above. Hidden entirely if there
-          are no reasons (the stable case), so the card stays clean. */}
-      {intel.reasons.length > 0 && (
-        <div className="mt-4">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
-            Why this patient is surfaced
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {intel.reasons.map((r) => (
-              <span
-                key={r}
-                className="px-2.5 py-1 rounded-lg text-xs text-foreground bg-background font-semibold"
-              >
-                {r}
+      {/* --- Footer: reason pills + treatment concern ---------------
+          Reason pills explain *why* this patient is in this priority.
+          The treatment-concern label sits alongside as a quiet
+          secondary signal — it adds clinical context without
+          competing with the priority pill at the top. */}
+      {(intel.reasons.length > 0 || risk) && (
+        <div className="mt-5 pt-4 border-t border-border flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
+          {intel.reasons.length > 0 ? (
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+                Why this patient is flagged
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {intel.reasons.map((r) => (
+                  <span
+                    key={r}
+                    className="px-2.5 py-1 rounded-lg text-xs text-foreground bg-background font-semibold"
+                  >
+                    {r}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div />
+          )}
+          {risk && (
+            <div
+              className="text-xs font-medium flex items-center gap-2 sm:shrink-0"
+              style={{ color: "#6B7280" }}
+              aria-label={`Treatment concern: ${RISK_BAND_LABEL[risk.band]}`}
+            >
+              <span className="uppercase tracking-wider text-[10px] font-semibold">
+                Treatment concern
               </span>
-            ))}
-          </div>
+              <span className="inline-flex items-center gap-1.5">
+                <span
+                  aria-hidden
+                  className="inline-block w-1.5 h-1.5 rounded-full"
+                  style={{ backgroundColor: RISK_BAND_DOT[risk.band] }}
+                />
+                <span className="text-foreground font-semibold">
+                  {RISK_BAND_LABEL[risk.band]}
+                </span>
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -552,84 +667,19 @@ export function PatientDetailPage({ id }: { id: number }) {
         ← All patients
       </Link>
 
-      {/* Patient identity header — anchors the top of the page. The
-          intelligence summary sits directly below it; the existing
-          escalation / follow-up CTAs and supporting cards live further
-          down as the evidence layer. */}
-      <div className="bg-card rounded-[20px] p-4 sm:p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6 sm:flex-wrap">
-          <div className="min-w-0 sm:flex-1 w-full">
-            <h1 className="font-display text-[24px] sm:text-[28px] font-bold text-foreground leading-tight break-words">
-              {p.name}
-            </h1>
-            <div className="text-muted-foreground text-sm mt-1.5 font-medium truncate sm:whitespace-normal sm:break-words">
-              {p.phone ?? p.email}
-            </div>
-            <div className="text-foreground text-sm mt-5 font-medium">
-              {p.glp1Drug ?? "No drug recorded"}
-              {p.dose && (
-                <span className="text-muted-foreground font-normal">
-                  {" · "}{p.dose}
-                </span>
-              )}
-              {p.startedOn && (
-                <span className="text-muted-foreground font-normal">
-                  {" · started "}{fmtDate(p.startedOn)}
-                </span>
-              )}
-            </div>
-            {weight.data?.latest && (
-              <div
-                className="text-muted-foreground text-xs mt-2 font-medium flex items-center gap-2"
-                aria-label="Latest weight"
-              >
-                <span className="text-foreground font-semibold">
-                  {Math.round(weight.data.latest.weightLbs)} lbs
-                </span>
-                <span aria-hidden="true">·</span>
-                <span>
-                  {weight.data.daysSinceLast === 0
-                    ? "logged today"
-                    : weight.data.daysSinceLast === 1
-                    ? "1 day ago"
-                    : `${weight.data.daysSinceLast} days ago`}
-                </span>
-                {(weight.data.trend === "up" || weight.data.trend === "down") &&
-                  weight.data.prior && (
-                    <span className="text-muted-foreground">
-                      {weight.data.trend === "up" ? "↑" : "↓"}{" "}
-                      {Math.abs(
-                        Math.round(
-                          weight.data.latest.weightLbs -
-                            weight.data.prior.weightLbs,
-                        ),
-                      )}{" "}
-                      lbs
-                    </span>
-                  )}
-              </div>
-            )}
-          </div>
-          {risk.data && (
-            <div className="sm:text-right sm:shrink-0">
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
-                Treatment risk
-              </div>
-              <div className="flex flex-wrap gap-2 sm:justify-end">
-                <ActionBadge action={risk.data.action} size="md" />
-                <RiskBadge band={risk.data.band} score={risk.data.score} size="md" />
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      {/* Unified clinical command card. Identity (name / med / dose),
+          care summary (issue type, action priority, summary sentence,
+          next action, reason pills), and a quiet treatment-concern
+          severity label all live in ONE card so the top of the page
+          reads as a single intelligence block instead of stacked
+          modules. The lower cards remain the evidence layer. */}
+      <PatientSummaryCard
+        intel={intel}
+        patient={p}
+        weight={weight.data}
+        risk={risk.data ?? null}
+      />
 
-      {/* Intelligence summary card — Patient summary, action priority,
-          recommended next action, and "why surfaced" reason pills.
-          Pure interpretation of values already on this page (risk,
-          care events, check-in recency, symptom flags, treatment
-          status). */}
-      <PatientSummaryCard intel={intel} />
 
       {/* Escalation banner. Renders amber + CTA when the patient has
           requested care-team review and no doctor_reviewed event has
@@ -975,7 +1025,7 @@ export function PatientDetailPage({ id }: { id: number }) {
       <div className="grid lg:grid-cols-2 gap-5">
         {/* Risk explanation */}
         <section className="bg-card rounded-[20px] p-6">
-          <SectionTitle>Why this risk band</SectionTitle>
+          <SectionTitle>Key drivers</SectionTitle>
           {risk.data && risk.data.rules.length === 0 && (
             <p className="text-foreground text-sm font-medium">
               No risk signals fired in the recent window.
