@@ -1,0 +1,47 @@
+Paste this to Replit Agent:
+
+Update the hydration options so they feel more clinically reasonable, sequential, and aligned with what an average patient or doctor would expect.
+
+In the hydration card / plan selection UI:
+
+1. Replace the current hydration option labels and supporting copy with this order from lowest to highest:
+
+* **Steady sipping**
+
+  * Supporting copy: `Stay consistent today`
+
+* **Light hydration**
+
+  * Supporting copy: `~5–6 cups on a lower activity day`
+
+* **Standard hydration**
+
+  * Supporting copy: `~6–8 cups for a typical day`
+  * This should be the default / most standard recommendation language
+
+* **Boost hydration**
+
+  * Supporting copy: `~6–8 cups + electrolytes for symptoms or activity`
+
+2. Remove any hydration option that says `10+ cups` or otherwise feels overly aggressive for the average patient.
+
+3. Keep the overall UI structure, spacing, selection behavior, and styling unchanged. This is a copy / content hierarchy update, not a redesign.
+
+4. Make sure the options render in a clearly sequential and intuitive order from least intensive to most intensive.
+
+5. If there is any summary text, helper text, or recommendation logic tied specifically to the old `10+ cups` language, update it so the experience still reads naturally and consistently with the new four-option structure.
+
+6. Do not expand scope into backend schema changes or unrelated intervention types. Only update the hydration option content and any directly dependent text.
+
+After making the change:
+
+* verify the hydration card still renders correctly in the mobile preview
+* confirm the option order is exactly:
+
+  1. Steady sipping
+  2. Light hydration
+  3. Standard hydration
+  4. Boost hydration
+* confirm there are no remaining visible references to `10+ cups` in this hydration flow
+
+If there’s an existing “recommended” state, it should map most naturally to **Standard hydration** unless there is already simple front-end-only logic that makes **Boost hydration** more appropriate on symptom or activity days. Do not add new complex personalization logic.
