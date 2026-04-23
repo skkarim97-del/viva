@@ -115,6 +115,7 @@ interface AppContextType {
   acknowledgeSymptomTip: (
     symptom: import("@/lib/symptomTips").SymptomKind,
     interventionTitle: string,
+    interventionCta: string,
   ) => void;
   // Day-after follow-up answer (Better/Same/Worse). Mirrors to the
   // server and dismisses the tip card locally.
@@ -136,7 +137,7 @@ interface AppContextType {
   // Today tab to render the followup card with the title the patient
   // actually saw, not whatever today's derived tip happens to be.
   guidanceAckTitleHistory: Partial<
-    Record<import("@/lib/symptomTips").SymptomKind, { date: string; title: string }>
+    Record<import("@/lib/symptomTips").SymptomKind, { date: string; title: string; cta?: string }>
   >;
   // Per-symptom set of "patient asked clinician for awareness today"
   // -- drives the inline confirmation on the tip card.
@@ -274,7 +275,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // by severity). Fallback to the current tip title at render time
   // covers legacy state from before this map existed.
   const [guidanceAckTitleHistory, setGuidanceAckTitleHistory] = useState<
-    Partial<Record<import("@/lib/symptomTips").SymptomKind, { date: string; title: string }>>
+    Partial<Record<import("@/lib/symptomTips").SymptomKind, { date: string; title: string; cta?: string }>>
   >({});
   // Per-symptom YYYY-MM-DD of the most recent "Let my clinician know"
   // tap. Persisted alongside guidanceAckHistory so the inline
@@ -1338,6 +1339,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     (
       symptom: import("@/lib/symptomTips").SymptomKind,
       interventionTitle: string,
+      interventionCta: string,
     ) => {
       const today = new Date().toISOString().split("T")[0]!;
       // Persist "the patient acknowledged guidance for this symptom
@@ -1354,7 +1356,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return next;
       });
       setGuidanceAckTitleHistory((prev) => {
-        const next = { ...prev, [symptom]: { date: today, title: interventionTitle } };
+        const next = {
+          ...prev,
+          [symptom]: { date: today, title: interventionTitle, cta: interventionCta },
+        };
         AsyncStorage.setItem(GUIDANCE_ACK_TITLE_HISTORY_KEY, JSON.stringify(next)).catch(() => {});
         return next;
       });

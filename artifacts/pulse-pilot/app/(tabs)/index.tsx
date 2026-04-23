@@ -395,7 +395,7 @@ export default function DashboardScreen() {
   }, []);
 
   const onAckSymptomTip = React.useCallback(
-    (symptom: SymptomKind, interventionTitle: string) => {
+    (symptom: SymptomKind, interventionTitle: string, interventionCta: string) => {
       // Snapshot the current severity at ack time so the re-trigger
       // logic above can compare against it. The selector reflects
       // "what was true the moment the patient tapped the CTA" since
@@ -412,7 +412,7 @@ export default function DashboardScreen() {
       // before today's check-in row exists" race. Pass the title so
       // the followup card tomorrow can quote the intervention the
       // patient actually saw.
-      acknowledgeSymptomTip(symptom, interventionTitle);
+      acknowledgeSymptomTip(symptom, interventionTitle, interventionCta);
     },
     [acknowledgeSymptomTip, dailyState],
   );

@@ -56,7 +56,11 @@ interface SymptomTipCardProps {
   // Passed in from the theme so dark mode and brand tweaks stay
   // centralized.
   warning: string;
-  onAcknowledge: (symptom: SymptomKind, interventionTitle: string) => void;
+  onAcknowledge: (
+    symptom: SymptomKind,
+    interventionTitle: string,
+    interventionCta: string,
+  ) => void;
   onTrendResponse: (
     symptom: SymptomKind,
     response: TrendResponse,
@@ -71,6 +75,11 @@ interface SymptomTipCardProps {
   // shifted since yesterday and the derived title would otherwise
   // refer to a different intervention than the one that was acked.
   ackedInterventionTitle?: string;
+  // Instruction sentence (the `cta`) the patient actually saw and
+  // acknowledged. Surfaced as the followup subtext so the prompt
+  // refers to the *exact* thing they tried, not a re-derived
+  // instruction. Falls back to the current tip.cta if absent.
+  ackedInterventionCta?: string;
 }
 
 // User-facing label for each symptom in the followup question
@@ -107,13 +116,16 @@ export function SymptomTipCard(props: SymptomTipCardProps) {
     onTrendResponse,
     onRequestClinician,
     ackedInterventionTitle,
+    ackedInterventionCta,
   } = props;
 
-  // Title to attribute the followup question to. Prefer the title we
-  // captured at ack time; fall back to the currently-derived tip
-  // title only if we have no record (legacy state, or first run
-  // after an upgrade).
+  // Title + instruction to attribute the followup question to. Prefer
+  // the values we captured at ack time so the prompt always quotes
+  // exactly what the patient saw and tapped. Fall back to the
+  // currently-derived tip values only if we have no record (legacy
+  // state, or first run after an upgrade).
   const followupInterventionTitle = ackedInterventionTitle ?? tip.title;
+  const followupInterventionCta = ackedInterventionCta ?? tip.cta;
 
   // Local "I tapped the CTA" state. We hold the card in a completed
   // visual state for COMPLETION_HOLD_MS so the patient gets clear
@@ -140,13 +152,14 @@ export function SymptomTipCard(props: SymptomTipCardProps) {
       : ("coffee" as const);
 
   // Followup question anchors to the symptom outcome being measured
-  // ("Did this help your nausea?") with the intervention name as
-  // subtext ("After trying Settle your stomach"). Two roles split
-  // across two lines so the patient knows exactly what they're
-  // rating: the effect of THIS suggestion on THAT symptom, not their
-  // overall wellbeing.
+  // ("Did this help your nausea?") with the actual instruction the
+  // patient followed as subtext ("You tried yesterday: Sip about
+  // 1/2 cup of water..."). Two roles split across two lines so the
+  // question stays short and conversational while the detail lives
+  // below it where it belongs. "Yesterday" is always accurate here:
+  // followup mode is gated on lastAck === yesterdayYmd.
   const followupTitle = `Did this help your ${SYMPTOM_OUTCOME_LABEL[tip.symptom]}?`;
-  const followupSubtext = `After trying ${followupInterventionTitle}`;
+  const followupSubtext = `You tried yesterday: ${followupInterventionCta}`;
 
   const handleCtaPress = () => {
     if (completed) return;
@@ -158,7 +171,7 @@ export function SymptomTipCard(props: SymptomTipCardProps) {
       useNativeDriver: true,
     }).start();
     dismissTimeoutRef.current = setTimeout(() => {
-      onAcknowledge(tip.symptom, tip.title);
+      onAcknowledge(tip.symptom, tip.title, tip.cta);
     }, COMPLETION_HOLD_MS);
   };
 
