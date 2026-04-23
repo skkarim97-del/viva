@@ -322,9 +322,9 @@ export interface CategoryOption {
 
 export const CATEGORY_OPTIONS: Record<ActionCategory, CategoryOption[]> = {
   move: [
-    { id: "move_strength", title: "30-45 min strength", subtitle: "Preserve muscle on treatment", category: "move", stateTag: "great", planTier: "high", durationMinutes: 37, intensity: "moderate", supportText: ["Strength training preserves lean mass during weight loss", "Focus on compound movements like squats and presses"] },
-    { id: "move_walk", title: "20-40 min walk", subtitle: "Steady daily movement", category: "move", stateTag: "good", planTier: "moderate", durationMinutes: 30, intensity: "low", supportText: ["Walking supports digestion and energy", "Post-meal walks can help with nausea"] },
-    { id: "move_light", title: "10-20 min light movement", subtitle: "Keep momentum without overdoing it", category: "move", stateTag: "tired", planTier: "low", durationMinutes: 15, intensity: "low", supportText: ["Gentle movement helps energy levels", "No pressure on pace or distance"] },
+    { id: "move_strength", title: "Strength (if up for it)", subtitle: "~20–30 min light strength", category: "move", stateTag: "great", planTier: "high", durationMinutes: 25, intensity: "moderate", supportText: ["Preserve muscle without overdoing it", "Focus on compound movements like squats and presses"] },
+    { id: "move_walk", title: "Walk", subtitle: "~20–30 min easy walk", category: "move", stateTag: "good", planTier: "moderate", durationMinutes: 25, intensity: "low", supportText: ["Support energy and digestion", "Post-meal walks can help with nausea"] },
+    { id: "move_light", title: "Light movement", subtitle: "~10–15 min gentle movement", category: "move", stateTag: "tired", planTier: "low", durationMinutes: 12, intensity: "low", supportText: ["Keep things moving without strain", "No pressure on pace or distance"] },
     { id: "move_rest", title: "Full rest day", subtitle: "Let your body recover", category: "move", stateTag: "stressed", planTier: "minimal", durationMinutes: 0, intensity: "low", supportText: ["Rest is part of the plan", "Your body needs time to adjust"] },
   ],
   fuel: [
