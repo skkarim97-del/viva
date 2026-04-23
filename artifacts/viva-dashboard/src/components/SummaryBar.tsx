@@ -56,34 +56,34 @@ export function SummaryBar({
   //   6. Actions taken today     (rolling activity)
   const items: Stat[] = [
     {
-      label: "Total patients",
+      label: "Total Patients",
       value: totalPatients,
       accent: "#38B6FF",
     },
     {
-      label: "Review now",
+      label: "Review Now",
       value: reviewNowCount,
       accent: "#FF9500",
       onClick: onFocusReviewNow,
     },
     {
-      label: "Follow up today",
+      label: "Follow Up Today",
       value: followUpTodayCount,
       accent: "#FF3B30",
       onClick: onFocusFollowUpToday,
     },
     {
-      label: "Engagement concerns",
+      label: "Engagement Concerns",
       value: engagementCount,
       accent: "#FFB23B",
     },
     {
-      label: "Clinical concerns",
+      label: "Clinical Concerns",
       value: clinicalCount,
       accent: "#B5251D",
     },
     {
-      label: "Actions taken today",
+      label: "Actions Taken Today",
       value: actionsToday,
       accent: "#142240",
     },

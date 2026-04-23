@@ -54,8 +54,8 @@ export const ISSUE_STYLE: Record<IssueType, { bg: string; fg: string }> = {
 };
 
 export const PRIORITY_LABEL: Record<RowPriority, string> = {
-  review_now: "Review now",
-  follow_up_today: "Follow up today",
+  review_now: "Review Now",
+  follow_up_today: "Follow Up Today",
   monitor: "Monitor",
   stable: "Stable",
 };

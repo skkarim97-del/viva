@@ -233,7 +233,7 @@ export function PatientsPage() {
       <div className="flex items-end justify-between mb-7">
         <div>
           <h1 className="font-display text-[28px] font-bold text-foreground leading-tight">
-            Your patients
+            Your Patients
           </h1>
           <p className="text-muted-foreground text-sm mt-1.5 font-medium">
             Live risk band based on the last 14 days of check-ins.

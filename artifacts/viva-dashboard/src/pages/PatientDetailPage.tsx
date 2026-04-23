@@ -111,8 +111,8 @@ const ISSUE_STYLE: Record<IssueType, { bg: string; fg: string }> = {
 };
 
 const PRIORITY_LABEL: Record<ActionPriority, string> = {
-  review_now: "Review now",
-  follow_up_today: "Follow up today",
+  review_now: "Review Now",
+  follow_up_today: "Follow Up Today",
   monitor: "Monitor",
   stable: "Stable",
 };
@@ -1105,7 +1105,7 @@ export function PatientDetailPage({ id }: { id: number }) {
 
       {/* Notes */}
       <section className="bg-card rounded-[20px] p-6">
-        <SectionTitle>Care team notes</SectionTitle>
+        <SectionTitle>Care Team Notes</SectionTitle>
         <form
           onSubmit={(e) => {
             e.preventDefault();
