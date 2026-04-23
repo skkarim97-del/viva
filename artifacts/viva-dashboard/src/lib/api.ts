@@ -82,6 +82,11 @@ export interface PatientRow {
   // the pending card so doctors can see at a glance which invites
   // are stuck.
   staleInvite?: boolean;
+  // True when the patient is treatment-stopped AND has no unresolved
+  // workflow items (open escalation or pending follow-up). The
+  // dashboard hides archived rows by default; they remain accessible
+  // via the "Show archived" toggle and the patient detail page.
+  archived?: boolean;
 }
 
 export type TreatmentStatus = "active" | "stopped" | "unknown";
@@ -303,7 +308,11 @@ export const api = {
     request<{ inviteLink: string }>("POST", `/patients/${id}/resend`),
 
   // doctor
-  patients: () => request<PatientRow[]>("GET", "/patients"),
+  patients: (opts?: { includeArchived?: boolean }) =>
+    request<PatientRow[]>(
+      "GET",
+      opts?.includeArchived ? "/patients?includeArchived=true" : "/patients",
+    ),
   doctorStats: () =>
     request<{ actionsToday: number }>("GET", "/patients/stats"),
   patient: (id: number) => request<PatientDetail>("GET", `/patients/${id}`),

@@ -75,7 +75,14 @@ interface NoteTarget {
 }
 
 export function PatientsPage() {
-  const q = useQuery({ queryKey: ["patients"], queryFn: api.patients });
+  // The dashboard shows the active panel by default. Toggling this on
+  // re-fetches with `?includeArchived=true` so stopped patients with no
+  // unresolved workflow re-appear in their own collapsed section.
+  const [showArchived, setShowArchived] = useState(false);
+  const q = useQuery({
+    queryKey: ["patients", { showArchived }],
+    queryFn: () => api.patients({ includeArchived: showArchived }),
+  });
   // Cheap sibling lookup -- ids of patients whose most-recent
   // escalation_requested has not been followed by a doctor_reviewed.
   // Used to badge worklist rows without bloating the main /patients
@@ -118,8 +125,16 @@ export function PatientsPage() {
       pending: [],
     };
     const requestedReview: PatientRow[] = [];
+    const archived: PatientRow[] = [];
     if (q.data) {
       for (const p of q.data) {
+        // Archived patients (treatment stopped + no unresolved
+        // workflow) get their own collapsed section so they don't
+        // dilute Stable / Monitor counts.
+        if (p.archived) {
+          archived.push(p);
+          continue;
+        }
         if (needsReviewSet.has(p.id) && !p.pending) {
           requestedReview.push(p);
         } else {
@@ -128,8 +143,19 @@ export function PatientsPage() {
       }
       for (const k of ACTION_ORDER) buckets[k] = sortRows(buckets[k], needsReviewSet);
     }
-    return { buckets, requestedReview: sortRows(requestedReview, needsReviewSet) };
+    return {
+      buckets,
+      requestedReview: sortRows(requestedReview, needsReviewSet),
+      archived: sortRows(archived, needsReviewSet),
+    };
   }, [q.data, needsReviewSet]);
+
+  // The active panel excludes archived rows so SummaryBar tiles and
+  // totals describe the working queue, not the historical record.
+  const activeRows = useMemo(
+    () => (q.data ? q.data.filter((p) => !p.archived) : []),
+    [q.data],
+  );
 
   // Issue-type counts feed the SummaryBar tiles. Counted across the
   // full panel (excluding pending) so the numbers match the queue
@@ -141,26 +167,23 @@ export function PatientsPage() {
       engagement: 0,
       stable: 0,
     };
-    if (q.data) {
-      for (const p of q.data) {
-        if (p.pending) continue;
-        const intel = rowIntelligence(p, needsReviewSet.has(p.id));
-        out[intel.issueType] += 1;
-      }
+    for (const p of activeRows) {
+      if (p.pending) continue;
+      const intel = rowIntelligence(p, needsReviewSet.has(p.id));
+      out[intel.issueType] += 1;
     }
     return out;
-  }, [q.data, needsReviewSet]);
+  }, [activeRows, needsReviewSet]);
 
   const followUpTodayCount = useMemo(() => {
-    if (!q.data) return 0;
     let n = 0;
-    for (const p of q.data) {
+    for (const p of activeRows) {
       if (p.pending) continue;
       const intel = rowIntelligence(p, needsReviewSet.has(p.id));
       if (intel.priority === "follow_up_today") n += 1;
     }
     return n;
-  }, [q.data, needsReviewSet]);
+  }, [activeRows, needsReviewSet]);
 
   const [noteTarget, setNoteTarget] = useState<NoteTarget | null>(null);
   const [showInvite, setShowInvite] = useState(false);
@@ -176,6 +199,7 @@ export function PatientsPage() {
     pending: false,
   });
   const [reviewGroupOpen, setReviewGroupOpen] = useState(true);
+  const [archivedOpen, setArchivedOpen] = useState(false);
   const groupRefs = useRef<Record<Action, HTMLElement | null>>({
     needs_followup: null,
     monitor: null,
@@ -215,7 +239,16 @@ export function PatientsPage() {
             Live risk band based on the last 14 days of check-ins.
           </p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+              className="accent-primary"
+            />
+            Show archived
+          </label>
           <button
             type="button"
             onClick={() => setShowInvite(true)}
@@ -271,7 +304,7 @@ export function PatientsPage() {
 
       {q.data && q.data.length > 0 && (
         <SummaryBar
-          totalPatients={q.data.length}
+          totalPatients={activeRows.length}
           reviewNowCount={grouped.requestedReview.length}
           followUpTodayCount={followUpTodayCount}
           engagementCount={issueCounts.engagement}
@@ -375,6 +408,55 @@ export function PatientsPage() {
             </PatientGroup>
           );
         })}
+
+      {/* Archived patients section. Only rendered when the doctor
+          opts in via "Show archived". These are stopped-treatment
+          patients with no unresolved workflow item -- preserved for
+          history and search but kept out of the active queue. */}
+      {showArchived && q.data && grouped.archived.length > 0 && (
+        <section data-group="archived" className="scroll-mt-6 mt-2">
+          <button
+            type="button"
+            onClick={() => setArchivedOpen((v) => !v)}
+            className="w-full flex items-center gap-3 px-1 py-2 mb-2 group"
+          >
+            <span
+              className="inline-block w-2.5 h-2.5 rounded-full shrink-0"
+              style={{ backgroundColor: "#8A94A6" }}
+              aria-hidden
+            />
+            <span className="font-display text-[15px] font-bold text-foreground">
+              Archived
+            </span>
+            <span className="text-xs font-semibold text-muted-foreground bg-card rounded-full px-2.5 py-0.5">
+              {grouped.archived.length}
+            </span>
+            <span className="text-xs font-medium text-muted-foreground">
+              treatment stopped
+            </span>
+            <span className="flex-1" />
+            <span
+              className="text-muted-foreground text-sm font-semibold transition-transform"
+              style={{ transform: archivedOpen ? "rotate(90deg)" : "rotate(0deg)" }}
+              aria-hidden
+            >
+              ›
+            </span>
+          </button>
+          {archivedOpen && (
+            <div className="space-y-3 mb-6 opacity-90">
+              {grouped.archived.map((p) => (
+                <PatientCard
+                  key={p.id}
+                  p={p}
+                  needsReview={needsReviewSet.has(p.id)}
+                  onAddNote={() => setNoteTarget({ id: p.id, name: p.name })}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       {noteTarget && (
         <AddNoteModal
@@ -596,6 +678,19 @@ function PatientCard({ p, needsReview, onAddNote }: CardProps) {
                 title="Patient requested review"
               >
                 Review now
+              </span>
+            )}
+            {p.archived && (
+              <span
+                className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full shrink-0 border"
+                style={{
+                  backgroundColor: "rgba(138,148,166,0.12)",
+                  color: "#5A6478",
+                  borderColor: "rgba(138,148,166,0.30)",
+                }}
+                title="Archived: treatment stopped, no unresolved workflow"
+              >
+                Archived
               </span>
             )}
             <span className="text-accent text-xl font-semibold leading-none shrink-0 sm:hidden ml-auto">

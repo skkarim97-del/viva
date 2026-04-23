@@ -1,7 +1,7 @@
 import { Router, type Response } from "express";
 import { randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
-import { and, eq, desc, gte, inArray, max, isNull } from "drizzle-orm";
+import { and, eq, desc, gte, inArray, max, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   db,
@@ -36,6 +36,11 @@ router.use(requireDoctor);
 // render risk badges without N+1 round trips.
 router.get("/", async (req, res: Response) => {
   const doctorId = (req as AuthedRequest).auth.userId;
+  // Default behavior: stopped patients with no unresolved workflow are
+  // considered "archived" and removed from the active dashboard. They
+  // remain accessible via patient detail by id, and can be re-included
+  // here with `?includeArchived=true` for search / history surfaces.
+  const includeArchived = req.query.includeArchived === "true";
   const rows = await db
     .select({
       id: usersTable.id,
@@ -120,6 +125,45 @@ router.get("/", async (req, res: Response) => {
     if (r.last) lastCheckinAllByPatient.set(r.patientUserId, r.last as string);
   }
 
+  // Per-patient unresolved-workflow lookup. A workflow is "unresolved"
+  // when there's an escalation_requested with no later doctor_reviewed
+  // OR no later follow_up_completed. Used to keep stopped patients
+  // visible in the active dashboard until their open workflow item is
+  // closed -- after which they archive automatically. One bulk query
+  // keeps this O(1) for the queue, regardless of panel size.
+  const openWorkflowByPatient = new Map<number, boolean>();
+  if (patientIds.length > 0) {
+    const wfRows = await db
+      .select({
+        patientUserId: careEventsTable.patientUserId,
+        lastEsc: max(
+          sql<string | null>`case when ${careEventsTable.type} = 'escalation_requested' then ${careEventsTable.occurredAt} end`,
+        ),
+        lastRev: max(
+          sql<string | null>`case when ${careEventsTable.type} = 'doctor_reviewed' then ${careEventsTable.occurredAt} end`,
+        ),
+        lastFu: max(
+          sql<string | null>`case when ${careEventsTable.type} = 'follow_up_completed' then ${careEventsTable.occurredAt} end`,
+        ),
+      })
+      .from(careEventsTable)
+      .where(inArray(careEventsTable.patientUserId, patientIds))
+      .groupBy(careEventsTable.patientUserId);
+    for (const r of wfRows) {
+      const lastEsc = r.lastEsc ? new Date(r.lastEsc).getTime() : 0;
+      if (!lastEsc) continue;
+      const lastRev = r.lastRev ? new Date(r.lastRev).getTime() : 0;
+      const lastFu = r.lastFu ? new Date(r.lastFu).getTime() : 0;
+      const open = lastRev < lastEsc || lastFu < lastEsc;
+      if (open) openWorkflowByPatient.set(r.patientUserId, true);
+    }
+  }
+  const isArchived = (
+    treatmentStatus: string,
+    patientUserId: number,
+  ): boolean =>
+    treatmentStatus === "stopped" && !openWorkflowByPatient.get(patientUserId);
+
   // Single source of truth for the 12-day inactivity rule applied to
   // every branch below.
   const ACTIVITY_THRESHOLD_DAYS = 12;
@@ -193,6 +237,7 @@ router.get("/", async (req, res: Response) => {
         inactive12d,
         inviteAgeHours,
         staleInvite,
+        archived: isArchived(p.treatmentStatus, p.id),
       };
     }
     const cks = byPatient.get(p.id) ?? [];
@@ -231,6 +276,7 @@ router.get("/", async (req, res: Response) => {
         treatmentStatus: p.treatmentStatus,
         stopReason: p.stopReason,
         inactive12d,
+        archived: isArchived(p.treatmentStatus, p.id),
       };
     }
     return {
@@ -268,10 +314,18 @@ router.get("/", async (req, res: Response) => {
       // above, so patients whose last check-in fell outside that
       // window are still counted correctly.
       inactive12d,
+      archived: isArchived(p.treatmentStatus, p.id),
     };
   });
 
-  res.json(result);
+  // Default queue is the actionable panel only. Archived patients
+  // (treatment stopped + no unresolved workflow) are dropped here
+  // unless the caller explicitly opts in via includeArchived. The
+  // detail endpoint (/patients/:id) is unaffected so any archived
+  // patient remains directly addressable via search / history.
+  const filtered = includeArchived ? result : result.filter((r) => !r.archived);
+
+  res.json(filtered);
 });
 
 // GET /patients/stats -- one-shot panel-health snapshot for the
