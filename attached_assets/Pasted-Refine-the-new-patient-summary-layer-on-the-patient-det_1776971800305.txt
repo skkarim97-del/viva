@@ -1,0 +1,378 @@
+Refine the new patient summary layer on the patient detail page so it is conceptually cleaner and less fragmented. The main issue to fix is that the current summary logic treats “no check-in / silence” too similarly to actual clinical deterioration. We need to clearly separate engagement risk from clinical risk, while keeping the page simple and preserving the current MVP structure.
+Core goal
+When a clinician opens a patient page, the summary at the top should make it immediately obvious whether the issue is:
+
+
+Engagement
+
+
+Clinical
+
+
+Combined
+
+
+Stable
+
+
+Right now, “no check-in in 10 days” is being surfaced in a way that can feel too close to a true clinical problem. That is not ideal. Silence matters, but it should usually mean disengagement / retention risk, not automatically clinical worsening.
+What to change
+1. Add an “Issue type” label to the top summary card
+Inside the existing Patient summary card, add a small pill or label that classifies the patient into one of these types:
+
+
+Engagement
+
+
+Clinical
+
+
+Combined
+
+
+Stable
+
+
+This should be visually subtle but clear.
+2. Update summary logic so engagement and clinical concerns are distinct
+Revise the summary generation so it follows this framework:
+Engagement
+Use this when the main issue is things like:
+
+
+no recent check-in
+
+
+missed engagement
+
+
+follow-up pending without clear symptom issue
+
+
+patient requested review but no clinical deterioration signal
+
+
+low responsiveness / possible disengagement
+
+
+Example summaries:
+
+
+“Patient has not checked in for 10 days and may be disengaging.”
+
+
+“Patient requested follow-up and has not yet re-engaged.”
+
+
+“Engagement has slowed and follow-up may be needed.”
+
+
+Clinical
+Use this when the main issue is symptom or treatment related:
+
+
+worsening nausea
+
+
+worsening fatigue / energy
+
+
+treatment tolerance issue
+
+
+adherence concern
+
+
+stopped treatment
+
+
+risk drivers that reflect actual patient condition
+
+
+Example summaries:
+
+
+“Patient is reporting worsening nausea and may need treatment support.”
+
+
+“Symptoms appear to be worsening and clinician review may be appropriate.”
+
+
+“Treatment tolerance may be declining based on recent check-ins.”
+
+
+Combined
+Use this when both are true:
+
+
+symptom issue followed by silence
+
+
+elevated symptom burden plus missed check-ins
+
+
+treatment concern plus unresolved engagement drop
+
+
+Example summaries:
+
+
+“Patient reported worsening symptoms and then stopped checking in.”
+
+
+“Recent treatment concerns are now paired with declining engagement.”
+
+
+“Patient may be struggling with both treatment tolerance and follow-through.”
+
+
+Stable
+Use this when nothing meaningful is wrong:
+
+
+no strong symptom signal
+
+
+no important engagement issue
+
+
+no unresolved escalation
+
+
+no pending follow-up
+
+
+Example:
+
+
+“Patient appears stable with no immediate follow-up needed.”
+
+
+3. Keep action priority, but do not let silence alone feel clinically severe
+Retain the Action priority pill:
+
+
+Review now
+
+
+Follow up today
+
+
+Monitor
+
+
+Stable
+
+
+But make sure the logic treats silence differently from symptom worsening.
+Guidance:
+
+
+No check-in / silence should usually drive Follow up today or Monitor
+
+
+Worsening symptoms or explicit treatment concern can drive stronger urgency
+
+
+Combined engagement + symptom concern can justify stronger escalation
+
+
+Do not make silence alone sound like clinical deterioration
+
+
+4. Update reason pills so they are grouped more intelligently
+Keep the “Why this patient is surfaced” row, but revise the logic so the reasons naturally reflect the issue type.
+Examples:
+Engagement reasons
+
+
+No check-in 10 days
+
+
+Follow-up pending
+
+
+Patient requested review
+
+
+Low engagement
+
+
+Clinical reasons
+
+
+Nausea worsened
+
+
+Energy declined
+
+
+Side effects elevated
+
+
+Treatment stopped
+
+
+Last check-in negative
+
+
+Combined reasons
+Mix both types when both are present.
+Keep the max at 2 to 4 pills and prioritize the most useful ones.
+5. Reduce duplication between the summary card and the separate Last check-in alert
+Right now the page feels a bit fragmented because the Patient summary card already says something like “Patient has not checked in for 10 days,” and then the pink Last check-in alert below repeats the same thing.
+Please clean this up.
+Best option:
+
+
+keep the Last check-in alert only when it adds important supporting context
+
+
+or restyle / tone it down so it feels secondary
+
+
+or integrate the “last check-in” fact into the summary layer more gracefully
+
+
+Do not remove useful recency information, but reduce repetitive visual duplication.
+6. Preserve the rest of the page
+Do not redesign the full page.
+Do not remove:
+
+
+Treatment status
+
+
+Why this risk band
+
+
+Recent check-ins
+
+
+Notes
+
+
+existing follow-up / escalation CTAs
+
+
+The current structure is mostly good. This is a refinement, not a rebuild.
+7. Suggested logic framework
+Use current available client-side data only. No heavy backend changes needed.
+Think of the classification like this:
+
+
+If there are both symptom / treatment concerns and engagement issues → Combined
+
+
+Else if the strongest issue is symptom / treatment related → Clinical
+
+
+Else if the strongest issue is non-response / missed check-in / unresolved follow-up → Engagement
+
+
+Else → Stable
+
+
+Signals that count as engagement:
+
+
+silentDays
+
+
+followUpPending
+
+
+escalationOpen without symptom issue
+
+
+no recent check-ins
+
+
+missed engagement pattern
+
+
+Signals that count as clinical:
+
+
+symptom flags
+
+
+risk drivers tied to condition
+
+
+treatment stopped
+
+
+severe symptom tags
+
+
+negative recent symptom pattern
+
+
+8. Product intent
+The top of the page should now read like:
+
+
+what type of problem this is
+
+
+what is happening
+
+
+what to do next
+
+
+Not just:
+
+
+generic risk
+
+
+generic follow-up
+
+
+That distinction will make the dashboard feel much smarter and more clinically credible.
+Final result we want
+For a patient who has not checked in for 10 days but has no strong symptom issue:
+
+
+Issue type: Engagement
+
+
+Summary: “Patient has not checked in for 10 days and may be disengaging.”
+
+
+Priority: Follow up today
+
+
+Next action: “Reach out to re-engage this patient.”
+
+
+For a patient with worsening nausea but still engaging:
+
+
+Issue type: Clinical
+
+
+Summary: “Patient is reporting worsening nausea and may need treatment support.”
+
+
+Priority based on severity
+
+
+Next action focused on symptom review
+
+
+For a patient with worsening symptoms and then silence:
+
+
+Issue type: Combined
+
+
+Summary: “Patient reported worsening symptoms and then stopped checking in.”
+
+
+Priority stronger than either issue alone
+
+
+The result should feel more unified, more intelligent, and less like separate components repeating themselves.

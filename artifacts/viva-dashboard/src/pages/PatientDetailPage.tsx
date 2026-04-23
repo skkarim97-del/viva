@@ -89,6 +89,26 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 type ActionPriority = "review_now" | "follow_up_today" | "monitor" | "stable";
 
+// Issue type separates *engagement* (the patient is going dark) from
+// *clinical* (the patient is reporting real symptom or treatment
+// concerns) so the doctor can read the situation correctly. Silence
+// alone is engagement, not clinical deterioration.
+type IssueType = "engagement" | "clinical" | "combined" | "stable";
+
+const ISSUE_LABEL: Record<IssueType, string> = {
+  engagement: "Engagement",
+  clinical: "Clinical",
+  combined: "Combined",
+  stable: "Stable",
+};
+
+const ISSUE_STYLE: Record<IssueType, { bg: string; fg: string }> = {
+  engagement: { bg: "rgba(255,149,0,0.10)", fg: "#9A5B00" },
+  clinical: { bg: "rgba(255,59,48,0.10)", fg: "#B5251D" },
+  combined: { bg: "rgba(20,34,64,0.08)", fg: "#142240" },
+  stable: { bg: "rgba(30,142,62,0.10)", fg: "#1E8E3E" },
+};
+
 const PRIORITY_LABEL: Record<ActionPriority, string> = {
   review_now: "Review now",
   follow_up_today: "Follow up today",
@@ -137,6 +157,7 @@ interface IntelligenceInputs {
 }
 
 interface Intelligence {
+  issueType: IssueType;
   priority: ActionPriority;
   summary: string;
   nextAction: string;
@@ -144,15 +165,20 @@ interface Intelligence {
 }
 
 function computeIntelligence(i: IntelligenceInputs): Intelligence {
-  const reasons: string[] = [];
-  if (i.escalationOpen) reasons.push("Patient requested review");
-  if (i.followUpPending) reasons.push("Follow-up pending");
-  if (i.silentDays !== null && i.silentDays >= 3) {
-    reasons.push(`No check-in ${i.silentDays} days`);
-  } else if (!i.hasAnyCheckin) {
-    reasons.push("No check-ins logged");
-  }
-  // Surface the most concerning symptom flag, if any.
+  // ---- Signal classification --------------------------------------
+  // Engagement signals: the patient is going quiet, not necessarily
+  // declining clinically. Escalation alone is engagement (the patient
+  // is asking for contact); only when paired with a real symptom flag
+  // does it become "combined".
+  const hasEngagementSignal =
+    i.escalationOpen ||
+    i.followUpPending ||
+    (i.silentDays !== null && i.silentDays >= 3) ||
+    !i.hasAnyCheckin;
+
+  // Clinical signals: real symptom / treatment-tolerance reports.
+  // recentLowMood is included as a soft clinical signal because mood
+  // <=2 is patient-reported deterioration, not absence of signal.
   const topFlag = [...i.symptomFlags].sort((a, b) => {
     const sevRank = { severe: 3, moderate: 2, mild: 1 } as const;
     const persRank = { worsening: 3, persistent: 2, transient: 1 } as const;
@@ -160,6 +186,23 @@ function computeIntelligence(i: IntelligenceInputs): Intelligence {
     const bScore = sevRank[b.severity] * 10 + persRank[b.persistence];
     return bScore - aScore;
   })[0];
+  const hasClinicalSignal =
+    !!topFlag ||
+    i.recentLowMood ||
+    i.treatmentStatus === "stopped" ||
+    i.riskBand === "high";
+
+  let issueType: IssueType = "stable";
+  if (hasEngagementSignal && hasClinicalSignal) issueType = "combined";
+  else if (hasClinicalSignal) issueType = "clinical";
+  else if (hasEngagementSignal) issueType = "engagement";
+
+  // ---- Reason pills ------------------------------------------------
+  // Ordered by clinical priority. We surface the most actionable
+  // engagement + clinical drivers first so a "combined" patient gets
+  // a balanced read at a glance.
+  const reasons: string[] = [];
+  if (i.escalationOpen) reasons.push("Patient requested review");
   if (topFlag) {
     const symptomLabel = SYMPTOM_LABEL[topFlag.symptom];
     const persistenceWord =
@@ -170,88 +213,138 @@ function computeIntelligence(i: IntelligenceInputs): Intelligence {
           : SEVERITY_LABEL[topFlag.severity].toLowerCase();
     reasons.push(`${symptomLabel} ${persistenceWord}`);
   }
+  if (i.followUpPending) reasons.push("Follow-up pending");
+  if (i.silentDays !== null && i.silentDays >= 3) {
+    reasons.push(`No check-in ${i.silentDays} days`);
+  } else if (!i.hasAnyCheckin) {
+    reasons.push("No check-ins logged");
+  }
   if (i.recentLowMood) reasons.push("Last check-in negative");
-  if (i.riskBand === "high") reasons.push("Treatment risk elevated");
   if (i.treatmentStatus === "stopped") reasons.push("Treatment stopped");
-
-  // Cap at 4 to keep the row compact.
+  if (i.riskBand === "high") reasons.push("Treatment risk elevated");
   const trimmedReasons = reasons.slice(0, 4);
 
-  // Priority + summary + next action — checked in operational severity
-  // order. The first matching branch wins so we never bury an
-  // escalation under a lesser signal.
+  // ---- Priority ----------------------------------------------------
+  // Ladder. Silence alone never reaches "Review now"; only clinical
+  // worsening or an explicit escalation can. Combined cases (silence
+  // + worsening) get one notch stronger than either signal alone.
   let priority: ActionPriority = "stable";
-  let summary = "Patient appears stable with consistent engagement.";
-  let nextAction = "Continue monitoring, no action needed.";
-
-  if (i.escalationOpen && i.followUpPending) {
+  if (i.escalationOpen) {
     priority = "review_now";
-    summary =
-      "Patient requested clinician review and a follow-up has not been logged yet.";
-    nextAction = "Call patient to address the requested review.";
-  } else if (i.escalationOpen) {
+  } else if (topFlag && topFlag.severity === "severe") {
+    priority = issueType === "combined" ? "review_now" : "follow_up_today";
+  } else if (
+    issueType === "combined" &&
+    topFlag &&
+    topFlag.persistence === "worsening"
+  ) {
     priority = "review_now";
-    summary = "Patient requested clinician review — acknowledge and respond.";
-    nextAction = "Mark as reviewed, then call or message the patient.";
   } else if (i.followUpPending) {
     priority = "follow_up_today";
-    summary = "An open escalation is still awaiting a logged follow-up.";
-    nextAction = "Log the follow-up touchpoint with this patient today.";
+  } else if (topFlag && topFlag.persistence === "worsening") {
+    priority = "follow_up_today";
   } else if (i.silentDays !== null && i.silentDays >= 7) {
     priority = "follow_up_today";
-    summary = `Patient has not checked in for ${i.silentDays} days and likely needs follow-up.`;
-    nextAction = "Reach out to re-engage this patient.";
-  } else if (topFlag && topFlag.severity === "severe") {
-    priority = "follow_up_today";
-    summary = `${SYMPTOM_LABEL[topFlag.symptom]} is ${
-      topFlag.persistence === "worsening" ? "worsening" : "severe"
-    }; follow-up may be appropriate.`;
-    nextAction = "Review side effects and check treatment tolerance.";
   } else if (i.riskAction === "needs_followup") {
     priority = "follow_up_today";
-    summary =
-      "Recent signals suggest this patient warrants a clinical touchpoint.";
-    nextAction = "Review recent check-ins and reach out as appropriate.";
-  } else if (i.silentDays !== null && i.silentDays >= 3) {
+  } else if (
+    (i.silentDays !== null && i.silentDays >= 3) ||
+    topFlag ||
+    i.treatmentStatus === "stopped" ||
+    i.riskAction === "monitor" ||
+    i.riskBand === "medium" ||
+    !i.hasAnyCheckin
+  ) {
     priority = "monitor";
-    summary = `Engagement has slowed — last check-in was ${i.silentDays} days ago.`;
-    nextAction = "Continue monitoring; reach out if no check-in within 24h.";
-  } else if (i.treatmentStatus === "stopped") {
-    priority = "monitor";
-    summary =
-      "Treatment is currently stopped — monitor for re-engagement signals.";
-    nextAction = "Confirm stop reason is still accurate.";
-  } else if (topFlag) {
-    priority = "monitor";
-    summary = `${SYMPTOM_LABEL[topFlag.symptom]} ${
-      topFlag.persistence === "worsening"
-        ? "is mildly worsening"
-        : `is ${SEVERITY_LABEL[topFlag.severity].toLowerCase()}`
-    } — keep an eye on it.`;
-    nextAction = "Continue monitoring; revisit if symptoms intensify.";
-  } else if (i.riskAction === "monitor" || i.riskBand === "medium") {
-    priority = "monitor";
-    summary =
-      "Patient appears mostly stable, but a minor signal is worth watching.";
-    nextAction = "Continue monitoring; no immediate action required.";
-  } else if (!i.hasAnyCheckin) {
-    priority = "monitor";
-    summary = "No check-ins logged yet — encourage onboarding completion.";
-    nextAction = "Confirm patient has activated the Viva Care app.";
   }
 
-  return { priority, summary, nextAction, reasons: trimmedReasons };
+  // ---- Summary + next action --------------------------------------
+  // Copy is shaped by issueType so engagement reads as engagement
+  // (disengagement, re-engage) and clinical reads as clinical
+  // (treatment support, symptom review). Combined explicitly names
+  // both halves so the doctor knows it isn't just one or the other.
+  const symptomName = topFlag ? SYMPTOM_LABEL[topFlag.symptom].toLowerCase() : null;
+  const symptomDir = topFlag
+    ? topFlag.persistence === "worsening"
+      ? "worsening"
+      : topFlag.persistence === "persistent"
+        ? "persistent"
+        : SEVERITY_LABEL[topFlag.severity].toLowerCase()
+    : null;
+
+  let summary = "Patient appears stable with no immediate follow-up needed.";
+  let nextAction = "Continue monitoring, no action needed.";
+
+  if (issueType === "combined") {
+    if (topFlag && i.silentDays !== null && i.silentDays >= 3) {
+      summary = `Patient reported ${symptomDir} ${symptomName} and then stopped checking in.`;
+    } else if (topFlag && i.escalationOpen) {
+      summary = `Patient flagged ${symptomDir} ${symptomName} and requested clinician review.`;
+    } else if (topFlag) {
+      summary = `Recent ${symptomName} concerns are now paired with declining engagement.`;
+    } else {
+      summary = "Patient may be struggling with both treatment tolerance and follow-through.";
+    }
+    nextAction = "Reach out to the patient and review symptoms together.";
+  } else if (issueType === "clinical") {
+    if (topFlag && topFlag.persistence === "worsening") {
+      summary = `Patient is reporting worsening ${symptomName} and may need treatment support.`;
+      nextAction = "Review side effects and check treatment tolerance.";
+    } else if (topFlag) {
+      summary = `Symptoms appear ${symptomDir}; clinician review may be appropriate.`;
+      nextAction = "Review recent check-ins and reach out as appropriate.";
+    } else if (i.treatmentStatus === "stopped") {
+      summary = "Treatment is currently stopped — confirm clinical context is still accurate.";
+      nextAction = "Confirm stop reason and decide on next clinical step.";
+    } else if (i.recentLowMood) {
+      summary = "Recent check-ins suggest treatment tolerance may be declining.";
+      nextAction = "Review recent check-ins and consider a clinical touchpoint.";
+    } else {
+      summary = "Clinical signals warrant a closer look at this patient's recent reports.";
+      nextAction = "Review the symptom and risk drivers below.";
+    }
+  } else if (issueType === "engagement") {
+    if (i.escalationOpen) {
+      summary = "Patient requested follow-up — acknowledge and re-engage.";
+      nextAction = "Mark as reviewed, then call or message the patient.";
+    } else if (i.followUpPending) {
+      summary = "Patient requested follow-up and has not yet re-engaged.";
+      nextAction = "Log the follow-up touchpoint with this patient.";
+    } else if (i.silentDays !== null && i.silentDays >= 7) {
+      summary = `Patient has not checked in for ${i.silentDays} days and may be disengaging.`;
+      nextAction = "Reach out to re-engage this patient.";
+    } else if (i.silentDays !== null && i.silentDays >= 3) {
+      summary = "Engagement has slowed and follow-up may be needed.";
+      nextAction = "Continue monitoring; reach out if no check-in within 24h.";
+    } else if (!i.hasAnyCheckin) {
+      summary = "No check-ins logged yet — encourage onboarding completion.";
+      nextAction = "Confirm patient has activated the Viva Care app.";
+    }
+  }
+
+  return { issueType, priority, summary, nextAction, reasons: trimmedReasons };
 }
 
 function PatientSummaryCard({ intel }: { intel: Intelligence }) {
   const style = PRIORITY_STYLE[intel.priority];
+  const issueStyle = ISSUE_STYLE[intel.issueType];
   return (
     <div className="bg-card rounded-[20px] p-5 sm:p-6">
-      {/* Header row: section eyebrow + action priority pill on the
-          right. Keeps the card scannable at a glance. */}
+      {/* Header row: section eyebrow + issue-type chip on the left,
+          action priority pill on the right. Issue type classifies the
+          situation; priority tells the doctor how urgently to act. */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-          Patient summary
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+            Patient summary
+          </div>
+          <div
+            className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] uppercase tracking-wider font-semibold whitespace-nowrap"
+            style={{ backgroundColor: issueStyle.bg, color: issueStyle.fg }}
+            aria-label={`Issue type: ${ISSUE_LABEL[intel.issueType]}`}
+          >
+            {ISSUE_LABEL[intel.issueType]}
+          </div>
         </div>
         <div
           className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap"
@@ -736,25 +829,23 @@ export function PatientDetailPage({ id }: { id: number }) {
         setStopNoteDraft={setStopNoteDraft}
       />
 
-      {/* Last check-in gap callout. Surfaces the strongest churn signal
-          (silence) without making the doctor scan the timeline first. */}
+      {/* Last check-in recency line. Used to be a large coloured
+          callout, but the summary card above already names this
+          signal in plain English when it matters. We keep the fact
+          (the doctor still wants the exact number of days) but
+          render it as a quiet supporting line so we're not repeating
+          the same headline twice. */}
       {checkins.data && checkins.data.length > 0 && (() => {
         const gap = daysSince(checkins.data[0]!.date);
         if (gap < 2) return null;
-        const urgent = gap >= 5;
         return (
           <div
-            className="rounded-[20px] px-5 py-4 flex items-center gap-3 font-semibold text-sm"
-            style={{
-              backgroundColor: urgent
-                ? "rgba(255,59,48,0.10)"
-                : "rgba(255,149,0,0.10)",
-              color: urgent ? "#B5251D" : "#B8650A",
-            }}
+            className="text-xs text-muted-foreground font-medium flex items-center gap-2 px-1"
+            aria-label="Last check-in recency"
           >
-            <span aria-hidden>{urgent ? "⚠️" : "⏱"}</span>
+            <span aria-hidden>⏱</span>
             <span>
-              Last check-in: {gap} day{gap === 1 ? "" : "s"} ago
+              Last check-in {gap} day{gap === 1 ? "" : "s"} ago
             </span>
           </div>
         );
