@@ -27,7 +27,10 @@ interface Props {
 }
 
 interface Stat {
-  label: string;
+  // Labels are intentionally split into two lines for a uniform
+  // top/bottom rhythm across all six tiles.
+  labelTop: string;
+  labelBottom: string;
   value: number;
   accent: string; // bg color for the small left rail
   onClick?: () => void;
@@ -56,34 +59,40 @@ export function SummaryBar({
   //   6. Actions taken today     (rolling activity)
   const items: Stat[] = [
     {
-      label: "Total Patients",
+      labelTop: "Total",
+      labelBottom: "Patients",
       value: totalPatients,
       accent: "#38B6FF",
     },
     {
-      label: "Review Now",
+      labelTop: "Review",
+      labelBottom: "Now",
       value: reviewNowCount,
       accent: "#FF9500",
       onClick: onFocusReviewNow,
     },
     {
-      label: "Follow Up Today",
+      labelTop: "Follow Up",
+      labelBottom: "Today",
       value: followUpTodayCount,
       accent: "#FF3B30",
       onClick: onFocusFollowUpToday,
     },
     {
-      label: "Engagement Concerns",
+      labelTop: "Engagement",
+      labelBottom: "Concerns",
       value: engagementCount,
       accent: "#FFB23B",
     },
     {
-      label: "Clinical Concerns",
+      labelTop: "Clinical",
+      labelBottom: "Concerns",
       value: clinicalCount,
       accent: "#B5251D",
     },
     {
-      label: "Actions Taken Today",
+      labelTop: "Actions Taken",
+      labelBottom: "Today",
       value: actionsToday,
       accent: "#142240",
     },
@@ -96,7 +105,7 @@ export function SummaryBar({
         const Tag = interactive ? "button" : "div";
         return (
           <Tag
-            key={s.label}
+            key={`${s.labelTop} ${s.labelBottom}`}
             type={interactive ? "button" : undefined}
             onClick={s.onClick}
             className={`relative overflow-hidden bg-card rounded-2xl px-5 py-4 text-left ${
@@ -115,12 +124,12 @@ export function SummaryBar({
             <div className="font-display text-[28px] font-bold text-foreground leading-none tabular-nums">
               {s.value}
             </div>
-            {/* Allow a clean two-line wrap so longer labels like
-                "Engagement Concerns" stay fully readable. Min-height
-                reserves the second line on shorter labels so all six
-                tiles stay vertically aligned. */}
-            <div className="text-xs text-muted-foreground font-semibold mt-2 leading-snug min-h-[2.4em]">
-              {s.label}
+            {/* Two-line label: every tile reads top word(s) over
+                bottom word so the row has a uniform rhythm and never
+                truncates. */}
+            <div className="text-xs text-muted-foreground font-semibold mt-2 leading-snug">
+              <div>{s.labelTop}</div>
+              <div>{s.labelBottom}</div>
             </div>
           </Tag>
         );
