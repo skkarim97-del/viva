@@ -46,8 +46,23 @@ function normalizeApiBase(raw: string): string {
 }
 
 function resolveApiBase(): string {
-  // Web is always served from the same origin as the API server.
+  // Web: in production the Expo web build is served from the same origin
+  // as the API server, so `/api` resolves correctly. In the Replit
+  // workspace preview, however, the Expo dev server is served from the
+  // *Expo* subdomain (`*.expo.spock.replit.dev`) while the API server
+  // lives on the sibling *spock* subdomain (`*.spock.replit.dev/api`).
+  // A plain `/api` request from the iframe lands on Metro, which has no
+  // /api routes -> "could not reach server". Detect that case at runtime
+  // and rewrite the host so requests reach the API server through the
+  // workspace proxy.
   if (Platform.OS === "web") {
+    if (typeof window !== "undefined") {
+      const host = window.location.hostname;
+      if (host.includes(".expo.spock.replit.dev")) {
+        const apiHost = host.replace(".expo.spock.replit.dev", ".spock.replit.dev");
+        return `${window.location.protocol}//${apiHost}/api`;
+      }
+    }
     return "/api";
   }
 
