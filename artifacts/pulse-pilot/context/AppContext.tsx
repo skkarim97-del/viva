@@ -118,6 +118,7 @@ interface AppContextType {
   recordSymptomTrend: (
     symptom: import("@/lib/symptomTips").SymptomKind,
     response: "better" | "same" | "worse",
+    interventionTitle: string,
   ) => void;
   // Patient explicitly asked the clinician to be aware. Mirrors to the
   // server (sticky on the most recent check-in row).
@@ -1342,6 +1343,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     (
       symptom: import("@/lib/symptomTips").SymptomKind,
       response: "better" | "same" | "worse",
+      interventionTitle: string,
     ) => {
       const today = new Date().toISOString().split("T")[0]!;
       setGuidanceAckHistory((prev) => {
@@ -1357,6 +1359,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // forget -- failure does not block the UX dismissal above.
       void logCareEventImmediate("intervention_feedback", {
         intervention_id: symptom,
+        intervention_title: interventionTitle,
         response,
         source: "today",
       });

@@ -57,7 +57,11 @@ interface SymptomTipCardProps {
   // centralized.
   warning: string;
   onAcknowledge: (symptom: SymptomKind) => void;
-  onTrendResponse: (symptom: SymptomKind, response: TrendResponse) => void;
+  onTrendResponse: (
+    symptom: SymptomKind,
+    response: TrendResponse,
+    interventionTitle: string,
+  ) => void;
   onRequestClinician: (symptom: SymptomKind) => void;
 }
 
@@ -109,11 +113,12 @@ export function SymptomTipCard(props: SymptomTipCardProps) {
       ? ("activity" as const)
       : ("coffee" as const);
 
-  // Single, intervention-anchored question across all symptoms. Ties
-  // the answer to the specific tip the patient just tried, which is
-  // the cleanest way to learn whether THIS suggestion worked rather
-  // than collecting a generic mood read.
-  const followupTitle = "After trying this, how do you feel?";
+  // Followup question is built from the specific tip's title so the
+  // patient sees exactly which suggestion the answer is about. No
+  // generic "this" or "the suggestion" -- the intervention name is
+  // quoted inline so the question stands on its own without needing
+  // surrounding context.
+  const followupTitle = `After trying \u2018${tip.title}\u2019, how do you feel?`;
 
   const handleCtaPress = () => {
     if (completed) return;
@@ -206,21 +211,23 @@ export function SymptomTipCard(props: SymptomTipCardProps) {
       </View>
 
       {/* Urgency line -- the "when" that nudges follow-through.
-          Replaced the old multi-suggestion body so a single decision
-          stays in front of the patient. */}
-      <Text
-        style={[
-          styles.urgency,
-          // Body / urgency text is a single role at fontSize 13 across
-          // every card. Hierarchy comes from the title above, not from
-          // shrinking the body on secondary cards.
-          { color: mutedForeground, fontSize: 13 },
-        ]}
-      >
-        {mode === "followup"
-          ? "You tried the suggestion yesterday -- is this better, the same, or worse?"
-          : tip.urgency}
-      </Text>
+          Only shown in ack mode; in followup mode the title already
+          names the intervention and the Better/Same/Worse buttons
+          carry the rest of the meaning, so any subtext here would
+          just be noise. */}
+      {mode === "ack" && (
+        <Text
+          style={[
+            styles.urgency,
+            // Body / urgency text is a single role at fontSize 13 across
+            // every card. Hierarchy comes from the title above, not from
+            // shrinking the body on secondary cards.
+            { color: mutedForeground, fontSize: 13 },
+          ]}
+        >
+          {tip.urgency}
+        </Text>
+      )}
 
       {/* Action sentence + a parenthetical example line. The action
           sentence is the specific thing to do (with standard units);
@@ -267,7 +274,7 @@ export function SymptomTipCard(props: SymptomTipCardProps) {
             return (
               <Pressable
                 key={r}
-                onPress={() => onTrendResponse(tip.symptom, r)}
+                onPress={() => onTrendResponse(tip.symptom, r, tip.title)}
                 accessibilityRole="button"
                 accessibilityLabel={`Mark ${tip.symptom.replace("_", " ")} as ${r}`}
                 style={({ pressed }) => [

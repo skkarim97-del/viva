@@ -1050,8 +1050,8 @@ export default function DashboardScreen() {
                   mutedForeground={c.mutedForeground}
                   warning={c.warning}
                   onAcknowledge={onAckSymptomTip}
-                  onTrendResponse={(s, r) => {
-                    recordSymptomTrend(s, r);
+                  onTrendResponse={(s, r, title) => {
+                    recordSymptomTrend(s, r, title);
                     // Treat answering as also dismissing the card --
                     // matches the "Got it" flow. Snapshot current
                     // severity so the same re-trigger rules apply.
