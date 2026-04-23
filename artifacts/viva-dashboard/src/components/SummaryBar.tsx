@@ -42,11 +42,22 @@ export function SummaryBar({
   const stats = useQuery({ queryKey: ["doctor-stats"], queryFn: api.doctorStats });
   const actionsToday = stats.data?.actionsToday ?? 0;
 
+  // Tile order, left -> right:
+  //   1. Total patients              (panel size, neutral context)
+  //   2. Patient requested review    (top priority -- matches the
+  //                                   orange section header below)
+  //   3. Needs follow-up             (queue's primary action bucket)
+  //   4. No check-in (3+ days)       (silence signal, kept exactly
+  //                                   as-is -- same label, same logic,
+  //                                   same focus target)
+  //   5. Actions taken today         (rolling activity, end of row)
+  // No bucket merged or renamed; this block is order-only.
   const items: Stat[] = [
-    // Patient-requested review tile mirrors the orange dot/pill styling
-    // used for the priority section header below, so the visual link
-    // between tile and section is unmistakable. The count is driven by
-    // the same dataset that produces the section, so they stay aligned.
+    {
+      label: "Total patients",
+      value: totalPatients,
+      accent: "#38B6FF",
+    },
     {
       label: "Patient requested review",
       value: requestedReviewCount,
@@ -69,11 +80,6 @@ export function SummaryBar({
       label: "Actions taken today",
       value: actionsToday,
       accent: "#142240",
-    },
-    {
-      label: "Total patients",
-      value: totalPatients,
-      accent: "#38B6FF",
     },
   ];
 
