@@ -62,6 +62,17 @@ export interface PatientRow {
   // with no check-in in 12+ days. Always false for pending or stopped.
   // Does not affect risk score or treatment status.
   inactive12d?: boolean;
+  // Compact symptom indicators emitted by the queue endpoint. Used by
+  // the dashboard's IssueType classifier to separate clinical concern
+  // from engagement concern without a per-row round trip.
+  symptomFlagCount?: number;
+  symptomEscalating?: boolean;
+  symptomSummary?: string | null;
+  // Doctor-owned treatment status, also returned on the queue payload
+  // so the dashboard can surface "Treatment stopped" as a clinical
+  // signal in the row classifier.
+  treatmentStatus?: TreatmentStatus;
+  stopReason?: StopReason | null;
   // Hours since the activation token was issued. Only present on
   // pending+invited rows; null for activated patients or when the
   // issuance timestamp is missing on legacy seed rows.

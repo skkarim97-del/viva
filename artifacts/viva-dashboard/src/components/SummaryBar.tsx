@@ -10,17 +10,20 @@ import { api } from "@/lib/api";
  * answer "how is my panel today?" in one glance.
  */
 interface Props {
-  needsFollowupCount: number;
-  silentCount: number;
   totalPatients: number;
-  requestedReviewCount: number;
+  // Top operational tiles, aligned with the dashboard intelligence
+  // model: Review now (open escalations), Follow up today (priority
+  // ladder), and the issue-type counts for engagement vs clinical.
+  reviewNowCount: number;
+  followUpTodayCount: number;
+  engagementCount: number;
+  clinicalCount: number;
   // Called when the doctor clicks a stat that should focus a queue
   // section. The parent page handles both expanding the matching group
   // and scrolling to it so the click "lands" even when the section was
   // collapsed.
-  onFocusNeedsFollowup: () => void;
-  onFocusSilent: () => void;
-  onFocusRequestedReview: () => void;
+  onFocusReviewNow: () => void;
+  onFocusFollowUpToday: () => void;
 }
 
 interface Stat {
@@ -31,27 +34,26 @@ interface Stat {
 }
 
 export function SummaryBar({
-  needsFollowupCount,
-  silentCount,
   totalPatients,
-  requestedReviewCount,
-  onFocusNeedsFollowup,
-  onFocusSilent,
-  onFocusRequestedReview,
+  reviewNowCount,
+  followUpTodayCount,
+  engagementCount,
+  clinicalCount,
+  onFocusReviewNow,
+  onFocusFollowUpToday,
 }: Props) {
   const stats = useQuery({ queryKey: ["doctor-stats"], queryFn: api.doctorStats });
   const actionsToday = stats.data?.actionsToday ?? 0;
 
-  // Tile order, left -> right:
-  //   1. Total patients              (panel size, neutral context)
-  //   2. Patient requested review    (top priority -- matches the
-  //                                   orange section header below)
-  //   3. Needs follow-up             (queue's primary action bucket)
-  //   4. No check-in (3+ days)       (silence signal, kept exactly
-  //                                   as-is -- same label, same logic,
-  //                                   same focus target)
-  //   5. Actions taken today         (rolling activity, end of row)
-  // No bucket merged or renamed; this block is order-only.
+  // Tile order matches the dashboard intelligence model:
+  //   1. Total patients          (panel size, neutral)
+  //   2. Review now              (open escalations -- top priority,
+  //                               matches the orange section header)
+  //   3. Follow up today         (priority ladder: needs_followup,
+  //                               worsening symptom, 7+ day silence)
+  //   4. Engagement concerns     (issue type = engagement)
+  //   5. Clinical concerns       (issue type = clinical)
+  //   6. Actions taken today     (rolling activity)
   const items: Stat[] = [
     {
       label: "Total patients",
@@ -59,22 +61,26 @@ export function SummaryBar({
       accent: "#38B6FF",
     },
     {
-      label: "Patient requested review",
-      value: requestedReviewCount,
+      label: "Review now",
+      value: reviewNowCount,
       accent: "#FF9500",
-      onClick: onFocusRequestedReview,
+      onClick: onFocusReviewNow,
     },
     {
-      label: "Needs follow-up",
-      value: needsFollowupCount,
+      label: "Follow up today",
+      value: followUpTodayCount,
       accent: "#FF3B30",
-      onClick: onFocusNeedsFollowup,
+      onClick: onFocusFollowUpToday,
     },
     {
-      label: "No check-in (3+ days)",
-      value: silentCount,
+      label: "Engagement concerns",
+      value: engagementCount,
       accent: "#FFB23B",
-      onClick: onFocusSilent,
+    },
+    {
+      label: "Clinical concerns",
+      value: clinicalCount,
+      accent: "#B5251D",
     },
     {
       label: "Actions taken today",
@@ -84,7 +90,7 @@ export function SummaryBar({
   ];
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-7">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-7">
       {items.map((s) => {
         const interactive = !!s.onClick;
         const Tag = interactive ? "button" : "div";

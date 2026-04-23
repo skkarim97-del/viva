@@ -2,13 +2,21 @@ import { useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type Action, type PatientRow } from "@/lib/api";
-import { RiskBadge } from "@/components/RiskBadge";
-import { ActionBadge } from "@/components/ActionBadge";
 import { PatientGroup } from "@/components/PatientGroup";
 import { AddNoteModal } from "@/components/AddNoteModal";
 import { InvitePatientModal } from "@/components/InvitePatientModal";
 import { SummaryBar } from "@/components/SummaryBar";
 import { relativeTime } from "@/lib/relativeTime";
+import {
+  rowIntelligence,
+  ISSUE_LABEL,
+  ISSUE_STYLE,
+  ISSUE_SORT,
+  PRIORITY_SORT,
+  RISK_BAND_LABEL,
+  RISK_BAND_DOT,
+  type IssueType,
+} from "@/lib/rowIntelligence";
 
 // The queue is grouped by action so a 40-patient list reads as three
 // short sections instead of one long scroll. Inside each group we sort
@@ -19,8 +27,24 @@ import { relativeTime } from "@/lib/relativeTime";
 // states stay at the top of the queue.
 const ACTION_ORDER: Action[] = ["needs_followup", "monitor", "stable", "pending"];
 
-function sortRows(rows: PatientRow[]): PatientRow[] {
+// Within a group we sort by IssueType (combined > clinical > engagement
+// > stable), then by RowPriority (review_now > follow_up_today >
+// monitor > stable), then risk score desc, then longest-silent first
+// as a final tiebreak. The risk score keeps influence as a secondary
+// signal, exactly per the dashboard intelligence brief.
+function sortRows(
+  rows: PatientRow[],
+  needsReviewSet: Set<number>,
+): PatientRow[] {
   return [...rows].sort((a, b) => {
+    const ai = rowIntelligence(a, needsReviewSet.has(a.id));
+    const bi = rowIntelligence(b, needsReviewSet.has(b.id));
+    if (ISSUE_SORT[ai.issueType] !== ISSUE_SORT[bi.issueType]) {
+      return ISSUE_SORT[ai.issueType] - ISSUE_SORT[bi.issueType];
+    }
+    if (PRIORITY_SORT[ai.priority] !== PRIORITY_SORT[bi.priority]) {
+      return PRIORITY_SORT[ai.priority] - PRIORITY_SORT[bi.priority];
+    }
     if (a.riskScore !== b.riskScore) return b.riskScore - a.riskScore;
     const aTs = a.lastCheckin ? Date.parse(a.lastCheckin) : 0;
     const bTs = b.lastCheckin ? Date.parse(b.lastCheckin) : 0;
@@ -49,37 +73,6 @@ interface NoteTarget {
   id: number;
   name: string;
 }
-
-// Urgency scaling for silence-based signals. Within "Needs follow-up"
-// a 5-day gap should not look identical to a 12-day gap. We parse the
-// "No check-in for Xd" / "Never checked in" primary signal and pick a
-// color + optional URGENT prefix so the longest-silent patients punch
-// through their own group.
-type SilenceSeverity = "amber" | "red" | "deepRed";
-
-function silenceSeverity(daysSilent: number | null): SilenceSeverity | null {
-  if (daysSilent === null) return null;
-  if (daysSilent >= 8) return "deepRed";
-  if (daysSilent >= 5) return "red";
-  if (daysSilent >= 3) return "amber";
-  return null;
-}
-
-function parseSilenceDays(signal: string | undefined): number | null {
-  if (!signal) return null;
-  if (signal === "Never checked in") return 999;
-  const m = /^No check-in for (\d+)d$/.exec(signal);
-  return m ? Number(m[1]) : null;
-}
-
-const SEVERITY_STYLE: Record<
-  SilenceSeverity,
-  { color: string; bold: boolean; prefix: string | null; size: "sm" | "xs" }
-> = {
-  amber: { color: "#B8650A", bold: false, prefix: null, size: "xs" },
-  red: { color: "#B5251D", bold: true, prefix: null, size: "sm" },
-  deepRed: { color: "#7A1410", bold: true, prefix: "URGENT:", size: "sm" },
-};
 
 export function PatientsPage() {
   const q = useQuery({ queryKey: ["patients"], queryFn: api.patients });
@@ -133,9 +126,40 @@ export function PatientsPage() {
           buckets[p.action].push(p);
         }
       }
-      for (const k of ACTION_ORDER) buckets[k] = sortRows(buckets[k]);
+      for (const k of ACTION_ORDER) buckets[k] = sortRows(buckets[k], needsReviewSet);
     }
-    return { buckets, requestedReview: sortRows(requestedReview) };
+    return { buckets, requestedReview: sortRows(requestedReview, needsReviewSet) };
+  }, [q.data, needsReviewSet]);
+
+  // Issue-type counts feed the SummaryBar tiles. Counted across the
+  // full panel (excluding pending) so the numbers match the queue
+  // the doctor is about to scroll.
+  const issueCounts = useMemo(() => {
+    const out: Record<IssueType, number> = {
+      combined: 0,
+      clinical: 0,
+      engagement: 0,
+      stable: 0,
+    };
+    if (q.data) {
+      for (const p of q.data) {
+        if (p.pending) continue;
+        const intel = rowIntelligence(p, needsReviewSet.has(p.id));
+        out[intel.issueType] += 1;
+      }
+    }
+    return out;
+  }, [q.data, needsReviewSet]);
+
+  const followUpTodayCount = useMemo(() => {
+    if (!q.data) return 0;
+    let n = 0;
+    for (const p of q.data) {
+      if (p.pending) continue;
+      const intel = rowIntelligence(p, needsReviewSet.has(p.id));
+      if (intel.priority === "follow_up_today") n += 1;
+    }
+    return n;
   }, [q.data, needsReviewSet]);
 
   const [noteTarget, setNoteTarget] = useState<NoteTarget | null>(null);
@@ -179,21 +203,6 @@ export function PatientsPage() {
       });
     });
   };
-
-  // Silence stat counts patients whose last check-in is 3+ days old
-  // OR who never checked in. Computed client-side from the queue
-  // payload so we don't need a second round trip.
-  const silentCount = useMemo(() => {
-    if (!q.data) return 0;
-    const now = Date.now();
-    return q.data.filter((p) => {
-      if (!p.lastCheckin) return true;
-      const days = Math.floor(
-        (now - new Date(p.lastCheckin).getTime()) / (1000 * 60 * 60 * 24),
-      );
-      return days >= 3;
-    }).length;
-  }, [q.data]);
 
   return (
     <div>
@@ -262,13 +271,13 @@ export function PatientsPage() {
 
       {q.data && q.data.length > 0 && (
         <SummaryBar
-          needsFollowupCount={grouped.buckets.needs_followup.length}
-          silentCount={silentCount}
           totalPatients={q.data.length}
-          requestedReviewCount={grouped.requestedReview.length}
-          onFocusNeedsFollowup={() => focusGroup("needs_followup")}
-          onFocusSilent={() => focusGroup("needs_followup")}
-          onFocusRequestedReview={focusRequestedReview}
+          reviewNowCount={grouped.requestedReview.length}
+          followUpTodayCount={followUpTodayCount}
+          engagementCount={issueCounts.engagement}
+          clinicalCount={issueCounts.clinical}
+          onFocusReviewNow={focusRequestedReview}
+          onFocusFollowUpToday={() => focusGroup("needs_followup")}
         />
       )}
 
@@ -463,7 +472,16 @@ function PendingCard({ p }: { p: PatientRow }) {
             {subtitle}
           </div>
         </div>
-        <ActionBadge action="pending" />
+        <span
+          className="px-2 py-0.5 rounded-md text-[10px] uppercase tracking-wider font-semibold whitespace-nowrap shrink-0 border"
+          style={{
+            backgroundColor: "rgba(56,182,255,0.10)",
+            color: "#1F6B8F",
+            borderColor: "rgba(56,182,255,0.30)",
+          }}
+        >
+          Pending
+        </span>
       </div>
       {showStale && (
         <div
@@ -523,34 +541,27 @@ interface CardProps {
 
 function PatientCard({ p, needsReview, onAddNote }: CardProps) {
   // Inline follow-up logger. Hits the SAME backend endpoint the
-  // detail page uses (api.markPatientFollowUpCompleted), so the
-  // resulting care-event is indistinguishable from one logged from
-  // the patient detail view -- analytics gets one consistent stream.
-  // Auto-links to the most recent escalation server-side via
-  // trigger_event_id when there's an open escalation; otherwise
-  // logs an unlinked follow-up (NULL trigger). We only render the
-  // button on operationally-relevant rows so it doesn't clutter
-  // the queue (see `showFollowUp` below).
+  // detail page uses so analytics gets one consistent stream.
   const qc = useQueryClient();
   const followUp = useMutation({
     mutationFn: () => api.markPatientFollowUpCompleted(p.id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["needs-review-ids"] });
       qc.invalidateQueries({ queryKey: ["patient", p.id, "care-events"] });
-      // follow_up_completed now feeds the "Actions taken today" tile,
-      // so refresh the panel-stats query immediately rather than
-      // waiting for the next mount.
       qc.invalidateQueries({ queryKey: ["doctor-stats"] });
     },
   });
-  // Visibility rule. Three triggers, all distinct operational signals:
-  //   - needsReview: patient has an open escalation (newer than the
-  //     last doctor_reviewed). The most important case -- this is the
-  //     CTA the closed-loop care model is built around.
-  //   - p.action === "needs_followup": queue has classified them as
-  //     needing a clinical touchpoint (silence, symptom flag, etc).
-  //   - p.inactive12d: 12+ day disengagement signal.
-  // Cards that match none of these stay clean.
+
+  // Row intelligence: same model as the detail page, scoped to the
+  // leaner queue payload. Drives the issue-type chip, the one-line
+  // summary, and the operational next-action hint.
+  const intel = rowIntelligence(p, !!needsReview);
+  const issueStyle = ISSUE_STYLE[intel.issueType];
+
+  // Visibility rule for the inline follow-up button. Same triggers
+  // as before -- open escalation, queue says needs-followup, or the
+  // 12+ day disengagement signal -- so the CTA continues to appear
+  // exactly where it did before this refactor.
   const showFollowUp =
     needsReview || p.action === "needs_followup" || p.inactive12d;
 
@@ -558,103 +569,61 @@ function PatientCard({ p, needsReview, onAddNote }: CardProps) {
     ? `Last note: ${relativeTime(p.lastNoteAt)}`
     : "No recent action";
 
-  // Pick the signal style. If the primary signal is silence-based, we
-  // override the default action color with a 3-tier urgency scale so a
-  // 12-day gap visually outranks a 5-day gap inside the same group.
-  const daysSilent = parseSilenceDays(p.signals[0]);
-  const severity = silenceSeverity(daysSilent);
-  const joined = p.signals.join(" · ");
-  let signalNode: React.ReactNode = null;
-  if (p.signals.length > 0) {
-    if (severity) {
-      const s = SEVERITY_STYLE[severity];
-      signalNode = (
-        <div
-          className={`mt-1.5 flex items-center gap-1.5 truncate ${
-            s.size === "sm" ? "text-sm" : "text-xs"
-          } ${s.bold ? "font-bold" : "font-semibold"}`}
-          style={{ color: s.color }}
-        >
-          {s.bold && <span aria-hidden>⚠️</span>}
-          {s.prefix && (
-            <span
-              className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold shrink-0"
-              style={{ backgroundColor: s.color, color: "#FFFFFF" }}
-            >
-              {s.prefix}
-            </span>
-          )}
-          <span className="truncate">{joined}</span>
-        </div>
-      );
-    } else if (p.action === "needs_followup") {
-      signalNode = (
-        <div
-          className="text-sm mt-1.5 font-bold flex items-center gap-1.5 truncate"
-          style={{ color: "#B5251D" }}
-        >
-          <span aria-hidden>⚠️</span>
-          <span className="truncate">{joined}</span>
-        </div>
-      );
-    } else {
-      signalNode = (
-        <div
-          className="text-xs mt-1 font-semibold truncate"
-          style={{ color: "#B8650A" }}
-        >
-          {joined}
-        </div>
-      );
-    }
-  }
-
   return (
     <Link
       href={`/patients/${p.id}`}
       className="block bg-card rounded-[20px] p-5 hover:bg-secondary active:scale-[0.995] transition-all cursor-pointer no-underline"
     >
-      {/* Header. On <sm we stack: name row (with arrow) on top, then
-          a wrapping pill row underneath. From sm+ we restore the
-          original two-column layout with pills hugging the right
-          edge. This kills the mobile overflow without changing the
-          desktop information density. */}
+      {/* Header. Patient name + issue-type chip on the left, the
+          quick-action buttons on the right. */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <div className="font-semibold text-[17px] text-foreground truncate flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="font-semibold text-[17px] text-foreground truncate min-w-0">
               {p.name}
             </div>
+            <span
+              className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] uppercase tracking-wider font-semibold whitespace-nowrap shrink-0"
+              style={{ backgroundColor: issueStyle.bg, color: issueStyle.fg }}
+              title={`Issue type: ${ISSUE_LABEL[intel.issueType]}`}
+            >
+              {ISSUE_LABEL[intel.issueType]}
+            </span>
             {needsReview && (
               <span
                 className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full shrink-0"
                 style={{ backgroundColor: "#FF9500", color: "#FFFFFF" }}
                 title="Patient requested review"
               >
-                Patient requested review
+                Review now
               </span>
             )}
-            {/* Arrow rides with the name on mobile so the pill row
-                below stays clean; on desktop the arrow sits with
-                the pill cluster (rendered below). */}
-            <span className="text-accent text-xl font-semibold leading-none shrink-0 sm:hidden">
+            <span className="text-accent text-xl font-semibold leading-none shrink-0 sm:hidden ml-auto">
               →
             </span>
           </div>
-          {signalNode ?? (
-            <div className="text-xs text-muted-foreground mt-1 font-medium truncate">
-              {p.phone ?? p.email}
-            </div>
-          )}
-          <div className="text-xs text-muted-foreground mt-1 font-medium truncate">
-            {lastNote}
+          {/* Intelligent summary -- one short sentence that frames
+              the situation in plain English. */}
+          <div className="text-sm text-foreground mt-1.5 font-medium leading-snug">
+            {intel.summary}
+          </div>
+          {/* Operational next-action hint + supporting context line. */}
+          <div className="text-xs text-muted-foreground mt-1.5 font-medium flex items-center gap-2 flex-wrap">
+            <span
+              className="font-semibold"
+              style={{ color: "#142240" }}
+              title="Recommended next action"
+            >
+              ▸ {intel.nextAction}
+            </span>
+            <span aria-hidden>·</span>
+            <span className="truncate">{lastNote}</span>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end min-w-0">
           <button
             type="button"
             onClick={(e) => {
-              // Don't navigate -- this is the inline quick action.
               e.preventDefault();
               e.stopPropagation();
               onAddNote();
@@ -663,11 +632,6 @@ function PatientCard({ p, needsReview, onAddNote }: CardProps) {
           >
             + Note
           </button>
-          {/* Inline follow-up logger. Same backend path as the detail
-              page button -- no separate logic. Color-shifts to green
-              on success so the doctor gets immediate feedback without
-              a toast (the row stays in place; reload of the queue
-              would be too disruptive while triaging). */}
           {showFollowUp && (
             <button
               type="button"
@@ -709,25 +673,16 @@ function PatientCard({ p, needsReview, onAddNote }: CardProps) {
                 : "+ Follow-up"}
             </button>
           )}
-          <ActionBadge action={p.action} />
-          {p.inactive12d && (
-            <span
-              className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider border bg-amber-50 text-amber-700 border-amber-200"
-              title="No check-in for 12+ days"
-            >
-              Inactive 12d+
-            </span>
-          )}
-          <RiskBadge band={p.riskBand} score={p.riskScore} />
           <span className="text-accent text-xl font-semibold leading-none hidden sm:inline">
             →
           </span>
         </div>
       </div>
-      {/* Body. Stacks on mobile with inline "LABEL value" rows so each
-          field gets a full line and nothing truncates aggressively.
-          From sm+ restores the original 3-column grid. */}
-      <div className="mt-4 pt-4 border-t border-border flex flex-col gap-2 sm:grid sm:grid-cols-3 sm:gap-x-5 sm:gap-y-3">
+      {/* Body. Drug / dose / last check-in stays as the supporting
+          metadata strip; treatment concern band sits here as a quiet
+          secondary signal so the risk score is preserved without
+          competing with the intelligence layer above. */}
+      <div className="mt-4 pt-4 border-t border-border flex flex-col gap-2 sm:grid sm:grid-cols-4 sm:gap-x-5 sm:gap-y-3">
         <div className="min-w-0 flex items-baseline gap-2 sm:block">
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold shrink-0">
             Drug
@@ -750,6 +705,22 @@ function PatientCard({ p, needsReview, onAddNote }: CardProps) {
           </div>
           <div className="text-sm text-foreground font-medium sm:mt-1 truncate">
             {formatDate(p.lastCheckin)}
+          </div>
+        </div>
+        <div className="min-w-0 flex items-baseline gap-2 sm:block">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold shrink-0">
+            Treatment concern
+          </div>
+          <div className="text-sm text-foreground font-medium sm:mt-1 flex items-center gap-1.5">
+            <span
+              aria-hidden
+              className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
+              style={{ backgroundColor: RISK_BAND_DOT[p.riskBand] }}
+            />
+            <span className="truncate">{RISK_BAND_LABEL[p.riskBand]}</span>
+            <span className="text-muted-foreground text-xs font-normal tabular-nums">
+              ({p.riskScore})
+            </span>
           </div>
         </div>
       </div>

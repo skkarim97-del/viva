@@ -1,0 +1,176 @@
+Upgrade the main patients dashboard / worklist so it inherits the same intelligence model now used on the patient detail page. The dashboard should feel more like a clinician command center and less like a raw patient list.
+
+Do not redesign from scratch. Keep the current structure, current action buttons, and current risk score in the data model and UI. The goal is to make each patient row more intelligent, easier to scan, and more operational, while keeping the risk score as a secondary supporting signal, not the primary story.
+
+Core product goal
+
+When a clinician scans the main dashboard, they should instantly understand for each patient:
+
+what type of issue this is
+what is going on
+what to do next
+
+The dashboard should become the fast triage layer.
+The patient detail page remains the deeper evidence / context layer.
+
+Important product guidance
+Keep the risk score / treatment concern
+Do not remove it
+Do not make it the dominant UI element
+The risk score should act as a secondary supporting signal beneath or beside the more useful interpretation layer
+Primary UI should be:
+issue type
+summary
+next action
+Secondary UI should be:
+treatment concern / risk band / risk score
+What to add to each patient row
+1. Add an Issue type label
+
+Use the same categories already implemented on the patient detail page:
+
+Engagement
+Clinical
+Combined
+Stable
+
+This should be a compact pill or subtle chip on each patient row.
+
+2. Add a 1-line intelligent summary to each patient row
+
+Use the same logic style as the patient detail page.
+Examples:
+
+Patient may be disengaging after 10 days without check-in
+Worsening nausea may need treatment support
+Reported worsening symptoms, then stopped checking in
+Stable, no immediate follow-up needed
+
+This should be more intelligent than just “No check-in for 10d.”
+
+3. Add a compact Next action hint on each row
+
+Keep it very short and operational.
+Examples:
+
+Call today
+Review symptoms
+Log follow-up
+Monitor
+
+This should help the clinician know what to do immediately.
+
+4. Keep treatment concern / risk visible as a secondary signal
+
+Do not remove the current patient treatment risk / risk score.
+But visually de-emphasize it relative to:
+
+issue type
+intelligent summary
+next action
+
+If helpful, show it as:
+
+Treatment concern · Low
+Treatment concern · Moderate
+Treatment concern · Elevated
+
+Or keep the current score / band if that is easier for now, but make sure it feels secondary.
+
+Logic consistency
+
+Reuse the same logic already implemented on the patient detail page:
+
+separate engagement concerns from clinical concerns
+classify patients as Engagement, Clinical, Combined, or Stable
+do not treat silence alone as equivalent to clinical worsening
+combined concern should rank above engagement-only or clinical-only
+keep risk score present, but secondary
+Sorting / prioritization
+
+Refine row ordering so the queue feels smarter and aligned with the new model.
+
+Preferred order:
+
+Combined concern
+Clinical concern with higher urgency
+Engagement concern with unresolved follow-up or longer silence
+Stable / monitor
+
+Within those groups, risk score / treatment concern can help rank patients secondarily.
+
+If a full sorting rewrite is too much for this pass, at least surface issue type, intelligent summary, and next action on each row.
+
+Summary bar improvements
+
+Update the dashboard summary bar so it better reflects the operational model.
+
+Keep:
+
+Total patients
+Actions taken today
+
+Improve the middle tiles so they align with the new intelligence model.
+Best options:
+
+Review now
+Follow up today
+Engagement concerns
+Clinical concerns
+Combined concerns
+
+If there is not enough room for all, prioritize:
+
+Review now
+Follow up today
+Engagement concerns
+Clinical concerns
+
+If the current existing tiles already support some of this, adapt rather than fully rebuilding.
+
+Row design guidance
+
+Do not make rows too busy.
+Keep the page compact and scannable.
+
+Ideal row hierarchy:
+
+patient name
+issue type pill
+intelligent summary
+next action hint
+treatment concern / risk as a secondary supporting signal
+existing row actions like note / follow-up / expand
+
+Do not overload each row with too many pills or text blocks.
+Interpretation should come before raw metrics.
+
+Product intent
+
+The dashboard should now answer:
+
+Who needs attention?
+Why?
+What should I do next?
+
+The patient detail page should answer:
+
+What is the full story and supporting evidence?
+
+That means:
+
+dashboard = triage and prioritization
+patient page = full context
+Final guidance
+
+Do not remove risk score.
+Do not let risk score dominate the experience.
+Preserve it quietly as a secondary signal that will become more valuable as the intelligence layer matures.
+
+The main upgrade here is:
+
+smarter row summaries
+issue type classification
+next action guidance
+better prioritization
+while keeping the risk score in place as part of the model and UI.
