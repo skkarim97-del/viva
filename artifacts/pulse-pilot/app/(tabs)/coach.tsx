@@ -235,22 +235,30 @@ export default function CoachScreen() {
 
   const requestCareTeamReview = useCallback(() => {
     const fire = async () => {
-      const ok = await logCareEventImmediate("escalation_requested", {
+      const result = await logCareEventImmediate("escalation_requested", {
         source: "coach",
       });
       if (Platform.OS !== "web") {
         try {
           Haptics.notificationAsync(
-            ok
+            result === "ok"
               ? Haptics.NotificationFeedbackType.Success
               : Haptics.NotificationFeedbackType.Warning,
           );
         } catch {}
       }
-      const title = ok ? "Care team notified" : "Could not send right now";
-      const body = ok
-        ? "Your care team has been notified and will follow up soon."
-        : "We couldn't reach the server. Please try again in a moment.";
+      const title =
+        result === "ok"
+          ? "Care team notified"
+          : result === "no_auth"
+            ? "Sign in required"
+            : "Could not send right now";
+      const body =
+        result === "ok"
+          ? "Your care team has been notified and will follow up soon."
+          : result === "no_auth"
+            ? "Please sign in again to notify your care team."
+            : "We couldn't reach the server. Please try again in a moment.";
       if (Platform.OS === "web") {
         // Alert.alert is a no-op on web — fall back to window.alert.
         try { (globalThis as any).alert?.(`${title}\n\n${body}`); } catch {}

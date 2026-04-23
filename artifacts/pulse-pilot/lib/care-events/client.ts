@@ -56,17 +56,28 @@ async function flushNow(): Promise<void> {
 }
 
 /**
+ * Tagged outcome of a one-shot care-event log attempt:
+ *  - "ok":      request fired and the server returned 2xx.
+ *  - "no_auth": no patient token in storage; request was NOT fired.
+ *               Caller should prompt the patient to sign in again.
+ *  - "failed":  request was fired but the network or server rejected it.
+ *               Caller should show a generic retry message.
+ */
+export type LogCareEventResult = "ok" | "no_auth" | "failed";
+
+/**
  * Log a care event without de-dupe. Use for one-shot user actions
  * (e.g. patient pressed Need more support) where every press should
- * count. Resolves to true iff the network round-trip succeeded.
+ * count. Returns a tagged result so callers can distinguish a missing
+ * auth token (user is signed out) from a real network/server failure.
  */
 export async function logCareEventImmediate(
   type: PatientCareEventType,
   metadata?: Record<string, unknown> | null,
-): Promise<boolean> {
+): Promise<LogCareEventResult> {
+  const token = await sessionApi.getStoredToken().catch(() => null);
+  if (!token) return "no_auth";
   try {
-    const token = await sessionApi.getStoredToken();
-    if (!token) return false;
     const res = await fetch(`${API_BASE}/care-events`, {
       method: "POST",
       headers: {
@@ -75,9 +86,9 @@ export async function logCareEventImmediate(
       },
       body: JSON.stringify({ events: [{ type, metadata: metadata ?? null }] }),
     });
-    return res.ok;
+    return res.ok ? "ok" : "failed";
   } catch {
-    return false;
+    return "failed";
   }
 }
 
