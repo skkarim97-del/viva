@@ -39,12 +39,12 @@ async function fetchMetrics(key: string): Promise<InternalMetrics> {
 }
 
 function pct(rate: number): string {
-  if (!Number.isFinite(rate)) return "—";
+  if (!Number.isFinite(rate)) return "--";
   return `${(rate * 100).toFixed(0)}%`;
 }
 
 function num(n: number): string {
-  if (!Number.isFinite(n)) return "—";
+  if (!Number.isFinite(n)) return "--";
   return n.toLocaleString();
 }
 
@@ -204,12 +204,12 @@ export function InternalDashboardPage() {
               <Stat
                 label="Invites sent"
                 value={num(q.data.invitesSent)}
-                hint="count(patientsTable) — every row is one invite the doctor sent."
+                hint="count(patientsTable). Every row is one invite the doctor sent."
               />
               <Stat
                 label="Activated"
                 value={num(q.data.activated)}
-                hint="count(patientsTable WHERE activatedAt IS NOT NULL) — patient claimed the account in the mobile app."
+                hint="count(patientsTable WHERE activatedAt IS NOT NULL). Patient claimed the account in the mobile app."
               />
               <Stat
                 label="Activation rate"
@@ -219,7 +219,7 @@ export function InternalDashboardPage() {
               <Stat
                 label="Completed first check-in"
                 value={num(q.data.completedFirstCheckin)}
-                hint="count(distinct patientUserId in patientCheckinsTable) — patients with ≥1 check-in ever."
+                hint="count(distinct patientUserId in patientCheckinsTable). Patients with ≥1 check-in ever."
               />
             </Section>
 
@@ -242,7 +242,7 @@ export function InternalDashboardPage() {
               <Stat
                 label="No check-in after invite"
                 value={num(q.data.noCheckinAfterInvite)}
-                hint="patients with NO row in patientCheckinsTable — invited or activated, never submitted a single check-in."
+                hint="patients with NO row in patientCheckinsTable. Invited or activated, never submitted a single check-in."
               />
             </Section>
 

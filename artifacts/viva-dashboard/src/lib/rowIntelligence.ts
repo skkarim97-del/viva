@@ -183,7 +183,7 @@ export function rowIntelligence(
       summary = `${capitalize(symptom)} active in recent check-ins.`;
       nextAction = "Review symptoms";
     } else if (p.treatmentStatus === "stopped") {
-      summary = "Treatment stopped — confirm clinical context.";
+      summary = "Treatment stopped. Confirm clinical context.";
       nextAction = "Confirm next step";
     } else {
       summary = "Clinical signals warrant a closer look.";
@@ -197,16 +197,16 @@ export function rowIntelligence(
       summary = `May be disengaging after ${silent} days without check-in.`;
       nextAction = "Call today";
     } else if (silent !== null && silent >= 7) {
-      summary = `No check-in for ${silent} days — engagement slipping.`;
+      summary = `No check-in for ${silent} days. Engagement slipping.`;
       nextAction = "Call today";
     } else if (silent !== null && silent >= 3) {
-      summary = `Engagement slowing — last check-in ${silent}d ago.`;
+      summary = `Engagement slowing. Last check-in ${silent}d ago.`;
       nextAction = "Send nudge";
     } else if (!p.lastCheckin) {
-      summary = "No check-ins logged yet — confirm onboarding.";
+      summary = "No check-ins logged yet. Confirm onboarding.";
       nextAction = "Send nudge";
     } else if (p.inactive12d) {
-      summary = "Inactive for 12+ days — possible disengagement.";
+      summary = "Inactive for 12+ days. Possible disengagement.";
       nextAction = "Call today";
     } else {
       summary = "Follow-up pending with this patient.";

@@ -301,7 +301,7 @@ function computeIntelligence(i: IntelligenceInputs): Intelligence {
       summary = `Symptoms appear ${symptomDir}; clinician review may be appropriate.`;
       nextAction = `Review ${symptomName} in recent check-ins and decide on follow-up.`;
     } else if (i.treatmentStatus === "stopped") {
-      summary = "Treatment is currently stopped — confirm clinical context is still accurate.";
+      summary = "Treatment is currently stopped. Confirm clinical context is still accurate.";
       nextAction = "Confirm stop reason and decide on next clinical step.";
     } else if (i.recentLowMood) {
       summary = "Recent check-ins suggest treatment tolerance may be declining.";
@@ -312,7 +312,7 @@ function computeIntelligence(i: IntelligenceInputs): Intelligence {
     }
   } else if (issueType === "engagement") {
     if (i.escalationOpen) {
-      summary = "Patient requested follow-up — acknowledge and re-engage.";
+      summary = "Patient requested follow-up. Acknowledge and re-engage.";
       nextAction = "Mark reviewed, then call patient to address the request.";
     } else if (i.followUpPending) {
       summary = "Patient requested follow-up and has not yet re-engaged.";
@@ -324,7 +324,7 @@ function computeIntelligence(i: IntelligenceInputs): Intelligence {
       summary = "Engagement has slowed and follow-up may be needed.";
       nextAction = "Send a check-in nudge today; call if no response within 24h.";
     } else if (!i.hasAnyCheckin) {
-      summary = "No check-ins logged yet — encourage onboarding completion.";
+      summary = "No check-ins logged yet. Encourage onboarding completion.";
       nextAction = "Confirm patient has activated the Viva Care app.";
     }
   }

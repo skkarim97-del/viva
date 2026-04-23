@@ -678,51 +678,37 @@ function PatientCard({ p, needsReview, onAddNote }: CardProps) {
           </span>
         </div>
       </div>
-      {/* Body. Drug / dose / last check-in stays as the supporting
-          metadata strip; treatment concern band sits here as a quiet
-          secondary signal so the risk score is preserved without
-          competing with the intelligence layer above. */}
-      <div className="mt-4 pt-4 border-t border-border flex flex-col gap-2 sm:grid sm:grid-cols-4 sm:gap-x-5 sm:gap-y-3">
-        <div className="min-w-0 flex items-baseline gap-2 sm:block">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold shrink-0">
-            Drug
-          </div>
-          <div className="text-sm text-foreground font-medium sm:mt-1 truncate">
-            {p.glp1Drug ?? "--"}
-          </div>
-        </div>
-        <div className="min-w-0 flex items-baseline gap-2 sm:block">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold shrink-0">
-            Dose
-          </div>
-          <div className="text-sm text-foreground font-medium sm:mt-1 truncate">
-            {p.dose ?? "--"}
-          </div>
-        </div>
-        <div className="min-w-0 flex items-baseline gap-2 sm:block">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold shrink-0">
-            Last check-in
-          </div>
-          <div className="text-sm text-foreground font-medium sm:mt-1 truncate">
-            {formatDate(p.lastCheckin)}
-          </div>
-        </div>
-        <div className="min-w-0 flex items-baseline gap-2 sm:block">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold shrink-0">
-            Treatment concern
-          </div>
-          <div className="text-sm text-foreground font-medium sm:mt-1 flex items-center gap-1.5">
-            <span
-              aria-hidden
-              className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
-              style={{ backgroundColor: RISK_BAND_DOT[p.riskBand] }}
-            />
-            <span className="truncate">{RISK_BAND_LABEL[p.riskBand]}</span>
-            <span className="text-muted-foreground text-xs font-normal tabular-nums">
-              ({p.riskScore})
-            </span>
-          </div>
-        </div>
+      {/* Footer. Single dense row of supporting metadata: drug, dose,
+          last check-in, treatment concern. Intentionally rendered at
+          xs/muted weight so it sits visually beneath the summary +
+          next-action layer above. Treatment concern keeps a small
+          colored dot so the band is parseable at a glance, but the
+          score is shown as "30%" to give the number context. */}
+      <div className="mt-3 pt-3 border-t border-border flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+        <span className="truncate">
+          <span className="font-semibold text-foreground/70">Drug:</span>{" "}
+          {p.glp1Drug ?? "--"}
+        </span>
+        <span className="truncate">
+          <span className="font-semibold text-foreground/70">Dose:</span>{" "}
+          {p.dose ?? "--"}
+        </span>
+        <span className="truncate">
+          <span className="font-semibold text-foreground/70">Last check-in:</span>{" "}
+          {formatDate(p.lastCheckin)}
+        </span>
+        <span className="inline-flex items-center gap-1.5 ml-auto">
+          <span
+            aria-hidden
+            className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
+            style={{ backgroundColor: RISK_BAND_DOT[p.riskBand] }}
+          />
+          <span className="font-semibold text-foreground/70">
+            Treatment concern:
+          </span>
+          <span>{RISK_BAND_LABEL[p.riskBand]}</span>
+          <span className="tabular-nums">({p.riskScore}%)</span>
+        </span>
       </div>
     </Link>
   );

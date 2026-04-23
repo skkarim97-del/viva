@@ -87,7 +87,7 @@ async function fetchSummary(key: string): Promise<AnalyticsSummary> {
 }
 
 function pct(num: number, denom: number): string {
-  if (!denom) return "—";
+  if (!denom) return "--";
   return `${Math.round((num / denom) * 100)}%`;
 }
 
@@ -206,7 +206,7 @@ function HealthPanel({ h }: { h: HealthBlock }) {
         />
         <Stat
           label="Top interventions"
-          value={top.length === 0 ? "—" : `${top.length}`}
+          value={top.length === 0 ? "--" : `${top.length}`}
           sub={
             top.length === 0
               ? "No interventions logged yet."
@@ -471,7 +471,7 @@ export function InternalAnalyticsPage() {
                 <span style={{ fontFamily: "monospace" }}>
                   {r.interventionType}
                 </span>
-                {" — "}
+                {": "}
                 {r.count}
               </li>
             ))}
