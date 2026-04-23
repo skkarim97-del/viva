@@ -112,7 +112,10 @@ interface AppContextType {
   // Mark a symptom-tip as acknowledged for today. Mirrors to the
   // server when today's check-in row exists; otherwise queues the ack
   // and replays it after the next saveDailyCheckIn.
-  acknowledgeSymptomTip: (symptom: import("@/lib/symptomTips").SymptomKind) => void;
+  acknowledgeSymptomTip: (
+    symptom: import("@/lib/symptomTips").SymptomKind,
+    interventionTitle: string,
+  ) => void;
   // Day-after follow-up answer (Better/Same/Worse). Mirrors to the
   // server and dismisses the tip card locally.
   recordSymptomTrend: (
@@ -129,6 +132,12 @@ interface AppContextType {
   // the Today tab to decide whether to show the day-after follow-up
   // question when the same symptom recurs.
   guidanceAckHistory: Partial<Record<import("@/lib/symptomTips").SymptomKind, string>>;
+  // Most recently acked intervention title per symptom. Used by the
+  // Today tab to render the followup card with the title the patient
+  // actually saw, not whatever today's derived tip happens to be.
+  guidanceAckTitleHistory: Partial<
+    Record<import("@/lib/symptomTips").SymptomKind, { date: string; title: string }>
+  >;
   // Per-symptom set of "patient asked clinician for awareness today"
   // -- drives the inline confirmation on the tip card.
   clinicianRequestedToday: Partial<Record<import("@/lib/symptomTips").SymptomKind, true>>;
@@ -177,6 +186,7 @@ const GLP1_INPUTS_KEY = "@viva_glp1_inputs";
 const GLP1_HISTORY_KEY = "@viva_glp1_history";
 const MED_LOG_KEY = "@viva_med_log";
 const GUIDANCE_ACK_HISTORY_KEY = "@viva_guidance_ack_history";
+const GUIDANCE_ACK_TITLE_HISTORY_KEY = "@viva_guidance_ack_title_history";
 // Per-symptom most-recent intervention feedback (better/same/worse)
 // plus its timestamp. Used by the local risk engine to apply a
 // small +/-5 nudge on the score so the patient sees their own
@@ -256,6 +266,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // promote the tip card from "Got it" to "Better / Same / Worse".
   const [guidanceAckHistory, setGuidanceAckHistory] = useState<
     Partial<Record<import("@/lib/symptomTips").SymptomKind, string>>
+  >({});
+  // Per-symptom { date, title } of the most recent guidance ack. Used
+  // by the followup card to quote the intervention the patient
+  // actually saw yesterday, not whatever today's deriveSymptomTips()
+  // happens to produce (relevant for nausea where the title varies
+  // by severity). Fallback to the current tip title at render time
+  // covers legacy state from before this map existed.
+  const [guidanceAckTitleHistory, setGuidanceAckTitleHistory] = useState<
+    Partial<Record<import("@/lib/symptomTips").SymptomKind, { date: string; title: string }>>
   >({});
   // Per-symptom YYYY-MM-DD of the most recent "Let my clinician know"
   // tap. Persisted alongside guidanceAckHistory so the inline
@@ -547,6 +566,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       try {
         const savedAckHist = await AsyncStorage.getItem(GUIDANCE_ACK_HISTORY_KEY);
         if (savedAckHist) setGuidanceAckHistory(JSON.parse(savedAckHist));
+        const savedAckTitleHist = await AsyncStorage.getItem(GUIDANCE_ACK_TITLE_HISTORY_KEY);
+        if (savedAckTitleHist) setGuidanceAckTitleHistory(JSON.parse(savedAckTitleHist));
         const savedClinReq = await AsyncStorage.getItem(CLINICIAN_REQUESTED_DATES_KEY);
         if (savedClinReq) setClinicianRequestedDates(JSON.parse(savedClinReq));
         const savedFb = await AsyncStorage.getItem(LAST_INTERVENTION_FEEDBACK_KEY);
@@ -1314,14 +1335,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const acknowledgeSymptomTip = useCallback(
-    (symptom: import("@/lib/symptomTips").SymptomKind) => {
+    (
+      symptom: import("@/lib/symptomTips").SymptomKind,
+      interventionTitle: string,
+    ) => {
       const today = new Date().toISOString().split("T")[0]!;
       // Persist "the patient acknowledged guidance for this symptom
       // on this date" locally so tomorrow we can offer the follow-up
-      // question even if the network is down.
+      // question even if the network is down. We also record the
+      // exact title of the intervention that was acked, so the
+      // followup card tomorrow can quote the intervention the
+      // patient actually saw -- not whatever today's derived tip
+      // happens to be (relevant for nausea, where the title varies
+      // by severity).
       setGuidanceAckHistory((prev) => {
         const next = { ...prev, [symptom]: today };
         AsyncStorage.setItem(GUIDANCE_ACK_HISTORY_KEY, JSON.stringify(next)).catch(() => {});
+        return next;
+      });
+      setGuidanceAckTitleHistory((prev) => {
+        const next = { ...prev, [symptom]: { date: today, title: interventionTitle } };
+        AsyncStorage.setItem(GUIDANCE_ACK_TITLE_HISTORY_KEY, JSON.stringify(next)).catch(() => {});
         return next;
       });
       // Persistent queue handles dedupe, retry on transient errors,
@@ -1599,6 +1633,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         recordSymptomTrend,
         requestClinicianForSymptom,
         guidanceAckHistory,
+        guidanceAckTitleHistory,
         clinicianRequestedToday,
         checkinSyncStatus,
         checkinLastSyncAt,

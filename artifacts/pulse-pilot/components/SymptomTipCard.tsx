@@ -56,14 +56,33 @@ interface SymptomTipCardProps {
   // Passed in from the theme so dark mode and brand tweaks stay
   // centralized.
   warning: string;
-  onAcknowledge: (symptom: SymptomKind) => void;
+  onAcknowledge: (symptom: SymptomKind, interventionTitle: string) => void;
   onTrendResponse: (
     symptom: SymptomKind,
     response: TrendResponse,
     interventionTitle: string,
   ) => void;
   onRequestClinician: (symptom: SymptomKind) => void;
+  // Title of the intervention the patient actually acknowledged
+  // yesterday. Only meaningful in followup mode. Falls back to the
+  // current `tip.title` if absent (e.g. legacy AsyncStorage state
+  // from before we recorded titles at ack time). This is what makes
+  // the followup card unambiguous when the symptom severity has
+  // shifted since yesterday and the derived title would otherwise
+  // refer to a different intervention than the one that was acked.
+  ackedInterventionTitle?: string;
 }
+
+// User-facing label for each symptom in the followup question
+// "Did this help your <X>?". For constipation we use "digestion"
+// because that's the lay framing the patient sees on the check-in
+// screen and on the tip card itself ("Get things moving" is about
+// digestive movement); "constipation" reads as too clinical here.
+const SYMPTOM_OUTCOME_LABEL: Record<SymptomKind, string> = {
+  nausea: "nausea",
+  constipation: "digestion",
+  low_appetite: "appetite",
+};
 
 // Delay (ms) between the patient tapping the CTA and the card being
 // dismissed by the parent. Tuned to ~6s so a quick "tap-without-doing"
@@ -87,7 +106,14 @@ export function SymptomTipCard(props: SymptomTipCardProps) {
     onAcknowledge,
     onTrendResponse,
     onRequestClinician,
+    ackedInterventionTitle,
   } = props;
+
+  // Title to attribute the followup question to. Prefer the title we
+  // captured at ack time; fall back to the currently-derived tip
+  // title only if we have no record (legacy state, or first run
+  // after an upgrade).
+  const followupInterventionTitle = ackedInterventionTitle ?? tip.title;
 
   // Local "I tapped the CTA" state. We hold the card in a completed
   // visual state for COMPLETION_HOLD_MS so the patient gets clear
@@ -113,12 +139,14 @@ export function SymptomTipCard(props: SymptomTipCardProps) {
       ? ("activity" as const)
       : ("coffee" as const);
 
-  // Followup question is built from the specific tip's title so the
-  // patient sees exactly which suggestion the answer is about. No
-  // generic "this" or "the suggestion" -- the intervention name is
-  // quoted inline so the question stands on its own without needing
-  // surrounding context.
-  const followupTitle = `After trying \u2018${tip.title}\u2019, how do you feel?`;
+  // Followup question anchors to the symptom outcome being measured
+  // ("Did this help your nausea?") with the intervention name as
+  // subtext ("After trying Settle your stomach"). Two roles split
+  // across two lines so the patient knows exactly what they're
+  // rating: the effect of THIS suggestion on THAT symptom, not their
+  // overall wellbeing.
+  const followupTitle = `Did this help your ${SYMPTOM_OUTCOME_LABEL[tip.symptom]}?`;
+  const followupSubtext = `After trying ${followupInterventionTitle}`;
 
   const handleCtaPress = () => {
     if (completed) return;
@@ -130,7 +158,7 @@ export function SymptomTipCard(props: SymptomTipCardProps) {
       useNativeDriver: true,
     }).start();
     dismissTimeoutRef.current = setTimeout(() => {
-      onAcknowledge(tip.symptom);
+      onAcknowledge(tip.symptom, tip.title);
     }, COMPLETION_HOLD_MS);
   };
 
@@ -210,24 +238,22 @@ export function SymptomTipCard(props: SymptomTipCardProps) {
         )}
       </View>
 
-      {/* Urgency line -- the "when" that nudges follow-through.
-          Only shown in ack mode; in followup mode the title already
-          names the intervention and the Better/Same/Worse buttons
-          carry the rest of the meaning, so any subtext here would
-          just be noise. */}
-      {mode === "ack" && (
-        <Text
-          style={[
-            styles.urgency,
-            // Body / urgency text is a single role at fontSize 13 across
-            // every card. Hierarchy comes from the title above, not from
-            // shrinking the body on secondary cards.
-            { color: mutedForeground, fontSize: 13 },
-          ]}
-        >
-          {tip.urgency}
-        </Text>
-      )}
+      {/* Body line under the title. In ack mode this is the urgency
+          ("Do this in the next 15 minutes..."). In followup mode it
+          is the intervention attribution ("After trying Settle your
+          stomach"), which together with the title above makes the
+          question unambiguous: which symptom + which intervention. */}
+      <Text
+        style={[
+          styles.urgency,
+          // Body text is a single role at fontSize 13 across every
+          // card. Hierarchy comes from the title above, not from
+          // shrinking the body on secondary cards.
+          { color: mutedForeground, fontSize: 13 },
+        ]}
+      >
+        {mode === "followup" ? followupSubtext : tip.urgency}
+      </Text>
 
       {/* Action sentence + a parenthetical example line. The action
           sentence is the specific thing to do (with standard units);
@@ -269,14 +295,22 @@ export function SymptomTipCard(props: SymptomTipCardProps) {
       {mode === "followup" ? (
         <View style={styles.trendRow}>
           {(["better", "same", "worse"] as const).map((r) => {
+            // Wire values stay better/same/worse so risk engine,
+            // sync queue, and care_event metadata don't have to
+            // change. Only the visible label is being updated to
+            // the more outcome-anchored Improved / No change / Worse.
             const tint =
               r === "better" ? "#1E8E3E" : r === "same" ? navy : "#B5251D";
+            const label =
+              r === "better" ? "Improved" : r === "same" ? "No change" : "Worse";
             return (
               <Pressable
                 key={r}
-                onPress={() => onTrendResponse(tip.symptom, r, tip.title)}
+                onPress={() =>
+                  onTrendResponse(tip.symptom, r, followupInterventionTitle)
+                }
                 accessibilityRole="button"
-                accessibilityLabel={`Mark ${tip.symptom.replace("_", " ")} as ${r}`}
+                accessibilityLabel={`Mark ${SYMPTOM_OUTCOME_LABEL[tip.symptom]} as ${label.toLowerCase()} after trying ${followupInterventionTitle}`}
                 style={({ pressed }) => [
                   styles.trendBtn,
                   {
@@ -287,7 +321,7 @@ export function SymptomTipCard(props: SymptomTipCardProps) {
                 ]}
               >
                 <Text style={[styles.trendBtnText, { color: tint }]}>
-                  {r === "better" ? "Better" : r === "same" ? "Same" : "Worse"}
+                  {label}
                 </Text>
               </Pressable>
             );

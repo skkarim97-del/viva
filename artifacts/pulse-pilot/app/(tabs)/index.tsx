@@ -138,7 +138,7 @@ export default function DashboardScreen() {
     metrics, completionHistory,
     streakDays, todayCompletionRate,
     lastCompletionFeedback, clearCompletionFeedback,
-    saveDailyCheckIn, todayCheckIn, acknowledgeSymptomTip,
+    saveDailyCheckIn, todayCheckIn, acknowledgeSymptomTip, guidanceAckTitleHistory,
     recordSymptomTrend, requestClinicianForSymptom,
     guidanceAckHistory, clinicianRequestedToday,
     checkinSyncStatus, flushCheckinSync,
@@ -395,7 +395,7 @@ export default function DashboardScreen() {
   }, []);
 
   const onAckSymptomTip = React.useCallback(
-    (symptom: SymptomKind) => {
+    (symptom: SymptomKind, interventionTitle: string) => {
       // Snapshot the current severity at ack time so the re-trigger
       // logic above can compare against it. The selector reflects
       // "what was true the moment the patient tapped the CTA" since
@@ -409,8 +409,10 @@ export default function DashboardScreen() {
       });
       // Delegate the server mirror (and queued retry on 404) to
       // AppContext so the ack survives the "patient dismisses tip
-      // before today's check-in row exists" race.
-      acknowledgeSymptomTip(symptom);
+      // before today's check-in row exists" race. Pass the title so
+      // the followup card tomorrow can quote the intervention the
+      // patient actually saw.
+      acknowledgeSymptomTip(symptom, interventionTitle);
     },
     [acknowledgeSymptomTip, dailyState],
   );
@@ -1033,11 +1035,21 @@ export default function DashboardScreen() {
               const yesterdayYmd = yesterday.toISOString().split("T")[0]!;
               const lastAck = guidanceAckHistory[tip.symptom];
               const isFollowup = lastAck === yesterdayYmd;
+              // Use the title we captured at ack time, not today's
+              // derived tip.title -- otherwise nausea (whose title
+              // varies with severity) would silently quote the wrong
+              // intervention if severity shifted overnight.
+              const ackedTitleEntry = guidanceAckTitleHistory[tip.symptom];
+              const ackedInterventionTitle =
+                ackedTitleEntry && ackedTitleEntry.date === lastAck
+                  ? ackedTitleEntry.title
+                  : undefined;
               return (
                 <SymptomTipCard
                   key={tip.symptom}
                   tip={tip}
                   mode={isFollowup ? "followup" : "ack"}
+                  ackedInterventionTitle={ackedInterventionTitle}
                   // Top tip gets full emphasis; subsequent tips render
                   // as quieter secondary cards so attention lands on
                   // one action at a time.
