@@ -115,7 +115,11 @@ export function SummaryBar({
             <div className="font-display text-[28px] font-bold text-foreground leading-none tabular-nums">
               {s.value}
             </div>
-            <div className="text-xs text-muted-foreground font-semibold mt-2 truncate">
+            {/* Allow a clean two-line wrap so longer labels like
+                "Engagement Concerns" stay fully readable. Min-height
+                reserves the second line on shorter labels so all six
+                tiles stay vertically aligned. */}
+            <div className="text-xs text-muted-foreground font-semibold mt-2 leading-snug min-h-[2.4em]">
               {s.label}
             </div>
           </Tag>
