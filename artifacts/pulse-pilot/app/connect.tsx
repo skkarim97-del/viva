@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -95,7 +96,13 @@ export default function ConnectScreen() {
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.brand}>viva</Text>
+          <Image
+            source={require("@/assets/viva-wordmark-navy.png")}
+            style={styles.brand}
+            resizeMode="contain"
+            accessibilityLabel="Viva"
+          />
+
           <Text style={styles.title}>
             {mode === "activate"
               ? "Connect to your clinician"
@@ -221,10 +228,8 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.light.background },
   scroll: { padding: 24, paddingBottom: 64 },
   brand: {
-    fontFamily: "Montserrat_700Bold",
-    fontSize: 22,
-    letterSpacing: 4,
-    color: colors.light.primary,
+    width: 96,
+    height: 44,
     marginBottom: 32,
   },
   title: {
