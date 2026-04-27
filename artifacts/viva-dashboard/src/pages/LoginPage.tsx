@@ -7,8 +7,8 @@ import { Logo } from "@/components/Logo";
 export function LoginPage() {
   const { login } = useAuth();
   const [, setLocation] = useLocation();
-  const [email, setEmail] = useState("doctor@vivaai.demo");
-  const [password, setPassword] = useState("viva-demo-2026");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -40,10 +40,18 @@ export function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-6">
       <div className="w-full max-w-md">
+        {/* Brand lockup mirrors the in-app header (viva. wordmark
+            stacked over the product label "Clinic"). The header uses
+            size="sm" + items-start; the login is a larger, centered
+            variant of the same lockup so signed-out and signed-in
+            states feel like one continuous surface. */}
         <div className="flex flex-col items-center mb-8">
           <Logo size="lg" />
-          <p className="mt-5 text-muted-foreground text-sm font-medium">
-            Care team sign in
+          <span className="font-display text-[28px] font-bold text-foreground tracking-tight -mt-1">
+            Clinic
+          </span>
+          <p className="mt-4 text-muted-foreground text-sm font-medium">
+            Clinician sign in
           </p>
         </div>
 
@@ -97,12 +105,7 @@ export function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-5 text-xs text-muted-foreground text-center leading-relaxed">
-          Demo doctor: <span className="text-foreground font-semibold">doctor@vivaai.demo</span>
-          <br />
-          Demo password: <span className="text-foreground font-semibold">viva-demo-2026</span>
-        </div>
-        <div className="mt-4 text-xs text-muted-foreground text-center">
+        <div className="mt-5 text-xs text-muted-foreground text-center">
           New to Viva?{" "}
           <Link href="/signup" className="text-foreground font-semibold underline">
             Create a clinician account

@@ -14,10 +14,20 @@ import {
   patientsTable,
   patientCheckinsTable,
   doctorNotesTable,
+  careEventsTable,
   type InsertPatientCheckin,
 } from "@workspace/db";
 
 const SEED_PASSWORD = "viva-demo-2026";
+
+// Secondary, fully isolated demo account for the public "demo@itsviva.com"
+// experience. Owns its own roster of exactly 12 patients (3 per priority
+// bucket) so the worklist visualisation always lands in the same shape.
+// Kept separate from the doctor@vivaai.demo / 40-patient seed so demo
+// playthroughs never collide with the broader QA dataset.
+const DEMO_DOCTOR_EMAIL = "demo@itsviva.com";
+const DEMO_DOCTOR_PASSWORD = "Demo4917!";
+const DEMO_DOCTOR_NAME = "Dr. Demo Avery";
 
 interface PatientSpec {
   email: string;
@@ -92,6 +102,46 @@ const PATIENTS: PatientSpec[] = [
   { email: "ana.beltran@vivaai.demo",      name: "Ana Beltran",      glp1Drug: "Tirzepatide", dose: "2.5mg weekly",  startedDaysAgo: 9,   tone: "improving" },
 ];
 
+// ----------------------------------------------------------------------
+// Demo doctor (demo@itsviva.com) roster.
+//
+// Curated 12-patient list, 3 per priority bucket the Clinic worklist
+// surfaces: Review Now, Follow Up Today, Track Closely (monitor),
+// Doing Well (stable). The bucket label drives both the tone of the
+// generated check-ins and -- for the "review_now" rows -- the open
+// escalation_requested care event we insert at the end of the seed.
+// Tones map to the existing PatientSpec.tone vocabulary so the random
+// check-in generator is reused unchanged.
+// ----------------------------------------------------------------------
+
+type DemoBucket = "review_now" | "follow_up_today" | "monitor" | "stable";
+
+interface DemoPatientSpec extends PatientSpec {
+  bucket: DemoBucket;
+}
+
+const DEMO_PATIENTS: DemoPatientSpec[] = [
+  // --- Review Now: open escalation, otherwise actively engaged --------
+  { bucket: "review_now",      email: "demo.review.riley@itsviva.com",     name: "Riley Donovan",     glp1Drug: "Semaglutide", dose: "0.5mg weekly",  startedDaysAgo: 30,  tone: "stable" },
+  { bucket: "review_now",      email: "demo.review.cassidy@itsviva.com",   name: "Cassidy Jiang",     glp1Drug: "Tirzepatide", dose: "5mg weekly",    startedDaysAgo: 60,  tone: "stable" },
+  { bucket: "review_now",      email: "demo.review.marco@itsviva.com",     name: "Marco Pellegrini",  glp1Drug: "Semaglutide", dose: "1mg weekly",    startedDaysAgo: 45,  tone: "improving" },
+
+  // --- Follow Up Today: needs_followup via silence + struggling -------
+  { bucket: "follow_up_today", email: "demo.followup.hailey@itsviva.com",  name: "Hailey Sutton",     glp1Drug: "Semaglutide", dose: "1.7mg weekly",  startedDaysAgo: 21,  tone: "struggling" },
+  { bucket: "follow_up_today", email: "demo.followup.theo@itsviva.com",    name: "Theo Brennan",      glp1Drug: "Tirzepatide", dose: "7.5mg weekly",  startedDaysAgo: 14,  tone: "silent" },
+  { bucket: "follow_up_today", email: "demo.followup.jasmin@itsviva.com",  name: "Jasmin Khoury",     glp1Drug: "Semaglutide", dose: "1mg weekly",    startedDaysAgo: 55,  tone: "struggling" },
+
+  // --- Track Closely: monitor via newly-silent + low-energy -----------
+  { bucket: "monitor",         email: "demo.monitor.devon@itsviva.com",    name: "Devon Marquez",     glp1Drug: "Tirzepatide", dose: "5mg weekly",    startedDaysAgo: 28,  tone: "low-energy" },
+  { bucket: "monitor",         email: "demo.monitor.lana@itsviva.com",     name: "Lana Ostrowski",    glp1Drug: "Semaglutide", dose: "0.5mg weekly",  startedDaysAgo: 42,  tone: "newly-silent" },
+  { bucket: "monitor",         email: "demo.monitor.quentin@itsviva.com",  name: "Quentin Reyes",     glp1Drug: "Tirzepatide", dose: "2.5mg weekly",  startedDaysAgo: 18,  tone: "low-energy" },
+
+  // --- Doing Well: stable + improving --------------------------------
+  { bucket: "stable",          email: "demo.stable.mira@itsviva.com",      name: "Mira Bernstein",    glp1Drug: "Semaglutide", dose: "0.5mg weekly",  startedDaysAgo: 90,  tone: "stable" },
+  { bucket: "stable",          email: "demo.stable.asher@itsviva.com",     name: "Asher Whitlock",    glp1Drug: "Tirzepatide", dose: "5mg weekly",    startedDaysAgo: 70,  tone: "improving" },
+  { bucket: "stable",          email: "demo.stable.polina@itsviva.com",    name: "Polina Vetrov",     glp1Drug: "Semaglutide", dose: "1mg weekly",    startedDaysAgo: 110, tone: "stable" },
+];
+
 function pick<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]!;
 }
@@ -140,7 +190,10 @@ function checkinsFor(
         break;
       case "low-energy":
         // Persistently dragging but no severe symptoms -- a Monitor case.
-        energy = pick(["tired", "depleted", "tired", "good"] as const);
+        // Drop "good" from the energy mix so the low_energy_7d rule fires
+        // deterministically (>=4 of last 7 days tired/depleted), keeping
+        // Monitor-bucket seeds from accidentally drifting into Stable.
+        energy = pick(["tired", "depleted", "tired", "depleted"] as const);
         nausea = pick(["mild", "none", "mild"] as const);
         mood = pick([2, 3, 3, 4]);
         break;
@@ -150,6 +203,15 @@ function checkinsFor(
         mood = pick([1, 2, 2, 3]);
         break;
       case "newly-silent":
+        // Pre-silence days are explicitly upbeat so the only rule that
+        // fires on this tone is silence_3d (+30 = Monitor). Mixing in
+        // "tired" days could co-fire low_energy_7d (+20 -> total 50)
+        // which deriveAction promotes to needs_followup, defeating the
+        // tone's role as the Monitor-bucket exemplar.
+        energy = "good";
+        nausea = "none";
+        mood = 4;
+        break;
       case "silent":
         energy = pick(["good", "tired"] as const);
         nausea = pick(["none", "mild"] as const);
@@ -169,16 +231,171 @@ function checkinsFor(
   return out;
 }
 
-async function main(): Promise<void> {
-  const allEmails = [DOCTOR_EMAIL, ...PATIENTS.map((p) => p.email)];
+// Deterministic check-in generator for the demo doctor's roster. The
+// random checkinsFor helper is great for the 40-patient QA dataset
+// (it sprinkles realistic variance) but the public demo needs every
+// patient to land in the SAME bucket every time the seed runs. This
+// helper produces a fixed shape per bucket -- no Math.random() calls --
+// so the worklist render is reproducible.
+function demoCheckinsFor(
+  patientUserId: number,
+  bucket: DemoBucket,
+): InsertPatientCheckin[] {
+  const out: InsertPatientCheckin[] = [];
+  const today = new Date();
 
-  // Wipe prior seed runs by email -- cascades remove related rows.
+  // Always-quiet baseline used by review_now and stable. Active
+  // patient, no clinical signals firing -- the only thing that lifts a
+  // review_now patient out of "stable" is the open escalation_requested
+  // care event we insert in main(), nothing in their check-in stream.
+  const baselineDay = (
+    daysAgo: number,
+  ): InsertPatientCheckin => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - daysAgo);
+    return {
+      patientUserId,
+      date: d.toISOString().split("T")[0]!,
+      energy: "good",
+      nausea: "none",
+      mood: 4,
+      notes: null,
+    };
+  };
+
+  switch (bucket) {
+    case "review_now":
+    case "stable":
+      // 14 days of clean check-ins. No silence, no symptoms, no energy
+      // dip -> deriveAction returns "stable" deterministically.
+      for (let daysAgo = 0; daysAgo < 14; daysAgo++) {
+        out.push(baselineDay(daysAgo));
+      }
+      return out;
+
+    case "follow_up_today":
+      // Force action=needs_followup via the severe_nausea_3d hard
+      // override (deriveAction promotes any severe nausea in the last
+      // 3 days regardless of score). Earlier days look ordinary so the
+      // queue copy has something to pivot off ("Severe nausea active in
+      // recent check-ins").
+      for (let daysAgo = 0; daysAgo < 14; daysAgo++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - daysAgo);
+        const date = d.toISOString().split("T")[0]!;
+        if (daysAgo <= 1) {
+          // Last 2 days: severe nausea + depleted energy -- the queue
+          // card needs a clinical signal to summarise.
+          out.push({
+            patientUserId,
+            date,
+            energy: "depleted",
+            nausea: "severe",
+            mood: 2,
+            notes: null,
+          });
+        } else if (daysAgo <= 3) {
+          out.push({
+            patientUserId,
+            date,
+            energy: "tired",
+            nausea: "moderate",
+            mood: 2,
+            notes: null,
+          });
+        } else {
+          out.push({
+            patientUserId,
+            date,
+            energy: "good",
+            nausea: "mild",
+            mood: 3,
+            notes: null,
+          });
+        }
+      }
+      return out;
+
+    case "monitor":
+      // 3-day silence -> silence_3d (+30) -> action=monitor. No other
+      // rules fire (energy stays "good") so we don't accidentally co-
+      // fire low_energy_7d and tip into needs_followup.
+      for (let daysAgo = 3; daysAgo < 17; daysAgo++) {
+        out.push(baselineDay(daysAgo));
+      }
+      return out;
+  }
+}
+
+// Insert one patient row + their generated check-ins. Returns the new
+// user id so callers can hang follow-up rows (care events, notes) off
+// of it without doing another lookup.
+async function seedPatient(
+  spec: PatientSpec,
+  doctorId: number,
+  passwordHash: string,
+  // Optional override for the check-in stream. When provided, this
+  // replaces the random tone-based generator -- used by the demo
+  // doctor seeding so its 12 patients land in fixed buckets.
+  checkins?: InsertPatientCheckin[],
+): Promise<number> {
+  const startedOn = new Date();
+  startedOn.setDate(startedOn.getDate() - spec.startedDaysAgo);
+
+  const [user] = await db
+    .insert(usersTable)
+    .values({
+      email: spec.email,
+      passwordHash,
+      role: "patient",
+      name: spec.name,
+    })
+    .returning();
+  // Stamp activatedAt + treatment_status so the seeded roster lands on
+  // the worklist as active patients rather than "pending activation"
+  // rows. activatedAt sits 1 day after startedOn so the patient looks
+  // like they signed in to the mobile app on day-2 of treatment.
+  const activatedAt = new Date(startedOn);
+  activatedAt.setDate(activatedAt.getDate() + 1);
+  await db.insert(patientsTable).values({
+    userId: user!.id,
+    doctorId,
+    glp1Drug: spec.glp1Drug,
+    dose: spec.dose,
+    startedOn: startedOn.toISOString().split("T")[0]!,
+    activatedAt,
+    treatmentStatus: "active",
+    treatmentStatusSource: "system",
+  });
+
+  const cks = checkins ?? checkinsFor(user!.id, spec.tone);
+  if (cks.length > 0) {
+    await db.insert(patientCheckinsTable).values(cks);
+  }
+  return user!.id;
+}
+
+async function main(): Promise<void> {
+  const allEmails = [
+    DOCTOR_EMAIL,
+    ...PATIENTS.map((p) => p.email),
+    DEMO_DOCTOR_EMAIL,
+    ...DEMO_PATIENTS.map((p) => p.email),
+  ];
+
+  // Wipe prior seed runs by email -- cascades remove related rows
+  // (check-ins, notes, care events, patients) so re-running the seed
+  // always lands the same shape regardless of how many times it ran.
   const existing = await db
     .select({ id: usersTable.id })
     .from(usersTable)
     .where(inArray(usersTable.email, allEmails));
   if (existing.length > 0) {
     const ids = existing.map((r) => r.id);
+    // care_events first: it has FKs onto users(actor_user_id /
+    // patient_user_id) and we want a clean wipe before we delete the
+    // owning users below.
+    await db.delete(careEventsTable).where(inArray(careEventsTable.patientUserId, ids));
     await db.delete(doctorNotesTable).where(inArray(doctorNotesTable.patientUserId, ids));
     await db.delete(patientCheckinsTable).where(inArray(patientCheckinsTable.patientUserId, ids));
     await db.delete(patientsTable).where(inArray(patientsTable.userId, ids));
@@ -188,6 +405,7 @@ async function main(): Promise<void> {
 
   const passwordHash = await bcrypt.hash(SEED_PASSWORD, 10);
 
+  // ---- Primary clinic (40 patients) --------------------------------
   const [doctor] = await db
     .insert(usersTable)
     .values({
@@ -200,36 +418,71 @@ async function main(): Promise<void> {
   console.log(`[seed] created doctor ${doctor!.email} (id=${doctor!.id})`);
 
   for (const p of PATIENTS) {
-    const startedOn = new Date();
-    startedOn.setDate(startedOn.getDate() - p.startedDaysAgo);
+    await seedPatient(p, doctor!.id, passwordHash);
+    console.log(`[seed] patient ${p.name} (${p.tone})`);
+  }
 
-    const [user] = await db
-      .insert(usersTable)
-      .values({
-        email: p.email,
-        passwordHash,
-        role: "patient",
-        name: p.name,
-      })
-      .returning();
-    await db.insert(patientsTable).values({
-      userId: user!.id,
-      doctorId: doctor!.id,
-      glp1Drug: p.glp1Drug,
-      dose: p.dose,
-      startedOn: startedOn.toISOString().split("T")[0]!,
-    });
+  // ---- Demo clinic (12 patients, fixed bucket distribution) --------
+  const demoPasswordHash = await bcrypt.hash(DEMO_DOCTOR_PASSWORD, 10);
+  const [demoDoctor] = await db
+    .insert(usersTable)
+    .values({
+      email: DEMO_DOCTOR_EMAIL,
+      passwordHash: demoPasswordHash,
+      role: "doctor",
+      name: DEMO_DOCTOR_NAME,
+      // Stamp clinicName up front so /api/auth/me returns
+      // needsOnboarding=false for this account; without it the dashboard
+      // bounces the demo login to /onboarding even though we already
+      // seeded a full 12-patient roster below.
+      clinicName: "Viva Demo Clinic",
+    })
+    .returning();
+  console.log(
+    `[seed] created demo doctor ${demoDoctor!.email} (id=${demoDoctor!.id})`,
+  );
 
-    const cks = checkinsFor(user!.id, p.tone);
-    if (cks.length > 0) {
-      await db.insert(patientCheckinsTable).values(cks);
+  // Patients share the standard SEED_PASSWORD so the existing mobile
+  // demo flow keeps working; only the demo doctor account uses the
+  // public Demo4917! password the dashboard surfaces.
+  for (const p of DEMO_PATIENTS) {
+    // Pass [] so seedPatient skips its random generator; we insert the
+    // deterministic stream below once we have the real user id.
+    const patientUserId = await seedPatient(p, demoDoctor!.id, passwordHash, []);
+    const stream = demoCheckinsFor(patientUserId, p.bucket);
+    if (stream.length > 0) {
+      await db.insert(patientCheckinsTable).values(stream);
+    }
+
+    // Open escalation_requested for the Review Now bucket. The funnel
+    // treats an escalation as "open" iff there is no later
+    // doctor_reviewed / follow_up_completed for the same patient,
+    // which is exactly what we want here -- a clinician demoing the
+    // worklist should see these three rows pinned at the top in the
+    // "Patient requested review" section.
+    if (p.bucket === "review_now") {
+      const occurredAt = new Date();
+      // Spread the escalations over the last few hours so the worklist
+      // ordering looks lived-in rather than stamped at the same second.
+      occurredAt.setHours(occurredAt.getHours() - (1 + DEMO_PATIENTS.indexOf(p) % 4));
+      await db.insert(careEventsTable).values({
+        patientUserId,
+        actorUserId: patientUserId,
+        source: "patient",
+        type: "escalation_requested",
+        occurredAt,
+        metadata: { note: "Requested clinician review from the mobile app." },
+      });
     }
     console.log(
-      `[seed] patient ${p.name} (${p.tone}) -> ${cks.length} check-ins`,
+      `[seed] demo patient ${p.name} -> ${p.bucket} (tone=${p.tone})`,
     );
   }
 
-  console.log(`\n[seed] done. Demo password for every account: ${SEED_PASSWORD}`);
+  console.log(
+    `\n[seed] done. Primary password: ${SEED_PASSWORD}  /  ` +
+      `Demo doctor: ${DEMO_DOCTOR_EMAIL} / ${DEMO_DOCTOR_PASSWORD}`,
+  );
   await pool.end();
 }
 

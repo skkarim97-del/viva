@@ -1,0 +1,87 @@
+Please update the Viva Clinic login/demo experience.
+
+LOGIN PAGE BRANDING
+1. Make the login page logo lockup match the in-app Viva Clinic branding exactly.
+
+Current signed-in app header shows:
+viva.
+Clinic
+
+The login page should use the same visual treatment:
+- viva logo on top
+- “Clinic” directly underneath
+- Capital C in Clinic
+- Center-align “Clinic” under the viva logo
+- Match the signed-in app’s font, weight, size relationship, color and spacing as closely as possible
+- The login page and signed-in app should feel cohesive, like the same product system
+
+2. Remove the demo credential helper text from the bottom of the login page:
+- Remove “Demo doctor: doctor@vivaai.demo”
+- Remove “Demo password: viva-demo-2026”
+- Keep the login form, sign-in button and create account link unchanged
+
+3. Replace “Care team sign in” with:
+“Clinician sign in”
+
+Final hierarchy:
+- viva. logo
+- Clinic centered underneath
+- Clinician sign in
+- login card
+
+DEMO ENVIRONMENT
+4. Add or verify seeded demo patients for a functioning demo clinician account.
+
+Create/verify demo login:
+- doctor@vivaai.demo or demo@itsviva.com
+- password: viva-demo-2026
+
+Use whichever account pattern already works, but make sure login actually works.
+
+5. Seed approximately 12 fake demo patients assigned to that demo clinician:
+
+A. 3 Review Now
+- patient requested review
+- worsening symptoms
+- missed check-ins + elevated concern
+
+B. 3 Follow Up Today
+- moderate concern
+- clear clinician action needed
+
+C. 3 Track Closely
+- mild engagement decline
+- monitoring, non-urgent
+
+D. 3 Doing Well
+- consistent check-ins
+- low concern
+- positive progress
+
+6. Ensure seeded patients populate:
+- SummaryBar counts
+- Patient list buckets
+- Patient detail pages
+- Care Team Notes
+- check-in history
+- treatment status
+- risk/reason pills
+
+7. Keep demo data clearly fake and non-PHI:
+- fake names only
+- fake emails if needed
+- fake phone numbers if needed
+- no real patient data
+
+8. Make the seed script idempotent:
+- running it multiple times should not duplicate patients
+- upsert demo records safely
+
+9. Verify:
+- demo clinician login works
+- dashboard is populated
+- buckets render correctly
+- SummaryBar counts match demo patients
+- login logo lockup matches the signed-in app header
+- “Clinic” is centered under “viva.” with capital C
+- typecheck passes
