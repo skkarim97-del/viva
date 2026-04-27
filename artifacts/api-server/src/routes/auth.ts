@@ -269,10 +269,15 @@ router.post("/login", async (req: Request, res: Response) => {
         res.status(500).json({ error: "session_save_failed" });
         return;
       }
+      // Doctors graduate from onboarding once they've named their
+      // practice. We deliberately do NOT also require a non-empty
+      // patient roster: the wizard now exposes a "Skip for now" path
+      // and clinicians can invite from the dashboard later, so an
+      // empty roster is a valid steady state. Gating on patient count
+      // would force any returning doctor whose roster was emptied
+      // (deleted, archived, etc.) back through the wizard.
       const needsOnboarding =
-        user.role === "doctor"
-          ? !user.clinicName || (await countDoctorPatients(user.id)) === 0
-          : false;
+        user.role === "doctor" ? !user.clinicName : false;
       // Always issue a bearer token. The dashboard ignores it (uses
       // its session cookie); the mobile patient app stores it in
       // AsyncStorage so it can authenticate subsequent requests.
@@ -318,19 +323,12 @@ router.get("/me", async (req: Request, res: Response) => {
     name: user.name,
     role: user.role,
     clinicName: user.clinicName,
+    // Mirrors the login handler: clinic-name presence is the sole
+    // gate. We dropped the patient-count check so an empty roster no
+    // longer bounces the doctor back into the wizard.
     needsOnboarding:
-      user.role === "doctor"
-        ? !user.clinicName || (await countDoctorPatients(user.id)) === 0
-        : false,
+      user.role === "doctor" ? !user.clinicName : false,
   });
 });
-
-async function countDoctorPatients(doctorId: number): Promise<number> {
-  const rows = await db
-    .select({ id: patientsTable.userId })
-    .from(patientsTable)
-    .where(eq(patientsTable.doctorId, doctorId));
-  return rows.length;
-}
 
 export default router;

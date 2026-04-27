@@ -3,7 +3,7 @@ import { useLocation, Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { api, HttpError } from "@/lib/api";
-import { Logo } from "@/components/Logo";
+import { ClinicLockup } from "@/components/ClinicLockup";
 
 /**
  * Step 1 of doctor onboarding: account creation. Intentionally minimal --
@@ -56,11 +56,11 @@ export function SignUpPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-6 py-12">
       <div className="w-full max-w-md">
-        <div className="flex flex-col items-center mb-8">
-          <Logo size="lg" />
-          <p className="mt-5 text-muted-foreground text-sm font-medium">
-            Create your clinician account
-          </p>
+        <div className="mb-8">
+          <ClinicLockup
+            variant="hero"
+            subtitle="Create your clinician account"
+          />
         </div>
         <form
           onSubmit={onSubmit}

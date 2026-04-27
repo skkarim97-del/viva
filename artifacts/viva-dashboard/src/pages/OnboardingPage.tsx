@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { api, HttpError, type InviteResult } from "@/lib/api";
-import { Logo } from "@/components/Logo";
+import { ClinicLockup } from "@/components/ClinicLockup";
 
 /**
  * Step 2 of doctor onboarding: build the patient panel.
@@ -92,6 +92,41 @@ export function OnboardingPage() {
     }
   }
 
+  // Persist the practice name and route to the dashboard without
+  // sending any invites. The clinician can invite from the dashboard
+  // later via InvitePatientModal -- the auth gate now treats a
+  // doctor with a clinic name as fully onboarded (see
+  // routes/auth.ts), so an empty patient panel is a valid steady
+  // state, not a bounced-back-to-onboarding loop.
+  async function skip() {
+    setErr(null);
+    const cleanPractice = practice.trim();
+    if (!cleanPractice) {
+      setErr("Please enter your practice name.");
+      return;
+    }
+    setBusy(true);
+    try {
+      if (cleanPractice !== me?.clinicName) {
+        await api.setClinic(cleanPractice);
+      }
+      // Refresh `me` so needsOnboarding flips to false BEFORE we route,
+      // mirroring the post-invite finish() handler. Without this the
+      // gate would synchronously bounce us right back to /onboarding.
+      try {
+        const fresh = await api.me();
+        setMe(fresh);
+      } catch {
+        /* fall through; the gate will resolve on next load */
+      }
+      setLocation("/");
+    } catch {
+      setErr("Could not save your practice name. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
@@ -109,7 +144,13 @@ export function OnboardingPage() {
       }))
       .filter(isFilled);
     if (ready.length === 0) {
-      setErr("Add at least one patient to enable monitoring.");
+      // The "Send invites & continue" path explicitly promises to send
+      // invites, so an empty list is a user error here. The "Skip for
+      // now" button (rendered alongside this submit) is the supported
+      // way to enter the dashboard without inviting anyone, so we no
+      // longer surface the older "Add at least one patient to enable
+      // monitoring" copy.
+      setErr("Add a patient row above, or use Skip for now to continue.");
       return;
     }
     for (const d of ready) {
@@ -163,7 +204,10 @@ export function OnboardingPage() {
     <div className="min-h-screen bg-background px-6 py-10">
       <div className="max-w-2xl mx-auto">
         <div className="flex items-center justify-between mb-8">
-          <Logo size="md" />
+          {/* Same header lockup as the signed-in dashboard so the
+              onboarding surface reads as part of the same product, not
+              a separate bare-wordmark page. */}
+          <ClinicLockup variant="header" />
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
             Step 2 of 2
           </span>
@@ -174,7 +218,7 @@ export function OnboardingPage() {
             Set up your patient panel
           </h1>
           <p className="text-muted-foreground text-sm mt-1.5 font-medium">
-            Patients will receive a link to download the Viva app and begin check-ins.
+            Invite patients now or skip and add them later from your dashboard.
           </p>
         </div>
 
@@ -268,31 +312,25 @@ export function OnboardingPage() {
             </div>
           )}
 
-          <div className="flex items-center justify-between gap-3">
-            {hasSent && (
-              <button
-                type="button"
-                onClick={async () => {
-                  // Refresh `me` here so needsOnboarding flips to
-                  // false BEFORE we route, otherwise the Gate would
-                  // immediately bounce us back to /onboarding.
-                  try {
-                    const fresh = await api.me();
-                    setMe(fresh);
-                  } catch {
-                    /* fall through; the gate will resolve on next load */
-                  }
-                  setLocation("/");
-                }}
-                className="text-sm font-semibold text-muted-foreground hover:text-foreground"
-              >
-                Go to dashboard →
-              </button>
-            )}
+          <div className="flex items-center justify-end gap-3">
+            {/* Secondary CTA: lets the clinician land on the dashboard
+                without inviting anyone. After at least one invite has
+                been sent the same handler is rendered as "Go to
+                dashboard" -- it is no longer a "skip" once invites are
+                in flight, but the underlying flow (persist clinic +
+                refresh me + navigate) is identical. */}
+            <button
+              type="button"
+              onClick={skip}
+              disabled={busy}
+              className="text-sm font-semibold text-muted-foreground hover:text-foreground px-3 py-3 disabled:opacity-60"
+            >
+              {hasSent ? "Go to dashboard →" : "Skip for now"}
+            </button>
             <button
               type="submit"
               disabled={busy}
-              className="ml-auto bg-primary text-primary-foreground font-semibold px-6 py-3 rounded-2xl hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-60"
+              className="bg-primary text-primary-foreground font-semibold px-6 py-3 rounded-2xl hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-60"
             >
               {busy ? "Sending invites..." : "Send invites & continue"}
             </button>

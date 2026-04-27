@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useLocation, Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { HttpError } from "@/lib/api";
-import { Logo } from "@/components/Logo";
+import { ClinicLockup } from "@/components/ClinicLockup";
 
 export function LoginPage() {
   const { login } = useAuth();
@@ -40,19 +40,11 @@ export function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-6">
       <div className="w-full max-w-md">
-        {/* Brand lockup mirrors the in-app header (viva. wordmark
-            stacked over the product label "Clinic"). The header uses
-            size="sm" + items-start; the login is a larger, centered
-            variant of the same lockup so signed-out and signed-in
-            states feel like one continuous surface. */}
-        <div className="flex flex-col items-center mb-8">
-          <Logo size="lg" />
-          <span className="font-display text-[28px] font-bold text-foreground tracking-tight -mt-1">
-            Clinic
-          </span>
-          <p className="mt-4 text-muted-foreground text-sm font-medium">
-            Clinician sign in
-          </p>
+        {/* Hero variant of the shared lockup -- larger and centered so
+            signed-out auth surfaces have brand presence, but the same
+            "viva. / Clinic" composition as the in-app header. */}
+        <div className="mb-8">
+          <ClinicLockup variant="hero" subtitle="Clinician sign in" />
         </div>
 
         <form

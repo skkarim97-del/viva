@@ -279,8 +279,7 @@ export function PatientsPage() {
           </div>
           <p className="text-sm text-muted-foreground font-medium max-w-md mx-auto leading-relaxed">
             Viva starts working once your patients are connected. Invite them
-            from the onboarding wizard, then their daily check-ins will appear
-            here.
+            using the button below and their daily check-ins will appear here.
           </p>
           <button
             type="button"
