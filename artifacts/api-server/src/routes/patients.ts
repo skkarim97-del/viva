@@ -1,7 +1,7 @@
 import { Router, type Response } from "express";
 import { randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
-import { and, eq, desc, gte, inArray, max, isNull, sql } from "drizzle-orm";
+import { and, eq, desc, gte, lte, inArray, max, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   db,
@@ -336,67 +336,146 @@ router.get("/", async (req, res: Response) => {
 // duplicate queries.) Defined BEFORE /:id so Express doesn't route
 // "stats" through the param handler.
 //
-// `actionsToday` is the count of clinician/patient triage events that
-// occurred today within this doctor's panel:
-//   - doctor notes written by this doctor                (clinician)
-//   - follow_up_completed care_events by this doctor     (clinician)
-//   - escalation_requested care_events on this doctor's
-//     patients (patient-initiated, but a real triage event
-//     the doctor needs to count toward today's activity)
-// All three are unioned on date; we don't dedupe across types because
-// a note + a follow-up logged for the same incident are two distinct
-// recorded actions in the audit trail.
+// Returns one operational KPI for the SummaryBar:
+//
+//   followUpRate24h: percentage (0-100, integer) of escalation_requested
+//   events on this doctor's panel that were "responded to" within
+//   24 hours of the escalation. The lookback window is the last
+//   30 days so a freshly-seeded panel still has a stable denominator
+//   once a few escalations age past 24h.
+//
+// Definitions:
+//   * Eligible escalation = an escalation_requested event whose
+//     occurredAt falls in [now-30d, now-24h]. Anything <24h old is
+//     excluded from BOTH numerator and denominator -- the doctor is
+//     not late on it yet, so counting it as a miss would be unfair.
+//   * Responded = there exists, for the SAME patient, a doctor-side
+//     activity (follow_up_completed, doctor_reviewed, OR a doctor_note
+//     by this doctor) with timestamp in [escalation.occurredAt,
+//     escalation.occurredAt + 24h]. We accept any of those event types
+//     because all three represent clinician acknowledgment of the
+//     escalation in the audit trail.
+//
+// followUpRate24h is null when the denominator is zero (e.g. a brand-
+// new account with no escalations old enough to evaluate). The client
+// renders that as a placeholder so we never display a misleading
+// "0%" / "100%" against an empty sample.
 router.get("/stats", async (req, res: Response) => {
   const doctorId = (req as AuthedRequest).auth.userId;
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
+  const now = new Date();
+  const lookbackStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const eligibleCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-  // Patient ids in this doctor's panel -- needed to scope
-  // patient-initiated escalations to the right doctor.
+  // Patient ids in this doctor's panel; needed to scope
+  // patient-initiated escalations to the right doctor and to scope
+  // the response-event lookups to those same patients.
   const panelRows = await db
     .select({ userId: patientsTable.userId })
     .from(patientsTable)
     .where(eq(patientsTable.doctorId, doctorId));
   const panelPatientIds = panelRows.map((r) => r.userId);
 
-  const [notesToday, followUpsToday, escalationsToday] = await Promise.all([
+  if (panelPatientIds.length === 0) {
+    res.json({ followUpRate24h: null });
+    return;
+  }
+
+  // Pull the eligible escalations and all candidate response events
+  // in parallel, then resolve the within-24h match in memory. The
+  // alternative -- a correlated subquery per escalation -- would scale
+  // poorly past a few hundred rows for no real benefit at this volume.
+  const [escalations, followUps, reviews, notes] = await Promise.all([
     db
-      .select({ id: doctorNotesTable.id })
-      .from(doctorNotesTable)
+      .select({
+        id: careEventsTable.id,
+        patientUserId: careEventsTable.patientUserId,
+        occurredAt: careEventsTable.occurredAt,
+      })
+      .from(careEventsTable)
       .where(
         and(
-          eq(doctorNotesTable.doctorUserId, doctorId),
-          gte(doctorNotesTable.createdAt, startOfToday),
+          eq(careEventsTable.type, "escalation_requested"),
+          inArray(careEventsTable.patientUserId, panelPatientIds),
+          gte(careEventsTable.occurredAt, lookbackStart),
+          lte(careEventsTable.occurredAt, eligibleCutoff),
         ),
       ),
     db
-      .select({ id: careEventsTable.id })
+      .select({
+        patientUserId: careEventsTable.patientUserId,
+        occurredAt: careEventsTable.occurredAt,
+      })
       .from(careEventsTable)
       .where(
         and(
           eq(careEventsTable.type, "follow_up_completed"),
           eq(careEventsTable.actorUserId, doctorId),
-          gte(careEventsTable.occurredAt, startOfToday),
+          gte(careEventsTable.occurredAt, lookbackStart),
         ),
       ),
-    panelPatientIds.length === 0
-      ? Promise.resolve([] as { id: number }[])
-      : db
-          .select({ id: careEventsTable.id })
-          .from(careEventsTable)
-          .where(
-            and(
-              eq(careEventsTable.type, "escalation_requested"),
-              inArray(careEventsTable.patientUserId, panelPatientIds),
-              gte(careEventsTable.occurredAt, startOfToday),
-            ),
-          ),
+    db
+      .select({
+        patientUserId: careEventsTable.patientUserId,
+        occurredAt: careEventsTable.occurredAt,
+      })
+      .from(careEventsTable)
+      .where(
+        and(
+          eq(careEventsTable.type, "doctor_reviewed"),
+          eq(careEventsTable.actorUserId, doctorId),
+          gte(careEventsTable.occurredAt, lookbackStart),
+        ),
+      ),
+    db
+      .select({
+        patientUserId: doctorNotesTable.patientUserId,
+        occurredAt: doctorNotesTable.createdAt,
+      })
+      .from(doctorNotesTable)
+      .where(
+        and(
+          eq(doctorNotesTable.doctorUserId, doctorId),
+          gte(doctorNotesTable.createdAt, lookbackStart),
+        ),
+      ),
   ]);
 
-  res.json({
-    actionsToday:
-      notesToday.length + followUpsToday.length + escalationsToday.length,
-  });
+  if (escalations.length === 0) {
+    res.json({ followUpRate24h: null });
+    return;
+  }
+
+  // Bucket every candidate response by patient so the per-escalation
+  // lookup is O(responses for this patient) instead of O(all responses).
+  const responsesByPatient = new Map<number, Date[]>();
+  const pushResponse = (patientUserId: number, occurredAt: Date | null) => {
+    if (!occurredAt) return;
+    const bucket = responsesByPatient.get(patientUserId) ?? [];
+    bucket.push(occurredAt);
+    responsesByPatient.set(patientUserId, bucket);
+  };
+  for (const r of followUps) pushResponse(r.patientUserId, r.occurredAt);
+  for (const r of reviews) pushResponse(r.patientUserId, r.occurredAt);
+  for (const r of notes) pushResponse(r.patientUserId, r.occurredAt);
+
+  let responded = 0;
+  for (const esc of escalations) {
+    if (!esc.occurredAt) continue;
+    const escTs = esc.occurredAt.getTime();
+    const deadline = escTs + 24 * 60 * 60 * 1000;
+    const candidates = responsesByPatient.get(esc.patientUserId) ?? [];
+    if (
+      candidates.some((d) => {
+        const ts = d.getTime();
+        return ts >= escTs && ts <= deadline;
+      })
+    ) {
+      responded += 1;
+    }
+  }
+
+  const rate = Math.round((responded / escalations.length) * 100);
+  res.json({ followUpRate24h: rate });
 });
 
 // PUT /patients/clinic -- set the calling doctor's clinic name. Captured

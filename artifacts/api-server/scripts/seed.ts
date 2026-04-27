@@ -6,7 +6,7 @@
  * Run with: pnpm --filter @workspace/api-server run seed
  */
 import bcrypt from "bcryptjs";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import {
   db,
   pool,
@@ -478,6 +478,56 @@ async function main(): Promise<void> {
       `[seed] demo patient ${p.name} -> ${p.bucket} (tone=${p.tone})`,
     );
   }
+
+  // ---- Historical escalations for the followUpRate24h KPI ----------
+  // The /patients/stats endpoint reports the percentage of escalations
+  // in the last 30 days (excluding the most recent 24h, which aren't
+  // due yet) that the doctor responded to within 24h. Without
+  // backdated rows the demo panel would always read "-" because the
+  // three open Review Now escalations seeded above are all <24h old.
+  // We seed six historical escalations and respond to five of them so
+  // the SummaryBar tile renders a stable "83%" right after seeding.
+  const demoStablePatients = await db
+    .select({ userId: patientsTable.userId })
+    .from(patientsTable)
+    .where(eq(patientsTable.doctorId, demoDoctor!.id));
+  const demoPatientIds = demoStablePatients.map((r) => r.userId);
+  const HISTORY = [
+    { ageDays: 2, respondHours: 3 },
+    { ageDays: 4, respondHours: 8 },
+    { ageDays: 7, respondHours: 14 },
+    { ageDays: 11, respondHours: 22 },
+    { ageDays: 16, respondHours: 6 },
+    { ageDays: 22, respondHours: null }, // miss -> 5/6 = 83%
+  ];
+  for (let i = 0; i < HISTORY.length && i < demoPatientIds.length; i++) {
+    const patientUserId = demoPatientIds[i]!;
+    const h = HISTORY[i]!;
+    const escAt = new Date(Date.now() - h.ageDays * 24 * 60 * 60 * 1000);
+    await db.insert(careEventsTable).values({
+      patientUserId,
+      actorUserId: patientUserId,
+      source: "patient",
+      type: "escalation_requested",
+      occurredAt: escAt,
+      metadata: { note: "Backdated demo escalation for follow-up KPI." },
+    });
+    if (h.respondHours !== null) {
+      const respAt = new Date(escAt.getTime() + h.respondHours * 60 * 60 * 1000);
+      await db.insert(careEventsTable).values({
+        patientUserId,
+        actorUserId: demoDoctor!.id,
+        source: "doctor",
+        type: "follow_up_completed",
+        occurredAt: respAt,
+        metadata: { note: "Backdated demo follow-up." },
+      });
+    }
+  }
+  console.log(
+    `[seed] demo doctor: seeded ${HISTORY.length} historical escalations ` +
+      `(${HISTORY.filter((h) => h.respondHours !== null).length} with <24h follow-up)`,
+  );
 
   console.log(
     `\n[seed] done. Primary password: ${SEED_PASSWORD}  /  ` +

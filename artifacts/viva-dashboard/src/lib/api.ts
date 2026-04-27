@@ -313,8 +313,11 @@ export const api = {
       "GET",
       opts?.includeArchived ? "/patients?includeArchived=true" : "/patients",
     ),
+  // Returns null when there are no escalations old enough to evaluate
+  // (denominator = 0). Callers must render a placeholder rather than
+  // assuming 0% in that case so we don't display a misleading metric.
   doctorStats: () =>
-    request<{ actionsToday: number }>("GET", "/patients/stats"),
+    request<{ followUpRate24h: number | null }>("GET", "/patients/stats"),
   patient: (id: number) => request<PatientDetail>("GET", `/patients/${id}`),
   patientCheckins: (id: number) =>
     request<Checkin[]>("GET", `/patients/${id}/checkins`),

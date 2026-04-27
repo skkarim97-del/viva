@@ -31,7 +31,10 @@ interface Stat {
   // top/bottom rhythm across all six tiles.
   labelTop: string;
   labelBottom: string;
-  value: number;
+  // Pre-formatted display string so percentage tiles ("83%") and the
+  // empty-sample placeholder ("–", en dash) can sit alongside the
+  // integer count tiles without bespoke rendering branches below.
+  display: string;
   accent: string; // bg color for the small left rail
   onClick?: () => void;
 }
@@ -46,7 +49,15 @@ export function SummaryBar({
   onFocusFollowUpToday,
 }: Props) {
   const stats = useQuery({ queryKey: ["doctor-stats"], queryFn: api.doctorStats });
-  const actionsToday = stats.data?.actionsToday ?? 0;
+  // followUpRate24h is null when no escalations are old enough to
+  // evaluate (denominator = 0). Render an en-dash placeholder in that
+  // case so the tile never lies with a fake "0%". Em dashes (U+2014)
+  // are forbidden product copy; the en dash (U+2013, "–") is allowed.
+  const followUpRate = stats.data?.followUpRate24h;
+  const followUpDisplay =
+    followUpRate === null || followUpRate === undefined
+      ? "\u2013"
+      : `${followUpRate}%`;
 
   // Tile order matches the dashboard intelligence model:
   //   1. Total patients          (panel size, neutral)
@@ -56,44 +67,46 @@ export function SummaryBar({
   //                               worsening symptom, 7+ day silence)
   //   4. Engagement concerns     (issue type = engagement)
   //   5. Clinical concerns       (issue type = clinical)
-  //   6. Actions taken today     (rolling activity)
+  //   6. Followed up <24 hrs     (responsiveness KPI -- % of recent
+  //                               escalations that were acted on
+  //                               within 24h)
   const items: Stat[] = [
     {
       labelTop: "Total",
       labelBottom: "Patients",
-      value: totalPatients,
+      display: String(totalPatients),
       accent: "#38B6FF",
     },
     {
       labelTop: "Review",
       labelBottom: "Now",
-      value: reviewNowCount,
+      display: String(reviewNowCount),
       accent: "#FF9500",
       onClick: onFocusReviewNow,
     },
     {
       labelTop: "Follow Up",
       labelBottom: "Today",
-      value: followUpTodayCount,
+      display: String(followUpTodayCount),
       accent: "#FF3B30",
       onClick: onFocusFollowUpToday,
     },
     {
       labelTop: "Engagement",
       labelBottom: "Concerns",
-      value: engagementCount,
+      display: String(engagementCount),
       accent: "#FFB23B",
     },
     {
       labelTop: "Clinical",
       labelBottom: "Concerns",
-      value: clinicalCount,
+      display: String(clinicalCount),
       accent: "#B5251D",
     },
     {
-      labelTop: "Actions Taken",
-      labelBottom: "Today",
-      value: actionsToday,
+      labelTop: "Followed Up",
+      labelBottom: "<24 Hrs",
+      display: followUpDisplay,
       accent: "#142240",
     },
   ];
@@ -122,7 +135,7 @@ export function SummaryBar({
               style={{ backgroundColor: s.accent }}
             />
             <div className="font-display text-[28px] font-bold text-foreground leading-none tabular-nums">
-              {s.value}
+              {s.display}
             </div>
             {/* Two-line label: every tile reads top word(s) over
                 bottom word so the row has a uniform rhythm and never
