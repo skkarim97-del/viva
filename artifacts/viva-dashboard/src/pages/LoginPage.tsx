@@ -44,7 +44,7 @@ export function LoginPage() {
             signed-out auth surfaces have brand presence, but the same
             "viva. / Clinic" composition as the in-app header. */}
         <div className="mb-8">
-          <ClinicLockup variant="hero" subtitle="Clinician sign in" />
+          <ClinicLockup variant="hero" />
         </div>
 
         <form
