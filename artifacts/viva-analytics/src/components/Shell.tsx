@@ -176,7 +176,7 @@ export function Shell({
             <SectionTitle />
             <div className="flex-1" />
             <a
-              href="/viva-dashboard/"
+              href="/"
               target="_top"
               className="text-[11px] font-semibold text-muted-foreground hover:text-foreground transition-colors hidden sm:inline"
             >

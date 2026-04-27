@@ -27,13 +27,30 @@ app.get("/healthz", (_req, res) => {
   res.json({ ok: true });
 });
 
-// Root-path convenience redirect. Matches only the literal "/" path so
-// it cannot shadow /api/* (proxied to upstream), /healthz, the static
-// asset middleware, or the SPA fallback. 302 keeps the redirect
-// non-permanent so the landing target can change without cached
-// redirects sticking in clients.
-app.get("/", (_req, res) => {
-  res.redirect(302, "/viva-dashboard");
+// Backward-compat redirect: the dashboard used to live at
+// /viva-dashboard. Any old link (bookmark, email, deep link) that
+// still points there is rewritten to the equivalent location at the
+// new root. We use 301 (permanent) so search engines and browsers
+// remember the new canonical URL. The regex matches:
+//   /viva-dashboard          -> /
+//   /viva-dashboard/         -> /
+//   /viva-dashboard/login    -> /login
+//   /viva-dashboard/foo/bar  -> /foo/bar
+// preserving query string via req.originalUrl semantics (Express
+// keeps the querystring on req.url for unmounted middleware).
+//
+// SECURITY: we strip every leading slash from `tail` before
+// re-prefixing with our own single "/", because a request path like
+// "/viva-dashboard//evil.com" would otherwise produce a
+// scheme-relative Location header ("//evil.com") and turn this route
+// into an open redirect that could be weaponized for phishing under
+// our canonical domain.
+app.get(/^\/viva-dashboard(?:\/(.*))?$/, (req, res) => {
+  const rawTail = req.params[0] ?? "";
+  const safeTail = rawTail.replace(/^\/+/, "");
+  const qIdx = req.originalUrl.indexOf("?");
+  const qs = qIdx >= 0 ? req.originalUrl.slice(qIdx) : "";
+  res.redirect(301, `/${safeTail}${qs}`);
 });
 
 app.use(

@@ -1,5 +1,5 @@
 kind = "web"
-previewPath = "/viva-dashboard/"
+previewPath = "/"
 title = "Viva Clinic"
 version = "1.0.0"
 id = "artifacts/viva-dashboard"
@@ -11,7 +11,7 @@ version = "1.0.0"
 
 [[services]]
 name = "web"
-paths = [ "/viva-dashboard/" ]
+paths = [ "/" ]
 localPort = 18616
 
 [services.development]
@@ -37,4 +37,4 @@ path = "/healthz"
 
 [services.env]
 PORT = "18616"
-BASE_PATH = "/viva-dashboard/"
+BASE_PATH = "/"

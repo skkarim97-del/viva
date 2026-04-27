@@ -1,5 +1,5 @@
 kind = "mobile"
-previewPath = "/"
+previewPath = "/pulse-pilot"
 title = "Viva Care"
 version = "1.0.0"
 id = "artifacts/pulse-pilot"
@@ -12,7 +12,7 @@ version = "1.0.0"
 [[services]]
 ensurePreviewReachable = "/status"
 name = "expo"
-paths = [ "/" ]
+paths = [ "/pulse-pilot" ]
 localPort = 20151
 
 [services.development]

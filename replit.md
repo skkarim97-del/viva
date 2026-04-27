@@ -64,7 +64,7 @@ The system is a pnpm workspace monorepo using Node.js 24 and TypeScript 5.9. The
 -   **Weekly Completion**: Tracks completed days within the current calendar week.
 -   **State Management**: Context-based state management (AppContext) for GLP-1 specific fields and logging.
 -   **Navigation**: Tab bar for Today, Plan, Trends, Settings, with modals for subscription and stack navigation for onboarding.
--   **Doctor Dashboard**: A standalone React + Vite web app (`/viva-dashboard/`) for care teams, featuring patient lists, patient details, and care team notes.
+-   **Doctor Dashboard**: A standalone React + Vite web app served at the production root (`/`) for care teams, featuring patient lists, patient details, and care team notes. The legacy `/viva-dashboard/...` path 301-redirects to the equivalent location at the root for backward compatibility with old links.
 -   **Check-in Sync Queue**: Persistent queue (`checkinSync.ts`) for mirroring patient daily state, handling pending snapshots, guidance acks, and escalation requests with retries.
 -   **Daily Check-in Reminders**: Local-only push reminders for the patient app (`reminders.ts`), scheduled at 12:00 PM and 7:00 PM, with logic to prevent duplicates after check-in.
 -   **Invite & Activation**: Invite tokens with a 14-day TTL, atomic activation process, and specific HTTP status codes for various activation states. Patient invites are keyed on phone number.
