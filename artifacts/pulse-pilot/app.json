@@ -17,7 +17,7 @@
       "icon": "./assets/icon.png",
       "supportsTablet": false,
       "bundleIdentifier": "com.sullyk97.vivaai",
-      "buildNumber": "40",
+      "buildNumber": "41",
       "associatedDomains": [
         "applinks:viva-ai.replit.app"
       ],
@@ -25,7 +25,9 @@
         "usesNonExemptEncryption": false
       },
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleDisplayName": "Viva Care",
+        "CFBundleName": "Viva Care"
       }
     },
     "android": {
