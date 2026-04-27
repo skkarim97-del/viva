@@ -480,53 +480,113 @@ async function main(): Promise<void> {
   }
 
   // ---- Historical escalations for the followUpRate24h KPI ----------
-  // The /patients/stats endpoint reports the percentage of escalations
-  // in the last 30 days (excluding the most recent 24h, which aren't
-  // due yet) that the doctor responded to within 24h. Without
-  // backdated rows the demo panel would always read "-" because the
-  // three open Review Now escalations seeded above are all <24h old.
-  // We seed six historical escalations and respond to five of them so
-  // the SummaryBar tile renders a stable "83%" right after seeding.
+  // The /patients/stats endpoint reports the percentage of escalation
+  // events in the last 30 days that the doctor responded to within
+  // 24h. The three Review Now escalations seeded above are all <24h
+  // old and unresponded -- they live in the denominator (= 3 misses
+  // until the demo doctor logs follow-ups), so we need historical
+  // hits to pull the initial value back up.
+  //
+  // Target initial value: 20 hits / 24 total = 83% on first load.
+  // After the demo flow ("Log follow-up" on each of the 3 Review Now
+  // cards) the metric climbs to 23 / 24 = 96%, which is the user-
+  // facing demonstration of the responsiveness loop.
   const demoStablePatients = await db
     .select({ userId: patientsTable.userId })
     .from(patientsTable)
     .where(eq(patientsTable.doctorId, demoDoctor!.id));
   const demoPatientIds = demoStablePatients.map((r) => r.userId);
-  const HISTORY = [
+  // 21 historical escalations (20 responded within 24h, 1 miss).
+  // ageDays span 2-29 to stay inside the 30-day window with margin,
+  // and respondHours are spread under 24 to look organic in the
+  // care_events stream. Patients are cycled with modulo so the rows
+  // distribute across the 12 demo patients regardless of panel size.
+  const HISTORY: Array<{ ageDays: number; respondHours: number | null }> = [
     { ageDays: 2, respondHours: 3 },
-    { ageDays: 4, respondHours: 8 },
+    { ageDays: 3, respondHours: 7 },
+    { ageDays: 4, respondHours: 11 },
+    { ageDays: 5, respondHours: 4 },
+    { ageDays: 6, respondHours: 18 },
     { ageDays: 7, respondHours: 14 },
+    { ageDays: 8, respondHours: 6 },
+    { ageDays: 9, respondHours: 21 },
+    { ageDays: 10, respondHours: 9 },
     { ageDays: 11, respondHours: 22 },
+    { ageDays: 12, respondHours: 5 },
+    { ageDays: 13, respondHours: 16 },
+    { ageDays: 14, respondHours: 8 },
+    { ageDays: 15, respondHours: 12 },
     { ageDays: 16, respondHours: 6 },
-    { ageDays: 22, respondHours: null }, // miss -> 5/6 = 83%
+    { ageDays: 18, respondHours: 19 },
+    { ageDays: 20, respondHours: 10 },
+    { ageDays: 22, respondHours: 4 },
+    { ageDays: 24, respondHours: 17 },
+    { ageDays: 26, respondHours: 13 },
+    { ageDays: 29, respondHours: null }, // the single historical miss
   ];
-  for (let i = 0; i < HISTORY.length && i < demoPatientIds.length; i++) {
-    const patientUserId = demoPatientIds[i]!;
-    const h = HISTORY[i]!;
-    const escAt = new Date(Date.now() - h.ageDays * 24 * 60 * 60 * 1000);
-    await db.insert(careEventsTable).values({
-      patientUserId,
-      actorUserId: patientUserId,
-      source: "patient",
-      type: "escalation_requested",
-      occurredAt: escAt,
-      metadata: { note: "Backdated demo escalation for follow-up KPI." },
-    });
-    if (h.respondHours !== null) {
-      const respAt = new Date(escAt.getTime() + h.respondHours * 60 * 60 * 1000);
+  // We cycle escalations across the 12 demo patients with modulo, so
+  // some historical escalations inevitably land on the 3 review_now
+  // patients. To prevent those historical rows from breaking the
+  // "Review Now" bucket on the worklist (which uses MAX(escalation_at)
+  // > MAX(doctor_reviewed_at) per patient), we ALSO insert a
+  // doctor_reviewed event for every historical escalation -- hits get
+  // a review timestamped at the same instant as the follow-up; the
+  // single miss gets a review 48h after the escalation, which keeps
+  // it OUT of the within-24h numerator while still closing the
+  // worklist row.
+  if (demoPatientIds.length > 0) {
+    for (let i = 0; i < HISTORY.length; i++) {
+      const patientUserId = demoPatientIds[i % demoPatientIds.length]!;
+      const h = HISTORY[i]!;
+      const escAt = new Date(Date.now() - h.ageDays * 24 * 60 * 60 * 1000);
       await db.insert(careEventsTable).values({
         patientUserId,
-        actorUserId: demoDoctor!.id,
-        source: "doctor",
-        type: "follow_up_completed",
-        occurredAt: respAt,
-        metadata: { note: "Backdated demo follow-up." },
+        actorUserId: patientUserId,
+        source: "patient",
+        type: "escalation_requested",
+        occurredAt: escAt,
+        metadata: { note: "Backdated demo escalation for follow-up KPI." },
       });
+      if (h.respondHours !== null) {
+        const respAt = new Date(
+          escAt.getTime() + h.respondHours * 60 * 60 * 1000,
+        );
+        await db.insert(careEventsTable).values({
+          patientUserId,
+          actorUserId: demoDoctor!.id,
+          source: "doctor",
+          type: "follow_up_completed",
+          occurredAt: respAt,
+          metadata: { note: "Backdated demo follow-up." },
+        });
+        await db.insert(careEventsTable).values({
+          patientUserId,
+          actorUserId: demoDoctor!.id,
+          source: "doctor",
+          type: "doctor_reviewed",
+          occurredAt: respAt,
+          metadata: { note: "Backdated demo review (closes worklist row)." },
+        });
+      } else {
+        // Miss path: review happens, but 48h after the escalation, so
+        // the within-24h SLA is breached even though the row is closed.
+        const reviewAt = new Date(escAt.getTime() + 48 * 60 * 60 * 1000);
+        await db.insert(careEventsTable).values({
+          patientUserId,
+          actorUserId: demoDoctor!.id,
+          source: "doctor",
+          type: "doctor_reviewed",
+          occurredAt: reviewAt,
+          metadata: { note: "Late review (>24h) -- counts as miss for SLA." },
+        });
+      }
     }
   }
+  const hits = HISTORY.filter((h) => h.respondHours !== null).length;
   console.log(
     `[seed] demo doctor: seeded ${HISTORY.length} historical escalations ` +
-      `(${HISTORY.filter((h) => h.respondHours !== null).length} with <24h follow-up)`,
+      `(${hits} with <24h follow-up). With the 3 open Review Now escalations ` +
+      `the initial followUpRate24h = ${Math.round((hits / (HISTORY.length + 3)) * 100)}%.`,
   );
 
   console.log(

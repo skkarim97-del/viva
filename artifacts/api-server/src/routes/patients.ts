@@ -1,7 +1,7 @@
 import { Router, type Response } from "express";
 import { randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
-import { and, eq, desc, gte, lte, inArray, max, isNull, sql } from "drizzle-orm";
+import { and, eq, desc, gte, inArray, max, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   db,
@@ -339,32 +339,33 @@ router.get("/", async (req, res: Response) => {
 // Returns one operational KPI for the SummaryBar:
 //
 //   followUpRate24h: percentage (0-100, integer) of escalation_requested
-//   events on this doctor's panel that were "responded to" within
-//   24 hours of the escalation. The lookback window is the last
-//   30 days so a freshly-seeded panel still has a stable denominator
-//   once a few escalations age past 24h.
+//   events on this doctor's panel, in the last 30 days, that were
+//   "responded to" within 24 hours of the escalation.
 //
 // Definitions:
-//   * Eligible escalation = an escalation_requested event whose
-//     occurredAt falls in [now-30d, now-24h]. Anything <24h old is
-//     excluded from BOTH numerator and denominator -- the doctor is
-//     not late on it yet, so counting it as a miss would be unfair.
+//   * Eligible escalation = any escalation_requested event for a
+//     patient on this doctor's panel with occurredAt >= now - 30d.
+//     We INCLUDE escalations that are still <24h old (i.e. the
+//     doctor's response window is still open) so that the metric
+//     reacts the moment a clinician logs a follow-up from the
+//     dashboard. An open escalation simply counts as a miss until
+//     a qualifying response is recorded; once the response lands,
+//     the next refetch shows it as a hit.
 //   * Responded = there exists, for the SAME patient, a doctor-side
 //     activity (follow_up_completed, doctor_reviewed, OR a doctor_note
 //     by this doctor) with timestamp in [escalation.occurredAt,
-//     escalation.occurredAt + 24h]. We accept any of those event types
-//     because all three represent clinician acknowledgment of the
-//     escalation in the audit trail.
+//     escalation.occurredAt + 24h]. All three event types represent
+//     clinician acknowledgment of the escalation in the audit trail,
+//     so any one of them within the window satisfies the SLA.
 //
-// followUpRate24h is null when the denominator is zero (e.g. a brand-
-// new account with no escalations old enough to evaluate). The client
-// renders that as a placeholder so we never display a misleading
+// followUpRate24h is null when the denominator is zero (no panel
+// patients or no escalations in the last 30 days). The client renders
+// a placeholder in that case so we never display a misleading
 // "0%" / "100%" against an empty sample.
 router.get("/stats", async (req, res: Response) => {
   const doctorId = (req as AuthedRequest).auth.userId;
   const now = new Date();
   const lookbackStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-  const eligibleCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
   // Patient ids in this doctor's panel; needed to scope
   // patient-initiated escalations to the right doctor and to scope
@@ -397,7 +398,6 @@ router.get("/stats", async (req, res: Response) => {
           eq(careEventsTable.type, "escalation_requested"),
           inArray(careEventsTable.patientUserId, panelPatientIds),
           gte(careEventsTable.occurredAt, lookbackStart),
-          lte(careEventsTable.occurredAt, eligibleCutoff),
         ),
       ),
     db
