@@ -11,6 +11,8 @@ import {
   patientWeightsTable,
   doctorNotesTable,
   careEventsTable,
+  patientHealthDailySummariesTable,
+  patientTreatmentLogsTable,
   TREATMENT_STATUSES,
   STOP_REASONS,
   deriveStopTiming,
