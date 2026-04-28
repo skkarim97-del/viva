@@ -47,3 +47,7 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Local AWS RDS exports (may contain PHI / patient data / auth+session data;
+# never commit or deploy)
+backups/
