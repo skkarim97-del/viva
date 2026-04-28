@@ -362,6 +362,8 @@ export default function SettingsScreen() {
         ))}
       </View>
 
+      <CareTeamReviewSection />
+
       <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>Apple Health</Text>
       <View style={[styles.section, { backgroundColor: c.card }]}>
         {integrations.map((integration, i) => {
@@ -442,11 +444,10 @@ export default function SettingsScreen() {
       </View>
 
       {/* Reminders sit right under Apple Health so the patient sees the
-          notification toggle alongside the data integrations -- both
-          are "what Viva can do in the background". Previously this
-          section was rendered after the disclaimer + a 100pt spacer,
-          which left a large dead zone in the middle of the screen and
-          buried the reminders below the fold on most devices. */}
+          notification toggle alongside the data integrations: both are
+          "what Viva can do in the background". The medical disclaimer
+          is moved to the very bottom of the page so it never sits
+          above important actions like Care Team or Sign out. */}
       <RemindersSection />
 
       {__DEV__ && (
@@ -462,12 +463,6 @@ export default function SettingsScreen() {
           <Feather name="chevron-right" size={16} color={c.mutedForeground} />
         </Pressable>
       )}
-
-      <Text style={[styles.disclaimer, { color: c.mutedForeground }]}>
-        Viva is for informational purposes only and does not provide medical advice.
-      </Text>
-
-      <View style={{ height: 24 }} />
 
       <Modal visible={editingField !== null} transparent animationType="fade" onRequestClose={() => setEditingField(null)}>
         <Pressable style={styles.modalOverlay} onPress={() => setEditingField(null)}>
@@ -646,11 +641,17 @@ export default function SettingsScreen() {
           </Pressable>
         </Pressable>
       </Modal>
-      {/* RemindersSection moved up beneath the Apple Health section.
-          SignOutSection stays anchored at the very bottom of the
-          ScrollView so signing out remains the last thing on the page. */}
-      <CareTeamReviewSection />
+      {/* CareTeamReviewSection has been moved up between Profile and
+          Apple Health so requesting a care-team review is visible
+          without intentional deep scrolling. SignOutSection stays just
+          before the disclaimer; the disclaimer is rendered last so it
+          carries low visual priority and never sits above important
+          actions. */}
       <SignOutSection />
+      <Text style={[styles.disclaimer, { color: c.mutedForeground }]}>
+        Viva provides wellness support and does not replace medical advice from your care team.
+      </Text>
+      <View style={{ height: 24 }} />
       <WeightLogModal
         visible={weightLogOpen}
         daysSinceLast={serverWeight.daysSinceLast}
@@ -733,94 +734,66 @@ function RemindersSection() {
 
   const showOpenSettings = enabled && perm === "denied";
 
+  // Reminders is rendered as a standard Settings section: an uppercase
+  // sectionLabel header followed by a rounded section card containing
+  // a single settingRow with the same icon-tile + title + control
+  // hierarchy used by Treatment, Profile, Care Team, and Apple Health.
+  // The toggle replaces the right-aligned status text those rows use,
+  // so visual rhythm and horizontal padding match exactly.
   return (
-    <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 8 }}>
-      <Text
-        style={[
-          styles.fieldLabel,
-          { color: c.mutedForeground, marginBottom: 8 },
-        ]}
-      >
-        Reminders
-      </Text>
-      <Pressable
-        onPress={handleToggle}
-        disabled={busy}
-        accessibilityRole="switch"
-        accessibilityLabel="Daily check-in reminders"
-        accessibilityState={{ checked: enabled, disabled: busy }}
-        style={({ pressed }) => ({
-          backgroundColor: c.card,
-          borderRadius: 14,
-          paddingVertical: 14,
-          paddingHorizontal: 16,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          opacity: pressed || busy ? 0.85 : 1,
-        })}
-      >
-        <View style={{ flex: 1, paddingRight: 12 }}>
-          <Text
-            style={{
-              fontFamily: "Montserrat_600SemiBold",
-              fontSize: 15,
-              color: c.foreground,
-            }}
-          >
-            Daily check-in reminders
-          </Text>
-          <Text
-            style={{
-              fontFamily: "Montserrat_500Medium",
-              fontSize: 12,
-              color: c.mutedForeground,
-              marginTop: 4,
-            }}
-          >
-            12:00 PM and 7:00 PM. Skipped automatically once you check in for the day.
-          </Text>
-        </View>
-        <View
-          style={{
-            width: 46,
-            height: 28,
-            borderRadius: 14,
-            backgroundColor: enabled ? c.accent || "#38B6FF" : c.border || "#D6D9E0",
-            justifyContent: "center",
-            paddingHorizontal: 3,
-            alignItems: enabled ? "flex-end" : "flex-start",
-          }}
+    <>
+      <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>Reminders</Text>
+      <View style={[styles.section, { backgroundColor: c.card }]}>
+        <Pressable
+          onPress={handleToggle}
+          disabled={busy}
+          accessibilityRole="switch"
+          accessibilityLabel="Daily check-in reminders"
+          accessibilityState={{ checked: enabled, disabled: busy }}
+          style={({ pressed }) => [
+            styles.settingRow,
+            { opacity: pressed || busy ? 0.7 : 1 },
+          ]}
         >
+          <View style={[styles.settingIcon, { backgroundColor: c.accent + "10" }]}>
+            <Feather name="bell" size={16} color={c.accent} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 15, fontFamily: "Montserrat_500Medium", color: c.foreground }}>
+              Daily check-in reminders
+            </Text>
+            <Text style={{ fontSize: 13, fontFamily: "Montserrat_400Regular", color: c.mutedForeground, marginTop: 2 }}>
+              12:00 PM and 7:00 PM
+            </Text>
+          </View>
           <View
             style={{
-              width: 22,
-              height: 22,
-              borderRadius: 11,
-              backgroundColor: "#fff",
-            }}
-          />
-        </View>
-      </Pressable>
-      {showOpenSettings && (
-        <Pressable
-          onPress={() => {
-            Linking.openSettings().catch(() => {});
-          }}
-          style={{ paddingVertical: 8, paddingHorizontal: 4, marginTop: 4 }}
-        >
-          <Text
-            style={{
-              fontFamily: "Montserrat_500Medium",
-              fontSize: 12,
-              color: c.accent || "#38B6FF",
+              width: 46,
+              height: 28,
+              borderRadius: 14,
+              backgroundColor: enabled ? c.accent || "#38B6FF" : c.border || "#D6D9E0",
+              justifyContent: "center",
+              paddingHorizontal: 3,
+              alignItems: enabled ? "flex-end" : "flex-start",
             }}
           >
-            Notifications are off in {Platform.OS === "ios" ? "iOS" : "system"} Settings — tap to enable.
-          </Text>
+            <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: "#fff" }} />
+          </View>
         </Pressable>
-      )}
-    </View>
+        {showOpenSettings && (
+          <View style={styles.inlineNotice}>
+            <Pressable onPress={() => { Linking.openSettings().catch(() => {}); }}>
+              <Text style={[styles.inlineNoticeText, { color: c.accent || "#38B6FF" }]}>
+                Notifications are off in {Platform.OS === "ios" ? "iOS" : "system"} Settings. Tap to enable.
+              </Text>
+            </Pressable>
+          </View>
+        )}
+      </View>
+      <Text style={[styles.helperCaption, { color: c.mutedForeground }]}>
+        Skipped once you check in for the day.
+      </Text>
+    </>
   );
 }
 
@@ -875,39 +848,33 @@ function CareTeamReviewSection() {
       ],
     );
   }, [busy]);
+  // Care Team is rendered as a standard Settings section so it sits
+  // between Profile and Apple Health with the same uppercase header,
+  // rounded card, icon-tile, and row rhythm as those sections. Moved
+  // higher because requesting care-team review is one of the most
+  // important MVP actions and was previously buried below the fold.
   return (
-    <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4 }}>
-      <Text style={[styles.fieldLabel, { color: c.mutedForeground, marginBottom: 8 }]}>
-        Care team
-      </Text>
-      <Pressable
-        onPress={handle}
-        disabled={busy}
-        style={({ pressed }) => ({
-          backgroundColor: c.card,
-          borderRadius: 14,
-          paddingVertical: 14,
-          paddingHorizontal: 16,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 12,
-          opacity: pressed || busy ? 0.7 : 1,
-        })}
-      >
-        <Feather name="life-buoy" size={16} color={c.accent} />
-        <Text
-          style={{
-            fontFamily: "Montserrat_600SemiBold",
-            fontSize: 14,
-            color: c.foreground,
-            flex: 1,
-          }}
+    <>
+      <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>Care Team</Text>
+      <View style={[styles.section, { backgroundColor: c.card }]}>
+        <Pressable
+          onPress={handle}
+          disabled={busy}
+          style={({ pressed }) => [
+            styles.settingRow,
+            { opacity: pressed || busy ? 0.7 : 1 },
+          ]}
         >
-          {busy ? "Sending..." : "Request care-team review"}
-        </Text>
-        <Feather name="chevron-right" size={14} color={c.mutedForeground + "80"} />
-      </Pressable>
-    </View>
+          <View style={[styles.settingIcon, { backgroundColor: c.accent + "10" }]}>
+            <Feather name="life-buoy" size={16} color={c.accent} />
+          </View>
+          <Text style={[styles.settingLabel, { color: c.foreground }]}>
+            {busy ? "Sending..." : "Request care-team review"}
+          </Text>
+          <Feather name="chevron-right" size={14} color={c.mutedForeground + "80"} />
+        </Pressable>
+      </View>
+    </>
   );
 }
 
@@ -1109,6 +1076,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginTop: 12,
     opacity: 0.6,
+  },
+  // Tiny gray caption used directly under a section card for optional
+  // helper text (e.g. the "Skipped once you check in" line under
+  // Reminders). Visually quieter than a row so it doesn't read as a
+  // second action, but stays aligned with the row's left padding.
+  helperCaption: {
+    fontSize: 11,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 16,
+    paddingHorizontal: 4,
+    marginTop: -4,
+    opacity: 0.7,
   },
   modalOverlay: {
     flex: 1,
