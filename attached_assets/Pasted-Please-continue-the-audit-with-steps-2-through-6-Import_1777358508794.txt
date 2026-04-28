@@ -1,0 +1,133 @@
+Please continue the audit with steps 2 through 6.
+
+Important context from step 1:
+The current active DATABASE_URL points to Replit Postgres host "helium", not AWS RDS/Aurora. The app is centralized around DATABASE_URL, which is good, but AWS Postgres is not active yet in this workspace or visible deployment config.
+
+Please now audit data persistence separately from the AWS cutover.
+
+Part A: Current persistence audit
+Using the current active Postgres database, audit what is persisted today versus what is local/mock/frontend-only.
+
+Please complete:
+
+2. Schema audit
+List all current Postgres tables and map them to:
+- Patients
+- Doctors
+- Clinics
+- Patient onboarding
+- Medication and dosage
+- Daily check-ins
+- Symptoms
+- Hydration
+- Food/fuel
+- Movement/activity
+- Sleep
+- Weight
+- Apple Health metrics
+- Coach interactions
+- Care-team review requests
+- Treatment concern flags
+- Clinician notes
+- Follow-up actions
+- Treatment status changes
+- Archived patients
+- Reminder settings
+- Analytics events
+- Invite tokens
+- Sessions/auth
+
+For each table, report:
+- Table name
+- Main columns
+- What writes to it
+- What reads from it
+- Whether it is pilot-critical
+
+3. Write-path audit
+Verify whether these actions create or update rows in Postgres:
+- Patient onboarding completion
+- Medication selection
+- Dosage selection
+- Daily check-in submission
+- Symptom logging
+- Hydration input
+- Food/fuel input
+- Movement/activity input
+- Sleep input
+- Weight logging
+- Apple Health sync
+- Reminder settings update
+- Coach interaction if intended to persist
+- Patient requests care-team review
+- Patient asks about stopping treatment or pausing medication
+- Clinician views patient if view tracking is intended
+- Clinician logs follow-up
+- Clinician writes care-team note
+- Clinician marks treatment stopped
+- Clinician archives patient
+
+4. Read-path audit
+Confirm whether these screens read live database-backed API data or mock/local data:
+- Viva Care Today tab
+- Viva Care Plan tab
+- Viva Care Trends tab
+- Metric detail screens
+- Viva Care Settings tab
+- Viva Clinic patient list
+- Viva Clinic patient detail
+- Viva Clinic summary bar
+- Viva Analytics dashboard
+
+Flag anything using:
+- mockData
+- demo data
+- seed-only data
+- localStorage-only state
+- AsyncStorage-only state
+- hardcoded frontend state
+
+5. API audit
+List every relevant API endpoint.
+
+For each endpoint, report:
+- Method and route
+- What table(s) it reads
+- What table(s) it writes
+- Whether it requires patient or doctor auth
+- Whether it is used by mobile app, clinic dashboard, analytics dashboard, or multiple surfaces
+
+6. Gap list
+Do not implement fixes yet unless they are tiny and low-risk.
+
+First report:
+- What is fully persisted today
+- What is not persisted but should be for the pilot
+- What still reads mock/demo data
+- What remains local-only and why
+- Which gaps are highest priority before pilot
+
+Part B: AWS Postgres cutover plan
+Separately, please provide a safe cutover plan from current Replit Postgres to AWS RDS/Aurora Postgres.
+
+Include:
+- Required AWS RDS/Aurora settings
+- Required DATABASE_URL format with sslmode=require, without printing secrets
+- Whether pg.Pool needs an explicit SSL config
+- How to run Drizzle schema push/migrations against AWS
+- How to provision the session table used by connect-pg-simple
+- How to export current data from Replit Postgres
+- How to import current data into AWS Postgres
+- How to verify row counts before and after
+- How to test the backend against AWS Postgres before switching production traffic
+- Which Replit PG env vars should be removed or ignored to avoid accidental wrong-DB usage
+
+Do not change:
+- Bundle ID
+- Apple Health permissions
+- Auth model
+- Existing UI layout
+- Patient/doctor isolation rules
+- Apple credentials
+
+Final output should be a clear audit table and a prioritized fix/cutover checklist.
