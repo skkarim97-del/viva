@@ -296,6 +296,13 @@ router.post("/chat", async (req: Request, res: Response) => {
     }
 
     let contextBlock = "";
+    // Defensive wrap: a malformed healthContext payload (missing or non-array
+    // fields, wrong nested shapes) used to throw inside the builder below
+    // and surface as a 500 to the user. On any error here we drop the
+    // context entirely and continue with a vanilla coach response. The
+    // mobile client also has a retry-without-context fallback, so this is
+    // belt-and-suspenders.
+    try {
     if (healthContext) {
       const parts: string[] = [];
 
@@ -342,7 +349,7 @@ router.post("/chat", async (req: Request, res: Response) => {
         const tsLines: string[] = [`\nTREATMENT STATE (single source of truth for what the rest of the app is showing this person right now):`];
         tsLines.push(`- Status chip on Today: "${ts.statusChipLabel}"`);
         tsLines.push(`- Hero headline on Today: "${ts.heroHeadline}"`);
-        if (ts.heroDrivers.length > 0) {
+        if (Array.isArray(ts.heroDrivers) && ts.heroDrivers.length > 0) {
           tsLines.push(`- Hero drivers: ${ts.heroDrivers.join(" | ")}`);
         }
         tsLines.push(`- Daily state: ${ts.treatmentDailyState}`);
@@ -351,7 +358,7 @@ router.post("/chat", async (req: Request, res: Response) => {
         tsLines.push(`- Dose-day position: ${ts.doseDayPosition}${typeof ts.daysSinceLastDose === "number" ? ` (day ${ts.daysSinceLastDose} since last dose)` : ""}`);
         tsLines.push(`- Risk lenses: symptoms=${ts.symptomBurden}, hydration=${ts.hydrationRisk}, fueling=${ts.fuelingRisk}, recovery=${ts.recoveryReadiness}`);
         tsLines.push(`- Escalation need: ${ts.escalationNeed}`);
-        if (ts.interventionTitles.length > 0) {
+        if (Array.isArray(ts.interventionTitles) && ts.interventionTitles.length > 0) {
           tsLines.push(`- Symptom interventions surfaced today: ${ts.interventionTitles.join(", ")}`);
         }
         parts.push(...tsLines);
@@ -391,7 +398,7 @@ router.post("/chat", async (req: Request, res: Response) => {
           `\nUSER PROFILE:`,
           `- Age: ${p.age}, Sex: ${p.sex}`,
           `- Current Weight: ${p.weight} lbs, Goal: ${p.goalWeight} lbs`,
-          `- Goals: ${p.goals.join(", ")}`,
+          `- Goals: ${Array.isArray(p.goals) && p.goals.length > 0 ? p.goals.join(", ") : "not specified"}`,
           p.glp1Medication ? `- GLP-1 Medication: ${p.glp1Medication}` : "",
           p.glp1Duration ? `- Treatment Duration: ${p.glp1Duration}` : "",
           p.proteinConfidence ? `- Protein Confidence: ${p.proteinConfidence}` : "",
@@ -468,6 +475,13 @@ router.post("/chat", async (req: Request, res: Response) => {
 
       contextBlock = parts.filter(Boolean).join("\n");
     }
+    } catch (ctxErr) {
+      console.warn(
+        `[coach/chat ${reqId}] healthContext build failed; dropping context:`,
+        (ctxErr as Error)?.message || ctxErr,
+      );
+      contextBlock = "";
+    }
 
     const messages: { role: "system" | "user" | "assistant"; content: string }[] = [
       { role: "system", content: SYSTEM_PROMPT },
@@ -507,7 +521,10 @@ router.post("/chat", async (req: Request, res: Response) => {
       };
 
       const tsRaw = healthContext?.treatmentState;
-      const ts = tsRaw ?? {
+      // Treat an incomplete treatmentState (missing claimsPolicy) as if it
+      // were absent, so the deny-all defaults below kick in instead of the
+      // claims-policy block crashing on undefined property access.
+      const ts = (tsRaw && tsRaw.claimsPolicy) ? tsRaw : {
         treatmentDailyState: "support" as const,
         primaryFocus: "continuity_support" as const,
         escalationNeed: "none" as const,
