@@ -17,7 +17,7 @@
       "icon": "./assets/icon.png",
       "supportsTablet": false,
       "bundleIdentifier": "com.sullyk97.vivaai",
-      "buildNumber": "41",
+      "buildNumber": "42",
       "associatedDomains": [
         "applinks:viva-ai.replit.app"
       ],

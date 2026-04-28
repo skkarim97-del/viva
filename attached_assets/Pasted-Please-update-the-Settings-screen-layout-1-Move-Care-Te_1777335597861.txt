@@ -1,0 +1,67 @@
+Please update the Settings screen layout.
+
+1. Move Care Team higher
+The “Request care-team review” action is currently too low and only visible if the user intentionally scrolls. This makes it effectively useless.
+
+Move the Care Team section higher so it is visible without intentional deep scrolling.
+
+Preferred order:
+- Treatment
+- Profile
+- Care Team
+- Apple Health
+- Reminders
+- Medical disclaimer
+
+Reason:
+Requesting care-team review is one of the most important MVP actions. It should be easy to find.
+
+2. Make Reminders match the other Settings sections
+The Reminders card currently has a different format from the other sections. Please restyle it to match the same Settings row/card format used by Treatment, Profile, Apple Health and Care Team.
+
+Specifically:
+- Same rounded card container style
+- Same row height rhythm
+- Same icon tile style on the left
+- Same title typography
+- Same subtitle/value typography
+- Same divider behavior if multiple rows are used
+- Same horizontal padding and alignment
+
+Suggested structure:
+Section header:
+REMINDERS
+
+Card row:
+Left icon tile: notification/bell icon
+Main title: Daily check-in reminders
+Subtitle/value: 12:00 PM and 7:00 PM
+Right side: toggle
+
+Optional smaller helper text:
+“Skipped once you check in for the day.”
+
+But keep it visually consistent with the rest of Settings. Do not use a separate large paragraph-card design unless the rest of the screen uses that pattern.
+
+3. Update and move the medical disclaimer lower
+Move the disclaimer to the very bottom of the Settings screen after Reminders.
+
+Replace the current copy:
+“Viva is for informational purposes only and does not provide medical advice.”
+
+With:
+“Viva provides wellness support and does not replace medical advice from your care team.”
+
+Style:
+- Small
+- Centered
+- Light gray
+- Low visual priority
+- Enough bottom spacing so it does not feel cramped above the tab bar
+- Do not place it above Care Team or any important action
+
+4. Preserve functionality
+- The reminder toggle should keep working
+- Apple Health sync row should keep working
+- Request care-team review should keep working
+- Do not change the broader navigation or tab structure

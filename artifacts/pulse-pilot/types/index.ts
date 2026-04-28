@@ -373,7 +373,7 @@ export const WEEKLY_OPTIONS: Record<ActionCategory, string[]> = Object.fromEntri
 // Recovery is a derived internal score that engines use but is never
 // surfaced to patients as a % in the UI. It is deliberately omitted from
 // MetricKey so no detail view, trend tile, or router path can reach it.
-export type MetricKey = "sleep" | "hrv" | "steps" | "restingHR" | "weight" | "activeCalories";
+export type MetricKey = "sleep" | "hrv" | "steps" | "restingHR" | "weight" | "activeCalories" | "activeDays";
 
 export interface MetricDetail {
   key: MetricKey;

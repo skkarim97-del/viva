@@ -18,11 +18,20 @@ import { getMetricDetail } from "@/data/mockData";
 import { useColors } from "@/hooks/useColors";
 import type { MetricKey } from "@/types";
 
+// Each MetricKey the screen can render must declare which Apple Health
+// availability bucket it depends on so the unavailable-metric empty
+// state fires when a user routes here without the required permission.
+// Active Days is derived from steps + active calories, so we gate it on
+// "steps", which is the cheaper of the two and always available with
+// HealthKit.
 const METRIC_KEY_TO_TYPE: Record<string, AvailableMetricType> = {
   sleep: "sleep",
   hrv: "hrv",
   steps: "steps",
   restingHR: "heartRate",
+  weight: "weight",
+  activeCalories: "activeCalories",
+  activeDays: "steps",
 };
 
 export default function MetricDetailScreen() {
@@ -92,13 +101,27 @@ export default function MetricDetailScreen() {
       case "restingHR": return todayMetrics.restingHeartRate;
       case "weight": return todayMetrics.weight;
       case "activeCalories": return todayMetrics.activeCalories ?? null;
+      case "activeDays":
+        // Today's binary active flag uses the same threshold as the
+        // Trends tile and the trend.data series, so all three views agree.
+        return ((todayMetrics.activeCalories || 0) > 200 || todayMetrics.steps > 8000) ? 1 : 0;
       default: return null;
     }
   })();
   const last7 = values.slice(-7);
   const avg7 = last7.length > 0 ? last7.reduce((s, v) => s + v, 0) / last7.length : null;
-  const formatForKey = (n: number | null | undefined): string => {
+  // Active Days values live on a 0..1 scale (each day is a binary flag),
+  // so the same number means different things in each row. We pass an
+  // explicit context so today's flag can render as "Active" / "Not yet"
+  // while the 7-day mean renders as a count out of seven.
+  type FormatContext = "today" | "weekly_count";
+  const formatForKey = (n: number | null | undefined, context: FormatContext): string => {
     if (n === null || n === undefined) return "—";
+    if (key === "activeDays") {
+      if (context === "today") return n >= 0.5 ? "Active" : "Not yet";
+      // Weekly mean of 0/1 flags scaled back to a count out of 7.
+      return `${Math.round(n * 7)} of 7`;
+    }
     switch (key) {
       case "sleep": return n.toFixed(1);
       case "hrv":
@@ -111,22 +134,28 @@ export default function MetricDetailScreen() {
     }
   };
   const latestLabel = key === "sleep" ? "Last night" : "Today";
-  const latestFormatted = formatForKey(todayValue);
-  const avg7Formatted = formatForKey(avg7);
+  const latestFormatted = formatForKey(todayValue, "today");
+  const avg7Formatted = formatForKey(avg7, "weekly_count");
   const avg28Formatted = detail.currentValue;
 
-  type BenchmarkRow = { label: string; value: string; emphasis: boolean };
+  // Active Days values are self-describing ("Active", "5 of 7"), so the
+  // shared `detail.unit` ("days/wk") would read awkwardly on those rows.
+  // Per-row `unit` overrides let us suppress it where the value already
+  // carries the unit, while every other metric falls back to detail.unit
+  // unchanged.
+  type BenchmarkRow = { label: string; value: string; emphasis: boolean; unit?: string | null };
+  const suppressRowUnit = key === "activeDays" ? null : undefined;
   const primary: BenchmarkRow = todayFirst
-    ? { label: latestLabel, value: latestFormatted, emphasis: true }
+    ? { label: latestLabel, value: latestFormatted, emphasis: true, unit: suppressRowUnit }
     : { label: "4-week average", value: avg28Formatted, emphasis: true };
   const benchmarks: BenchmarkRow[] = todayFirst
     ? [
-        { label: "7-day average", value: avg7Formatted, emphasis: false },
+        { label: "7-day average", value: avg7Formatted, emphasis: false, unit: suppressRowUnit },
         { label: "4-week average", value: avg28Formatted, emphasis: false },
       ]
     : [
-        { label: latestLabel, value: latestFormatted, emphasis: false },
-        { label: "7-day average", value: avg7Formatted, emphasis: false },
+        { label: latestLabel, value: latestFormatted, emphasis: false, unit: suppressRowUnit },
+        { label: "7-day average", value: avg7Formatted, emphasis: false, unit: suppressRowUnit },
       ];
 
   const min = Math.min(...values);
@@ -190,7 +219,13 @@ export default function MetricDetailScreen() {
               <Text style={[styles.benchmarkLabel, { color: c.mutedForeground }]}>{row.label}</Text>
               <Text style={[styles.benchmarkValue, { color: c.foreground }]}>
                 {row.value}
-                {detail.unit ? <Text style={[styles.benchmarkUnit, { color: c.mutedForeground }]}>{` ${detail.unit}`}</Text> : null}
+                {(() => {
+                  // Per-row override: undefined means inherit detail.unit
+                  // (the original behavior); null means suppress entirely
+                  // because the value already carries its own unit.
+                  const u = row.unit === undefined ? detail.unit : row.unit;
+                  return u ? <Text style={[styles.benchmarkUnit, { color: c.mutedForeground }]}>{` ${u}`}</Text> : null;
+                })()}
               </Text>
             </View>
           ))}

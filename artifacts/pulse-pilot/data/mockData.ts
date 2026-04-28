@@ -213,6 +213,14 @@ export function getMetricDetail(
         case "restingHR": value = m.restingHeartRate; break;
         case "weight": value = m.weight; break;
         case "activeCalories": value = m.activeCalories ?? 0; break;
+        // Active Days is a derived binary signal: a day counts as
+        // "active" when it crosses either of the same thresholds the
+        // Trends tile uses (>200 active kcal OR >8000 steps). Stored
+        // as 0/1 per day so the 30-day chart shows the exact pattern
+        // and rolling means trivially become rates.
+        case "activeDays":
+          value = ((m.activeCalories || 0) > 200 || m.steps > 8000) ? 1 : 0;
+          break;
       }
       return { date: m.date, value };
     })
@@ -375,6 +383,34 @@ export function getMetricDetail(
       secondaryLabel: "Today",
       secondaryValue: `${todayMetrics.weight} lbs`,
     },
+    activeDays: (() => {
+      // avg28 here is the share of days that crossed the active
+      // threshold (each value is 0/1), so multiplying by 7 gives a
+      // clean "days per week" rate that matches the Trends tile.
+      const perWeek = +(avg28 * 7).toFixed(1);
+      const last7Count = recent.reduce((s, d) => s + d.value, 0);
+      return {
+        title: "Active Days",
+        headline: perWeek >= 5
+          ? "Movement has been consistent across the last 4 weeks."
+          : perWeek >= 3
+          ? "Movement has been steady most weeks over the last 4 weeks."
+          : perWeek > 0
+          ? "Active days have been light over the last 4 weeks."
+          : "Not enough active days yet to spot a pattern.",
+        explanation: `4-week average: ${perWeek} active days/week. Last 7 days: ${last7Count} of 7.`,
+        whatItMeans: "An active day is one where you crossed a meaningful movement threshold. Stacking active days week after week supports energy, digestion, and steady progress on treatment.",
+        recommendation: perWeek < 3
+          ? "Aim for one short walk after a meal each day. Two more active days a week is a realistic next step."
+          : perWeek < 5
+          ? "Add one more active day this week. A 20-minute walk is enough to count."
+          : "Strong rhythm. Keep movement easy on lower-energy days so the streak holds.",
+        currentValue: `${perWeek}`,
+        unit: "days/wk",
+        secondaryLabel: "Last 7 days",
+        secondaryValue: `${last7Count} of 7`,
+      };
+    })(),
   };
 
   const detail = details[key];

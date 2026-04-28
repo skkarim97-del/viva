@@ -1,0 +1,51 @@
+Please make the following Viva Care onboarding and coach updates.
+
+1. Start page logo alignment
+- On the opening/start page, center the “Care” text directly under the viva logo.
+- It should visually align with the logo lockup and not look offset.
+- Keep the current styling otherwise unless minor spacing tweaks are needed.
+
+2. Start page subtext copy
+Replace the current subtext:
+“A simple daily check-in plus Apple Health, so your care team sees how you're really doing between visits.”
+
+With:
+“Daily check-ins and Apple Health insights, so your care team can support you between visits.”
+
+Keep line breaks responsive and visually balanced.
+
+3. Coach response style rules
+Update the coach/system prompt or response formatting rules so coach responses:
+- Never use em dashes
+- Use short, bite-sized responses
+- Prefer 2 to 4 short sentences max
+- Give 1 to 3 concrete next steps
+- Avoid overly generic encouragement like “You’ve got this!” unless used very sparingly
+- Avoid sounding like it is making clinical decisions
+- Recommend contacting the care team when the user mentions stopping treatment, worsening symptoms, severe symptoms, uncertainty about medication, or concerns about side effects
+
+4. Coach medication-stop detection
+If a patient asks anything similar to:
+- “Should I stop treatment?”
+- “Should I stop my medication?”
+- “Can I quit?”
+- “Should I pause my dose?”
+- “Should I skip my dose?”
+- “I want to stop taking this”
+Then:
+- The coach should NOT advise them to stop or continue independently
+- The response should say they should check with their care team before stopping or changing medication
+- The app should create a care event / escalation event that appears in the clinician dashboard
+- Classify this as a “Patient requested review” or “Treatment concern” flag, not necessarily an emergency unless emergency symptoms are also present
+
+Suggested coach response for this case:
+“Don’t stop or change your medication without checking with your care team.
+If side effects are bothering you, your provider may adjust timing, dose, or supportive steps.
+I can flag this for your care team to review.”
+
+5. Safety distinction
+Keep severe red-flag symptoms separate from normal treatment concerns.
+Emergency symptoms should trigger stronger safety guidance.
+Stopping-treatment questions should trigger clinician review because they are adherence and retention risk signals.
+
+Please make these updates without changing the broader UI structure.

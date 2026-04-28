@@ -34,6 +34,8 @@ const metricKeyMap: Record<string, MetricKey> = {
   "Resting HR": "restingHR",
   Sleep: "sleep",
   Steps: "steps",
+  "Active Days": "activeDays",
+  "Active Cal": "activeCalories",
 };
 
 interface SparkMetric {
@@ -129,8 +131,8 @@ export default function TrendsScreen() {
 
   const allActivityMetrics: (SparkMetric & { requiredType: string })[] = [
     { label: "Steps", value: avgSteps >= 1000 ? `${(avgSteps / 1000).toFixed(1)}k` : `${avgSteps}`, unit: "avg", data: stepsData, color: "#34C759", detailKey: "Steps", requiredType: "steps" },
-    { label: "Active Days", value: `${activeDaysPerWeek}`, unit: "/week", data: activityData.map(v => v * 7), color: "#142240", requiredType: "steps" },
-    { label: "Active Cal", value: `${avgActiveCalories}`, unit: "avg", data: activeCalData, color: "#FF9500", requiredType: "calories" },
+    { label: "Active Days", value: `${activeDaysPerWeek}`, unit: "/week", data: activityData.map(v => v * 7), color: "#142240", detailKey: "Active Days", requiredType: "steps" },
+    { label: "Active Cal", value: `${avgActiveCalories}`, unit: "avg", data: activeCalData, color: "#FF9500", detailKey: "Active Cal", requiredType: "calories" },
   ];
   const activityMetrics = allActivityMetrics.filter(m => availableMetricTypes.includes(m.requiredType as any));
 
