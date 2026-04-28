@@ -1050,4 +1050,51 @@ router.delete("/:patientId/notes/:noteId", async (req, res: Response) => {
   res.json({ ok: true });
 });
 
+// ---------------------------------------------------------------------
+// Doctor read of a patient's recent Apple Health daily summaries. Owns
+// the same loadOwnedPatient guard as the rest of /patients/:id/* so a
+// doctor cannot peek at another doctor's roster.
+// ---------------------------------------------------------------------
+router.get("/:id/health/daily-summary", async (req, res: Response) => {
+  const doctorId = (req as AuthedRequest).auth.userId;
+  const patientId = Number(req.params.id);
+  if (!Number.isFinite(patientId)) {
+    res.status(400).json({ error: "invalid_id" });
+    return;
+  }
+  const patient = await loadOwnedPatient(doctorId, patientId);
+  if (!patient) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  const rows = await db
+    .select()
+    .from(patientHealthDailySummariesTable)
+    .where(eq(patientHealthDailySummariesTable.patientUserId, patientId))
+    .orderBy(desc(patientHealthDailySummariesTable.summaryDate))
+    .limit(30);
+  res.json(rows);
+});
+
+router.get("/:id/treatment-log", async (req, res: Response) => {
+  const doctorId = (req as AuthedRequest).auth.userId;
+  const patientId = Number(req.params.id);
+  if (!Number.isFinite(patientId)) {
+    res.status(400).json({ error: "invalid_id" });
+    return;
+  }
+  const patient = await loadOwnedPatient(doctorId, patientId);
+  if (!patient) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  const rows = await db
+    .select()
+    .from(patientTreatmentLogsTable)
+    .where(eq(patientTreatmentLogsTable.patientUserId, patientId))
+    .orderBy(desc(patientTreatmentLogsTable.createdAt))
+    .limit(30);
+  res.json(rows);
+});
+
 export default router;

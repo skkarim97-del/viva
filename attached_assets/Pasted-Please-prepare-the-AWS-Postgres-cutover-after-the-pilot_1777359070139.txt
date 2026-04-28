@@ -1,0 +1,83 @@
+Please prepare the AWS Postgres cutover after the pilot-critical persistence fixes are complete and verified.
+
+Goal:
+Move Viva from Replit Postgres to AWS RDS/Aurora Postgres safely, using the existing centralized DATABASE_URL setup.
+
+Steps:
+
+1. Confirm final schema
+- Confirm all new persistence tables are included in the Drizzle schema
+- Confirm the session table requirement from connect-pg-simple
+- Confirm no app code reads PGHOST/PGUSER/PGPASSWORD/PGDATABASE/PGPORT
+
+2. Provision AWS Postgres
+Use:
+- PostgreSQL 16
+- RDS or Aurora Postgres
+- Encryption at rest enabled
+- TLS required
+- Automated backups enabled
+- Private networking if possible
+- Strict security group access
+
+3. Configure DATABASE_URL
+Use only DATABASE_URL in the app runtime.
+
+Format:
+postgresql://<USER>:<PASSWORD>@<AWS_RDS_OR_AURORA_HOST>:5432/<DBNAME>?sslmode=require
+
+Do not print credentials.
+
+4. Push schema to AWS
+Run the Drizzle schema push against the AWS DATABASE_URL.
+
+Also provision the session table required by connect-pg-simple before booting the app.
+
+5. Export current Replit Postgres
+Use pg_dump custom format with no owner and no privileges.
+
+6. Restore into AWS Postgres
+Use pg_restore into AWS.
+
+7. Verify counts
+Compare row counts between Replit and AWS for every table, including any new tables added for:
+- patient_health_daily_summaries
+- patient_treatment_logs
+- patient profiles
+- coach_messages
+
+8. Smoke test backend against AWS DB
+Before production cutover, test:
+- clinician login
+- patient invite
+- patient activation
+- daily check-in
+- weight log
+- Apple Health daily summary sync
+- coach message
+- treatment-stop concern escalation
+- clinician patient list
+- clinician patient detail
+- analytics dashboard
+
+9. Production cutover
+Only after smoke tests pass:
+- Set production DATABASE_URL to AWS
+- Redeploy backend
+- Re-run smoke tests
+- Confirm no writes are going to Replit Postgres
+
+10. Cleanup
+After a safe quarantine window:
+- Remove Replit PG env vars from deployment config
+- Remove postgresql-16 from .replit modules if no longer needed
+- Keep Replit DB backup for rollback window
+- Decommission Replit DB only after AWS is stable
+
+Do not change:
+- Bundle ID
+- Apple Health permissions
+- Auth model
+- UI layout
+- Patient/doctor isolation rules
+- Apple credentials

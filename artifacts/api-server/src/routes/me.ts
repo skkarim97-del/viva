@@ -1,7 +1,14 @@
 import { Router, type Response } from "express";
-import { desc, eq, and } from "drizzle-orm";
+import { desc, eq, and, sql } from "drizzle-orm";
 import { z } from "zod";
-import { db, patientCheckinsTable, patientWeightsTable } from "@workspace/db";
+import {
+  db,
+  patientCheckinsTable,
+  patientWeightsTable,
+  patientHealthDailySummariesTable,
+  patientTreatmentLogsTable,
+  patientProfilesTable,
+} from "@workspace/db";
 import { requirePatient, type AuthedRequest } from "../middlewares/auth";
 import { computeRisk } from "../lib/risk";
 import { computeSymptomFlags } from "../lib/symptoms";
@@ -302,6 +309,208 @@ router.get("/risk", async (req, res: Response) => {
     ...computeRisk(cks),
     symptomFlags: computeSymptomFlags(cks),
   });
+});
+
+// ---------------------------------------------------------------------
+// Health daily summary. Mobile-side daily aggregation of HealthKit
+// signals. Upsert by (patient, summaryDate). Every metric is nullable.
+// We deliberately accept partial payloads so the mobile sync queue
+// can post whatever it has without first reading the existing row.
+// ---------------------------------------------------------------------
+const healthSummarySchema = z.object({
+  summaryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  steps: z.number().int().nonnegative().nullish(),
+  sleepMinutes: z.number().int().nonnegative().nullish(),
+  restingHeartRate: z.number().int().positive().max(300).nullish(),
+  hrv: z.number().nonnegative().max(500).nullish(),
+  activeCalories: z.number().int().nonnegative().nullish(),
+  activeDay: z.boolean().nullish(),
+  weightLbs: z.number().positive().min(40).max(900).nullish(),
+  source: z.string().max(40).nullish(),
+});
+
+router.post("/health/daily-summary", async (req, res: Response) => {
+  const userId = (req as AuthedRequest).auth.userId;
+  const parsed = healthSummarySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_input" });
+    return;
+  }
+  const d = parsed.data;
+  const [row] = await db
+    .insert(patientHealthDailySummariesTable)
+    .values({
+      patientUserId: userId,
+      summaryDate: d.summaryDate,
+      steps: d.steps ?? null,
+      sleepMinutes: d.sleepMinutes ?? null,
+      restingHeartRate: d.restingHeartRate ?? null,
+      hrv: d.hrv ?? null,
+      activeCalories: d.activeCalories ?? null,
+      activeDay: d.activeDay ?? null,
+      weightLbs: d.weightLbs ?? null,
+      source: d.source ?? null,
+    })
+    // Upsert by (patient, date). Nullable fields are coalesced so a
+    // partial payload (e.g. weight-only sync) never zero-clobbers an
+    // earlier full-day write.
+    .onConflictDoUpdate({
+      target: [
+        patientHealthDailySummariesTable.patientUserId,
+        patientHealthDailySummariesTable.summaryDate,
+      ],
+      set: {
+        steps: sql`coalesce(excluded.steps, ${patientHealthDailySummariesTable.steps})`,
+        sleepMinutes: sql`coalesce(excluded.sleep_minutes, ${patientHealthDailySummariesTable.sleepMinutes})`,
+        restingHeartRate: sql`coalesce(excluded.resting_heart_rate, ${patientHealthDailySummariesTable.restingHeartRate})`,
+        hrv: sql`coalesce(excluded.hrv, ${patientHealthDailySummariesTable.hrv})`,
+        activeCalories: sql`coalesce(excluded.active_calories, ${patientHealthDailySummariesTable.activeCalories})`,
+        activeDay: sql`coalesce(excluded.active_day, ${patientHealthDailySummariesTable.activeDay})`,
+        weightLbs: sql`coalesce(excluded.weight_lbs, ${patientHealthDailySummariesTable.weightLbs})`,
+        source: sql`coalesce(excluded.source, ${patientHealthDailySummariesTable.source})`,
+        updatedAt: new Date(),
+      },
+    })
+    .returning();
+  res.status(201).json(row);
+});
+
+router.get("/health/daily-summary/recent", async (req, res: Response) => {
+  const userId = (req as AuthedRequest).auth.userId;
+  const rows = await db
+    .select()
+    .from(patientHealthDailySummariesTable)
+    .where(eq(patientHealthDailySummariesTable.patientUserId, userId))
+    .orderBy(desc(patientHealthDailySummariesTable.summaryDate))
+    .limit(30);
+  res.json(rows);
+});
+
+// ---------------------------------------------------------------------
+// Treatment log. Append-only patient-confirmed med history. Distinct
+// from patients.glp1Drug / patients.dose which the doctor sets and
+// which remain the source of truth for the dashboard.
+// ---------------------------------------------------------------------
+const treatmentLogSchema = z.object({
+  medicationName: z.string().min(1).max(200),
+  dose: z.number().positive().max(1000).nullish(),
+  doseUnit: z.string().max(20).nullish(),
+  frequency: z.string().max(40).nullish(),
+  startedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
+});
+
+router.post("/treatment-log", async (req, res: Response) => {
+  const userId = (req as AuthedRequest).auth.userId;
+  const parsed = treatmentLogSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_input" });
+    return;
+  }
+  const d = parsed.data;
+  const [row] = await db
+    .insert(patientTreatmentLogsTable)
+    .values({
+      patientUserId: userId,
+      medicationName: d.medicationName,
+      dose: d.dose ?? null,
+      doseUnit: d.doseUnit ?? null,
+      frequency: d.frequency ?? null,
+      startedOn: d.startedOn ?? null,
+      source: "patient",
+    })
+    .returning();
+  res.status(201).json(row);
+});
+
+router.get("/treatment-log/recent", async (req, res: Response) => {
+  const userId = (req as AuthedRequest).auth.userId;
+  const rows = await db
+    .select()
+    .from(patientTreatmentLogsTable)
+    .where(eq(patientTreatmentLogsTable.patientUserId, userId))
+    .orderBy(desc(patientTreatmentLogsTable.createdAt))
+    .limit(30);
+  res.json(rows);
+});
+
+// ---------------------------------------------------------------------
+// Patient onboarding profile. One row per patient, blind-upsertable.
+// We persist ONLY the fields the onboarding UI already collects --
+// no extra PHI surface area beyond the existing in-app capture.
+// ---------------------------------------------------------------------
+const profileSchema = z.object({
+  age: z.number().int().min(13).max(120).nullish(),
+  sex: z.enum(["male", "female", "other"]).nullish(),
+  heightInches: z.number().positive().max(120).nullish(),
+  weightLbs: z.number().positive().min(40).max(900).nullish(),
+  goalWeightLbs: z.number().positive().min(40).max(900).nullish(),
+  units: z.enum(["imperial", "metric"]).nullish(),
+  goals: z.array(z.string().max(60)).max(20).nullish(),
+  glp1Medication: z.string().max(60).nullish(),
+  glp1Reason: z.string().max(60).nullish(),
+  glp1Duration: z.string().max(60).nullish(),
+});
+
+router.post("/profile", async (req, res: Response) => {
+  const userId = (req as AuthedRequest).auth.userId;
+  const parsed = profileSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_input" });
+    return;
+  }
+  const d = parsed.data;
+  const [row] = await db
+    .insert(patientProfilesTable)
+    .values({
+      patientUserId: userId,
+      age: d.age ?? null,
+      sex: d.sex ?? null,
+      heightInches: d.heightInches ?? null,
+      weightLbs: d.weightLbs ?? null,
+      goalWeightLbs: d.goalWeightLbs ?? null,
+      units: d.units ?? null,
+      goals: d.goals ?? [],
+      glp1Medication: d.glp1Medication ?? null,
+      glp1Reason: d.glp1Reason ?? null,
+      glp1Duration: d.glp1Duration ?? null,
+    })
+    // Coalesce so a partial profile patch (e.g. units toggle only)
+    // does not erase fields the onboarding flow has already captured.
+    .onConflictDoUpdate({
+      target: patientProfilesTable.patientUserId,
+      set: {
+        age: sql`coalesce(excluded.age, ${patientProfilesTable.age})`,
+        sex: sql`coalesce(excluded.sex, ${patientProfilesTable.sex})`,
+        heightInches: sql`coalesce(excluded.height_inches, ${patientProfilesTable.heightInches})`,
+        weightLbs: sql`coalesce(excluded.weight_lbs, ${patientProfilesTable.weightLbs})`,
+        goalWeightLbs: sql`coalesce(excluded.goal_weight_lbs, ${patientProfilesTable.goalWeightLbs})`,
+        units: sql`coalesce(excluded.units, ${patientProfilesTable.units})`,
+        // Goals overwrite the array (rather than coalesce) so a user
+        // who deselects a goal sees it removed. Empty array is a
+        // legitimate state.
+        goals: sql`coalesce(excluded.goals, ${patientProfilesTable.goals})`,
+        glp1Medication: sql`coalesce(excluded.glp1_medication, ${patientProfilesTable.glp1Medication})`,
+        glp1Reason: sql`coalesce(excluded.glp1_reason, ${patientProfilesTable.glp1Reason})`,
+        glp1Duration: sql`coalesce(excluded.glp1_duration, ${patientProfilesTable.glp1Duration})`,
+        updatedAt: new Date(),
+      },
+    })
+    .returning();
+  res.json(row);
+});
+
+router.get("/profile", async (req, res: Response) => {
+  const userId = (req as AuthedRequest).auth.userId;
+  const [row] = await db
+    .select()
+    .from(patientProfilesTable)
+    .where(eq(patientProfilesTable.patientUserId, userId))
+    .limit(1);
+  if (!row) {
+    res.json(null);
+    return;
+  }
+  res.json(row);
 });
 
 export default router;

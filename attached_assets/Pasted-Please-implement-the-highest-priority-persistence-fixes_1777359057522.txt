@@ -1,0 +1,162 @@
+Please implement the highest-priority persistence fixes before pilot.
+
+Context:
+The audit confirmed that the clinic dashboard is mostly live/database-backed, but several Viva Care patient-side data points are still local-only. We are not trying to overbuild, but pilot-critical data needs to be persisted.
+
+Please implement these in priority order:
+
+1. Persist Apple Health daily summaries
+Add a Postgres-backed table for daily Apple Health summaries.
+
+Minimum metrics:
+- steps
+- sleep duration
+- resting heart rate
+- HRV
+- active calories
+- active days / active indicator
+- weight if available from HealthKit
+
+Preferred structure:
+One row per patient per date, with nullable metric columns.
+
+Example:
+patient_health_daily_summaries
+- id
+- patient_user_id
+- summary_date
+- steps
+- sleep_minutes
+- resting_heart_rate
+- hrv
+- active_calories
+- active_day boolean
+- weight_lbs nullable
+- source
+- created_at
+- updated_at
+
+Add a patient-authenticated endpoint:
+POST /api/me/health/daily-summary
+
+Also add:
+GET /api/me/health/daily-summary/recent
+GET /api/patients/:id/health/daily-summary
+
+Rules:
+- Upsert by patient_user_id + summary_date
+- Do not store raw Apple Health samples
+- Store daily summaries only
+- Keep patient/doctor isolation intact
+- Do not change Apple Health permissions
+
+2. Persist patient-confirmed medication and dose
+Right now doctor-set medication/dose exists on patients, but patient-entered medication/dose is local-only.
+
+Add a database-backed patient treatment history table.
+
+Example:
+patient_treatment_logs
+- id
+- patient_user_id
+- medication_name
+- dose
+- dose_unit
+- frequency
+- started_on nullable
+- source patient/doctor
+- created_at
+
+Add patient endpoint:
+POST /api/me/treatment-log
+GET /api/me/treatment-log/recent
+
+Add doctor endpoint:
+GET /api/patients/:id/treatment-log
+
+Rules:
+- Do not replace the existing doctor-set patients.glp1_drug and patients.dose fields yet
+- Treat this as patient-confirmed treatment history
+- Preserve existing UI unless minimal wiring is needed
+
+3. Persist onboarding profile
+The audit found @viva_profile is AsyncStorage-only.
+
+Create or extend a table for patient profile fields:
+- age or date of birth if already captured
+- height
+- goal weight
+- preferred units
+- relevant onboarding goals currently captured in app
+
+Add:
+POST /api/me/profile
+GET /api/me/profile
+
+Wire onboarding completion to persist this profile server-side.
+
+Rules:
+- Do not store unnecessary sensitive fields
+- Keep fields aligned only with what the app already captures
+- Do not redesign onboarding UI
+
+4. Verify and fix weight persistence
+The patient_weights table exists but has 0 rows in dev despite the app depending on weight.
+
+Please test on the mobile app:
+- Log weight
+- Confirm POST /api/me/weights fires
+- Confirm a row appears in patient_weights
+- Confirm GET /api/me/weights/latest returns it
+- Confirm doctor dashboard GET /api/patients/:id/weight can read it
+
+If broken, fix it.
+
+5. Persist coach message bodies for safety review
+Add a coach_messages table.
+
+Example:
+coach_messages
+- id
+- patient_user_id
+- role user/assistant/system
+- body
+- mode nullable
+- created_at
+
+Wire POST /api/coach/message so both the user message and assistant response are persisted.
+
+Also keep the existing care_events coach_message metadata event if useful for analytics.
+
+Rules:
+- This is for pilot QA and safety review
+- Do not expose full chat history in the clinician dashboard yet unless already designed
+- Do not change the visible coach UI
+- Ensure no em dashes in generated coach responses
+
+6. Dedicated treatment-stop concern event
+If the user asks about stopping, pausing, skipping or quitting treatment:
+- Persist the coach messages
+- Create a care_events row with type escalation_requested or a treatment_concern equivalent
+- Ensure it appears in the clinician needs-review flow
+
+If adding a new enum type is risky, use existing escalation_requested with metadata.reason = "treatment_stop_question".
+
+7. Final verification report
+After implementation, run direct SQL verification.
+
+For each new persistence area:
+- Perform the app action
+- Query Postgres
+- Confirm row appears
+- Confirm relevant read endpoint returns it
+- Include SQL query used
+- Do not include PHI
+
+Do not change:
+- Bundle ID
+- Apple Health permissions
+- Auth model
+- Existing UI layout except minimal wiring
+- Patient/doctor isolation rules
+- Apple credentials

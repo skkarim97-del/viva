@@ -231,4 +231,42 @@ export const sessionApi = {
       "/me/weights",
       { weightLbs },
     ),
+
+  // Pilot persistence layer. All three are best-effort from the
+  // mobile side: callers should swallow errors so a transient sync
+  // failure never blocks the in-app flow. The server upserts by
+  // (patient, date) for the daily summary and by patient_user_id for
+  // the profile, so retries are idempotent.
+  postHealthDailySummary: (payload: {
+    summaryDate: string;
+    steps?: number | null;
+    sleepMinutes?: number | null;
+    restingHeartRate?: number | null;
+    hrv?: number | null;
+    activeCalories?: number | null;
+    activeDay?: boolean | null;
+    weightLbs?: number | null;
+    source?: string | null;
+  }) => request<unknown>("POST", "/me/health/daily-summary", payload),
+
+  postTreatmentLog: (payload: {
+    medicationName: string;
+    dose?: number | null;
+    doseUnit?: string | null;
+    frequency?: string | null;
+    startedOn?: string | null;
+  }) => request<unknown>("POST", "/me/treatment-log", payload),
+
+  postProfile: (payload: {
+    age?: number | null;
+    sex?: "male" | "female" | "other" | null;
+    heightInches?: number | null;
+    weightLbs?: number | null;
+    goalWeightLbs?: number | null;
+    units?: "imperial" | "metric" | null;
+    goals?: string[] | null;
+    glp1Medication?: string | null;
+    glp1Reason?: string | null;
+    glp1Duration?: string | null;
+  }) => request<unknown>("POST", "/me/profile", payload),
 };

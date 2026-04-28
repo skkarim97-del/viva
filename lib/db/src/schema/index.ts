@@ -8,3 +8,7 @@ export * from "./interventionEvents";
 export * from "./outcomeSnapshots";
 export * from "./careEvents";
 export * from "./analyticsEvents";
+export * from "./patientHealthDailySummaries";
+export * from "./patientTreatmentLogs";
+export * from "./patientProfiles";
+export * from "./coachMessages";

@@ -413,6 +413,58 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     loadData();
   }, []);
 
+  // Best-effort daily Apple Health summary sync. Fires when
+  // todayMetrics has actual data and dedupes by (date, signature) so
+  // we POST at most once per meaningful change. The server upserts
+  // and coalesces nullable fields so a partial payload never
+  // overwrites an earlier full-day write. Failures are swallowed:
+  // this layer must never block the in-app flow.
+  const lastSyncedHealthSummaryRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!todayMetrics) return;
+    if (!hasHealthData) return;
+    const m = todayMetrics;
+    const sig = [
+      m.date,
+      m.steps ?? "",
+      m.sleepDuration ?? "",
+      m.restingHeartRate ?? "",
+      m.hrv ?? "",
+      m.activeCalories ?? "",
+      m.weight ?? "",
+    ].join("|");
+    if (lastSyncedHealthSummaryRef.current === sig) return;
+    lastSyncedHealthSummaryRef.current = sig;
+    sessionApi
+      .postHealthDailySummary({
+        summaryDate: m.date,
+        steps: typeof m.steps === "number" ? Math.round(m.steps) : null,
+        // sleepDuration is in hours on the mobile side; the server
+        // column is integer minutes.
+        sleepMinutes:
+          typeof m.sleepDuration === "number" && m.sleepDuration > 0
+            ? Math.round(m.sleepDuration * 60)
+            : null,
+        restingHeartRate:
+          typeof m.restingHeartRate === "number"
+            ? Math.round(m.restingHeartRate)
+            : null,
+        hrv: typeof m.hrv === "number" ? m.hrv : null,
+        activeCalories:
+          typeof m.activeCalories === "number"
+            ? Math.round(m.activeCalories)
+            : null,
+        // Treat any nontrivial active-calorie burn as an "active day".
+        // Conservative threshold so a phone-only user with a stale
+        // ring isn't flagged active when they didn't move.
+        activeDay:
+          typeof m.activeCalories === "number" ? m.activeCalories >= 100 : null,
+        weightLbs: typeof m.weight === "number" ? m.weight : null,
+        source: "apple_health",
+      })
+      .catch(() => {});
+  }, [todayMetrics, hasHealthData]);
+
   const fetchAIWeeklyPlan = async (allMetrics: HealthMetrics[], userProfile: UserProfile, history: CompletionRecord[]) => {
     try {
       const res = await fetch(`${API_BASE}/coach/weekly-plan`, {
@@ -1147,6 +1199,77 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setProfile((prev) => {
       const updated = { ...prev, ...updates };
       AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(updated));
+
+      // Best-effort patient-confirmed treatment-log entry. Fires only
+      // when the medication brand or the dose changes (vs the prior
+      // profile state) so we don't spam the log on unrelated profile
+      // edits like goal weight or units. Patient-set drug name lives
+      // either on the structured medicationProfile.medicationBrand or
+      // (older builds) on glp1Medication.
+      const prevMed =
+        prev.medicationProfile?.medicationBrand ?? prev.glp1Medication ?? null;
+      const nextMed =
+        updated.medicationProfile?.medicationBrand ??
+        updated.glp1Medication ??
+        null;
+      const prevDose = prev.medicationProfile?.doseValue ?? null;
+      const nextDose = updated.medicationProfile?.doseValue ?? null;
+      const prevUnit = prev.medicationProfile?.doseUnit ?? null;
+      const nextUnit = updated.medicationProfile?.doseUnit ?? null;
+      const prevFreq = prev.medicationProfile?.frequency ?? null;
+      const nextFreq = updated.medicationProfile?.frequency ?? null;
+      const medChanged =
+        nextMed != null &&
+        (prevMed !== nextMed ||
+          prevDose !== nextDose ||
+          prevUnit !== nextUnit ||
+          prevFreq !== nextFreq);
+      if (medChanged) {
+        sessionApi
+          .postTreatmentLog({
+            medicationName: nextMed!,
+            dose: nextDose,
+            doseUnit: nextUnit,
+            frequency: nextFreq,
+            startedOn:
+              updated.medicationProfile?.startDate ?? null,
+          })
+          .catch(() => {});
+      }
+
+      // Best-effort onboarding-profile sync. Pushes the small server-
+      // shaped subset of UserProfile any time a relevant field is in
+      // the patch, plus once at onboarding completion so the very
+      // first profile row is created.
+      const profileFieldsTouched =
+        "age" in updates ||
+        "sex" in updates ||
+        "height" in updates ||
+        "weight" in updates ||
+        "goalWeight" in updates ||
+        "units" in updates ||
+        "goals" in updates ||
+        "glp1Medication" in updates ||
+        "glp1Reason" in updates ||
+        "glp1Duration" in updates ||
+        ("onboardingComplete" in updates && updates.onboardingComplete);
+      if (profileFieldsTouched) {
+        sessionApi
+          .postProfile({
+            age: updated.age ?? null,
+            sex: updated.sex ?? null,
+            heightInches: updated.height ?? null,
+            weightLbs: updated.weight ?? null,
+            goalWeightLbs: updated.goalWeight ?? null,
+            units: updated.units ?? null,
+            goals: updated.goals ?? null,
+            glp1Medication: updated.glp1Medication ?? null,
+            glp1Reason: updated.glp1Reason ?? null,
+            glp1Duration: updated.glp1Duration ?? null,
+          })
+          .catch(() => {});
+      }
+
       return updated;
     });
     if (updates.medicationProfile) {

@@ -1,7 +1,57 @@
 import { Router, type Request, type Response } from "express";
+import { eq } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import {
+  db,
+  apiTokensTable,
+  coachMessagesTable,
+  careEventsTable,
+} from "@workspace/db";
 
 const router = Router();
+
+// Best-effort bearer-token resolver for the coach routes. The /chat
+// route is intentionally not gated behind requirePatient (preserves
+// the existing public-by-default behavior for legacy clients), but
+// when the mobile app sends an Authorization header we want to
+// associate persistence rows with the right patient. Returns null on
+// any failure -- never throws -- so the chat path stays resilient.
+async function resolvePatientUserId(req: Request): Promise<number | null> {
+  try {
+    const header = req.get("authorization") || "";
+    const m = /^Bearer\s+([A-Za-z0-9_\-]+)$/.exec(header);
+    if (!m) return null;
+    const [row] = await db
+      .select({
+        userId: apiTokensTable.userId,
+        role: apiTokensTable.role,
+      })
+      .from(apiTokensTable)
+      .where(eq(apiTokensTable.token, m[1]!))
+      .limit(1);
+    if (!row || row.role !== "patient") return null;
+    return row.userId;
+  } catch {
+    return null;
+  }
+}
+
+// Heuristic detection of "I'm thinking about stopping / pausing /
+// quitting / skipping treatment". Word-boundary matched so we don't
+// flag normal sentences ("I had to stop the car"); we require a
+// treatment / med / dose / shot anchor nearby. This is intentionally
+// conservative -- a false negative is fine (the patient can also use
+// the explicit Request review button), but a false positive spams the
+// clinician's needs-review queue.
+const STOP_VERB_RE = /\b(stop|stopping|stopped|pause|pausing|paused|skip|skipping|skipped|quit|quitting|quitted|discontinu\w*|come\s+off|coming\s+off|get\s+off|getting\s+off|going\s+off|stop\s+taking|hold\s+off)\b/i;
+const TREATMENT_ANCHOR_RE = /\b(treatment|medication|med|meds|drug|dose|shot|injection|glp\W*1|semaglutide|tirzepatide|liraglutide|ozempic|wegovy|mounjaro|zepbound|saxenda|rybelsus)\b/i;
+
+function detectTreatmentStopConcern(text: string): boolean {
+  if (!text) return false;
+  // Two cheap regex passes are faster than tokenizing for a 200-char
+  // string. Both must match for the concern to fire.
+  return STOP_VERB_RE.test(text) && TREATMENT_ANCHOR_RE.test(text);
+}
 
 const SYSTEM_PROMPT = `You are VIVA, a premium GLP-1 support coach. You know this person's medication, dose, recent trends, and daily state. You speak like a smart friend who truly gets what GLP-1 treatment feels like.
 
@@ -639,6 +689,56 @@ router.post("/chat", async (req: Request, res: Response) => {
 
     console.log(`[coach/chat ${reqId}] calling OpenAI: model=gpt-4o-mini messages=${messages.length} stream=${wantsStream}`);
 
+    // Best-effort identity resolution for persistence. Done once per
+    // request and reused for both the user-message and assistant-
+    // message inserts. If null we silently skip persistence so we
+    // never break the chat path on a DB or auth hiccup.
+    const patientUserId = await resolvePatientUserId(req);
+    const coachMode =
+      healthContext?.treatmentState?.communicationMode ?? null;
+
+    if (patientUserId !== null) {
+      // Persist the user message and detect a treatment-stop concern
+      // in parallel. Both are best-effort -- failures are logged and
+      // swallowed so the chat path always returns to the user.
+      void db
+        .insert(coachMessagesTable)
+        .values({
+          patientUserId,
+          role: "user",
+          body: message,
+          mode: coachMode,
+        })
+        .catch((err) => {
+          console.error(`[coach/chat ${reqId}] coach_messages user insert failed`, err);
+        });
+
+      if (detectTreatmentStopConcern(message)) {
+        // Use the existing escalation_requested type with a metadata
+        // reason so the clinician needs-review query (which already
+        // groups by escalation_requested) picks this up without an
+        // enum migration. The mobile app's explicit Request review
+        // button uses the same type, so the dashboard surface is
+        // already wired.
+        void db
+          .insert(careEventsTable)
+          .values({
+            patientUserId,
+            actorUserId: patientUserId,
+            source: "patient",
+            type: "escalation_requested",
+            metadata: {
+              reason: "treatment_stop_question",
+              channel: "coach",
+              messagePreview: message.slice(0, 240),
+            },
+          })
+          .catch((err) => {
+            console.error(`[coach/chat ${reqId}] treatment-stop care_event insert failed`, err);
+          });
+      }
+    }
+
     if (!wantsStream) {
       // Non-streaming JSON path. Used by React Native (no SSE support in fetch).
       const completion = await openai.chat.completions.create({
@@ -650,6 +750,21 @@ router.post("/chat", async (req: Request, res: Response) => {
       const content = completion.choices[0]?.message?.content || "";
       console.log(`[coach/chat ${reqId}] returned JSON: contentLen=${content.length}`);
       res.json({ content });
+      // Fire-and-forget assistant persistence after the response goes
+      // out. Same best-effort posture as the user-message insert.
+      if (patientUserId !== null && content) {
+        void db
+          .insert(coachMessagesTable)
+          .values({
+            patientUserId,
+            role: "assistant",
+            body: content,
+            mode: coachMode,
+          })
+          .catch((err) => {
+            console.error(`[coach/chat ${reqId}] coach_messages assistant insert failed`, err);
+          });
+      }
       return;
     }
 
@@ -664,11 +779,16 @@ router.post("/chat", async (req: Request, res: Response) => {
       stream: true,
     });
 
+    // Accumulate the full assistant body for persistence. The streamed
+    // chunks are both written to the SSE client and concatenated here
+    // so we end up with one canonical assistant string.
+    let fullContent = "";
     let totalLen = 0;
     for await (const chunk of stream) {
       const content = chunk.choices[0]?.delta?.content;
       if (content) {
         totalLen += content.length;
+        fullContent += content;
         res.write(`data: ${JSON.stringify({ content })}\n\n`);
       }
     }
@@ -676,6 +796,20 @@ router.post("/chat", async (req: Request, res: Response) => {
     res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
     res.end();
     console.log(`[coach/chat ${reqId}] returned stream: contentLen=${totalLen}`);
+
+    if (patientUserId !== null && fullContent) {
+      void db
+        .insert(coachMessagesTable)
+        .values({
+          patientUserId,
+          role: "assistant",
+          body: fullContent,
+          mode: coachMode,
+        })
+        .catch((err) => {
+          console.error(`[coach/chat ${reqId}] coach_messages assistant insert failed`, err);
+        });
+    }
   } catch (error: any) {
     console.error(`[coach/chat ${reqId}] error:`, error?.message || error);
     console.error(`[coach/chat ${reqId}] error type:`, error?.constructor?.name);

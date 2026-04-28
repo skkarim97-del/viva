@@ -1,6 +1,7 @@
 import { Platform } from "react-native";
 
 import { API_BASE } from "@/lib/apiConfig";
+import { sessionApi } from "@/lib/api/sessionClient";
 
 export type CoachConversationMessage = { role: "user" | "assistant"; content: string };
 
@@ -87,12 +88,25 @@ export async function sendCoachMessage(args: CoachRequestArgs): Promise<{ conten
   dlog("Request", { url, useStream, platform: Platform.OS, msgLen: args.message.length, historyLen: args.conversationHistory?.length ?? 0, hasContext: !!args.healthContext, bodyBytes: body.length });
 
   let response: Response;
+  // Pull the patient bearer so the server can persist coach_messages
+  // and fire treatment-stop care_events against the correct patient.
+  // Best-effort: if the token lookup fails or returns null, the chat
+  // still works (server-side persistence simply skips), so we never
+  // let token retrieval block or break the request.
+  let bearer: string | null = null;
+  try {
+    bearer = await sessionApi.getStoredToken();
+  } catch {
+    bearer = null;
+  }
+  const baseHeaders: Record<string, string> = useStream
+    ? { "Content-Type": "application/json" }
+    : { "Content-Type": "application/json", "Accept": "application/json" };
+  if (bearer) baseHeaders["Authorization"] = `Bearer ${bearer}`;
   try {
     response = await fetch(url, {
       method: "POST",
-      headers: useStream
-        ? { "Content-Type": "application/json" }
-        : { "Content-Type": "application/json", "Accept": "application/json" },
+      headers: baseHeaders,
       body,
       signal: controller.signal,
     });

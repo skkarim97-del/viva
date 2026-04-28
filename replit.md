@@ -43,6 +43,18 @@ The system is a pnpm workspace monorepo using Node.js 24 and TypeScript 5.9. The
 -   **GLP-1 Daily Inputs**: Tracks energy, appetite, nausea, and digestion.
 -   **Mental State Check-in**: Records mental state for plan generation.
 
+### Pilot Persistence Layer (added 2026-04-28)
+
+Server-side persistence so doctors and analytics see real patient activity (previously most state lived only in mobile AsyncStorage).
+
+-   **patient_profiles** (`patient_user_id` PK): one-row-per-patient onboarding snapshot. POST `/api/me/profile` blind-upserts; nullable fields use coalesce semantics so partial patches never wipe earlier values. `goals` jsonb uses replace semantics so deselects work. Doctor-readable via `loadOwnedPatient`.
+-   **patient_health_daily_summaries** (`(patient_user_id, summary_date)` unique): daily Apple Health rollup. POST `/api/me/health/daily-summary` upserts, coalesce on every metric. Mobile fires from a `useEffect` watching `todayMetrics` with a (date, signature) ref to dedupe.
+-   **patient_treatment_logs** (append-only, indexed by `(patient_user_id, created_at)`): patient-confirmed med/dose/frequency events. Mobile inserts only when `updateProfile` actually changes brand, dose, unit, or frequency vs the prior profile.
+-   **coach_messages** (indexed by `(patient_user_id, created_at)`): user + assistant turns from `/api/coach/chat`. Persistence is fire-and-forget on both sides so a DB hiccup never blocks the chat.
+-   **Treatment-stop intent detection**: `detectTreatmentStopConcern` in `coach/index.ts` requires both a stop verb and a treatment anchor token; when both fire, an `escalation_requested` care_event is inserted with `metadata.reason='treatment_stop_question'`. Conservative on purpose; false negatives are acceptable, false positives are not.
+-   **Bearer-token resolution on /coach/chat**: `resolvePatientUserId` is best-effort. If the bearer is missing or invalid, persistence is silently skipped; the chat itself still streams normally.
+-   **Doctor read endpoints**: `/api/patients/:id/health/daily-summary` and `/api/patients/:id/treatment-log` are gated by `loadOwnedPatient` (404 on non-ownership, no enumeration leak).
+
 ### Technical Implementations & Features
 
 -   **Onboarding**: A 13-step GLP-1 specific flow covering personal details, medication, lifestyle, and integrations.
