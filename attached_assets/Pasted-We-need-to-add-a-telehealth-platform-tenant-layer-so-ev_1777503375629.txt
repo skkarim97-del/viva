@@ -1,0 +1,59 @@
+We need to add a telehealth platform / tenant layer so every doctor, patient, and pilot metric can be tied back to the correct customer.
+
+Goal:
+Support analytics by telehealth platform, not just by individual doctor.
+
+Required hierarchy:
+Telehealth Platform → Providers/Doctors → Patients → Check-ins / interventions / care events / pilot metrics
+
+Please inspect the current schema first and tell me what already exists for clinic/customer/org scoping. If there is already a clinic_id, organization_id, platform_id, or tenant field, use that instead of creating a duplicate concept.
+
+If missing, add a clean platform/organization model:
+
+1. Add a telehealth_platforms or organizations table
+   Fields:
+
+* id
+* name
+* slug
+* status
+* created_at
+* updated_at
+
+2. Associate doctors/providers with a platform
+   Each doctor should belong to one telehealth platform for now.
+
+3. Associate patients with a platform
+   Patients should inherit platform association through their provider/doctor, but also have a direct platform_id if needed for clean analytics queries.
+
+4. Update pilot metrics
+   Pilot Metrics should support filters by:
+
+* platform
+* provider/doctor
+* cohort date range
+
+The default customer-facing pilot readout should be at the platform level, aggregating across all providers and patients under that platform.
+
+5. Update snapshots
+   pilot_snapshots should store:
+
+* platform_id
+* provider_id if scoped to one provider
+* cohort_start_date
+* cohort_end_date
+* patient_count
+* metrics JSON
+* generated_at
+* generated_by
+* metric_definition_version
+
+6. Access control
+   Doctors should only see patients within their platform and provider scope.
+   Internal Viva analytics can view platform-level metrics across providers.
+
+7. Migration / backfill
+   For existing demo data, assign all current doctors and patients to a default platform such as “Demo Platform” unless there is already a clinic/customer concept.
+
+Important:
+Do not create duplicate org concepts if one already exists. First inspect the schema and reuse the existing customer/clinic/org field if present.
