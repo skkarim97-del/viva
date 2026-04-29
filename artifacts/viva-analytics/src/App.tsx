@@ -12,6 +12,7 @@ import { PatientsPage } from "@/pages/PatientsPage";
 import { DoctorsPage } from "@/pages/DoctorsPage";
 import { CareLoopPage } from "@/pages/CareLoopPage";
 import { UsagePage } from "@/pages/UsagePage";
+import { PilotMetricsPage } from "@/pages/PilotMetricsPage";
 import NotFound from "@/pages/not-found";
 
 import { KEY_STORAGE } from "@/lib/api";
@@ -113,6 +114,7 @@ function Routes({ data }: { data: AnalyticsSummary }) {
       <Route path="/patients" component={() => <PatientsPage data={data} />} />
       <Route path="/doctors" component={() => <DoctorsPage data={data} />} />
       <Route path="/care-loop" component={() => <CareLoopPage />} />
+      <Route path="/pilot" component={() => <PilotMetricsPage data={data} />} />
       <Route path="/usage" component={() => <UsagePage />} />
       <Route component={NotFound} />
     </Switch>

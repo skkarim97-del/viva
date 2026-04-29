@@ -131,6 +131,69 @@ export interface DataSanityBlock {
   ok: boolean;
 }
 
+// ---------------------------------------------------------- pilot block
+//
+// Composite "Pilot Metrics" KPIs computed server-side from existing
+// data (no new raw events). Documented in
+// artifacts/api-server/src/lib/pilotMetrics.ts. Wire-format kept
+// optional so a server outage in the pilot computation cannot break
+// the rest of the analytics page.
+
+export type PilotRiskBand = "low" | "medium" | "high";
+
+export interface PilotRiskCategory {
+  code: string;
+  label: string;
+  patients: number;
+  pct: number; // 0..1, share of cohort
+}
+
+export interface PilotRiskBlock {
+  flaggedPatients: number;
+  pctFlagged: number;
+  avgSignalsPerPatient: number;
+  topCategories: PilotRiskCategory[];
+  bandDistribution: Record<PilotRiskBand, number>;
+}
+
+export interface PilotInterventionsBlock {
+  triggered: number;
+  perPatient: number;
+  engaged: number;
+  pctEngaged: number;
+  autoResolved: number;
+  pctAutoResolved: number;
+  escalated: number;
+  pctEscalated: number;
+}
+
+export interface PilotProviderBlock {
+  patientsEscalated: number;
+  escalationsRaw: number;
+  escalationsDeduped: number;
+  avgTimeToFollowUpHours: number | null;
+  timeToFollowUpDenom: number;
+  pctReviewed: number;
+  pctActedOn: number;
+}
+
+export interface PilotBlock {
+  windowDays: number;
+  cohort: { activated: number };
+  risk: PilotRiskBlock;
+  interventions: PilotInterventionsBlock;
+  provider: PilotProviderBlock;
+  rules: {
+    autoResolveWindowHours: number;
+    engagementWindowHours: number;
+    escalationDedupeHours: number;
+    riskBandSource: string;
+    engagementJoin: string;
+    actedOnDefinition: string;
+    reviewedDefinition: string;
+  };
+}
+
 export interface AnalyticsSummary {
   generatedAt: string;
   operating?: OperatingBlock;
@@ -138,6 +201,7 @@ export interface AnalyticsSummary {
   health?: HealthBlock;
   drilldown?: DrilldownBlock;
   dataSanity?: DataSanityBlock;
+  pilot?: PilotBlock;
 }
 
 // ---------------------------------------------------------- display maps

@@ -16,6 +16,10 @@ import { computeRisk, deriveAction } from "../lib/risk";
 import { logger } from "../lib/logger";
 import { linkInterventionsToOutcomes } from "./interventions";
 import { recomputeRecentOutcomesForAllPatients } from "./outcomes";
+import {
+  computePilotMetrics,
+  type PilotMetricsBlock,
+} from "../lib/pilotMetrics";
 
 const router: Router = Router();
 
@@ -989,9 +993,22 @@ router.get(
           stoppedTotal === stoppedTimingSum,
       };
 
+      // ----- Pilot metrics block ---------------------------------------
+      // Composite KPIs for the internal Pilot Metrics page. Wrapped so a
+      // failure here cannot break the rest of the summary -- the pilot
+      // page handles a missing block by rendering an empty state.
+      let pilot: PilotMetricsBlock | undefined;
+      try {
+        pilot = await computePilotMetrics();
+      } catch (err) {
+        logger.warn({ err }, "pilot_metrics_compute_failed");
+        pilot = undefined;
+      }
+
       res.json({
         generatedAt: new Date().toISOString(),
         windowDays: 7,
+        pilot,
         health: {
           windowDays: healthWindowDays,
           nextDayCheckinAfterIntervention: {
@@ -1949,5 +1966,30 @@ function localHour(timestamptz: string, tz: string): number | null {
     return null;
   }
 }
+
+// ----------------------------------------------------------------------
+// POST /internal/analytics/pilot/snapshot
+//
+// Frozen 30-day cohort readout for external partners. Intentionally
+// disabled until the HIPAA prerequisites are in place: a signed BAA
+// covering the hosting platform, an audit_log table, AI-vendor
+// coverage for any data the pilot metrics surface, and a
+// de-identification / minimum-necessary review of the readout shape.
+//
+// Keeping the route registered (not deleted) so the URL exists in
+// monitoring and a future enable is one config flag away rather than
+// a fresh route deploy.
+// ----------------------------------------------------------------------
+router.post(
+  "/analytics/pilot/snapshot",
+  requireInternalKey,
+  (_req: Request, res: Response) => {
+    res.status(503).json({
+      error: "snapshot_disabled",
+      detail:
+        "External pilot readout disabled until HIPAA prerequisites (BAA, audit log, AI-vendor coverage, de-identification review) are resolved.",
+    });
+  },
+);
 
 export default router;
