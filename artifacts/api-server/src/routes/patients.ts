@@ -553,6 +553,20 @@ router.post("/invite", async (req, res: Response) => {
   // password. The patient sets a real password during activation.
   const placeholderHash = await bcrypt.hash(randomBytes(24).toString("hex"), 10);
   const token = randomBytes(24).toString("base64url");
+  // Look up the inviting doctor's platform once so we can denormalize it
+  // onto patients.platform_id. Patients formally inherit platform via
+  // doctor_id -> users.platform_id, but copying the value here lets
+  // analytics queries filter by platform without a doubled join. If the
+  // doctor row somehow has no platform (legacy data created before the
+  // platform layer existed AND not covered by backfill), the patient
+  // simply lands platformless -- the FK is nullable for exactly this
+  // case and analytics treats null as "unscoped".
+  const [doctorRow] = await db
+    .select({ platformId: usersTable.platformId })
+    .from(usersTable)
+    .where(eq(usersTable.id, doctorId))
+    .limit(1);
+  const platformId = doctorRow?.platformId ?? null;
   const [user] = await db
     .insert(usersTable)
     .values({
@@ -570,6 +584,7 @@ router.post("/invite", async (req, res: Response) => {
   await db.insert(patientsTable).values({
     userId: user.id,
     doctorId,
+    platformId,
     glp1Drug: parsed.data.glp1Drug?.trim() || null,
     dose: parsed.data.dose?.trim() || null,
     activationToken: token,

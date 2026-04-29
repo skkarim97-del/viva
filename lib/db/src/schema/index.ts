@@ -1,3 +1,4 @@
+export * from "./telehealthPlatforms";
 export * from "./users";
 export * from "./patients";
 export * from "./patientCheckins";

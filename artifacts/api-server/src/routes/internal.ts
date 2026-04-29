@@ -12,6 +12,7 @@ import {
   outcomeSnapshotsTable,
   analyticsEventsTable,
   pilotSnapshotsTable,
+  telehealthPlatformsTable,
   deriveStopTiming,
 } from "@workspace/db";
 import { computeRisk, deriveAction } from "../lib/risk";
@@ -256,7 +257,7 @@ router.get("/ping", requireInternalKey, (_req, res: Response) => {
 router.get(
   "/analytics/summary",
   requireInternalKey,
-  async (_req, res: Response) => {
+  async (req, res: Response) => {
     try {
       // Recompute the recent window so the join below has fresh
       // outcome rows even for clients that haven't migrated yet.
@@ -1000,9 +1001,26 @@ router.get(
       // Composite KPIs for the internal Pilot Metrics page. Wrapped so a
       // failure here cannot break the rest of the summary -- the pilot
       // page handles a missing block by rendering an empty state.
+      //
+      // Optional ?platformId= / ?doctorId= query params narrow the cohort
+      // to one Viva customer (telehealth platform) and/or one provider
+      // within it. Anything non-numeric or absent means whole-cohort,
+      // matching the previous behaviour. Validation is permissive on
+      // purpose: bad values just fall through to whole-cohort rather
+      // than 400ing the entire summary endpoint.
+      const parsePositiveInt = (v: unknown): number | undefined => {
+        if (typeof v !== "string") return undefined;
+        const n = Number(v);
+        return Number.isInteger(n) && n > 0 ? n : undefined;
+      };
+      const pilotPlatformId = parsePositiveInt(req.query.platformId);
+      const pilotDoctorId = parsePositiveInt(req.query.doctorId);
       let pilot: PilotMetricsBlock | undefined;
       try {
-        pilot = await computePilotMetrics();
+        pilot = await computePilotMetrics({
+          platformId: pilotPlatformId,
+          doctorId: pilotDoctorId,
+        });
       } catch (err) {
         logger.warn({ err }, "pilot_metrics_compute_failed");
         pilot = undefined;
@@ -2004,10 +2022,20 @@ function localHour(timestamptz: string, tz: string): number | null {
 // ZodObject typing in several other tables; introducing another use
 // would compound the problem. The inputs we care about for create are
 // narrow enough that a hand-written schema is clearer anyway.
+// Scope inputs are shared between preset and range. Both null = pilot
+// is whole-cohort (today's default). doctorId without platformId is
+// allowed -- the resolver will derive the doctor's platform implicitly
+// via their patients -- but in practice the UI always sends both.
+const scopeShape = {
+  platformId: z.number().int().positive().nullable().optional(),
+  doctorId: z.number().int().positive().nullable().optional(),
+};
+
 const snapshotPresetSchema = z.object({
   preset: z.enum(["day15", "day30"]),
   notes: z.string().max(2000).optional(),
   generatedByLabel: z.string().min(1).max(120).optional(),
+  ...scopeShape,
 });
 
 const snapshotRangeSchema = z.object({
@@ -2018,6 +2046,7 @@ const snapshotRangeSchema = z.object({
   cohortEndDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD"),
   notes: z.string().max(2000).optional(),
   generatedByLabel: z.string().min(1).max(120).optional(),
+  ...scopeShape,
 });
 
 const snapshotCreateSchema = z.union([snapshotPresetSchema, snapshotRangeSchema]);
@@ -2080,9 +2109,18 @@ router.post(
     }
 
     try {
+      // Scope filters flow into both the metrics computation AND the
+      // persisted row, so the snapshot row can stand alone later (the
+      // metrics blob already records the scope it described, but the
+      // top-level columns make list queries indexable).
+      const platformId = parsed.data.platformId ?? null;
+      const doctorId = parsed.data.doctorId ?? null;
+
       const metrics = await computePilotMetrics({
         windowStart: win.windowStart,
         windowEnd: win.windowEnd,
+        platformId,
+        doctorId,
       });
 
       const cohortStartDate = ymdLocal(win.windowStart);
@@ -2093,6 +2131,8 @@ router.post(
       const [row] = await db
         .insert(pilotSnapshotsTable)
         .values({
+          platformId,
+          doctorUserId: doctorId,
           cohortStartDate,
           cohortEndDate,
           generatedByLabel,
@@ -2119,6 +2159,8 @@ router.post(
 // GET /api/internal/analytics/pilot/snapshots -- list metadata only.
 // Intentionally omits the `metrics` JSONB blob so a list of N snapshots
 // stays cheap to render; the detail route returns the full payload.
+// Joins telehealth_platforms + users so the UI can show "Demo Platform /
+// Dr. Smith" without an extra round-trip per row.
 router.get(
   "/analytics/pilot/snapshots",
   requireInternalKey,
@@ -2133,12 +2175,24 @@ router.get(
           generatedByUserId: pilotSnapshotsTable.generatedByUserId,
           generatedByLabel: pilotSnapshotsTable.generatedByLabel,
           clinicName: pilotSnapshotsTable.clinicName,
+          platformId: pilotSnapshotsTable.platformId,
+          platformName: telehealthPlatformsTable.name,
+          platformSlug: telehealthPlatformsTable.slug,
           doctorUserId: pilotSnapshotsTable.doctorUserId,
+          doctorName: usersTable.name,
           metricDefinitionVersion: pilotSnapshotsTable.metricDefinitionVersion,
           patientCount: pilotSnapshotsTable.patientCount,
           notes: pilotSnapshotsTable.notes,
         })
         .from(pilotSnapshotsTable)
+        .leftJoin(
+          telehealthPlatformsTable,
+          eq(telehealthPlatformsTable.id, pilotSnapshotsTable.platformId),
+        )
+        .leftJoin(
+          usersTable,
+          eq(usersTable.id, pilotSnapshotsTable.doctorUserId),
+        )
         .orderBy(desc(pilotSnapshotsTable.generatedAt));
       res.json({ snapshots: rows });
     } catch (e) {
@@ -2148,7 +2202,8 @@ router.get(
   },
 );
 
-// GET /api/internal/analytics/pilot/snapshots/:id -- full row.
+// GET /api/internal/analytics/pilot/snapshots/:id -- full row, plus
+// resolved platform + doctor names (the UI's FrozenBanner needs them).
 router.get(
   "/analytics/pilot/snapshots/:id",
   requireInternalKey,
@@ -2160,18 +2215,74 @@ router.get(
     }
     try {
       const [row] = await db
-        .select()
+        .select({
+          snapshot: pilotSnapshotsTable,
+          platformName: telehealthPlatformsTable.name,
+          platformSlug: telehealthPlatformsTable.slug,
+          doctorName: usersTable.name,
+        })
         .from(pilotSnapshotsTable)
+        .leftJoin(
+          telehealthPlatformsTable,
+          eq(telehealthPlatformsTable.id, pilotSnapshotsTable.platformId),
+        )
+        .leftJoin(
+          usersTable,
+          eq(usersTable.id, pilotSnapshotsTable.doctorUserId),
+        )
         .where(eq(pilotSnapshotsTable.id, id))
         .limit(1);
       if (!row) {
         res.status(404).json({ error: "not_found" });
         return;
       }
-      res.json(row);
+      res.json({
+        ...row.snapshot,
+        platformName: row.platformName,
+        platformSlug: row.platformSlug,
+        doctorName: row.doctorName,
+      });
     } catch (e) {
       req.log.error({ err: e }, "pilot_snapshot_get_failed");
       res.status(500).json({ error: "snapshot_get_failed" });
+    }
+  },
+);
+
+// GET /api/internal/analytics/pilot/scopes -- selectors for the UI.
+// Returns the list of telehealth platforms and the list of doctors per
+// platform, so the New Snapshot panel and the live-view scope picker
+// can render dropdowns without a separate admin endpoint. Doctors are
+// scoped via patients.platform_id (denormalised at signup) so a doctor
+// who has not yet been assigned to any platform won't appear; that's
+// intentional -- pilot metrics are meaningless for them.
+router.get(
+  "/analytics/pilot/scopes",
+  requireInternalKey,
+  async (req: Request, res: Response) => {
+    try {
+      const platforms = await db
+        .select({
+          id: telehealthPlatformsTable.id,
+          name: telehealthPlatformsTable.name,
+          slug: telehealthPlatformsTable.slug,
+          status: telehealthPlatformsTable.status,
+        })
+        .from(telehealthPlatformsTable)
+        .orderBy(telehealthPlatformsTable.name);
+      const doctors = await db
+        .select({
+          id: usersTable.id,
+          name: usersTable.name,
+          platformId: usersTable.platformId,
+        })
+        .from(usersTable)
+        .where(eq(usersTable.role, "doctor"))
+        .orderBy(usersTable.name);
+      res.json({ platforms, doctors });
+    } catch (e) {
+      req.log.error({ err: e }, "pilot_scopes_failed");
+      res.status(500).json({ error: "scopes_failed" });
     }
   },
 );

@@ -177,6 +177,20 @@ export interface PilotProviderBlock {
   pctActedOn: number;
 }
 
+// Scope describes which slice of the cohort a metrics block covers.
+// Optional; absent = whole-cohort (every patient on every Viva platform
+// under every doctor). Present when the caller restricted by platform
+// and/or doctor; the UI uses these labels in the FrozenBanner and the
+// scope pill in the list view so an operator can tell at a glance
+// which customer / provider the numbers describe.
+export interface PilotScope {
+  platformId: number | null;
+  platformName: string | null;
+  platformSlug: string | null;
+  doctorId: number | null;
+  doctorName: string | null;
+}
+
 export interface PilotBlock {
   windowDays: number;
   // Server-supplied YYYY-MM-DD strings describing the window. Optional
@@ -184,6 +198,7 @@ export interface PilotBlock {
   // not carry them; the page falls back to "—" when missing.
   windowStartDate?: string;
   windowEndDate?: string;
+  scope?: PilotScope;
   cohort: { activated: number };
   risk: PilotRiskBlock;
   interventions: PilotInterventionsBlock;
@@ -213,8 +228,19 @@ export interface PilotSnapshotSummary {
   generatedAt: string; // ISO timestamp
   generatedByUserId: number | null;
   generatedByLabel: string;
+  // Legacy free-text column from before the platform model existed.
+  // Always null on snapshots created after the platform rollout; the
+  // UI ignores it and prefers platformName below.
   clinicName: string | null;
+  // Scope: who the snapshot describes. All four nullable for the
+  // historical "whole pilot" snapshots; platformName/doctorName are
+  // server-resolved via join (not stored on the row) so renaming a
+  // platform reflects everywhere immediately.
+  platformId: number | null;
+  platformName: string | null;
+  platformSlug: string | null;
   doctorUserId: number | null;
+  doctorName: string | null;
   metricDefinitionVersion: string;
   patientCount: number;
   notes: string | null;
@@ -228,14 +254,42 @@ export interface PilotSnapshotListResponse {
   snapshots: PilotSnapshotSummary[];
 }
 
+// Scope inputs are optional; both null/undefined = whole-cohort.
+type SnapshotScopeInputs = {
+  platformId?: number | null;
+  doctorId?: number | null;
+};
+
 export type PilotSnapshotCreateRequest =
-  | { preset: "day15" | "day30"; notes?: string; generatedByLabel?: string }
-  | {
+  | ({
+      preset: "day15" | "day30";
+      notes?: string;
+      generatedByLabel?: string;
+    } & SnapshotScopeInputs)
+  | ({
       cohortStartDate: string;
       cohortEndDate: string;
       notes?: string;
       generatedByLabel?: string;
-    };
+    } & SnapshotScopeInputs);
+
+// Selectors for scope dropdowns. `doctors[].platformId` lets the UI
+// filter the doctor list whenever a platform is picked.
+export interface PilotPlatformOption {
+  id: number;
+  name: string;
+  slug: string;
+  status: "active" | "paused" | "archived";
+}
+export interface PilotDoctorOption {
+  id: number;
+  name: string;
+  platformId: number | null;
+}
+export interface PilotScopesResponse {
+  platforms: PilotPlatformOption[];
+  doctors: PilotDoctorOption[];
+}
 
 export interface AnalyticsSummary {
   generatedAt: string;

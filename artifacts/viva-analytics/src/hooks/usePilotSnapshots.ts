@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, ApiError } from "@/lib/api";
 import type {
+  PilotScopesResponse,
   PilotSnapshotCreateRequest,
   PilotSnapshotDetail,
   PilotSnapshotListResponse,
@@ -60,4 +61,22 @@ export function useCreatePilotSnapshot(key: string | null) {
       },
     },
   );
+}
+
+// Selectors for the New Snapshot panel + live-view scope picker.
+// Whole-cohort by default; this query feeds the dropdowns. Cached
+// generously because platforms/doctors don't change mid-session.
+export function usePilotScopes(key: string | null) {
+  return useQuery<PilotScopesResponse, ApiError>({
+    queryKey: ["pilot-scopes", key],
+    queryFn: ({ signal }) =>
+      apiGet<PilotScopesResponse>(
+        "/internal/analytics/pilot/scopes",
+        key!,
+        signal,
+      ),
+    enabled: !!key,
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
 }

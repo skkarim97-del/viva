@@ -63,6 +63,8 @@ import {
   patientCheckinsTable,
   interventionEventsTable,
   careEventsTable,
+  telehealthPlatformsTable,
+  usersTable,
 } from "@workspace/db";
 import { computeRisk } from "./risk";
 import type { RiskBand } from "./risk";
@@ -133,6 +135,17 @@ export interface PilotMetricsBlock {
   // existing wire consumers that only care about counts don't break.
   windowStartDate?: string;
   windowEndDate?: string;
+  // Scope describes which slice of the cohort the numbers cover.
+  // Optional fields are present only when the caller restricted scope;
+  // null on the live operator-key dashboard where the default is
+  // whole-cohort (every patient on every platform under every doctor).
+  scope?: {
+    platformId: number | null;
+    platformName: string | null;
+    platformSlug: string | null;
+    doctorId: number | null;
+    doctorName: string | null;
+  };
   cohort: { activated: number };
   risk: PilotRiskBlock;
   interventions: PilotInterventionsBlock;
@@ -154,6 +167,17 @@ export interface ComputePilotMetricsOptions {
   windowStart?: Date;
   // End of the metrics window (inclusive). Defaults to "now".
   windowEnd?: Date;
+  // Restrict cohort to one telehealth platform (Viva customer). When
+  // null/undefined the cohort spans every platform -- the operator-key
+  // dashboard's default. The future external readout will always pass
+  // an explicit platformId so a customer can never see another
+  // customer's numbers.
+  platformId?: number | null;
+  // Restrict cohort to a single provider within the platform. Doctor
+  // scope is independent of platform scope (asking for one doctor
+  // implicitly scopes to that doctor's platform), but callers
+  // typically pass both for clarity.
+  doctorId?: number | null;
 }
 
 // ---- Computation -----------------------------------------------------
@@ -188,20 +212,36 @@ export async function computePilotMetrics(
   const windowStartDate = ymdLocal(windowStart);
   const windowEndDate = ymdLocal(windowEnd);
 
+  // -------- Scope: resolve display labels for any platform/doctor
+  // filter the caller asked for. Two small one-row lookups; they're
+  // skipped entirely on the default whole-cohort path so the live
+  // dashboard pays no extra cost.
+  const scope = await resolveScope(opts.platformId, opts.doctorId);
+
   // -------- Cohort: activated patients as of windowEnd --------------
   // The "activated as of windowEnd" bound makes Day 15 / Day 30
   // snapshots historically defensible. For live view (windowEnd = now),
   // every activated patient passes the bound, so behaviour is unchanged
   // from the original "all activated" rule.
+  //
+  // Optional scope filters narrow the cohort to one platform (Viva
+  // customer) and/or one provider within that platform. Both null =
+  // whole-cohort (operator-key default). External readouts always pass
+  // an explicit platformId so cross-customer leakage is impossible.
+  const cohortConds = [
+    isNotNull(patientsTable.activatedAt),
+    lte(patientsTable.activatedAt, windowEnd),
+  ];
+  if (opts.platformId != null) {
+    cohortConds.push(eq(patientsTable.platformId, opts.platformId));
+  }
+  if (opts.doctorId != null) {
+    cohortConds.push(eq(patientsTable.doctorId, opts.doctorId));
+  }
   const cohortRows = await db
     .select({ id: patientsTable.userId })
     .from(patientsTable)
-    .where(
-      and(
-        isNotNull(patientsTable.activatedAt),
-        lte(patientsTable.activatedAt, windowEnd),
-      ),
-    );
+    .where(and(...cohortConds));
   const cohortIds = cohortRows.map((r) => r.id);
   const cohortSize = cohortIds.length;
 
@@ -216,6 +256,7 @@ export async function computePilotMetrics(
       },
       windowStartDate,
       windowEndDate,
+      scope,
     );
   }
 
@@ -497,6 +538,7 @@ export async function computePilotMetrics(
     windowDays,
     windowStartDate,
     windowEndDate,
+    scope,
     cohort: { activated: cohortSize },
     risk: {
       flaggedPatients: flagged,
@@ -538,6 +580,50 @@ export async function computePilotMetrics(
 
 // ---- Helpers ---------------------------------------------------------
 
+// resolveScope turns the optional platformId / doctorId filters into the
+// human-readable labels the UI needs, without forcing the dashboard to
+// make an extra round-trip. Both sides of an `||` short-circuit when the
+// caller didn't ask for a scope, so the live whole-cohort path pays no
+// extra DB cost.
+async function resolveScope(
+  platformId: number | null | undefined,
+  doctorId: number | null | undefined,
+): Promise<PilotMetricsBlock["scope"]> {
+  if (platformId == null && doctorId == null) return undefined;
+  let platformName: string | null = null;
+  let platformSlug: string | null = null;
+  let doctorName: string | null = null;
+  if (platformId != null) {
+    const [p] = await db
+      .select({
+        name: telehealthPlatformsTable.name,
+        slug: telehealthPlatformsTable.slug,
+      })
+      .from(telehealthPlatformsTable)
+      .where(eq(telehealthPlatformsTable.id, platformId))
+      .limit(1);
+    if (p) {
+      platformName = p.name;
+      platformSlug = p.slug;
+    }
+  }
+  if (doctorId != null) {
+    const [u] = await db
+      .select({ name: usersTable.name })
+      .from(usersTable)
+      .where(eq(usersTable.id, doctorId))
+      .limit(1);
+    if (u) doctorName = u.name;
+  }
+  return {
+    platformId: platformId ?? null,
+    platformName,
+    platformSlug,
+    doctorId: doctorId ?? null,
+    doctorName,
+  };
+}
+
 function emptyBlock(
   windowDays: number,
   windows: {
@@ -547,11 +633,13 @@ function emptyBlock(
   },
   windowStartDate: string,
   windowEndDate: string,
+  scope: PilotMetricsBlock["scope"],
 ): PilotMetricsBlock {
   return {
     windowDays,
     windowStartDate,
     windowEndDate,
+    scope,
     cohort: { activated: 0 },
     risk: {
       flaggedPatients: 0,

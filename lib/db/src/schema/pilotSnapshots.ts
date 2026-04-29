@@ -9,6 +9,7 @@ import {
   index,
 } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
+import { telehealthPlatformsTable } from "./telehealthPlatforms";
 
 // Frozen Pilot Metrics readouts. Snapshots are append-only: once a row is
 // inserted, the metrics blob and date range never change. The live
@@ -36,7 +37,17 @@ export const pilotSnapshotsTable = pgTable(
   {
     id: serial("id").primaryKey(),
 
-    // Scope -- both nullable for "all clinics / all doctors".
+    // Scope -- all nullable to allow "all platforms / all doctors"
+    // whole-cohort snapshots. Set platformId to scope to one Viva
+    // customer; additionally set doctorUserId to scope to one provider
+    // within that customer. clinicName predates the platform model and
+    // is kept as a deprecated, unused string column for backward
+    // compatibility -- always null on new rows; will be removed in a
+    // separate cleanup pass once all snapshot consumers ignore it.
+    platformId: integer("platform_id").references(
+      () => telehealthPlatformsTable.id,
+      { onDelete: "set null" },
+    ),
     clinicName: text("clinic_name"),
     doctorUserId: integer("doctor_user_id").references(() => usersTable.id, {
       onDelete: "set null",

@@ -11,6 +11,7 @@ import {
   usePilotSnapshotsList,
   usePilotSnapshotDetail,
   useCreatePilotSnapshot,
+  usePilotScopes,
 } from "@/hooks/usePilotSnapshots";
 import {
   Card,
@@ -210,7 +211,7 @@ function SnapshotRow({
             {s.cohortStartDate} → {s.cohortEndDate}
           </div>
           <div className="text-[12px] text-muted-foreground mt-0.5">
-            {s.patientCount} patients · taken{" "}
+            {s.patientCount} patients · {scopeLabel(s)} · taken{" "}
             {new Date(s.generatedAt).toLocaleDateString()}{" "}
             {fmtTime(s.generatedAt)} by {s.generatedByLabel}
           </div>
@@ -224,6 +225,21 @@ function SnapshotRow({
       </div>
     </button>
   );
+}
+
+// Render a short human label describing a snapshot's scope. Whole-cohort
+// snapshots (no platform, no doctor) get the "All platforms" wording so
+// it's distinct from a snapshot scoped to one platform.
+function scopeLabel(s: {
+  platformName: string | null;
+  doctorName: string | null;
+}): string {
+  if (s.doctorName && s.platformName) {
+    return `${s.platformName} / ${s.doctorName}`;
+  }
+  if (s.platformName) return s.platformName;
+  if (s.doctorName) return s.doctorName;
+  return "All platforms";
 }
 
 // ------------------------------------------------------- snapshot detail
@@ -273,11 +289,12 @@ function FrozenBanner({ s }: { s: PilotSnapshotSummary }) {
     <Card>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <span className="inline-block px-2 py-0.5 rounded-full bg-[#142240] text-white text-[10px] font-bold uppercase tracking-wider">
               Frozen snapshot
             </span>
             <Chip tone="muted">{s.metricDefinitionVersion}</Chip>
+            <Chip tone="muted">Scope: {scopeLabel(s)}</Chip>
           </div>
           <div className="text-[14px] font-semibold text-[#142240]">
             Window: {s.cohortStartDate} → {s.cohortEndDate}
@@ -308,9 +325,33 @@ function NewSnapshotPanel({ operatorKey }: { operatorKey: string | null }) {
   const [customEnd, setCustomEnd] = useState<string>(() => todayYmd());
   const [notes, setNotes] = useState("");
   const [label, setLabel] = useState("");
+  // Scope state: empty string == "all". Doctor list is filtered to the
+  // selected platform when one is chosen, mirroring how doctors actually
+  // belong to one platform in the data model.
+  const [platformId, setPlatformId] = useState<string>("");
+  const [doctorId, setDoctorId] = useState<string>("");
+  const scopes = usePilotScopes(operatorKey);
   const create = useCreatePilotSnapshot(operatorKey);
 
+  const platforms = scopes.data?.platforms ?? [];
+  const doctorsAll = scopes.data?.doctors ?? [];
+  const visibleDoctors = platformId
+    ? doctorsAll.filter((d) => d.platformId === Number(platformId))
+    : doctorsAll;
+  // If the operator switches platforms and the previously-picked doctor
+  // belongs to a different platform, drop it so we don't post a
+  // mismatched scope. Done in render rather than effect to keep things
+  // synchronous and easy to reason about.
+  const effectiveDoctorId =
+    doctorId && visibleDoctors.some((d) => d.id === Number(doctorId))
+      ? doctorId
+      : "";
+
   const submit = () => {
+    const scopeFields = {
+      ...(platformId ? { platformId: Number(platformId) } : {}),
+      ...(effectiveDoctorId ? { doctorId: Number(effectiveDoctorId) } : {}),
+    };
     const body: PilotSnapshotCreateRequest =
       preset === "custom"
         ? {
@@ -318,11 +359,13 @@ function NewSnapshotPanel({ operatorKey }: { operatorKey: string | null }) {
             cohortEndDate: customEnd,
             ...(notes.trim() ? { notes: notes.trim() } : {}),
             ...(label.trim() ? { generatedByLabel: label.trim() } : {}),
+            ...scopeFields,
           }
         : {
             preset,
             ...(notes.trim() ? { notes: notes.trim() } : {}),
             ...(label.trim() ? { generatedByLabel: label.trim() } : {}),
+            ...scopeFields,
           };
     create.mutate(body, {
       onSuccess: () => {
@@ -355,6 +398,40 @@ function NewSnapshotPanel({ operatorKey }: { operatorKey: string | null }) {
             <option value="day15">Day 15 (last 15 days)</option>
             <option value="day30">Day 30 (last 30 days)</option>
             <option value="custom">Custom range…</option>
+          </select>
+        </Field>
+        <Field label="Platform (Viva customer)">
+          <select
+            value={platformId}
+            onChange={(e) => {
+              setPlatformId(e.target.value);
+              setDoctorId(""); // changing platform invalidates doctor pick
+            }}
+            disabled={scopes.isLoading}
+            className="w-full rounded-md border border-[rgba(20,34,64,0.15)] bg-white px-2 py-1.5 text-[13px]"
+          >
+            <option value="">All platforms (whole cohort)</option>
+            {platforms.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+                {p.status !== "active" ? ` (${p.status})` : ""}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Doctor (within platform)">
+          <select
+            value={effectiveDoctorId}
+            onChange={(e) => setDoctorId(e.target.value)}
+            disabled={scopes.isLoading}
+            className="w-full rounded-md border border-[rgba(20,34,64,0.15)] bg-white px-2 py-1.5 text-[13px]"
+          >
+            <option value="">All doctors</option>
+            {visibleDoctors.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
           </select>
         </Field>
         <Field label="Generated by (label)">
@@ -633,7 +710,14 @@ function RulesNote({ pilot, isEmpty }: { pilot: PilotBlock; isEmpty: boolean }) 
       <ul className="text-[12px] text-muted-foreground space-y-1.5 leading-relaxed">
         <li>
           <strong>Cohort:</strong> patients activated on or before the window
-          end date (operator-key view, no per-doctor scope).
+          end date.{" "}
+          {pilot.scope?.platformName || pilot.scope?.doctorName
+            ? `Scope: ${pilot.scope.platformName ?? "all platforms"}${
+                pilot.scope.doctorName
+                  ? ` / ${pilot.scope.doctorName}`
+                  : " / all doctors"
+              }.`
+            : "Whole-cohort (every platform, every doctor)."}
         </li>
         <li>
           <strong>Window:</strong> {pilot.windowDays} days

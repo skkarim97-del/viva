@@ -2,6 +2,7 @@ import { pgTable, integer, text, date, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { usersTable } from "./users";
+import { telehealthPlatformsTable } from "./telehealthPlatforms";
 
 export const patientsTable = pgTable("patients", {
   userId: integer("user_id")
@@ -10,6 +11,17 @@ export const patientsTable = pgTable("patients", {
   doctorId: integer("doctor_id")
     .notNull()
     .references(() => usersTable.id, { onDelete: "restrict" }),
+  // Telehealth platform that owns this patient. Denormalized from
+  // doctor_id -> users.platform_id at create time so analytics can
+  // filter by platform without joining through users every query. Keep
+  // in sync if a patient is ever reassigned to a different doctor on
+  // a different platform (rare, doctor moves not yet supported in UI).
+  // Nullable so the column can be added without backfill -- once
+  // backfill runs, every row should have a value.
+  platformId: integer("platform_id").references(
+    () => telehealthPlatformsTable.id,
+    { onDelete: "set null" },
+  ),
   glp1Drug: text("glp1_drug"),
   // Free-form dose label, e.g. "1mg weekly". Kept as a single text column
   // to stay lean -- structured titration history is intentionally out of

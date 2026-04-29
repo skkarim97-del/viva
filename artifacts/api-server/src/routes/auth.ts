@@ -10,6 +10,7 @@ import {
 } from "@workspace/db";
 import { z } from "zod";
 import { isInviteTokenExpired } from "../lib/inviteTokens";
+import { getDemoPlatformId } from "../lib/platforms";
 
 // Issue a long-lived bearer token for the patient mobile app. Cookies
 // are not reliable on RN, so the app stores this in AsyncStorage and
@@ -56,6 +57,12 @@ router.post("/signup", async (req: Request, res: Response) => {
     return;
   }
   const passwordHash = await bcrypt.hash(parsed.data.password, 10);
+  // Every freshly-created doctor lands on the default ("demo")
+  // platform during the demo phase. Once Viva onboards a second
+  // customer this becomes a runtime decision (signup picker or admin
+  // assignment); until then keeping the assignment implicit avoids
+  // making every doctor pick from a list of one.
+  const platformId = await getDemoPlatformId();
   const [user] = await db
     .insert(usersTable)
     .values({
@@ -63,6 +70,7 @@ router.post("/signup", async (req: Request, res: Response) => {
       passwordHash,
       role: "doctor",
       name: parsed.data.name.trim(),
+      platformId,
     })
     .returning();
   if (!user) {
