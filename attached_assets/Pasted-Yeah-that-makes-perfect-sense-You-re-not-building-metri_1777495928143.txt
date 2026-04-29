@@ -1,0 +1,190 @@
+Yeah that makes perfect sense. You’re not building metrics from scratch, you’re **organizing and composing them into a pilot layer**.
+
+The key is:
+👉 **existing raw metrics → derived “pilot metrics” → cohort-level readout**
+
+Here’s how I’d frame it to Replit Agent so it’s clean and actionable:
+
+---
+
+## Copy/paste this to Replit Agent:
+
+### **Goal**
+
+We already track granular product metrics across patient activity, symptoms, interventions, and care events.
+
+We now need to create a **“Pilot Metrics” layer inside Viva Analytics** that:
+
+* Aggregates existing data into composite pilot KPIs
+* Updates in real-time internally
+* Produces a clean **30-day cohort readout for external partners**
+
+---
+
+## **1. Create a “Pilot Metrics” Section in Viva Analytics**
+
+Add a new analytics module:
+
+> **Pilot Metrics (Cohort-Level View)**
+
+This should sit separately from raw product analytics.
+
+---
+
+## **2. Define Composite Pilot Metrics (Derived from Existing Data)**
+
+We are NOT creating new raw events.
+We are computing derived metrics from existing tables:
+
+---
+
+### **A. Earlier Risk Visibility**
+
+Derived from: `risk_events`, `patient_checkins`, engagement data
+
+* **% patients flagged at risk**
+  → (# unique patients with ≥1 risk_event) / (total active patients)
+
+* **Avg. risk signals per patient**
+  → total risk_events / total patients
+
+* **Top risk categories**
+  → distribution of risk_label by % of patients affected
+
+---
+
+### **B. Intervention Performance**
+
+Derived from: `intervention_events`, `intervention_responses`, `care_events`
+
+* **# interventions triggered per patient**
+  → total interventions / total patients
+
+* **% interventions engaged with**
+  → (# interventions with response) / (total interventions)
+
+* **% resolved via automation**
+  → interventions with NO escalation within X hours (24–48h window)
+
+* **% escalated to provider**
+  → interventions linked to escalation events
+
+---
+
+### **C. Provider Leverage**
+
+Derived from: `care_events`
+
+* **# patients escalated**
+  → count of unique patients with escalation_requested
+
+* **Avg. time-to-provider action**
+  → avg(timestamp(action_taken) - timestamp(escalation_requested))
+
+* **% escalations acted on**
+  → (# escalation events with action_taken) / (total escalations)
+
+---
+
+## **3. Cohort Logic (Important)**
+
+All pilot metrics must be computed for a defined **pilot cohort**:
+
+* cohort_start_date
+* cohort_end_date (30 days)
+* cohort_patient_ids
+
+Only include:
+
+* patients invited during pilot
+* or patients activated during pilot window
+
+---
+
+## **4. Dual View Requirement**
+
+### **Internal (Real-Time View)**
+
+* Live updating metrics
+* Daily aggregation
+* Used by us to monitor pilot performance
+
+### **External (30-Day Readout)**
+
+* Frozen snapshot at end of pilot
+* Clean, presentation-ready summary
+* No raw data, only aggregated KPIs
+
+---
+
+## **5. Implementation Approach**
+
+* Create a **pilot_metrics service / query layer** (not new tables unless needed)
+* Use SQL views or backend aggregation logic
+* Avoid duplicating raw data
+
+Example:
+
+* `pilot_metrics_summary` (computed view)
+* `pilot_metrics_daily` (optional for trend lines)
+
+---
+
+## **6. Key Constraints**
+
+* No double counting (dedupe by patient_id + event type)
+* All metrics must be reproducible from raw events
+* Time windows must be consistent (24h, 48h rules clearly defined)
+* Must support filtering by:
+
+  * clinic
+  * provider
+  * date range
+
+---
+
+## **7. Output (What we need visible)**
+
+At minimum:
+
+* % patients flagged at risk
+* Avg. risk signals per patient
+* # interventions per patient
+* % interventions engaged with
+* % resolved vs escalated
+* Avg. time-to-action
+* % escalations acted on
+
+---
+
+## **Context**
+
+These metrics power our pilot readout and are critical for:
+
+* validating signal detection
+* proving intervention effectiveness
+* demonstrating provider leverage
+
+---
+
+## My blunt advice (important)
+
+Don’t let them overengineer this.
+
+You do NOT need:
+
+* complex ML scoring yet
+* perfect attribution logic
+* dozens of dashboards
+
+You need:
+👉 **clean, defensible aggregation of existing events**
+
+---
+
+If you want next step, I’d help you define:
+
+* exact “resolved vs escalated” logic (this is where people mess up)
+* or what thresholds make your pilot look strong vs weak
+
+That part actually matters more than the tracking itself.
