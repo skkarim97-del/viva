@@ -41,3 +41,39 @@ export async function apiGet<T>(
   }
   return (await res.json()) as T;
 }
+
+export async function apiPost<TReq, TRes>(
+  path: string,
+  key: string,
+  body: TReq,
+  signal?: AbortSignal,
+): Promise<TRes> {
+  const res = await fetch(`/api${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${key}`,
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (res.status === 401) {
+    throw new ApiError("invalid_key", 401);
+  }
+  if (!res.ok) {
+    // Surface the server's `error`/`detail` so the caller can show a
+    // useful message instead of a bare HTTP code.
+    const data = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      detail?: unknown;
+    };
+    const detail =
+      typeof data.detail === "string"
+        ? data.detail
+        : data.detail
+          ? JSON.stringify(data.detail)
+          : undefined;
+    throw new ApiError(data.error ?? `http_${res.status}`, res.status, detail);
+  }
+  return (await res.json()) as TRes;
+}

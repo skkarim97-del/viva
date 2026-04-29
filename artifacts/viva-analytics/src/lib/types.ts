@@ -179,6 +179,11 @@ export interface PilotProviderBlock {
 
 export interface PilotBlock {
   windowDays: number;
+  // Server-supplied YYYY-MM-DD strings describing the window. Optional
+  // because older deployments and the empty-cohort short-circuit may
+  // not carry them; the page falls back to "—" when missing.
+  windowStartDate?: string;
+  windowEndDate?: string;
   cohort: { activated: number };
   risk: PilotRiskBlock;
   interventions: PilotInterventionsBlock;
@@ -193,6 +198,44 @@ export interface PilotBlock {
     reviewedDefinition: string;
   };
 }
+
+// ---------------------------------------------------------- pilot snapshots
+//
+// Frozen pilot-metrics readouts. List view returns metadata only
+// (cheap to render); detail view returns the full row including the
+// metrics blob. Wire shape mirrors `pilotSnapshotsTable` in
+// @workspace/db -- if a column is added there, mirror it here.
+
+export interface PilotSnapshotSummary {
+  id: number;
+  cohortStartDate: string; // YYYY-MM-DD
+  cohortEndDate: string; // YYYY-MM-DD
+  generatedAt: string; // ISO timestamp
+  generatedByUserId: number | null;
+  generatedByLabel: string;
+  clinicName: string | null;
+  doctorUserId: number | null;
+  metricDefinitionVersion: string;
+  patientCount: number;
+  notes: string | null;
+}
+
+export interface PilotSnapshotDetail extends PilotSnapshotSummary {
+  metrics: PilotBlock;
+}
+
+export interface PilotSnapshotListResponse {
+  snapshots: PilotSnapshotSummary[];
+}
+
+export type PilotSnapshotCreateRequest =
+  | { preset: "day15" | "day30"; notes?: string; generatedByLabel?: string }
+  | {
+      cohortStartDate: string;
+      cohortEndDate: string;
+      notes?: string;
+      generatedByLabel?: string;
+    };
 
 export interface AnalyticsSummary {
   generatedAt: string;

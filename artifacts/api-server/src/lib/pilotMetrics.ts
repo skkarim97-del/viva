@@ -56,7 +56,7 @@
 //     doesn't retroactively flag escalation #1 as reviewed.
 // ----------------------------------------------------------------------
 
-import { and, eq, gte, isNotNull, sql, desc } from "drizzle-orm";
+import { and, eq, gte, lte, isNotNull, sql, desc } from "drizzle-orm";
 import {
   db,
   patientsTable,
@@ -66,6 +66,23 @@ import {
 } from "@workspace/db";
 import { computeRisk } from "./risk";
 import type { RiskBand } from "./risk";
+
+// ---- Definition version ---------------------------------------------
+//
+// Bumped whenever the meaning of any KPI changes (window-size defaults,
+// dedupe windows, "acted on" / "reviewed" definitions, the cohort rule,
+// or the wire-format shape). Snapshots persist this string so a future
+// reader can refuse to compare snapshots taken under different rule
+// sets, and so the UI can label snapshots with their definition era.
+//
+// Bump rules: SemVer-flavoured.
+//   * patch: pure code-quality change, no number movement expected.
+//   * minor: shape addition (new optional fields; old snapshots still
+//     valid for comparison on shared fields).
+//   * major: any rule change that can move a number for unchanged data
+//     (e.g. flipping inclusive/exclusive boundary, changing dedupe
+//     window, swapping computeRisk implementation).
+export const PILOT_METRIC_DEFINITION_VERSION = "v1.0.0";
 
 // ---- Wire types ------------------------------------------------------
 
@@ -106,20 +123,37 @@ export interface PilotProviderBlock {
 }
 
 export interface PilotMetricsBlock {
-  windowDays: 30;
+  // The window the metrics describe, in days. Live view defaults to 30.
+  // Snapshots can be any positive integer (e.g. 15 for a Day 15 readout
+  // or arbitrary for a custom range).
+  windowDays: number;
+  // ISO date strings (YYYY-MM-DD) describing the window in the server's
+  // local timezone -- so the dashboard can show "Window: 2025-04-01 to
+  // 2025-04-30" without re-deriving it from the live clock. Optional so
+  // existing wire consumers that only care about counts don't break.
+  windowStartDate?: string;
+  windowEndDate?: string;
   cohort: { activated: number };
   risk: PilotRiskBlock;
   interventions: PilotInterventionsBlock;
   provider: PilotProviderBlock;
   rules: {
-    autoResolveWindowHours: 48;
-    engagementWindowHours: 48;
-    escalationDedupeHours: 24;
+    autoResolveWindowHours: number;
+    engagementWindowHours: number;
+    escalationDedupeHours: number;
     riskBandSource: "computed_on_read";
     engagementJoin: "loose_patient_only_within_48h";
     actedOnDefinition: "follow_up_completed_linked_via_trigger";
     reviewedDefinition: "doctor_reviewed_after_escalation_before_next";
   };
+}
+
+export interface ComputePilotMetricsOptions {
+  // Start of the metrics window (inclusive). Defaults to 30 days before
+  // windowEnd.
+  windowStart?: Date;
+  // End of the metrics window (inclusive). Defaults to "now".
+  windowEnd?: Date;
 }
 
 // ---- Computation -----------------------------------------------------
@@ -128,40 +162,75 @@ export interface PilotMetricsBlock {
  * Build the pilot-metrics block. Single composed read; safe to call
  * inside the existing summary endpoint. All counts are dedupe-safe per
  * the rules above.
+ *
+ * Window:
+ *   - windowEnd defaults to "now".
+ *   - windowStart defaults to (windowEnd - 30 days).
+ *   - Both ends are inclusive when filtering events. The cohort is
+ *     "patients activated on or before windowEnd" so a snapshot for an
+ *     earlier window doesn't include patients onboarded after that
+ *     window closed (would otherwise inflate the denominator for
+ *     historical readouts).
  */
-export async function computePilotMetrics(): Promise<PilotMetricsBlock> {
-  const WINDOW_DAYS = 30 as const;
+export async function computePilotMetrics(
+  opts: ComputePilotMetricsOptions = {},
+): Promise<PilotMetricsBlock> {
   const AUTO_RESOLVE_HOURS = 48 as const;
   const ENGAGEMENT_HOURS = 48 as const;
   const DEDUPE_HOURS = 24 as const;
 
-  const windowStart = new Date(Date.now() - WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const windowEnd = opts.windowEnd ?? new Date();
+  const windowStart =
+    opts.windowStart ??
+    new Date(windowEnd.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const windowMs = windowEnd.getTime() - windowStart.getTime();
+  const windowDays = Math.max(1, Math.round(windowMs / (24 * 60 * 60 * 1000)));
+  const windowStartDate = ymdLocal(windowStart);
+  const windowEndDate = ymdLocal(windowEnd);
 
-  // -------- Cohort: all activated patients --------------------------
+  // -------- Cohort: activated patients as of windowEnd --------------
+  // The "activated as of windowEnd" bound makes Day 15 / Day 30
+  // snapshots historically defensible. For live view (windowEnd = now),
+  // every activated patient passes the bound, so behaviour is unchanged
+  // from the original "all activated" rule.
   const cohortRows = await db
     .select({ id: patientsTable.userId })
     .from(patientsTable)
-    .where(isNotNull(patientsTable.activatedAt));
+    .where(
+      and(
+        isNotNull(patientsTable.activatedAt),
+        lte(patientsTable.activatedAt, windowEnd),
+      ),
+    );
   const cohortIds = cohortRows.map((r) => r.id);
   const cohortSize = cohortIds.length;
 
   // Empty cohort short-circuit. All KPIs zero, no work to do.
   if (cohortSize === 0) {
-    return emptyBlock(WINDOW_DAYS, {
-      autoResolveWindowHours: AUTO_RESOLVE_HOURS,
-      engagementWindowHours: ENGAGEMENT_HOURS,
-      escalationDedupeHours: DEDUPE_HOURS,
-    });
+    return emptyBlock(
+      windowDays,
+      {
+        autoResolveWindowHours: AUTO_RESOLVE_HOURS,
+        engagementWindowHours: ENGAGEMENT_HOURS,
+        escalationDedupeHours: DEDUPE_HOURS,
+      },
+      windowStartDate,
+      windowEndDate,
+    );
   }
 
-  // -------- Risk: pull last 30d of check-ins for cohort, group in
+  // -------- Risk: pull check-ins in window for cohort, group in
   // memory, run computeRisk per patient. Mirrors the needsFollowup
   // block in routes/internal.ts so the cost is well-understood.
-  const checkinsCutoff = ymdDaysAgo(WINDOW_DAYS - 1);
   const checkins = await db
     .select()
     .from(patientCheckinsTable)
-    .where(gte(patientCheckinsTable.date, checkinsCutoff))
+    .where(
+      and(
+        gte(patientCheckinsTable.date, windowStartDate),
+        lte(patientCheckinsTable.date, windowEndDate),
+      ),
+    )
     .orderBy(desc(patientCheckinsTable.date));
   const checkinsByPatient = new Map<number, typeof checkins>();
   for (const c of checkins) {
@@ -209,11 +278,20 @@ export async function computePilotMetrics(): Promise<PilotMetricsBlock> {
   // Drizzle doesn't expose interval arithmetic ergonomically across
   // dialects, so we use raw SQL for the EXISTS subqueries -- mirrors
   // the existing pattern in routes/internal.ts.
+  // Note on the upper bound: `ie.occurred_at <= windowEnd` constrains
+  // the *intervention* to live in the metrics window. The follow-on
+  // engagement/escalation event in the EXISTS subquery is intentionally
+  // NOT bounded by windowEnd -- if an intervention happened at the very
+  // end of the window we still want to credit a feedback that arrives
+  // shortly after, otherwise the engagement KPI would be biased
+  // downward at the trailing edge. For live view (windowEnd = now) the
+  // upper bound is a no-op; for snapshots it matters.
   const triggeredRows = await db.execute(sql`
     select cast(count(*) as int) as n
     from intervention_events
     where patient_user_id = any(${sql.raw(toIntArrayLiteral(cohortIds))})
       and occurred_at >= ${windowStart}
+      and occurred_at <= ${windowEnd}
   `);
   const triggered = numFromRow(triggeredRows.rows?.[0], "n");
 
@@ -227,6 +305,7 @@ export async function computePilotMetrics(): Promise<PilotMetricsBlock> {
     from intervention_events ie
     where ie.patient_user_id = any(${sql.raw(toIntArrayLiteral(cohortIds))})
       and ie.occurred_at >= ${windowStart}
+      and ie.occurred_at <= ${windowEnd}
       and exists (
         select 1 from care_events ce
         where ce.patient_user_id = ie.patient_user_id
@@ -242,6 +321,7 @@ export async function computePilotMetrics(): Promise<PilotMetricsBlock> {
     from intervention_events ie
     where ie.patient_user_id = any(${sql.raw(toIntArrayLiteral(cohortIds))})
       and ie.occurred_at >= ${windowStart}
+      and ie.occurred_at <= ${windowEnd}
       and exists (
         select 1 from care_events ce
         where ce.patient_user_id = ie.patient_user_id
@@ -268,6 +348,7 @@ export async function computePilotMetrics(): Promise<PilotMetricsBlock> {
       and(
         eq(careEventsTable.type, "escalation_requested"),
         gte(careEventsTable.occurredAt, windowStart),
+        lte(careEventsTable.occurredAt, windowEnd),
       ),
     )
     .orderBy(careEventsTable.patientUserId, careEventsTable.occurredAt);
@@ -310,6 +391,7 @@ export async function computePilotMetrics(): Promise<PilotMetricsBlock> {
       from care_events
       where type = 'follow_up_completed'
         and trigger_event_id = any(${sql.raw(toIntArrayLiteral(ids))})
+        and occurred_at <= ${windowEnd}
     `);
     followUps = (fuRows.rows ?? []).map((r) => {
       const row = r as { trigger_event_id: number | null; occurred_at: Date };
@@ -374,6 +456,7 @@ export async function computePilotMetrics(): Promise<PilotMetricsBlock> {
         and(
           eq(careEventsTable.type, "doctor_reviewed"),
           gte(careEventsTable.occurredAt, windowStart),
+          lte(careEventsTable.occurredAt, windowEnd),
         ),
       );
     const reviewsByPatient = new Map<number, Date[]>();
@@ -411,7 +494,9 @@ export async function computePilotMetrics(): Promise<PilotMetricsBlock> {
   }
 
   return {
-    windowDays: WINDOW_DAYS,
+    windowDays,
+    windowStartDate,
+    windowEndDate,
     cohort: { activated: cohortSize },
     risk: {
       flaggedPatients: flagged,
@@ -454,15 +539,19 @@ export async function computePilotMetrics(): Promise<PilotMetricsBlock> {
 // ---- Helpers ---------------------------------------------------------
 
 function emptyBlock(
-  windowDays: 30,
+  windowDays: number,
   windows: {
-    autoResolveWindowHours: 48;
-    engagementWindowHours: 48;
-    escalationDedupeHours: 24;
+    autoResolveWindowHours: number;
+    engagementWindowHours: number;
+    escalationDedupeHours: number;
   },
+  windowStartDate: string,
+  windowEndDate: string,
 ): PilotMetricsBlock {
   return {
     windowDays,
+    windowStartDate,
+    windowEndDate,
     cohort: { activated: 0 },
     risk: {
       flaggedPatients: 0,
@@ -522,9 +611,10 @@ function numFromRow(
   return typeof v === "number" ? v : Number(v ?? 0);
 }
 
-function ymdDaysAgo(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
+// Format a Date as YYYY-MM-DD in the server's local timezone. Matches
+// the format used by the patient_checkins.date column and what humans
+// expect to see in the snapshot UI ("2025-04-01 to 2025-04-30").
+function ymdLocal(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");

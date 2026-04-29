@@ -1,5 +1,6 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
-import { and, eq, gte, isNotNull, sql, desc } from "drizzle-orm";
+import { and, eq, gte, lte, isNotNull, sql, desc } from "drizzle-orm";
+import { z } from "zod";
 import {
   db,
   usersTable,
@@ -10,6 +11,7 @@ import {
   careEventsTable,
   outcomeSnapshotsTable,
   analyticsEventsTable,
+  pilotSnapshotsTable,
   deriveStopTiming,
 } from "@workspace/db";
 import { computeRisk, deriveAction } from "../lib/risk";
@@ -18,6 +20,7 @@ import { linkInterventionsToOutcomes } from "./interventions";
 import { recomputeRecentOutcomesForAllPatients } from "./outcomes";
 import {
   computePilotMetrics,
+  PILOT_METRIC_DEFINITION_VERSION,
   type PilotMetricsBlock,
 } from "../lib/pilotMetrics";
 
@@ -1968,27 +1971,208 @@ function localHour(timestamptz: string, tz: string): number | null {
 }
 
 // ----------------------------------------------------------------------
-// POST /internal/analytics/pilot/snapshot
+// Pilot Metrics Snapshots (internal only)
 //
-// Frozen 30-day cohort readout for external partners. Intentionally
-// disabled until the HIPAA prerequisites are in place: a signed BAA
-// covering the hosting platform, an audit_log table, AI-vendor
-// coverage for any data the pilot metrics surface, and a
-// de-identification / minimum-necessary review of the readout shape.
+// A snapshot is a frozen, immutable readout of the pilot KPIs for a
+// specific cohort window. Two intended modes:
+//   * Day-15 / Day-30 presets, computed against the rolling window
+//     ending "now".
+//   * Explicit cohortStartDate/cohortEndDate for custom retrospective
+//     readouts.
 //
-// Keeping the route registered (not deleted) so the URL exists in
-// monitoring and a future enable is one config flag away rather than
-// a fresh route deploy.
+// Persistence rules:
+//   * Snapshots are append-only. There is intentionally no PUT/PATCH/
+//     DELETE -- if a snapshot is wrong, take a new one with notes
+//     explaining why and ignore the old one in the UI.
+//   * `metricDefinitionVersion` is captured per-row so a future
+//     definition change (e.g. flipping a dedupe boundary) cannot
+//     silently re-interpret old snapshots. Comparing across versions
+//     is a UI/operator decision.
+//
+// External sharing is still NOT exposed. When HIPAA prerequisites
+// (BAA covering hosting, audit_log table, AI-vendor coverage,
+// de-identification / minimum-necessary review of the readout shape)
+// are in place, the external readout will be a separate route that
+// reads from `pilot_snapshots` -- it will never recompute live numbers
+// for an external caller. That ordering keeps "what we showed the
+// partner" auditable forever.
 // ----------------------------------------------------------------------
+
+// Hand-written zod request schemas. We deliberately don't use
+// drizzle-zod's createInsertSchema for pilot_snapshots because the
+// repo's current zod version disagrees with drizzle-zod's emitted
+// ZodObject typing in several other tables; introducing another use
+// would compound the problem. The inputs we care about for create are
+// narrow enough that a hand-written schema is clearer anyway.
+const snapshotPresetSchema = z.object({
+  preset: z.enum(["day15", "day30"]),
+  notes: z.string().max(2000).optional(),
+  generatedByLabel: z.string().min(1).max(120).optional(),
+});
+
+const snapshotRangeSchema = z.object({
+  // YYYY-MM-DD; we re-validate by parsing into a Date below.
+  cohortStartDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD"),
+  cohortEndDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD"),
+  notes: z.string().max(2000).optional(),
+  generatedByLabel: z.string().min(1).max(120).optional(),
+});
+
+const snapshotCreateSchema = z.union([snapshotPresetSchema, snapshotRangeSchema]);
+
+// Resolve the request body into a concrete inclusive [start, end] window.
+// Presets compute backwards from "now" so a Day-15 readout taken today
+// covers the most recent 15 days. Explicit ranges parse the YMD strings
+// in the SERVER's local timezone (start = 00:00:00.000, end =
+// 23:59:59.999) for consistency with how patient_checkins.date is read.
+function resolveWindow(
+  body: z.infer<typeof snapshotCreateSchema>,
+): { windowStart: Date; windowEnd: Date } | { error: string } {
+  if ("preset" in body) {
+    const days = body.preset === "day15" ? 15 : 30;
+    const windowEnd = new Date();
+    const windowStart = new Date(
+      windowEnd.getTime() - days * 24 * 60 * 60 * 1000,
+    );
+    return { windowStart, windowEnd };
+  }
+  // Explicit range. Build local-midnight bounds.
+  const [sy, sm, sd] = body.cohortStartDate.split("-").map(Number);
+  const [ey, em, ed] = body.cohortEndDate.split("-").map(Number);
+  const windowStart = new Date(sy, sm - 1, sd, 0, 0, 0, 0);
+  const windowEnd = new Date(ey, em - 1, ed, 23, 59, 59, 999);
+  if (
+    Number.isNaN(windowStart.getTime()) ||
+    Number.isNaN(windowEnd.getTime())
+  ) {
+    return { error: "invalid_date" };
+  }
+  if (windowEnd.getTime() < windowStart.getTime()) {
+    return { error: "end_before_start" };
+  }
+  // Cap the window at ~2 years of days as a defensive guard against
+  // accidental "year 0001" inputs that would scan the entire events
+  // table. The pilot won't run for years; if it does we revisit.
+  const days =
+    (windowEnd.getTime() - windowStart.getTime()) / (24 * 60 * 60 * 1000);
+  if (days > 730) return { error: "window_too_large" };
+  return { windowStart, windowEnd };
+}
+
+// POST /api/internal/analytics/pilot/snapshot -- create a snapshot.
 router.post(
   "/analytics/pilot/snapshot",
   requireInternalKey,
-  (_req: Request, res: Response) => {
-    res.status(503).json({
-      error: "snapshot_disabled",
-      detail:
-        "External pilot readout disabled until HIPAA prerequisites (BAA, audit log, AI-vendor coverage, de-identification review) are resolved.",
-    });
+  async (req: Request, res: Response) => {
+    const parsed = snapshotCreateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res
+        .status(400)
+        .json({ error: "invalid_request", detail: parsed.error.issues });
+      return;
+    }
+    const win = resolveWindow(parsed.data);
+    if ("error" in win) {
+      res.status(400).json({ error: win.error });
+      return;
+    }
+
+    try {
+      const metrics = await computePilotMetrics({
+        windowStart: win.windowStart,
+        windowEnd: win.windowEnd,
+      });
+
+      const cohortStartDate = ymdLocal(win.windowStart);
+      const cohortEndDate = ymdLocal(win.windowEnd);
+      const generatedByLabel =
+        parsed.data.generatedByLabel?.trim() || "operator";
+
+      const [row] = await db
+        .insert(pilotSnapshotsTable)
+        .values({
+          cohortStartDate,
+          cohortEndDate,
+          generatedByLabel,
+          metricDefinitionVersion: PILOT_METRIC_DEFINITION_VERSION,
+          patientCount: metrics.cohort.activated,
+          metrics,
+          notes: parsed.data.notes ?? null,
+        })
+        .returning();
+
+      res.status(201).json(row);
+    } catch (e) {
+      req.log.error(
+        { err: e },
+        "pilot_snapshot_create_failed",
+      );
+      res
+        .status(500)
+        .json({ error: "snapshot_create_failed" });
+    }
+  },
+);
+
+// GET /api/internal/analytics/pilot/snapshots -- list metadata only.
+// Intentionally omits the `metrics` JSONB blob so a list of N snapshots
+// stays cheap to render; the detail route returns the full payload.
+router.get(
+  "/analytics/pilot/snapshots",
+  requireInternalKey,
+  async (req: Request, res: Response) => {
+    try {
+      const rows = await db
+        .select({
+          id: pilotSnapshotsTable.id,
+          cohortStartDate: pilotSnapshotsTable.cohortStartDate,
+          cohortEndDate: pilotSnapshotsTable.cohortEndDate,
+          generatedAt: pilotSnapshotsTable.generatedAt,
+          generatedByUserId: pilotSnapshotsTable.generatedByUserId,
+          generatedByLabel: pilotSnapshotsTable.generatedByLabel,
+          clinicName: pilotSnapshotsTable.clinicName,
+          doctorUserId: pilotSnapshotsTable.doctorUserId,
+          metricDefinitionVersion: pilotSnapshotsTable.metricDefinitionVersion,
+          patientCount: pilotSnapshotsTable.patientCount,
+          notes: pilotSnapshotsTable.notes,
+        })
+        .from(pilotSnapshotsTable)
+        .orderBy(desc(pilotSnapshotsTable.generatedAt));
+      res.json({ snapshots: rows });
+    } catch (e) {
+      req.log.error({ err: e }, "pilot_snapshot_list_failed");
+      res.status(500).json({ error: "snapshot_list_failed" });
+    }
+  },
+);
+
+// GET /api/internal/analytics/pilot/snapshots/:id -- full row.
+router.get(
+  "/analytics/pilot/snapshots/:id",
+  requireInternalKey,
+  async (req: Request, res: Response) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      res.status(400).json({ error: "invalid_id" });
+      return;
+    }
+    try {
+      const [row] = await db
+        .select()
+        .from(pilotSnapshotsTable)
+        .where(eq(pilotSnapshotsTable.id, id))
+        .limit(1);
+      if (!row) {
+        res.status(404).json({ error: "not_found" });
+        return;
+      }
+      res.json(row);
+    } catch (e) {
+      req.log.error({ err: e }, "pilot_snapshot_get_failed");
+      res.status(500).json({ error: "snapshot_get_failed" });
+    }
   },
 );
 
