@@ -1,5 +1,5 @@
 import express, { type Express, type ErrorRequestHandler, type RequestHandler } from "express";
-import cors from "cors";
+import cors, { type CorsOptions } from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
@@ -39,11 +39,42 @@ app.use(
   }),
 );
 // CORS with credentials so the doctor dashboard (served at a different
-// path) can attach the session cookie. Origin is reflected back per
-// request, which is fine because the cookie is sameSite=lax.
+// path) can attach the session cookie.
+//
+// `ALLOWED_ORIGINS` is a comma-separated allowlist of approved browser
+// origins (scheme + host + port, no trailing slash) that are permitted
+// to make credentialed cross-origin requests. Examples:
+//   ALLOWED_ORIGINS=https://viva-ai.replit.app,https://dashboard.viva-ai.com
+// Mobile native fetch does not send an Origin header and is therefore
+// never CORS-evaluated; this allowlist only constrains browser clients.
+//
+// When the var is unset the middleware falls back to reflecting the
+// request Origin (legacy behavior) so local dev and the existing
+// Replit deployment keep working without a config change.
+const allowedOriginList = (process.env.ALLOWED_ORIGINS || "")
+  .split(",")
+  .map((s) => s.trim().replace(/\/$/, ""))
+  .filter(Boolean);
+const allowedOriginSet = new Set(allowedOriginList);
+const corsOriginCheck: CorsOptions["origin"] =
+  allowedOriginSet.size === 0
+    ? true
+    : (origin, cb) => {
+        // No Origin header: server-to-server, native mobile, curl,
+        // same-origin browser requests. Always allowed.
+        if (!origin) return cb(null, true);
+        if (allowedOriginSet.has(origin.replace(/\/$/, ""))) {
+          return cb(null, true);
+        }
+        logger.warn(
+          { origin, allowed: allowedOriginList },
+          "cors_origin_rejected",
+        );
+        return cb(null, false);
+      };
 app.use(
   cors({
-    origin: true,
+    origin: corsOriginCheck,
     credentials: true,
   }),
 );

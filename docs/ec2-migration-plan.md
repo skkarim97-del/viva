@@ -28,9 +28,23 @@ Out of scope on purpose (per "keep it simple"):
 - **Build location**: on the EC2 box (`pnpm install --frozen-lockfile` +
   `pnpm --filter @workspace/api-server run build`). The api-server bundle
   produced by esbuild plus the resolved `node_modules` is what runs.
-- **DB driver**: existing `pg` Pool in `lib/db/src/index.ts`. The TLS
-  no-verify branch only fires when `AWS_DATABASE_URL` is set, so on EC2
-  we will set `AWS_DATABASE_URL` (not `DATABASE_URL`) so RDS TLS is enabled.
+- **DB driver**: existing `pg` Pool in `lib/db/src/index.ts`. Two opt-in
+  paths now exist:
+  1. `AWS_DATABASE_URL` set, `AWS_DB_SSL_CA_PATH` unset -> `sslmode=no-verify`
+     (the legacy Replit Autoscale path; kept for back-compat).
+  2. `AWS_DATABASE_URL` set, `AWS_DB_SSL_CA_PATH` pointed at the RDS CA
+     bundle PEM file on disk -> `verify-full` with `rejectUnauthorized:
+     true` and the bundle pinned. **This is the EC2 path.**
+- **CORS allowlist**: `app.ts` now reads `ALLOWED_ORIGINS` (comma-separated
+  origin list). When set, only those origins receive CORS headers from
+  the API; when unset, the server reflects any origin (legacy behavior,
+  preserves the current Replit deployment without a config change).
+  Mobile native fetch never sends an `Origin` header so the allowlist
+  has no effect on the iOS/Android app.
+- **Secrets**: `/etc/viva-api.env` for the first cutover. AWS Secrets
+  Manager / Parameter Store SecureString is documented as a follow-up
+  hardening item in T111 and intentionally not wired into the runtime
+  yet. We don't need the AWS SDK on the box on day one.
 - **No schema changes.** This migration is hosting-layer only. `users.id`
   and every other PK stays the type it already is.
 
@@ -115,8 +129,10 @@ Write to `/etc/viva-api.env` (mode `0600`, owned by `root:viva`):
 | `NODE_ENV` | yes | Production mode | `production` |
 | `PORT` | yes | App listen port | `8080` |
 | `LOG_LEVEL` | no | pino level | default `info` |
-| `AWS_DATABASE_URL` | yes | RDS connection string | set this, not `DATABASE_URL`, so the existing `sslmode=no-verify` branch in `lib/db/src/index.ts` activates |
-| `SESSION_SECRET` | yes | Signs doctor session cookies | generate with `openssl rand -hex 32` once and store in AWS Secrets Manager too |
+| `AWS_DATABASE_URL` | yes | RDS connection string | set this (not `DATABASE_URL`) so the SSL branch in `lib/db/src/index.ts` activates |
+| `AWS_DB_SSL_CA_PATH` | yes on EC2 | Path to RDS CA bundle PEM | set to e.g. `/opt/viva/rds-ca-bundle.pem` to get `verify-full`; if omitted, falls back to `no-verify` |
+| `ALLOWED_ORIGINS` | yes | Comma-separated browser-origin allowlist | e.g. `https://viva-ai.replit.app,https://dashboard.viva-ai.com` -- only browser CORS, mobile native fetch is unaffected |
+| `SESSION_SECRET` | yes | Signs doctor session cookies | generate with `openssl rand -hex 32` |
 | `INTERNAL_API_KEY` | yes (operator routes) | Static operator bearer | generate with `openssl rand -hex 32` |
 | `INTERNAL_IP_ALLOWLIST` | yes (operator routes) | Comma-separated CIDRs/IPs that can hit `/api/internal/*` | the office / VPN egress IPs |
 | `COACH_PILOT_MODE` | yes for pilot | Coach mode | `safe` (defaults safe in production already, but be explicit) |
@@ -185,15 +201,28 @@ sudo journalctl -u viva-api -f
   2. Confirm the RDS instance has `Publicly accessible = No`. If it is
      currently public (because Replit needed it), flip it to private now;
      the EC2 reaches it over the VPC.
-  3. The connection string already uses `sslmode=no-verify` via
-     `lib/db/src/index.ts` when `AWS_DATABASE_URL` is set. Pilot is fine
-     with this. **Hardening follow-up (post-pilot):** download the
-     `rds-combined-ca-bundle.pem`, mount it on the box, switch to
-     `sslmode=verify-full`, and pin the CA in code.
-  4. Quick sanity:
+  3. **TLS verify-full with the RDS CA bundle** (now wired into the
+     code as an opt-in via `AWS_DB_SSL_CA_PATH`):
+     ```bash
+     sudo -u viva curl -fsSL \
+       https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem \
+       -o /opt/viva/rds-ca-bundle.pem
+     sudo chmod 0644 /opt/viva/rds-ca-bundle.pem
+     ```
+     Then add to `/etc/viva-api.env`:
+     ```
+     AWS_DB_SSL_CA_PATH=/opt/viva/rds-ca-bundle.pem
+     ```
+     `lib/db/src/index.ts` will read the bundle at startup, drop any
+     `sslmode` from the URL, and pass `ssl: { ca, rejectUnauthorized:
+     true }` to the pg Pool. If the file is missing or unreadable the
+     process throws on startup with a clear error -- safer than silently
+     downgrading.
+  4. Quick sanity (uses the same bundle so it matches the app):
      ```bash
      sudo -u viva bash -c 'set -a; source /etc/viva-api.env; set +a;
-       psql "$AWS_DATABASE_URL" -c "select now(), current_user, version()"'
+       psql "$AWS_DATABASE_URL?sslmode=verify-full&sslrootcert=$AWS_DB_SSL_CA_PATH" \
+         -c "select now(), current_user, version()"'
      ```
 
 ### T106: Caddy reverse proxy + TLS for api.viva-ai.com
@@ -284,9 +313,16 @@ default-deny except the ephemeral return path.
          the static `dist/` from `dashboard.viva-ai.com` as a separate
          site block). Dashboard then keeps its same-origin `/api`.
      - For pilot, pick the easier path.
-  4. **CORS** -- in `artifacts/api-server/src/app.ts` the `cors()` config
-     should explicitly allow the dashboard origin (Replit URL or
-     `dashboard.viva-ai.com`) with `credentials: true`.
+  4. **CORS** -- the API now reads `ALLOWED_ORIGINS` from env. On the
+     EC2 box, set:
+     ```
+     ALLOWED_ORIGINS=https://viva-ai.replit.app,https://dashboard.viva-ai.com
+     ```
+     Include every browser origin that needs to attach the doctor
+     session cookie. The mobile app sends no `Origin` header and is
+     unaffected. Rejected origins are logged once per request as
+     `cors_origin_rejected` so a misconfiguration shows up in the
+     journal immediately.
   5. **iOS / Android associated domains JSON** -- the API serves
      `/.well-known/apple-app-site-association` and
      `/.well-known/assetlinks.json`. Confirm both still respond at
@@ -335,12 +371,16 @@ default-deny except the ephemeral return path.
         days.
   - [ ] Restore-from-snapshot drill: spin up a throwaway RDS from
         snapshot, run a smoke test, tear down. Document timing.
-  - [ ] Switch RDS TLS from `sslmode=no-verify` to `sslmode=verify-full`
-        with the RDS CA bundle pinned (code change in
-        `lib/db/src/index.ts`).
+  - [ ] Confirm `AWS_DB_SSL_CA_PATH` is set in `/etc/viva-api.env` and
+        the journal shows no SSL fall-through warnings (code change
+        already landed in `lib/db/src/index.ts`).
   - [ ] Rotate `SESSION_SECRET` and `INTERNAL_API_KEY` once during
-        cutover and put both in AWS Secrets Manager (or Parameter Store
-        SecureString) instead of a flat env file.
+        cutover and migrate both to AWS Secrets Manager or Parameter
+        Store SecureString. The `EnvironmentFile=` line in the systemd
+        unit can be replaced with a small `ExecStartPre=` that pulls
+        the secrets via the AWS CLI and writes them to a tmpfs file --
+        deferred until after the first stable cutover so we don't
+        change two things at once.
   - [ ] CloudWatch Logs agent on the EC2 box, shipping
         `journalctl -u viva-api` to a log group with retention >= 6
         years (HIPAA audit log requirement).
