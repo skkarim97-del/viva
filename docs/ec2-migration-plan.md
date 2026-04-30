@@ -134,7 +134,7 @@ Write to `/etc/viva-api.env` (mode `0600`, owned by `root:viva`):
 | `ALLOWED_ORIGINS` | yes | Comma-separated browser-origin allowlist | e.g. `https://viva-ai.replit.app,https://dashboard.viva-ai.com` -- only browser CORS, mobile native fetch is unaffected |
 | `SESSION_SECRET` | yes | Signs doctor session cookies | generate with `openssl rand -hex 32` |
 | `INTERNAL_API_KEY` | yes (operator routes) | Static operator bearer | generate with `openssl rand -hex 32` |
-| `INTERNAL_IP_ALLOWLIST` | yes (operator routes) | Comma-separated CIDRs/IPs that can hit `/api/internal/*` | the office / VPN egress IPs |
+| `INTERNAL_IP_ALLOWLIST` | yes (operator routes) | Comma-separated **exact** IPv4/IPv6 addresses that can hit `/api/internal/*` (CIDR not supported by current middleware) | the office / VPN egress IPs |
 | `COACH_PILOT_MODE` | yes for pilot | Coach mode | `safe` (defaults safe in production already, but be explicit) |
 | `AI_INTEGRATIONS_OPENAI_API_KEY` | no in safe mode | OpenAI key | omit for the pilot; safe mode does not call OpenAI |
 | `OPENAI_API_KEY` | no in safe mode | Legacy alias | omit |
