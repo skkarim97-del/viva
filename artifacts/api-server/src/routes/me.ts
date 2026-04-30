@@ -12,9 +12,23 @@ import {
 import { requirePatient, type AuthedRequest } from "../middlewares/auth";
 import { computeRisk } from "../lib/risk";
 import { computeSymptomFlags } from "../lib/symptoms";
+import { mediumApiLimiter } from "../middlewares/rateLimit";
+import { phiAudit } from "../middlewares/phiAudit";
 
 const router: Router = Router();
+// Rate limit BEFORE the auth gate so an unauthenticated flood
+// doesn't burn DB cycles on the bearer token lookup.
+router.use(mediumApiLimiter);
 router.use(requirePatient);
+// HIPAA audit log for patient-self PHI. Mounted AFTER requirePatient
+// so req.auth is set; getPatientId is the patient's own user id
+// (every route in this router is naturally scoped to req.auth.userId
+// -- /me has no other patient id surface).
+router.use(
+  phiAudit({
+    getPatientId: (req) => (req as AuthedRequest).auth?.userId ?? null,
+  }),
+);
 
 router.get("/checkins", async (req, res: Response) => {
   const userId = (req as AuthedRequest).auth.userId;

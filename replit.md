@@ -43,6 +43,48 @@ The system is a pnpm workspace monorepo using Node.js 24 and TypeScript 5.9. The
 -   **GLP-1 Daily Inputs**: Tracks energy, appetite, nausea, and digestion.
 -   **Mental State Check-in**: Records mental state for plan generation.
 
+### HIPAA-Readiness Hardening (added 2026-04-30)
+
+First half of the pre-customer security pass (T001-T005). Sequence and decisions
+captured in `.local/session_plan.md`; T006-T008 paused for user review.
+
+-   **T001 - Log redaction & housekeeping**: Removed `backups/` (gitignored,
+    untracked). Extended pino redact in `artifacts/api-server/src/lib/logger.ts`
+    to scrub `req.body`, `*.body`, `*.message`, `*.token`, `*.secret`, and
+    `*.response.data` from structured logs. Coach error log no longer dumps
+    OpenAI response bodies.
+-   **T002 - Hashed bearer tokens**: New `lib/apiTokens.ts` (sha256-hex via
+    `generateRawApiToken`/`hashApiToken`). `routes/auth.ts.issueApiToken`
+    stores the hash; `middlewares/auth.ts` hashes the incoming bearer before
+    DB lookup. Migration of the 15 active production tokens was done in
+    place (one-shot SQL UPDATE rewriting each `token` PK value to its
+    SHA-256 hex), so no patients had to re-login. The `api_tokens.token`
+    column type is unchanged (still `text` PK).
+-   **T003 - Rate limiting + operator IP allowlist**: Added
+    `middlewares/rateLimit.ts` (`strictAuthLimiter` 10/15min on auth and
+    invite endpoints, `mediumApiLimiter` 60/min on coach/patients/me/internal,
+    `lenientGlobalLimiter`) and `middlewares/ipAllowlist.ts`
+    (`operatorIpAllowlist` reads `INTERNAL_IP_ALLOWLIST`; warns and allows
+    when unset for dev). Mounted router-level so per-route omissions are
+    impossible.
+-   **T004 - PHI access audit log**: New `phi_access_logs` table (serial PK,
+    nullable FKs with `ON DELETE SET NULL` so audit rows survive user
+    deletion). Mounted `middlewares/phiAudit.ts` at the router level on
+    `patients.ts`, `careEvents.ts`, and `internal.ts`. Writes are
+    fire-and-forget on `res.on('finish')` so the request path never blocks
+    or fails on an audit insert. Captures actor (user id + role), action
+    (read/write/delete derived from HTTP verb), target patient/platform id,
+    route, method, status code, and SHA-256-hashed ip + user-agent. Never
+    captures request body, query string, or response body. Operator audit
+    rows use `actor_user_id = NULL`, `actor_role = 'operator'`.
+-   **T005 - Authorization audit**: New `lib/canAccessPatient.ts` is the
+    single source of truth for "is this doctor allowed to read/write this
+    patient's PHI?". `careEvents.ts.ownsPatient` now delegates to it;
+    `patients.ts` keeps `loadOwnedPatient` (which also returns the row)
+    but the underlying ownership predicate matches. Full route-x-check
+    matrix written to `docs/authz-audit.md`. Audit found no missing
+    guards on PHI routes.
+
 ### Pilot Persistence Layer (added 2026-04-28)
 
 Server-side persistence so doctors and analytics see real patient activity (previously most state lived only in mobile AsyncStorage).

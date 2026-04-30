@@ -24,8 +24,36 @@ import {
   PILOT_METRIC_DEFINITION_VERSION,
   type PilotMetricsBlock,
 } from "../lib/pilotMetrics";
+import { operatorIpAllowlist } from "../middlewares/ipAllowlist";
+import { mediumApiLimiter } from "../middlewares/rateLimit";
+import { phiAudit } from "../middlewares/phiAudit";
 
 const router: Router = Router();
+
+// Order matters: rate limit first (cheap, no DB), then IP allowlist
+// (cheap, no DB), then the bearer-key check inside requireInternalKey.
+// Mounting them at the router level applies them to every operator
+// endpoint without having to remember per-route.
+router.use(mediumApiLimiter);
+router.use(operatorIpAllowlist);
+// HIPAA audit log for operator activity. Operator requests have no
+// user row today (deferred per pilot decision), so we override the
+// actor role to 'operator' and let actor_user_id be NULL. We do not
+// resolve a patient id here -- internal endpoints serve platform-
+// scoped aggregates, not patient PHI -- but routes that DO surface
+// per-patient data (e.g. needs-review lists) call phiAudit at their
+// own scope or wrap the data fetch in the existing PHI route group.
+router.use(
+  phiAudit({
+    actor: { actorRole: "operator" },
+    getPlatformId: (req) => {
+      const raw = req.query?.platformId ?? req.params?.platformId;
+      if (typeof raw !== "string") return null;
+      const n = parseInt(raw, 10);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    },
+  }),
+);
 
 // Internal-only endpoint. NOT mounted under /api on purpose -- this
 // lives at /api/internal but is gated by a separate bearer token, not

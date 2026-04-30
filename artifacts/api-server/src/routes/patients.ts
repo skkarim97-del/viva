@@ -28,10 +28,31 @@ import {
   computeSymptomFlags,
   summarizeFlagForList,
 } from "../lib/symptoms";
+import { mediumApiLimiter } from "../middlewares/rateLimit";
+import { phiAudit } from "../middlewares/phiAudit";
 
 const router: Router = Router();
 
+// Rate limit BEFORE the auth gate so an unauthenticated flood
+// doesn't burn DB cycles on bcrypt-style work in requireDoctor.
+router.use(mediumApiLimiter);
 router.use(requireDoctor);
+// HIPAA audit log: mount AFTER requireDoctor so req.auth is populated
+// by the time the response 'finish' handler fires. The middleware's
+// own try/catch + .catch() on the insert means an audit failure
+// never breaks a doctor request. We pull the patient id from either
+// `:id` (the standard 14 routes) or `:patientId` (only the
+// notes/:noteId DELETE route uses the alternate name).
+router.use(
+  phiAudit({
+    getPatientId: (req) => {
+      const raw = req.params?.id ?? req.params?.patientId;
+      if (typeof raw !== "string") return null;
+      const n = parseInt(raw, 10);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    },
+  }),
+);
 
 // GET /patients -- list every patient assigned to the calling doctor, with
 // last-checkin date and computed risk band so the dashboard list view can

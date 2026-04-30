@@ -15,6 +15,8 @@ import {
   type AuthedRequest,
 } from "../middlewares/auth";
 import { logger } from "../lib/logger";
+import { phiAudit } from "../middlewares/phiAudit";
+import { canAccessPatient } from "../lib/canAccessPatient";
 
 // ----------------------------------------------------------------------
 // /care-events -- the dual-layer intervention event stream.
@@ -31,6 +33,34 @@ import { logger } from "../lib/logger";
 // ----------------------------------------------------------------------
 
 const router: Router = Router();
+
+// HIPAA audit log. Mounted at the router level so every read AND
+// write through /care-events is captured. The middleware reads
+// req.auth in the response 'finish' callback (after per-route
+// requireAuth/requirePatient/requireDoctor have populated it), and
+// safely no-ops on 401s where no actor was ever known.
+//
+// Patient id resolution:
+//   * doctor read     GET   /:patientId        -> req.params.patientId
+//   * doctor mark     POST  /:patientId/reviewed -> req.params.patientId
+//   * doctor follow-up POST /:patientId/follow-up -> req.params.patientId
+//   * patient batch   POST  /                  -> falls back to the
+//     authenticated patient's own user id, since that endpoint logs
+//     events about the patient themselves.
+router.use(
+  phiAudit({
+    getPatientId: (req) => {
+      const raw = req.params?.patientId;
+      if (typeof raw === "string") {
+        const n = parseInt(raw, 10);
+        if (Number.isFinite(n) && n > 0) return n;
+      }
+      const auth = (req as AuthedRequest).auth;
+      if (auth?.role === "patient") return auth.userId;
+      return null;
+    },
+  }),
+);
 
 // ---- patient: batched log -------------------------------------------
 //
@@ -97,21 +127,17 @@ router.post("/", requirePatient, async (req, res: Response) => {
 // recent doctor_reviewed per patient -- but we don't dedupe, since
 // repeated reviews are themselves a useful signal.
 
+// ownsPatient -- thin wrapper kept for call-site readability. The
+// real implementation is the shared canAccessPatient helper, which
+// is also used by patients.ts so both routers route their access
+// decisions through a single audited code path. We deliberately do
+// not inline this back in -- a named helper at the call site is a
+// stronger reviewability signal than a bare boolean expression.
 async function ownsPatient(
   doctorId: number,
   patientId: number,
 ): Promise<boolean> {
-  const rows = await db
-    .select({ userId: patientsTable.userId })
-    .from(patientsTable)
-    .where(
-      and(
-        eq(patientsTable.userId, patientId),
-        eq(patientsTable.doctorId, doctorId),
-      ),
-    )
-    .limit(1);
-  return rows.length > 0;
+  return canAccessPatient(doctorId, patientId);
 }
 
 // ---- doctor: mark follow-up completed -------------------------------

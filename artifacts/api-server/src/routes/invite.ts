@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { eq } from "drizzle-orm";
 import { db, usersTable, patientsTable } from "@workspace/db";
 import { isInviteTokenExpired } from "../lib/inviteTokens";
+import { strictAuthLimiter } from "../middlewares/rateLimit";
 
 // Public invite routes. These are intentionally mounted OUTSIDE the
 // /api prefix because:
@@ -108,7 +109,11 @@ async function loadInvitePreview(token: string): Promise<InvitePreview | null> {
   };
 }
 
-JSON_ROUTER.get("/:token", async (req: Request, res: Response) => {
+// Per-IP rate limit on the JSON preview endpoint. Without this, an
+// attacker could enumerate the activation-token space (it's 32 bytes
+// of randomness so guessing is implausible, but a leaked partial
+// could still get tested at machine speed).
+JSON_ROUTER.get("/:token", strictAuthLimiter, async (req: Request, res: Response) => {
   const token = String(req.params.token || "");
   const preview = await loadInvitePreview(token);
   if (!preview) {

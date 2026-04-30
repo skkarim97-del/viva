@@ -14,8 +14,32 @@ import {
   redactPHI,
   shouldStoreRawCoachMessages,
 } from "../../lib/coachClassify";
+import { mediumApiLimiter } from "../../middlewares/rateLimit";
+import { phiAudit } from "../../middlewares/phiAudit";
+import { hashApiToken } from "../../lib/apiTokens";
 
 const router = Router();
+
+// Per-IP rate limit on the coach surface. Today this protects
+// OpenAI quota and DB write rate; under pilot safe-mode (T006) it
+// also bounds the structured-template lookup.
+router.use(mediumApiLimiter);
+// HIPAA audit log. /coach/chat does NOT use requireAuth (legacy
+// public-by-default behavior is preserved), so we use an async
+// getActor that re-runs resolvePatientUserId to attribute the call.
+// Unauthenticated coach calls still go through (and are not
+// audit-logged, since there is no actor to attribute) -- matching
+// the existing behavior where bearer-less chat is anonymous and
+// nothing is persisted server-side.
+router.use(
+  phiAudit({
+    getPatientId: (req) => resolvePatientUserId(req),
+    getActor: async (req) => {
+      const userId = await resolvePatientUserId(req);
+      return userId === null ? null : { userId, role: "patient" };
+    },
+  }),
+);
 
 // =====================================================================
 // AI COACH PRIVACY MODEL (PILOT)
@@ -79,13 +103,19 @@ async function resolvePatientUserId(req: Request): Promise<number | null> {
     const header = req.get("authorization") || "";
     const m = /^Bearer\s+([A-Za-z0-9_\-]+)$/.exec(header);
     if (!m) return null;
+    // T002: api_tokens.token is stored as a SHA-256 hex hash of the
+    // raw bearer the patient holds. The original implementation
+    // queried by the raw token and silently returned null after the
+    // T002 migration; this hashed lookup restores coach persistence
+    // and audit attribution for bearer-authed patients.
+    const tokenHash = hashApiToken(m[1]!);
     const [row] = await db
       .select({
         userId: apiTokensTable.userId,
         role: apiTokensTable.role,
       })
       .from(apiTokensTable)
-      .where(eq(apiTokensTable.token, m[1]!))
+      .where(eq(apiTokensTable.token, tokenHash))
       .limit(1);
     if (!row || row.role !== "patient") return null;
     return row.userId;
@@ -323,11 +353,19 @@ interface ChatRequestBody {
 router.post("/chat", async (req: Request, res: Response) => {
   const reqId = Math.random().toString(36).slice(2, 8);
   const wantsStream = req.query.stream !== "false" && req.get("accept") !== "application/json";
-  console.log(`[coach/chat ${reqId}] received: stream=${wantsStream} ua="${req.get("user-agent") || "?"}" len=${JSON.stringify(req.body || {}).length}b`);
+  // Routed through pino so every coach log line is subject to the
+  // same redact paths as the rest of the server. We deliberately
+  // surface lengths and counts only -- never the body itself -- so
+  // even an accidental redact-path miss cannot leak chat content.
+  req.log.info(
+    `[coach/chat ${reqId}] received: stream=${wantsStream} ua_present=${!!req.get("user-agent")} bodyLen=${JSON.stringify(req.body || {}).length}b`,
+  );
   try {
     const body = req.body as ChatRequestBody;
     const { message, healthContext, conversationHistory } = body;
-    console.log(`[coach/chat ${reqId}] payload: msgLen=${message?.length ?? 0} hasContext=${!!healthContext} historyLen=${conversationHistory?.length ?? 0}`);
+    req.log.info(
+      `[coach/chat ${reqId}] payload: msgLen=${message?.length ?? 0} hasContext=${!!healthContext} historyLen=${conversationHistory?.length ?? 0}`,
+    );
 
     if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY && !process.env.OPENAI_API_KEY) {
       console.error(`[coach/chat ${reqId}] missing OpenAI credentials`);
@@ -938,10 +976,19 @@ router.post("/chat", async (req: Request, res: Response) => {
         });
     }
   } catch (error: any) {
-    console.error(`[coach/chat ${reqId}] error:`, error?.message || error);
-    console.error(`[coach/chat ${reqId}] error type:`, error?.constructor?.name);
-    console.error(`[coach/chat ${reqId}] error status:`, error?.status || error?.response?.status);
-    if (error?.response?.data) console.error(`[coach/chat ${reqId}] error data:`, JSON.stringify(error.response.data));
+    // Scrub upstream errors before logging. OpenAI error payloads
+    // frequently echo the prompt / completion text inside
+    // `error.response.data`, which would re-introduce PHI into the
+    // log pipeline after we worked to keep it out of the DB. Log
+    // shape only: status code, error class, and message (which is
+    // an OpenAI-supplied string like "Rate limit exceeded" -- never
+    // user content).
+    const errStatus = error?.status || error?.response?.status;
+    const errClass = error?.constructor?.name;
+    const errMsg = typeof error?.message === "string" ? error.message : "unknown";
+    console.error(
+      `[coach/chat ${reqId}] error: status=${errStatus ?? "?"} class=${errClass ?? "?"} msg=${errMsg}`,
+    );
 
     let statusCode = 500;
     let errorDetail = "Failed to generate response";

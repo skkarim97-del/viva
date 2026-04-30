@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { eq } from "drizzle-orm";
 import { db, apiTokensTable } from "@workspace/db";
+import { hashApiToken } from "../lib/apiTokens";
 
 export interface AuthedRequest extends Request {
   auth: { userId: number; role: "doctor" | "patient" };
@@ -25,14 +26,20 @@ export async function requireAuth(
   const header = req.get("authorization") || "";
   const m = /^Bearer\s+([A-Za-z0-9_\-]+)$/.exec(header);
   if (m) {
+    // The token column stores a SHA-256 hex digest of the raw bearer
+    // (see lib/apiTokens.ts). We hash the incoming value before the
+    // lookup so the raw token never leaves the request handler.
+    const tokenHash = hashApiToken(m[1]!);
     const [row] = await db
       .select()
       .from(apiTokensTable)
-      .where(eq(apiTokensTable.token, m[1]!))
+      .where(eq(apiTokensTable.token, tokenHash))
       .limit(1);
     if (row) {
       (req as AuthedRequest).auth = { userId: row.userId, role: row.role };
       // Best-effort touch so an idle audit could later expire stale tokens.
+      // row.token is already the hash, so this update keys on the same
+      // value we just looked up by.
       db.update(apiTokensTable)
         .set({ lastUsedAt: new Date() })
         .where(eq(apiTokensTable.token, row.token))

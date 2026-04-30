@@ -14,3 +14,4 @@ export * from "./patientTreatmentLogs";
 export * from "./patientProfiles";
 export * from "./coachMessages";
 export * from "./pilotSnapshots";
+export * from "./phiAccessLogs";

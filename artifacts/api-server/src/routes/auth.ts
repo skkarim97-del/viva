@@ -1,6 +1,5 @@
 import { Router, type Request, type Response } from "express";
 import bcrypt from "bcryptjs";
-import { randomBytes } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
 import {
   db,
@@ -11,17 +10,28 @@ import {
 import { z } from "zod";
 import { isInviteTokenExpired } from "../lib/inviteTokens";
 import { getDemoPlatformId } from "../lib/platforms";
+import { generateRawApiToken, hashApiToken } from "../lib/apiTokens";
+import { strictAuthLimiter } from "../middlewares/rateLimit";
 
 // Issue a long-lived bearer token for the patient mobile app. Cookies
 // are not reliable on RN, so the app stores this in AsyncStorage and
 // sends it on every request via Authorization: Bearer <token>.
+//
+// What lands in the DB is the SHA-256 hash of the raw token, never
+// the raw token itself. The raw value is returned to the caller in
+// this single response and never serialized again -- the mobile
+// client must persist it locally (Keychain via expo-secure-store).
+// See lib/apiTokens.ts for the rationale on hashing instead of
+// salting/argon2.
 async function issueApiToken(
   userId: number,
   role: "doctor" | "patient",
 ): Promise<string> {
-  const token = randomBytes(32).toString("base64url");
-  await db.insert(apiTokensTable).values({ token, userId, role });
-  return token;
+  const raw = generateRawApiToken();
+  await db
+    .insert(apiTokensTable)
+    .values({ token: hashApiToken(raw), userId, role });
+  return raw;
 }
 
 const router: Router = Router();
@@ -40,7 +50,7 @@ const signupSchema = z.object({
 // POST /auth/signup -- create a new doctor account. Patient accounts
 // are not created this way; they are provisioned by a doctor via the
 // invite flow and claim their account from the mobile app.
-router.post("/signup", async (req: Request, res: Response) => {
+router.post("/signup", strictAuthLimiter, async (req: Request, res: Response) => {
   const parsed = signupSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_input" });
@@ -111,7 +121,7 @@ const activateSchema = z.object({
   token: z.string().min(8).max(200),
   password: z.string().min(8).max(200),
 });
-router.post("/activate", async (req: Request, res: Response) => {
+router.post("/activate", strictAuthLimiter, async (req: Request, res: Response) => {
   const parsed = activateSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_input" });
@@ -237,7 +247,7 @@ router.post("/activate", async (req: Request, res: Response) => {
   });
 });
 
-router.post("/login", async (req: Request, res: Response) => {
+router.post("/login", strictAuthLimiter, async (req: Request, res: Response) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_input" });

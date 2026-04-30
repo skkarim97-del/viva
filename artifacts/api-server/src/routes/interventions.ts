@@ -11,8 +11,18 @@ import {
 } from "@workspace/db";
 import { requirePatient, requireAuth, type AuthedRequest } from "../middlewares/auth";
 import { logger } from "../lib/logger";
+import { phiAudit } from "../middlewares/phiAudit";
 
 const router: Router = Router();
+// HIPAA audit log. Per-route auth (requirePatient on /log,
+// requireAuth on /recent), so we read req.auth in the response
+// 'finish' handler. The middleware safely no-ops when no actor was
+// established (i.e. a 401 fired before req.auth was set).
+router.use(
+  phiAudit({
+    getPatientId: (req) => (req as AuthedRequest).auth?.userId ?? null,
+  }),
+);
 
 // ----- POST /interventions/log -------------------------------------
 // Patient client batches the interventions it has rendered (Today,

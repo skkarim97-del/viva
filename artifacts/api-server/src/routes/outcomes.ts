@@ -8,8 +8,17 @@ import {
 } from "@workspace/db";
 import { requirePatient, type AuthedRequest } from "../middlewares/auth";
 import { logger } from "../lib/logger";
+import { phiAudit } from "../middlewares/phiAudit";
 
 const router: Router = Router();
+// HIPAA audit log. Both routes use requirePatient per-route, so
+// req.auth is populated by the time the response 'finish' handler
+// fires; the middleware safely no-ops on 401 when no actor was set.
+router.use(
+  phiAudit({
+    getPatientId: (req) => (req as AuthedRequest).auth?.userId ?? null,
+  }),
+);
 
 // Direct upsert path. The mobile client calls this once per day with
 // the proxy outcomes it can compute locally (daily check-in done?
