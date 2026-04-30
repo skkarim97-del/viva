@@ -1,0 +1,109 @@
+Let’s proceed with the next HIPAA-readiness hardening scope before real pilots.
+
+Goals:
+
+1. Restrict AI coach to non-sensitive inputs
+2. Hash bearer tokens
+3. Run an authorization audit on patient/provider routes
+4. Add PHI access audit logging
+5. Add basic doctor MFA
+6. Delete all backup folders in the workspace
+7. Add rate limiting
+8. Improve logging hygiene so PHI is not logged
+9. Ensure push notification payloads are PHI-free
+
+Scope details:
+
+AI Coach Restriction
+
+* Keep AI coach disabled for free-text PHI until vendor BAA/zero-retention setup is resolved
+* Add a safe-mode guard that rejects or redirects sensitive medical free-text
+* Allow only structured, non-sensitive coaching flows for now, such as selecting symptom categories, severity, hydration, sleep, nausea, appetite, energy, activity, and general wellness guidance
+* Do not send raw patient free-text to OpenAI in pilot mode
+* Add clear UX copy if a user types sensitive info: “For your privacy, please use the structured check-in or contact your care team for medical concerns.”
+
+Token Security
+
+* Hash all bearer tokens before storing them
+* Never store raw tokens after issuance
+* Lookup tokens by hash
+* Add migration path for existing tokens if needed
+
+Authorization Audit
+
+* Audit all /api/patients/:id/*, care event, check-in, dashboard, analytics, invite, coach, and treatment routes
+* Confirm every route enforces one of:
+
+  * patient can access only self
+  * doctor can access only assigned patients
+  * platform admin can access only platform patients
+  * internal operator access is explicitly gated
+* Fix any missing authorization checks
+
+PHI Access Audit Log
+
+* Add a phi_access_logs table
+* Track:
+
+  * id
+  * user_id
+  * role
+  * patient_id when applicable
+  * platform_id when applicable
+  * action
+  * route
+  * method
+  * ip_hash
+  * user_agent_hash
+  * created_at
+* Log clinician and internal access to patient-level PHI
+* Do not store request bodies or PHI in the audit log
+
+Doctor MFA
+
+* Add basic MFA for doctors before viewing patient data
+* Start with email OTP if easiest
+* Require MFA for doctor role and internal operator role
+* Do not require MFA for patients yet unless easy
+* Add session flag mfa_verified
+
+Backups
+
+* Delete all backup folders in workspace, especially backups/
+* Confirm no real PHI exists in local workspace backups
+* If any backup is needed, it should live only in encrypted, access-controlled AWS storage with retention rules
+
+Rate Limiting
+
+* Add rate limits for:
+
+  * login
+  * invite activation
+  * coach endpoints
+  * patient routes
+  * analytics/internal routes
+* Use stricter limits for auth and invite endpoints
+
+Logging Hygiene
+
+* Add redaction middleware/config for:
+
+  * request body
+  * authorization headers
+  * cookies
+  * patient identifiers where possible
+  * free-text fields
+* Ensure no PHI is logged in console or pino logs
+* Log event metadata only, not patient content
+
+Push Notifications
+
+* Ensure notification title/body never includes PHI, medication names, symptoms, diagnoses, weight, or treatment details
+* Use generic copy only:
+
+  * “You have a new Viva update”
+  * “Your care team has a new update”
+  * “Time for your check-in”
+* Add code comments or helper functions so future notifications stay PHI-free
+
+Please inspect current implementation first, then propose the smallest safe build plan before coding.
