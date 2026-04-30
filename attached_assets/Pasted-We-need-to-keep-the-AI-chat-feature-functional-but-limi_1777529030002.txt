@@ -1,0 +1,110 @@
+We need to keep the AI chat feature functional, but limit what patient chat data is saved to reduce PHI exposure for pilot.
+
+Goal:
+Keep the AI coaching/chat UX as-is, but change persistence and logging so we do NOT store raw free-text patient messages or full AI responses unless absolutely necessary.
+
+Please inspect the current AI coach/chat implementation first and identify:
+
+* where patient messages are sent
+* where patient messages are stored
+* where AI responses are stored
+* whether messages are logged in care_events, analytics_events, intervention_events, or any other table
+
+Implementation requirements:
+
+1. Do not store raw patient free-text chat messages
+
+* Patient can still type into the AI chat
+* Message can be used transiently to generate a response
+* But raw user text should not be persisted in the database or analytics logs
+
+2. Do not store full AI responses by default
+
+* Store only structured metadata needed for analytics and safety
+* Example metadata:
+
+  * patient_id
+  * doctor_id
+  * platform_id if available
+  * timestamp
+  * message_category
+  * risk_category
+  * escalation_recommended boolean
+  * escalation_triggered boolean
+  * response_template_id if applicable
+  * model/provider used
+  * safety_flag boolean
+
+3. Store only classified summaries, not raw text
+   If we need to save something, save a short structured classification like:
+
+* symptom_support
+* medication_question
+* side_effect
+* nutrition
+* hydration
+* exercise
+* urgent_concern
+* other
+
+Do not save patient-written details like names, dates, locations, conditions, dosing specifics, family details, insurance info, or other identifiers.
+
+4. Add a PHI redaction / stripping layer before any logging
+   Before saving anything from the chat flow:
+
+* remove names
+* emails
+* phone numbers
+* dates of birth
+* addresses
+* exact dates
+* medication IDs or prescription numbers
+* insurance details
+* free-text medical history
+
+Prefer allowlist logging over redaction:
+Only save fields we explicitly allow.
+
+5. Keep escalation audit trail
+   If chat detects a serious issue, continue creating a care_event for escalation, but store only:
+
+* event_type = escalation_requested or coach_escalation_recommended
+* patient_id
+* doctor_id
+* timestamp
+* risk_category
+* severity
+* no raw chat text
+
+6. Keep analytics useful
+   We still need to track:
+
+* # coach interactions
+* top message categories
+* % chats leading to escalation recommendation
+* % chats leading to provider escalation
+* patient engagement with coach
+  But all should be based on structured metadata, not raw messages.
+
+7. Add config flag
+   Add an environment flag:
+   COACH_STORE_RAW_MESSAGES=false
+
+Default should be false in all pilot/production environments.
+If true in local development only, raw message storage can be temporarily enabled for debugging, but never in production.
+
+8. Update existing storage if needed
+   If raw chat messages are already being saved, identify where and either:
+
+* stop writing them going forward
+* optionally add a migration/script to redact or delete prior raw chat content from demo/pilot data
+
+9. Add comments in code
+   Document clearly:
+
+* AI chat uses transient message processing
+* raw PHI/free text is not persisted by default
+* only structured metadata is stored for analytics and safety
+
+Important:
+Do not remove or break the AI chat UX. The patient should experience the chat normally. This is mainly a backend persistence/logging change to reduce PHI retention.

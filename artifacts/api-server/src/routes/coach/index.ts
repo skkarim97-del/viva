@@ -6,9 +6,67 @@ import {
   apiTokensTable,
   coachMessagesTable,
   careEventsTable,
+  patientsTable,
 } from "@workspace/db";
+import {
+  classifyCategory,
+  assessRisk,
+  redactPHI,
+  shouldStoreRawCoachMessages,
+} from "../../lib/coachClassify";
 
 const router = Router();
+
+// =====================================================================
+// AI COACH PRIVACY MODEL (PILOT)
+// =====================================================================
+// The chat UX is unchanged: patients type freely, we send the message
+// to OpenAI, we stream the response back. What CHANGED is what gets
+// persisted:
+//   * Raw patient free-text is NOT stored in coach_messages by default
+//   * Full AI responses are NOT stored in coach_messages by default
+//   * coach_messages now carries structured metadata only --
+//     message_category, risk_category, escalation flags, model used,
+//     length, platform/doctor scope -- which is what the analytics
+//     and safety queries actually need
+//   * care_events escalation rows no longer carry a messagePreview;
+//     they carry a structured reason + risk band + severity instead
+//   * NO chat body is logged via pino / console (only lengths +
+//     classifier outputs)
+//   * The body column is kept (now NULLABLE) for back-compat with
+//     pre-pilot rows and for local-dev debugging when
+//     COACH_STORE_RAW_MESSAGES=true. In that mode, body is PHI-
+//     redacted before insert. The default in pilot/production is
+//     allowlist-by-omission (never write the body), which is
+//     strictly safer than redact-then-store.
+// See artifacts/api-server/src/lib/coachClassify.ts.
+// =====================================================================
+
+// Cache the patient's tenant scope (platform_id, doctor_user_id) so
+// we can denormalize it onto each coach_messages row without a join
+// at read time. Returns nulls on any failure -- never throws.
+async function resolvePatientScope(
+  patientUserId: number,
+): Promise<{ platformId: number | null; doctorUserId: number | null }> {
+  try {
+    const [row] = await db
+      .select({
+        platformId: patientsTable.platformId,
+        doctorId: patientsTable.doctorId,
+      })
+      .from(patientsTable)
+      .where(eq(patientsTable.userId, patientUserId))
+      .limit(1);
+    return {
+      platformId: row?.platformId ?? null,
+      doctorUserId: row?.doctorId ?? null,
+    };
+  } catch {
+    return { platformId: null, doctorUserId: null };
+  }
+}
+
+const COACH_MODEL_PROVIDER = "openai:gpt-4o-mini";
 
 // Best-effort bearer-token resolver for the coach routes. The /chat
 // route is intentionally not gated behind requirePatient (preserves
@@ -36,22 +94,10 @@ async function resolvePatientUserId(req: Request): Promise<number | null> {
   }
 }
 
-// Heuristic detection of "I'm thinking about stopping / pausing /
-// quitting / skipping treatment". Word-boundary matched so we don't
-// flag normal sentences ("I had to stop the car"); we require a
-// treatment / med / dose / shot anchor nearby. This is intentionally
-// conservative -- a false negative is fine (the patient can also use
-// the explicit Request review button), but a false positive spams the
-// clinician's needs-review queue.
-const STOP_VERB_RE = /\b(stop|stopping|stopped|pause|pausing|paused|skip|skipping|skipped|quit|quitting|quitted|discontinu\w*|come\s+off|coming\s+off|get\s+off|getting\s+off|going\s+off|stop\s+taking|hold\s+off)\b/i;
-const TREATMENT_ANCHOR_RE = /\b(treatment|medication|med|meds|drug|dose|shot|injection|glp\W*1|semaglutide|tirzepatide|liraglutide|ozempic|wegovy|mounjaro|zepbound|saxenda|rybelsus)\b/i;
-
-function detectTreatmentStopConcern(text: string): boolean {
-  if (!text) return false;
-  // Two cheap regex passes are faster than tokenizing for a 200-char
-  // string. Both must match for the concern to fire.
-  return STOP_VERB_RE.test(text) && TREATMENT_ANCHOR_RE.test(text);
-}
+// NOTE: heuristic treatment-stop detection used to live here. It moved
+// to ../../lib/coachClassify.ts as part of the broader risk classifier
+// (assessRisk) so the chat route only needs a single classification
+// pass per turn. Imported above.
 
 const SYSTEM_PROMPT = `You are VIVA, a premium GLP-1 support coach. You know this person's medication, dose, recent trends, and daily state. You speak like a smart friend who truly gets what GLP-1 treatment feels like.
 
@@ -714,29 +760,62 @@ router.post("/chat", async (req: Request, res: Response) => {
     const coachMode =
       healthContext?.treatmentState?.communicationMode ?? null;
 
+    // Classify and risk-assess the user message OUTSIDE the persistence
+    // branch so the values are also available for the assistant rows
+    // and for downstream analytics. The classifier emits only
+    // allowlisted enum values -- never raw text.
+    const userCategory = classifyCategory(message);
+    const userRisk = assessRisk(message);
+    const userMessageLength = message.length;
+    console.log(
+      `[coach/chat ${reqId}] classified: category=${userCategory} risk=${userRisk.riskCategory} escalate=${userRisk.escalationRecommended} len=${userMessageLength}`,
+    );
+
     if (patientUserId !== null) {
-      // Persist the user message and detect a treatment-stop concern
-      // in parallel. Both are best-effort -- failures are logged and
-      // swallowed so the chat path always returns to the user.
+      // Resolve tenant scope (platform / doctor) once and reuse for
+      // every coach_messages row in this turn. Best-effort -- nulls on
+      // any failure so the chat path stays resilient.
+      const scope = await resolvePatientScope(patientUserId);
+      const storeRaw = shouldStoreRawCoachMessages();
+      const escalationTriggered = userRisk.escalationRecommended;
+
+      // PRIVACY: structured metadata only by default. body stays NULL
+      // unless COACH_STORE_RAW_MESSAGES=true (dev/debug), in which
+      // case it's PHI-redacted first.
       void db
         .insert(coachMessagesTable)
         .values({
           patientUserId,
           role: "user",
-          body: message,
+          body: storeRaw ? redactPHI(message) : null,
           mode: coachMode,
+          messageCategory: userCategory,
+          riskCategory: userRisk.riskCategory,
+          escalationRecommended: userRisk.escalationRecommended,
+          escalationTriggered,
+          safetyFlag: userRisk.safetyFlag,
+          modelProvider: COACH_MODEL_PROVIDER,
+          platformId: scope.platformId,
+          doctorUserId: scope.doctorUserId,
+          messageLength: userMessageLength,
         })
         .catch((err) => {
           console.error(`[coach/chat ${reqId}] coach_messages user insert failed`, err);
         });
 
-      if (detectTreatmentStopConcern(message)) {
-        // Use the existing escalation_requested type with a metadata
-        // reason so the clinician needs-review query (which already
-        // groups by escalation_requested) picks this up without an
-        // enum migration. The mobile app's explicit Request review
-        // button uses the same type, so the dashboard surface is
-        // already wired.
+      if (escalationTriggered) {
+        // Existing escalation_requested type so the clinician
+        // needs-review query (which already groups by this type)
+        // picks it up without an enum migration. The mobile app's
+        // explicit Request review button uses the same type. PRIVACY:
+        // metadata carries only an allowlisted reason + risk band +
+        // severity, never the patient's free text.
+        const severity =
+          userRisk.riskCategory === "critical"
+            ? "high"
+            : userRisk.riskCategory === "high"
+              ? "medium"
+              : "low";
         void db
           .insert(careEventsTable)
           .values({
@@ -745,13 +824,16 @@ router.post("/chat", async (req: Request, res: Response) => {
             source: "patient",
             type: "escalation_requested",
             metadata: {
-              reason: "treatment_stop_question",
+              reason: userRisk.escalationReason ?? "treatment_stop_question",
               channel: "coach",
-              messagePreview: message.slice(0, 240),
+              riskCategory: userRisk.riskCategory,
+              messageCategory: userCategory,
+              severity,
+              safetyFlag: userRisk.safetyFlag,
             },
           })
           .catch((err) => {
-            console.error(`[coach/chat ${reqId}] treatment-stop care_event insert failed`, err);
+            console.error(`[coach/chat ${reqId}] coach escalation care_event insert failed`, err);
           });
       }
     }
@@ -768,15 +850,29 @@ router.post("/chat", async (req: Request, res: Response) => {
       console.log(`[coach/chat ${reqId}] returned JSON: contentLen=${content.length}`);
       res.json({ content });
       // Fire-and-forget assistant persistence after the response goes
-      // out. Same best-effort posture as the user-message insert.
+      // out. PRIVACY: structured metadata only (length, model, scope,
+      // category mirrored from the user turn for grouping). Body is
+      // NULL by default; populated + redacted only when
+      // COACH_STORE_RAW_MESSAGES=true.
       if (patientUserId !== null && content) {
+        const scope = await resolvePatientScope(patientUserId);
+        const storeRaw = shouldStoreRawCoachMessages();
         void db
           .insert(coachMessagesTable)
           .values({
             patientUserId,
             role: "assistant",
-            body: content,
+            body: storeRaw ? redactPHI(content) : null,
             mode: coachMode,
+            messageCategory: userCategory,
+            riskCategory: userRisk.riskCategory,
+            escalationRecommended: userRisk.escalationRecommended,
+            escalationTriggered: userRisk.escalationRecommended,
+            safetyFlag: userRisk.safetyFlag,
+            modelProvider: COACH_MODEL_PROVIDER,
+            platformId: scope.platformId,
+            doctorUserId: scope.doctorUserId,
+            messageLength: content.length,
           })
           .catch((err) => {
             console.error(`[coach/chat ${reqId}] coach_messages assistant insert failed`, err);
@@ -815,13 +911,27 @@ router.post("/chat", async (req: Request, res: Response) => {
     console.log(`[coach/chat ${reqId}] returned stream: contentLen=${totalLen}`);
 
     if (patientUserId !== null && fullContent) {
+      // PRIVACY: structured metadata only by default; body redacted
+      // when COACH_STORE_RAW_MESSAGES=true. Mirrors the user-turn
+      // category/risk so analytics can group a turn pair.
+      const scope = await resolvePatientScope(patientUserId);
+      const storeRaw = shouldStoreRawCoachMessages();
       void db
         .insert(coachMessagesTable)
         .values({
           patientUserId,
           role: "assistant",
-          body: fullContent,
+          body: storeRaw ? redactPHI(fullContent) : null,
           mode: coachMode,
+          messageCategory: userCategory,
+          riskCategory: userRisk.riskCategory,
+          escalationRecommended: userRisk.escalationRecommended,
+          escalationTriggered: userRisk.escalationRecommended,
+          safetyFlag: userRisk.safetyFlag,
+          modelProvider: COACH_MODEL_PROVIDER,
+          platformId: scope.platformId,
+          doctorUserId: scope.doctorUserId,
+          messageLength: fullContent.length,
         })
         .catch((err) => {
           console.error(`[coach/chat ${reqId}] coach_messages assistant insert failed`, err);

@@ -2053,28 +2053,58 @@ const snapshotCreateSchema = z.union([snapshotPresetSchema, snapshotRangeSchema]
 
 // Resolve the request body into a concrete inclusive [start, end] window.
 // Presets compute backwards from "now" so a Day-15 readout taken today
-// covers the most recent 15 days. Explicit ranges parse the YMD strings
-// in the SERVER's local timezone (start = 00:00:00.000, end =
-// 23:59:59.999) for consistency with how patient_checkins.date is read.
+// covers exactly N CALENDAR DAYS ending at end-of-today: windowStart
+// is start-of-day for `today - (N - 1)`, windowEnd is end-of-day today.
+// This keeps date-bound checkin queries (`>= startYmd AND <= endYmd`)
+// and instant-bound event queries (`>= windowStart AND <= windowEnd`)
+// covering the same N calendar days, instead of the off-by-one that
+// `windowEnd - N*24h` would produce (which would yield N+1 dates).
+//
+// Explicit ranges parse the YMD strings in the SERVER's local
+// timezone and verify the constructed Date round-trips to the same
+// Y/M/D -- that's how we reject impossible dates like "2026-02-31"
+// which JS would otherwise silently roll forward to March 3.
 function resolveWindow(
   body: z.infer<typeof snapshotCreateSchema>,
 ): { windowStart: Date; windowEnd: Date } | { error: string } {
   if ("preset" in body) {
     const days = body.preset === "day15" ? 15 : 30;
-    const windowEnd = new Date();
+    const now = new Date();
+    const windowEnd = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      23,
+      59,
+      59,
+      999,
+    );
     const windowStart = new Date(
-      windowEnd.getTime() - days * 24 * 60 * 60 * 1000,
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() - (days - 1),
+      0,
+      0,
+      0,
+      0,
     );
     return { windowStart, windowEnd };
   }
-  // Explicit range. Build local-midnight bounds.
+  // Explicit range. Build local-midnight bounds and verify round-trip
+  // to reject calendar-invalid inputs.
   const [sy, sm, sd] = body.cohortStartDate.split("-").map(Number);
   const [ey, em, ed] = body.cohortEndDate.split("-").map(Number);
   const windowStart = new Date(sy, sm - 1, sd, 0, 0, 0, 0);
   const windowEnd = new Date(ey, em - 1, ed, 23, 59, 59, 999);
   if (
     Number.isNaN(windowStart.getTime()) ||
-    Number.isNaN(windowEnd.getTime())
+    Number.isNaN(windowEnd.getTime()) ||
+    windowStart.getFullYear() !== sy ||
+    windowStart.getMonth() !== sm - 1 ||
+    windowStart.getDate() !== sd ||
+    windowEnd.getFullYear() !== ey ||
+    windowEnd.getMonth() !== em - 1 ||
+    windowEnd.getDate() !== ed
   ) {
     return { error: "invalid_date" };
   }
