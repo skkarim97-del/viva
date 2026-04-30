@@ -9,7 +9,12 @@ import {
   INTERVENTION_SURFACES,
   INTERVENTION_TYPES,
 } from "@workspace/db";
-import { requirePatient, requireAuth, type AuthedRequest } from "../middlewares/auth";
+import {
+  requirePatient,
+  requireAuth,
+  checkDoctorMfa,
+  type AuthedRequest,
+} from "../middlewares/auth";
 import { logger } from "../lib/logger";
 import { phiAudit } from "../middlewares/phiAudit";
 
@@ -207,6 +212,13 @@ router.get("/recent", requireAuth, async (req, res: Response) => {
   // ONLY for patients they own (doctorId match).
   let pid = auth.userId;
   if (auth.role === "doctor") {
+    // HIPAA pilot T007: doctor PHI reads require MFA. Inline check
+    // because the patient branch above does not need MFA.
+    const mfa = await checkDoctorMfa(req);
+    if (!mfa.ok) {
+      res.status(mfa.status).json(mfa.body);
+      return;
+    }
     const q = z.coerce.number().int().positive().safeParse(req.query.patientId);
     if (!q.success) {
       res.status(400).json({ error: "patientId_required" });

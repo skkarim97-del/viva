@@ -1,7 +1,12 @@
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+} from "@tanstack/react-query";
 import { useEffect } from "react";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { api, HttpError } from "@/lib/api";
 import { logEvent as logAnalytics } from "@/lib/analytics";
 import { Shell } from "@/components/Shell";
 import { LoginPage } from "@/pages/LoginPage";
@@ -11,6 +16,8 @@ import { PatientsPage } from "@/pages/PatientsPage";
 import { PatientDetailPage } from "@/pages/PatientDetailPage";
 import { InternalDashboardPage } from "@/pages/InternalDashboardPage";
 import { InternalAnalyticsPage } from "@/pages/InternalAnalyticsPage";
+import { MfaEnrollPage } from "@/pages/MfaEnrollPage";
+import { MfaVerifyPage } from "@/pages/MfaVerifyPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -128,6 +135,60 @@ function Gate() {
     );
   }
 
+  // HIPAA pilot: TOTP MFA gate (T007). A doctor with a session must
+  // either enroll (no mfaEnrolledAt) or pass step-up verification this
+  // session before any PHI route renders. The mfaStatus query is the
+  // single source of truth and is invalidated by Mfa{Enroll,Verify}Page
+  // on success so the gate naturally falls through.
+  //
+  // MFA must come BEFORE onboarding because the onboarding wizard's
+  // PUT /api/patients/clinic call lives on the patients router, which
+  // is gated by requireDoctorMfa server-side. New doctors enroll MFA
+  // first, then complete onboarding.
+  return <MfaGate me={me} />;
+}
+
+function MfaGate({ me }: { me: { needsOnboarding: boolean } }) {
+  const { logout } = useAuth();
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["mfa-status"],
+    queryFn: () => api.mfaStatus(),
+    // No automatic refetch -- pages explicitly invalidate after a
+    // successful enroll or verify, which is the only state change
+    // that should affect this gate's decision.
+    staleTime: Infinity,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-muted-foreground">
+        Loading...
+      </div>
+    );
+  }
+  if (error) {
+    // 401 here means the cookie session expired between the AuthContext
+    // probe and now -- log out so the gate above bounces to /login.
+    if (error instanceof HttpError && error.status === 401) {
+      void logout();
+      return null;
+    }
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-muted-foreground px-6">
+        <div>Couldn't check MFA status. Please reload.</div>
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="bg-primary text-primary-foreground font-semibold px-5 py-2 rounded-xl"
+        >
+          Reload
+        </button>
+      </div>
+    );
+  }
+  if (!data) return null;
+  if (!data.enrolled) return <MfaEnrollPage />;
+  if (!data.sessionVerified) return <MfaVerifyPage />;
   if (me.needsOnboarding) {
     return (
       <Switch>
@@ -136,7 +197,6 @@ function Gate() {
       </Switch>
     );
   }
-
   return <ProtectedRoutes />;
 }
 

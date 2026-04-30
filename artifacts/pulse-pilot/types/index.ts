@@ -280,6 +280,16 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   timestamp: number;
+  // T006 -- distinguishes a structured (category+severity) turn from a
+  // legacy free-text turn or a system notice (e.g. "safe mode is on").
+  // Defaults to "free" when omitted so older persisted rows still render.
+  kind?: "free" | "structured" | "notice";
+  // For structured turns we render a small badge alongside the bubble
+  // so the patient can scan their history without re-reading the body.
+  category?: string;
+  severity?: "mild" | "moderate" | "severe";
+  templateId?: string;
+  escalated?: boolean;
 }
 
 export interface TrendData {

@@ -36,5 +36,13 @@ declare module "express-session" {
   interface SessionData {
     userId: number;
     role: "doctor" | "patient";
+    // Doctor MFA per-session verification state (T007).
+    // mfaVerified is true ONLY after the doctor has POSTed a valid
+    // TOTP code in THIS session. It is intentionally NOT set by
+    // login alone -- verifying once at login per session is the
+    // whole point of step-up MFA. Cleared by /auth/logout via
+    // session.destroy().
+    mfaVerified?: boolean;
+    mfaVerifiedAt?: number; // unix ms
   }
 }

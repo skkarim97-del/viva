@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useFocusEffect } from "expo-router";
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -18,7 +18,16 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
-import { sendCoachMessage, CoachRequestError, describeCoachError } from "@/lib/api/coachClient";
+import {
+  sendCoachMessage,
+  sendStructuredCoachMessage,
+  getCoachMode,
+  CoachRequestError,
+  describeCoachError,
+  type CoachCategory,
+  type CoachSeverity,
+  type CoachContextTag,
+} from "@/lib/api/coachClient";
 import { logIntervention } from "@/lib/intervention/logger";
 import { logCareEventDeduped, logCareEventImmediate } from "@/lib/care-events/client";
 import { Alert } from "react-native";
@@ -33,6 +42,82 @@ const quickActions = [
   { label: "What should I focus on this week?", icon: "calendar" as const },
 ];
 
+// T006 -- structured-coach picker copy. Single source of truth for the
+// labels the patient sees. Server never echoes these strings back so we
+// don't have to keep them in sync over the wire -- they're purely UX.
+const CATEGORY_META: Record<
+  CoachCategory,
+  { label: string; sublabel: string; icon: React.ComponentProps<typeof Feather>["name"] }
+> = {
+  symptom_support: {
+    label: "How I'm feeling",
+    sublabel: "General check-in or symptom",
+    icon: "heart",
+  },
+  side_effect: {
+    label: "Side effects",
+    sublabel: "Nausea, fatigue, GI, etc.",
+    icon: "alert-circle",
+  },
+  medication_question: {
+    label: "Medication question",
+    sublabel: "Timing, dose, missed shot",
+    icon: "package",
+  },
+  nutrition: {
+    label: "Eating & nutrition",
+    sublabel: "Protein, appetite, meals",
+    icon: "coffee",
+  },
+  hydration: {
+    label: "Hydration",
+    sublabel: "Fluids, electrolytes",
+    icon: "droplet",
+  },
+  exercise: {
+    label: "Exercise & movement",
+    sublabel: "Workouts, energy, recovery",
+    icon: "activity",
+  },
+  urgent_concern: {
+    label: "Urgent concern",
+    sublabel: "Needs care team attention",
+    icon: "alert-triangle",
+  },
+  other: {
+    label: "Something else",
+    sublabel: "Doesn't fit above",
+    icon: "more-horizontal",
+  },
+};
+
+const SEVERITY_META: Record<
+  CoachSeverity,
+  { label: string; description: string }
+> = {
+  mild: { label: "Mild", description: "Noticeable, but I can keep going" },
+  moderate: { label: "Moderate", description: "It's interfering with my day" },
+  severe: {
+    label: "Severe",
+    description: "Affecting my ability to function or feels alarming",
+  },
+};
+
+const CONTEXT_TAG_META: Record<CoachContextTag, string> = {
+  started_recently: "Started recently",
+  after_dose_change: "After a dose change",
+  morning: "In the morning",
+  evening: "In the evening",
+  after_meal: "After a meal",
+  with_food: "With food",
+  ongoing: "Been ongoing",
+  recurring: "Keeps coming back",
+};
+
+function categoryLabel(cat: string): string {
+  return (CATEGORY_META as Record<string, { label: string }>)[cat]?.label ?? cat;
+}
+
 export default function CoachScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
@@ -46,6 +131,17 @@ export default function CoachScreen() {
   const topPad = Platform.OS === "web" ? 60 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
+  // T006 -- pilot mode state. Default to safe so the UI never momentarily
+  // shows a free-text composer in production while /coach/mode is in
+  // flight. If the server says open, we relax. If the lookup fails we
+  // stay safe.
+  const [safeMode, setSafeMode] = useState<boolean>(true);
+  const [modeReady, setModeReady] = useState<boolean>(false);
+  const [selectedCategory, setSelectedCategory] = useState<CoachCategory | null>(null);
+  const [selectedSeverity, setSelectedSeverity] = useState<CoachSeverity | null>(null);
+  const [selectedTags, setSelectedTags] = useState<CoachContextTag[]>([]);
+  const [submittingStructured, setSubmittingStructured] = useState(false);
+
   // Dismiss the keyboard when the user navigates away from the coach screen
   // so it doesn't stay focused off-screen on other tabs.
   useFocusEffect(
@@ -56,6 +152,28 @@ export default function CoachScreen() {
       };
     }, []),
   );
+
+  // T006 -- discover pilot mode on mount. We don't block the screen on
+  // this; we render the safe UI immediately (default state above) and
+  // relax to free-text if the server reports open. If the request
+  // fails entirely we stay in safe mode -- privacy fail-closed.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const info = await getCoachMode();
+        if (cancelled) return;
+        setSafeMode(info.safeMode);
+      } catch {
+        // network error -> stay in safe mode (default)
+      } finally {
+        if (!cancelled) setModeReady(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const buildHealthContext = useCallback(() => {
     if (!todayMetrics) return undefined;
@@ -179,6 +297,21 @@ export default function CoachScreen() {
       });
     } catch (err: any) {
       console.log("[Coach] final error:", { kind: err?.kind, status: err?.status, message: err?.message, body: err?.body, url: err?.url });
+      // T006 -- safe-mode 403. Server is telling us free-text is
+      // disabled; flip the UI to the structured composer and post
+      // a centered system notice instead of an error bubble.
+      if (err instanceof CoachRequestError && err.kind === "safe_mode") {
+        setSafeMode(true);
+        addChatMessage({
+          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+          role: "assistant",
+          content:
+            "Free-text chat is paused for the pilot. Pick a category and severity below -- we'll respond with guidance and notify your care team if it's serious.",
+          timestamp: Date.now(),
+          kind: "notice",
+        });
+        return;
+      }
       const userMessage = err instanceof CoachRequestError
         ? describeCoachError(err)
         : `Something went wrong. ${err?.message || ""}`.trim();
@@ -195,6 +328,106 @@ export default function CoachScreen() {
     }
   }, [isTyping, chatMessages, addChatMessage, buildHealthContext]);
 
+  // T006 -- structured submit. Builds a (category, severity, tags)
+  // payload from the picker state, posts to /coach/structured, and
+  // pushes both the user 'turn' (rendered as a labeled summary, not
+  // free text the patient typed) and the templated assistant reply
+  // into the same chatMessages list.
+  const submitStructured = useCallback(async () => {
+    if (!selectedCategory || !selectedSeverity || submittingStructured) return;
+    const cat = selectedCategory;
+    const sev = selectedSeverity;
+    const tags = [...selectedTags];
+    setSubmittingStructured(true);
+    if (Platform.OS !== "web") {
+      try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+    }
+    // The user 'turn' has no free text by construction; we render a
+    // labeled summary so the conversation is still readable.
+    const summary =
+      `${categoryLabel(cat)} - ${SEVERITY_META[sev].label}` +
+      (tags.length > 0
+        ? ` (${tags.map((t) => CONTEXT_TAG_META[t]).join(", ")})`
+        : "");
+    addChatMessage({
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      role: "user",
+      content: summary,
+      timestamp: Date.now(),
+      kind: "structured",
+      category: cat,
+      severity: sev,
+    });
+    try {
+      const result = await sendStructuredCoachMessage({
+        category: cat,
+        severity: sev,
+        contextTags: tags.length > 0 ? tags : undefined,
+      });
+      addChatMessage({
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        role: "assistant",
+        content: result.content,
+        timestamp: Date.now(),
+        kind: "structured",
+        category: result.category,
+        severity: result.severity,
+        templateId: result.templateId,
+        escalated: result.escalated,
+      });
+      // Reset picker so the next turn starts fresh.
+      setSelectedCategory(null);
+      setSelectedSeverity(null);
+      setSelectedTags([]);
+      // Keep the existing intervention + care-event side-effects so
+      // analytics treat structured turns identically to free-text.
+      if (dailyState) {
+        logIntervention({
+          surface: "Coach",
+          interventionType: "adherence_checkin",
+          title: `coach_structured:${cat}.${sev}`,
+          rationale: dailyState.rationale?.join(" | ") ?? null,
+          state: dailyState,
+        });
+      }
+      logCareEventDeduped("coach_message", "Coach", {
+        mode: dailyState?.communicationMode ?? "simplify",
+      });
+      if (Platform.OS !== "web") {
+        try {
+          Haptics.notificationAsync(
+            result.escalated
+              ? Haptics.NotificationFeedbackType.Warning
+              : Haptics.NotificationFeedbackType.Success,
+          );
+        } catch {}
+      }
+    } catch (err: any) {
+      const userMessage =
+        err instanceof CoachRequestError
+          ? describeCoachError(err)
+          : `Something went wrong. ${err?.message || ""}`.trim();
+      addChatMessage({
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        role: "assistant",
+        content: userMessage,
+        timestamp: Date.now(),
+      });
+    } finally {
+      setSubmittingStructured(false);
+    }
+  }, [selectedCategory, selectedSeverity, selectedTags, submittingStructured, addChatMessage, dailyState]);
+
+  const toggleTag = useCallback((tag: CoachContextTag) => {
+    setSelectedTags((prev) =>
+      prev.includes(tag)
+        ? prev.filter((t) => t !== tag)
+        : prev.length >= 4
+          ? prev // server caps at 4
+          : [...prev, tag],
+    );
+  }, []);
+
   const displayMessages = [...chatMessages];
   if (streamingText) {
     displayMessages.push({
@@ -208,30 +441,90 @@ export default function CoachScreen() {
   const renderMessage = ({ item }: { item: ChatMessage }) => {
     const isUser = item.role === "user";
     const isStreaming = item.id === "streaming";
+    // T006 -- a 'notice' is a system-rendered turn (e.g. "free-text is
+    // disabled"). Centered, neutral card, no avatar/time.
+    if (item.kind === "notice") {
+      return (
+        <View style={styles.noticeRow}>
+          <View style={[styles.noticeBubble, { backgroundColor: c.muted, borderColor: c.border ?? c.muted }]}>
+            <Feather name="info" size={14} color={c.mutedForeground} />
+            <Text style={[styles.noticeText, { color: c.mutedForeground }]}>
+              {item.content}
+            </Text>
+          </View>
+        </View>
+      );
+    }
+    const isStructured = item.kind === "structured";
+    const isEscalated = isStructured && item.escalated && !isUser;
     return (
       <View style={[styles.msgRow, isUser && styles.msgRowUser]}>
-        <View
-          style={[
-            styles.msgBubble,
-            isUser
-              ? { backgroundColor: c.primary }
-              : { backgroundColor: c.card },
-          ]}
-        >
-          <Text style={[styles.msgText, { color: isUser ? c.primaryForeground : c.foreground }]}>
-            {item.content}{isStreaming ? "\u258D" : ""}
-          </Text>
-          {!isStreaming && (
-            <Text style={[styles.msgTime, { color: isUser ? c.primaryForeground + "66" : c.mutedForeground }]}>
-              {formatTime(item.timestamp)}
-            </Text>
+        <View style={{ maxWidth: "82%" }}>
+          {isStructured && (
+            <View
+              style={[
+                styles.structuredBadge,
+                isUser ? styles.structuredBadgeUser : null,
+                {
+                  backgroundColor: isEscalated
+                    ? "#dc262620"
+                    : isUser
+                      ? c.primary + "22"
+                      : c.accent + "18",
+                },
+              ]}
+            >
+              <Feather
+                name={isEscalated ? "alert-triangle" : "tag"}
+                size={10}
+                color={isEscalated ? "#dc2626" : isUser ? c.primary : c.accent}
+              />
+              <Text
+                style={[
+                  styles.structuredBadgeText,
+                  {
+                    color: isEscalated
+                      ? "#dc2626"
+                      : isUser
+                        ? c.primary
+                        : c.accent,
+                  },
+                ]}
+              >
+                {isEscalated
+                  ? "Escalated to care team"
+                  : item.category
+                    ? `${categoryLabel(item.category)}${item.severity ? ` - ${SEVERITY_META[item.severity].label}` : ""}`
+                    : "Structured"}
+              </Text>
+            </View>
           )}
+          <View
+            style={[
+              styles.msgBubble,
+              isUser
+                ? { backgroundColor: c.primary }
+                : { backgroundColor: c.card },
+            ]}
+          >
+            <Text style={[styles.msgText, { color: isUser ? c.primaryForeground : c.foreground }]}>
+              {item.content}{isStreaming ? "\u258D" : ""}
+            </Text>
+            {!isStreaming && (
+              <Text style={[styles.msgTime, { color: isUser ? c.primaryForeground + "66" : c.mutedForeground }]}>
+                {formatTime(item.timestamp)}
+              </Text>
+            )}
+          </View>
         </View>
       </View>
     );
   };
 
-  const showQuickActions = chatMessages.length === 0 && !isTyping;
+  // In safe mode there are no free-text quick actions to show -- the
+  // composer below renders the picker directly.
+  const showQuickActions = !safeMode && chatMessages.length === 0 && !isTyping;
+  const showSafeIntro = safeMode && chatMessages.length === 0 && !isTyping;
 
   const requestCareTeamReview = useCallback(() => {
     const fire = async () => {
@@ -292,11 +585,39 @@ export default function CoachScreen() {
       <View style={[styles.header, { paddingTop: topPad + 16 }]}>
         <Text style={[styles.headerTitle, { color: c.foreground }]}>Coach</Text>
         <Text style={[styles.headerSub, { color: c.mutedForeground }]}>
-          Ask about your treatment, recovery, nutrition, or trends.
+          {safeMode
+            ? "Pick a category and severity. We'll respond with guidance and loop in your care team if it's serious."
+            : "Ask about your treatment, recovery, nutrition, or trends."}
         </Text>
+        {safeMode && modeReady && (
+          <View style={[styles.privacyBanner, { backgroundColor: c.accent + "12", borderColor: c.accent + "30" }]}>
+            <Feather name="shield" size={12} color={c.accent} />
+            <Text style={[styles.privacyText, { color: c.accent }]}>
+              Pilot privacy mode: free-text chat is paused. Your selections are not sent to any outside AI service.
+            </Text>
+          </View>
+        )}
       </View>
 
-      {showQuickActions ? (
+      {showSafeIntro ? (
+        <ScrollView
+          style={styles.quickArea}
+          contentContainerStyle={styles.safeIntroInner}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={[styles.safeIntroCard, { backgroundColor: c.card }]}>
+            <View style={[styles.safeIntroIconWrap, { backgroundColor: c.accent + "18" }]}>
+              <Feather name="message-circle" size={20} color={c.accent} />
+            </View>
+            <Text style={[styles.safeIntroTitle, { color: c.foreground }]}>
+              How can the coach help?
+            </Text>
+            <Text style={[styles.safeIntroBody, { color: c.mutedForeground }]}>
+              Choose a category below, then say how it's affecting you. The coach will respond with guidance for that situation. If it's serious, your care team gets notified automatically.
+            </Text>
+          </View>
+        </ScrollView>
+      ) : showQuickActions ? (
         <ScrollView style={styles.quickArea} contentContainerStyle={styles.quickInner} showsVerticalScrollIndicator={false}>
           {quickActions.map(({ label, icon }) => (
             <Pressable
@@ -341,7 +662,7 @@ export default function CoachScreen() {
       )}
 
       <View style={[styles.inputArea, { backgroundColor: c.background, paddingBottom: bottomPad + 8 }]}>
-        {!isTyping && (
+        {!isTyping && !submittingStructured && (
           <Pressable
             onPress={requestCareTeamReview}
             style={({ pressed }) => [
@@ -356,7 +677,7 @@ export default function CoachScreen() {
             </Text>
           </Pressable>
         )}
-        {lastFailedDraft && !isTyping && (
+        {!safeMode && lastFailedDraft && !isTyping && (
           <Pressable
             onPress={() => sendMessage(lastFailedDraft)}
             style={({ pressed }) => [
@@ -373,30 +694,226 @@ export default function CoachScreen() {
             </Pressable>
           </Pressable>
         )}
-        <View style={[styles.inputRow, { backgroundColor: c.card }]}>
-          <TextInput
-            ref={inputRef}
-            style={[styles.input, { color: c.foreground }]}
-            value={input}
-            onChangeText={setInput}
-            placeholder="Ask your coach..."
-            placeholderTextColor={c.mutedForeground + "80"}
-            onSubmitEditing={() => sendMessage(input)}
-            returnKeyType="send"
-            blurOnSubmit
-            editable={!isTyping}
-          />
-          <Pressable
-            onPress={() => sendMessage(input)}
-            disabled={isTyping || !input.trim()}
-            style={({ pressed }) => [
-              styles.sendBtn,
-              { backgroundColor: input.trim() && !isTyping ? c.primary : c.muted, opacity: pressed ? 0.8 : 1 },
-            ]}
+        {safeMode ? (
+          // T006 -- structured composer. Three sections:
+          //  1) category grid -- always visible
+          //  2) severity row -- enabled only after a category is picked
+          //  3) optional context tags -- enabled only after severity
+          //     is picked, capped at 4 (server enforces too)
+          // Submit is enabled only when (category + severity) are set.
+          <ScrollView
+            style={styles.composerScroll}
+            contentContainerStyle={styles.composerInner}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
           >
-            <Feather name="arrow-up" size={16} color={input.trim() && !isTyping ? c.primaryForeground : c.mutedForeground} />
-          </Pressable>
-        </View>
+            <Text style={[styles.composerSectionLabel, { color: c.mutedForeground }]}>
+              1. What's it about?
+            </Text>
+            <View style={styles.categoryGrid}>
+              {(Object.keys(CATEGORY_META) as CoachCategory[]).map((cat) => {
+                const meta = CATEGORY_META[cat];
+                const active = selectedCategory === cat;
+                return (
+                  <Pressable
+                    key={cat}
+                    onPress={() => {
+                      setSelectedCategory(cat);
+                      // changing category resets the rest so we never
+                      // submit a (categoryA, severityChosenForB) pair
+                      setSelectedSeverity(null);
+                      setSelectedTags([]);
+                      if (Platform.OS !== "web") {
+                        try { Haptics.selectionAsync(); } catch {}
+                      }
+                    }}
+                    style={({ pressed }) => [
+                      styles.categoryBtn,
+                      {
+                        backgroundColor: active ? c.primary : c.card,
+                        borderColor: active ? c.primary : "transparent",
+                        opacity: pressed ? 0.85 : 1,
+                      },
+                    ]}
+                  >
+                    <Feather
+                      name={meta.icon}
+                      size={14}
+                      color={active ? c.primaryForeground : c.accent}
+                    />
+                    <Text
+                      style={[
+                        styles.categoryLabel,
+                        { color: active ? c.primaryForeground : c.foreground },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {meta.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Text style={[styles.composerSectionLabel, { color: c.mutedForeground, marginTop: 12 }]}>
+              2. How severe?
+            </Text>
+            <View style={styles.severityRow}>
+              {(Object.keys(SEVERITY_META) as CoachSeverity[]).map((sev) => {
+                const meta = SEVERITY_META[sev];
+                const active = selectedSeverity === sev;
+                const disabled = !selectedCategory;
+                return (
+                  <Pressable
+                    key={sev}
+                    onPress={() => {
+                      if (disabled) return;
+                      setSelectedSeverity(sev);
+                      if (Platform.OS !== "web") {
+                        try { Haptics.selectionAsync(); } catch {}
+                      }
+                    }}
+                    style={({ pressed }) => [
+                      styles.severityBtn,
+                      {
+                        backgroundColor: active ? c.primary : c.card,
+                        borderColor: active ? c.primary : "transparent",
+                        opacity: disabled ? 0.4 : pressed ? 0.85 : 1,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.severityLabel,
+                        { color: active ? c.primaryForeground : c.foreground },
+                      ]}
+                    >
+                      {meta.label}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.severitySublabel,
+                        {
+                          color: active
+                            ? c.primaryForeground + "cc"
+                            : c.mutedForeground,
+                        },
+                      ]}
+                      numberOfLines={2}
+                    >
+                      {meta.description}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {selectedSeverity && (
+              <>
+                <Text style={[styles.composerSectionLabel, { color: c.mutedForeground, marginTop: 12 }]}>
+                  3. Any context? (optional, pick up to 4)
+                </Text>
+                <View style={styles.tagRow}>
+                  {(Object.keys(CONTEXT_TAG_META) as CoachContextTag[]).map(
+                    (tag) => {
+                      const active = selectedTags.includes(tag);
+                      const atCap = !active && selectedTags.length >= 4;
+                      return (
+                        <Pressable
+                          key={tag}
+                          onPress={() => toggleTag(tag)}
+                          disabled={atCap}
+                          style={({ pressed }) => [
+                            styles.tagChip,
+                            {
+                              backgroundColor: active
+                                ? c.accent
+                                : c.card,
+                              borderColor: active ? c.accent : "transparent",
+                              opacity: atCap ? 0.35 : pressed ? 0.85 : 1,
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.tagText,
+                              {
+                                color: active
+                                  ? c.primaryForeground
+                                  : c.foreground,
+                              },
+                            ]}
+                          >
+                            {CONTEXT_TAG_META[tag]}
+                          </Text>
+                        </Pressable>
+                      );
+                    },
+                  )}
+                </View>
+              </>
+            )}
+
+            <Pressable
+              onPress={submitStructured}
+              disabled={
+                !selectedCategory || !selectedSeverity || submittingStructured
+              }
+              style={({ pressed }) => [
+                styles.submitBtn,
+                {
+                  backgroundColor:
+                    selectedCategory && selectedSeverity && !submittingStructured
+                      ? c.primary
+                      : c.muted,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              {submittingStructured ? (
+                <Text style={[styles.submitText, { color: c.primaryForeground }]}>
+                  Sending...
+                </Text>
+              ) : (
+                <>
+                  <Text style={[styles.submitText, { color: selectedCategory && selectedSeverity ? c.primaryForeground : c.mutedForeground }]}>
+                    Get guidance
+                  </Text>
+                  <Feather
+                    name="arrow-right"
+                    size={16}
+                    color={selectedCategory && selectedSeverity ? c.primaryForeground : c.mutedForeground}
+                  />
+                </>
+              )}
+            </Pressable>
+          </ScrollView>
+        ) : (
+          <View style={[styles.inputRow, { backgroundColor: c.card }]}>
+            <TextInput
+              ref={inputRef}
+              style={[styles.input, { color: c.foreground }]}
+              value={input}
+              onChangeText={setInput}
+              placeholder="Ask your coach..."
+              placeholderTextColor={c.mutedForeground + "80"}
+              onSubmitEditing={() => sendMessage(input)}
+              returnKeyType="send"
+              blurOnSubmit
+              editable={!isTyping}
+            />
+            <Pressable
+              onPress={() => sendMessage(input)}
+              disabled={isTyping || !input.trim()}
+              style={({ pressed }) => [
+                styles.sendBtn,
+                { backgroundColor: input.trim() && !isTyping ? c.primary : c.muted, opacity: pressed ? 0.8 : 1 },
+              ]}
+            >
+              <Feather name="arrow-up" size={16} color={input.trim() && !isTyping ? c.primaryForeground : c.mutedForeground} />
+            </Pressable>
+          </View>
+        )}
       </View>
     </KeyboardAvoidingView>
   );
@@ -537,5 +1054,172 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
+  },
+  // T006 -- safe-mode styles
+  privacyBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    marginTop: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  privacyText: {
+    flex: 1,
+    fontSize: 11,
+    fontFamily: "Montserrat_500Medium",
+    lineHeight: 15,
+  },
+  safeIntroInner: {
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  safeIntroCard: {
+    padding: 18,
+    borderRadius: 18,
+    gap: 10,
+  },
+  safeIntroIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  safeIntroTitle: {
+    fontSize: 17,
+    fontFamily: "Montserrat_700Bold",
+    letterSpacing: -0.2,
+  },
+  safeIntroBody: {
+    fontSize: 13.5,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 19,
+  },
+  composerScroll: {
+    maxHeight: 360,
+  },
+  composerInner: {
+    paddingTop: 4,
+    paddingBottom: 8,
+    gap: 0,
+  },
+  composerSectionLabel: {
+    fontSize: 11,
+    fontFamily: "Montserrat_600SemiBold",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    marginBottom: 6,
+  },
+  categoryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  categoryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 11,
+    paddingVertical: 9,
+    borderRadius: 12,
+    borderWidth: 1,
+    minWidth: "47%",
+  },
+  categoryLabel: {
+    fontSize: 12.5,
+    fontFamily: "Montserrat_500Medium",
+    flex: 1,
+  },
+  severityRow: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  severityBtn: {
+    flex: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 2,
+  },
+  severityLabel: {
+    fontSize: 13,
+    fontFamily: "Montserrat_600SemiBold",
+  },
+  severitySublabel: {
+    fontSize: 10.5,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 13,
+  },
+  tagRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  tagChip: {
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  tagText: {
+    fontSize: 12,
+    fontFamily: "Montserrat_500Medium",
+  },
+  submitBtn: {
+    marginTop: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 14,
+  },
+  submitText: {
+    fontSize: 14,
+    fontFamily: "Montserrat_600SemiBold",
+  },
+  noticeRow: {
+    alignItems: "center",
+    paddingHorizontal: 12,
+    marginVertical: 4,
+  },
+  noticeBubble: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    maxWidth: "92%",
+  },
+  noticeText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: "Montserrat_500Medium",
+    lineHeight: 16,
+  },
+  structuredBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    alignSelf: "flex-start",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    marginBottom: 4,
+  },
+  structuredBadgeUser: {
+    alignSelf: "flex-end",
+  },
+  structuredBadgeText: {
+    fontSize: 10,
+    fontFamily: "Montserrat_600SemiBold",
+    letterSpacing: 0.2,
   },
 });

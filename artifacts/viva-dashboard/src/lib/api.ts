@@ -366,6 +366,32 @@ export const api = {
       `/patients/${id}/treatment-status`,
       input,
     ),
+  // ---- doctor MFA (TOTP) ---------------------------------------------------
+  // HIPAA pilot, T007. Backend mounts these under /me/mfa BEFORE the
+  // patient-only /me router so doctor sessions can enroll and verify.
+  // mfaStatus polls cheaply; the rest are user-initiated form submits.
+  mfaStatus: () =>
+    request<{ enrolled: boolean; sessionVerified: boolean; hasSession: boolean }>(
+      "GET",
+      "/me/mfa/status",
+    ),
+  mfaEnrollStart: () =>
+    request<{ secret: string; otpauthUrl: string; qrcodeDataUrl: string }>(
+      "POST",
+      "/me/mfa/enroll/start",
+    ),
+  mfaEnrollVerify: (code: string) =>
+    request<{ ok: true; recoveryCodes: string[] }>(
+      "POST",
+      "/me/mfa/enroll/verify",
+      { code },
+    ),
+  // Pass either { code } (TOTP) or { recoveryCode } (single-use backup).
+  // Sending both returns 400; the backend schema is .strict().
+  mfaVerify: (input: { code?: string; recoveryCode?: string }) =>
+    request<{ ok: true }>("POST", "/me/mfa/verify", input),
+  mfaDisable: (code: string) =>
+    request<{ ok: true }>("POST", "/me/mfa/disable", { code }),
 };
 
 export { HttpError };

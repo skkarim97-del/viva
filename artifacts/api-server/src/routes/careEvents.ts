@@ -12,8 +12,14 @@ import {
   requireAuth,
   requirePatient,
   requireDoctor,
+  requireDoctorMfa,
+  checkDoctorMfa,
   type AuthedRequest,
 } from "../middlewares/auth";
+// requireDoctor stays imported as documentation; the comment in the
+// router's audit gate below references it. Each PHI write endpoint
+// in this file uses requireDoctorMfa (T007) for step-up TOTP.
+void requireDoctor;
 import { logger } from "../lib/logger";
 import { phiAudit } from "../middlewares/phiAudit";
 import { canAccessPatient } from "../lib/canAccessPatient";
@@ -154,7 +160,7 @@ async function ownsPatient(
 
 router.post(
   "/:patientId/follow-up-completed",
-  requireDoctor,
+  requireDoctorMfa,
   async (req, res: Response) => {
     const doctorId = (req as AuthedRequest).auth.userId;
     const patientId = Number(req.params.patientId);
@@ -206,7 +212,7 @@ router.post(
 
 router.post(
   "/:patientId/reviewed",
-  requireDoctor,
+  requireDoctorMfa,
   async (req, res: Response) => {
     const doctorId = (req as AuthedRequest).auth.userId;
     const patientId = Number(req.params.patientId);
@@ -258,9 +264,20 @@ router.get("/:patientId", requireAuth, async (req, res: Response) => {
     res.status(403).json({ error: "forbidden" });
     return;
   }
-  if (auth.role === "doctor" && !(await ownsPatient(auth.userId, patientId))) {
-    res.status(404).json({ error: "not_found" });
-    return;
+  if (auth.role === "doctor") {
+    // HIPAA pilot T007: doctor PHI reads require MFA. We can't use
+    // the requireDoctorMfa middleware directly because patients also
+    // hit this route with self-access; check inline after the role
+    // branch.
+    const mfa = await checkDoctorMfa(req);
+    if (!mfa.ok) {
+      res.status(mfa.status).json(mfa.body);
+      return;
+    }
+    if (!(await ownsPatient(auth.userId, patientId))) {
+      res.status(404).json({ error: "not_found" });
+      return;
+    }
   }
   const since = new Date();
   since.setDate(since.getDate() - 60);
@@ -338,7 +355,7 @@ router.get("/:patientId", requireAuth, async (req, res: Response) => {
 // Cheap lookup the worklist uses to badge rows. Returns just the ids
 // to keep the response tiny; the full event stream is per-patient.
 
-router.get("/_ids/needs-review", requireDoctor, async (req, res: Response) => {
+router.get("/_ids/needs-review", requireDoctorMfa, async (req, res: Response) => {
   const doctorId = (req as AuthedRequest).auth.userId;
   // Pull most-recent escalation per patient and most-recent review per
   // patient, then keep the ones the doctor owns where escalation is

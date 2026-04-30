@@ -17,7 +17,11 @@ import {
   STOP_REASONS,
   deriveStopTiming,
 } from "@workspace/db";
-import { requireDoctor, type AuthedRequest } from "../middlewares/auth";
+import {
+  requireDoctor,
+  requireDoctorMfa,
+  type AuthedRequest,
+} from "../middlewares/auth";
 import {
   computeRisk,
   deriveAction,
@@ -36,8 +40,14 @@ const router: Router = Router();
 // Rate limit BEFORE the auth gate so an unauthenticated flood
 // doesn't burn DB cycles on bcrypt-style work in requireDoctor.
 router.use(mediumApiLimiter);
-router.use(requireDoctor);
-// HIPAA audit log: mount AFTER requireDoctor so req.auth is populated
+// requireDoctorMfa = requireDoctor + per-session TOTP verification (T007).
+// All patient PHI in this router is doctor-only AND must be behind MFA
+// for the HIPAA pilot. The export of `requireDoctor` is kept available
+// for routes that need doctor identity but not PHI (none in this file
+// today).
+router.use(requireDoctorMfa);
+void requireDoctor; // imported for future doctor-non-PHI routes; explicit no-op
+// HIPAA audit log: mount AFTER requireDoctorMfa so req.auth is populated
 // by the time the response 'finish' handler fires. The middleware's
 // own try/catch + .catch() on the insert means an audit failure
 // never breaks a doctor request. We pull the patient id from either

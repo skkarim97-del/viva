@@ -15,3 +15,4 @@ export * from "./patientProfiles";
 export * from "./coachMessages";
 export * from "./pilotSnapshots";
 export * from "./phiAccessLogs";
+export * from "./sessions";

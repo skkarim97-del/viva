@@ -13,8 +13,57 @@ export interface CoachRequestArgs {
   signal?: AbortSignal;
 }
 
+// T006 -- pilot mode discovery + structured-coach types.
+export type CoachPilotMode = "safe" | "open";
+
+export type CoachCategory =
+  | "symptom_support"
+  | "side_effect"
+  | "medication_question"
+  | "nutrition"
+  | "hydration"
+  | "exercise"
+  | "urgent_concern"
+  | "other";
+
+export type CoachSeverity = "mild" | "moderate" | "severe";
+
+export type CoachContextTag =
+  | "started_recently"
+  | "after_dose_change"
+  | "morning"
+  | "evening"
+  | "after_meal"
+  | "with_food"
+  | "ongoing"
+  | "recurring";
+
+export interface CoachModeInfo {
+  mode: CoachPilotMode;
+  safeMode: boolean;
+  categories: readonly CoachCategory[];
+  severities: readonly CoachSeverity[];
+  structuredEndpoint: string;
+}
+
+export interface StructuredCoachArgs {
+  category: CoachCategory;
+  severity: CoachSeverity;
+  contextTags?: CoachContextTag[];
+}
+
+export interface StructuredCoachResponse {
+  content: string;
+  templateId: string;
+  category: CoachCategory;
+  severity: CoachSeverity;
+  riskCategory: "low" | "medium" | "high" | "critical";
+  escalated: boolean;
+}
+
 export type CoachErrorKind =
   | "config"
+  | "safe_mode"
   | "timeout"
   | "network"
   | "http"
@@ -126,6 +175,17 @@ export async function sendCoachMessage(args: CoachRequestArgs): Promise<{ conten
     try { errorBody = await response.text(); } catch {}
     clearTimeout(timeoutId);
     args.signal?.removeEventListener?.("abort", onParentAbort);
+    // T006 -- safe-mode 403. The server returns this exact shape when
+    // free-text chat is disabled for the pilot. We surface it as a
+    // `safe_mode` kind so the UI can switch composers without showing
+    // the patient an error bubble.
+    if (response.status === 403 && errorBody.includes("free_text_disabled")) {
+      throw new CoachRequestError(
+        "safe_mode",
+        "Free-text coach chat is disabled. Use the structured composer instead.",
+        { url, status: 403, body: errorBody.slice(0, 500) },
+      );
+    }
     throw new CoachRequestError("http", `Server returned ${response.status}.`, { url, status: response.status, body: errorBody.slice(0, 500) });
   }
 
@@ -196,6 +256,13 @@ export function describeCoachError(err: CoachRequestError): string {
     case "config":
       body = err.message;
       break;
+    case "safe_mode":
+      // Friendly text for the rare case the UI doesn't catch the
+      // safe_mode kind itself and falls back to the generic error
+      // bubble. Should normally not be shown -- the screen swaps
+      // composers on first detection.
+      body = "The coach is in safe mode. Pick a category and severity from the picker -- free-text chat is paused for the pilot.";
+      break;
     case "timeout":
       body = `${err.message} The server may be slow or unreachable. Tap retry below.`;
       break;
@@ -223,4 +290,162 @@ export function describeCoachError(err: CoachRequestError): string {
       body = err.message || "Something went wrong. Try again in a moment.";
   }
   return `${body}${diagSuffix(err)}`;
+}
+
+// ---------------------------------------------------------------------
+// T006 -- pilot mode discovery + structured chat
+// ---------------------------------------------------------------------
+
+// Cached mode lookup: the value is set by the deployment env so it
+// can't change at runtime, but the cache is opt-in (caller can pass
+// {force: true}) for testing. Module-scoped so a tab switch doesn't
+// re-hit the network.
+let _cachedMode: CoachModeInfo | null = null;
+let _cachedModeAt = 0;
+const MODE_TTL_MS = 60_000;
+
+export async function getCoachMode(opts?: { force?: boolean }): Promise<CoachModeInfo> {
+  const now = Date.now();
+  if (!opts?.force && _cachedMode && now - _cachedModeAt < MODE_TTL_MS) {
+    return _cachedMode;
+  }
+  const url = `${API_BASE}/coach/mode`;
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+  } catch (e: any) {
+    throw new CoachRequestError(
+      "network",
+      `Cannot reach the server at ${API_BASE}. ${e?.message || ""}`.trim(),
+      { url, cause: e },
+    );
+  }
+  if (!response.ok) {
+    let errorBody = "";
+    try { errorBody = await response.text(); } catch {}
+    throw new CoachRequestError("http", `Server returned ${response.status}.`, {
+      url,
+      status: response.status,
+      body: errorBody.slice(0, 500),
+    });
+  }
+  const data = (await response.json().catch(() => ({}))) as Partial<CoachModeInfo>;
+  // Defense in depth: if the server sends a malformed mode, treat
+  // it as 'safe'. Erring on the safe side never harms the patient.
+  const mode: CoachPilotMode = data.mode === "open" ? "open" : "safe";
+  const info: CoachModeInfo = {
+    mode,
+    safeMode: mode === "safe",
+    categories: Array.isArray(data.categories) && data.categories.length > 0
+      ? (data.categories as CoachCategory[])
+      : ([
+          "symptom_support",
+          "side_effect",
+          "medication_question",
+          "nutrition",
+          "hydration",
+          "exercise",
+          "urgent_concern",
+          "other",
+        ] as const),
+    severities: Array.isArray(data.severities) && data.severities.length > 0
+      ? (data.severities as CoachSeverity[])
+      : (["mild", "moderate", "severe"] as const),
+    structuredEndpoint:
+      typeof data.structuredEndpoint === "string"
+        ? data.structuredEndpoint
+        : "/api/coach/structured",
+  };
+  _cachedMode = info;
+  _cachedModeAt = now;
+  return info;
+}
+
+export interface StructuredCoachResult extends StructuredCoachResponse {
+  durationMs: number;
+  url: string;
+}
+
+export async function sendStructuredCoachMessage(
+  args: StructuredCoachArgs,
+): Promise<StructuredCoachResult> {
+  const url = `${API_BASE}/coach/structured`;
+  const startedAt = Date.now();
+  let bearer: string | null = null;
+  try {
+    bearer = await sessionApi.getStoredToken();
+  } catch {
+    bearer = null;
+  }
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
+  if (bearer) headers["Authorization"] = `Bearer ${bearer}`;
+
+  let body: string;
+  try {
+    body = JSON.stringify({
+      category: args.category,
+      severity: args.severity,
+      contextTags: args.contextTags ?? [],
+    });
+  } catch (e: any) {
+    throw new CoachRequestError(
+      "serialize",
+      `Could not serialize structured payload: ${e?.message || String(e)}`,
+      { url, cause: e },
+    );
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(url, { method: "POST", headers, body });
+  } catch (e: any) {
+    throw new CoachRequestError(
+      "network",
+      `Cannot reach the server at ${API_BASE}. ${e?.message || ""}`.trim(),
+      { url, cause: e },
+    );
+  }
+
+  if (!response.ok) {
+    let errorBody = "";
+    try { errorBody = await response.text(); } catch {}
+    throw new CoachRequestError("http", `Server returned ${response.status}.`, {
+      url,
+      status: response.status,
+      body: errorBody.slice(0, 500),
+    });
+  }
+
+  const data = (await response.json().catch((e) => {
+    throw new CoachRequestError(
+      "parse",
+      `Could not parse JSON response: ${e?.message || String(e)}`,
+      { url, cause: e },
+    );
+  })) as Partial<StructuredCoachResponse>;
+
+  if (typeof data?.content !== "string" || !data.content) {
+    throw new CoachRequestError("empty", "Server returned no content.", {
+      url,
+      body: JSON.stringify(data).slice(0, 300),
+    });
+  }
+
+  return {
+    content: data.content,
+    templateId: typeof data.templateId === "string" ? data.templateId : "unknown",
+    category: (data.category as CoachCategory) ?? args.category,
+    severity: (data.severity as CoachSeverity) ?? args.severity,
+    riskCategory:
+      (data.riskCategory as StructuredCoachResponse["riskCategory"]) ?? "low",
+    escalated: Boolean(data.escalated),
+    durationMs: Date.now() - startedAt,
+    url,
+  };
 }

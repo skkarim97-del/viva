@@ -18,6 +18,7 @@ The user prefers an understated, confident, premium, and modern feel for the app
 - Coach responses: 1 framing sentence + 2-3 practical actions + optional reason. 3-5 sentences max. No lists, no bullets. Decisive and direct.
 - Bundle ID: com.sullyk97.vivaai, owner: sullyk97.
 - pnpm-workspace.yaml overrides REMOVED (do not re-add).
+- HIPAA pilot hardening (T001-T006 done): pino redact extended; bearer tokens stored as sha256 hex (raw returned once); rate limiting on auth/coach/patients/internal; operator IP allowlist via OPERATOR_ALLOWED_IPS; phi_access_logs middleware on all PHI surfaces; canAccessPatient helper; audit matrix in docs/authz-audit.md; coach safe-mode (env COACH_PILOT_MODE; defaults safe in production) blocks /chat 403 and routes patients to structured /coach/structured (24 in-code templates by category x severity, no OpenAI in safe mode).
 
 ## System Architecture
 
@@ -45,8 +46,8 @@ The system is a pnpm workspace monorepo using Node.js 24 and TypeScript 5.9. The
 
 ### HIPAA-Readiness Hardening (added 2026-04-30)
 
-First half of the pre-customer security pass (T001-T005). Sequence and decisions
-captured in `.local/session_plan.md`; T006-T008 paused for user review.
+Pre-customer security pass (T001-T008). Sequence and decisions captured in
+`.local/session_plan.md`. All eight tasks complete.
 
 -   **T001 - Log redaction & housekeeping**: Removed `backups/` (gitignored,
     untracked). Extended pino redact in `artifacts/api-server/src/lib/logger.ts`
@@ -84,6 +85,51 @@ captured in `.local/session_plan.md`; T006-T008 paused for user review.
     but the underlying ownership predicate matches. Full route-x-check
     matrix written to `docs/authz-audit.md`. Audit found no missing
     guards on PHI routes.
+-   **T006 - AI coach safe mode**: New `lib/coachSafeMode.ts`
+    (`getCoachPilotMode`, env `COACH_PILOT_MODE`, defaults `safe` in
+    production) and `lib/coachTemplates.ts` (24 in-code templates: 8
+    categories x 3 severities, with STANDARD / SAFETY / ESCALATION
+    footers). When safe mode is on, `POST /api/coach/chat` returns 403
+    `free_text_disabled`. New `GET /api/coach/mode` advertises mode +
+    options, `POST /api/coach/structured` returns the templated
+    response and persists user + assistant rows to `coach_messages`
+    with `body=null` and `responseTemplateId` set; `urgent_concern.severe`
+    fires a `care_events` escalation. Mobile `coach.tsx` swaps to a
+    structured composer (category grid + severity row + optional context
+    tags) when safe mode is active and falls back to the free-text input
+    when open. No OpenAI calls in safe mode. Zero schema changes.
+-   **T007 - Doctor TOTP MFA**: 3 nullable cols added to `users`
+    (`mfa_secret`, `mfa_enrolled_at`, `mfa_recovery_codes_hashed text[]`)
+    and a new `sessions` table for `connect-pg-simple`. Pushed to BOTH
+    local heliumdb AND AWS RDS via `pnpm push-force` (lib/db prefers
+    `AWS_DATABASE_URL` at runtime; drizzle.config.ts only reads
+    `DATABASE_URL`, so AWS pushes need the env override). New
+    `lib/mfa.ts` (otplib RFC-6238, sha256 recovery code hashes) and
+    `routes/mfa.ts` mounted at `/me/mfa` BEFORE the patient-only `/me`
+    router. Endpoints: `GET /status`, `POST /enroll/start`,
+    `POST /enroll/verify`, `POST /verify` (XOR strict: code XOR
+    recoveryCode), `POST /disable`. All use `.strict()` schemas;
+    `enroll/start`, `enroll/verify`, `verify`, `disable` are rate-limited
+    via `strictAuthLimiter`. Recovery codes are single-use and consumed
+    atomically via `UPDATE ... SET ... = array_remove(...) WHERE ... =
+    ANY(...) RETURNING id` (no select-then-update race).
+    `middlewares/auth.ts` exposes `requireDoctorMfa` (router-level on
+    `patients.ts` and PHI write endpoints in `careEvents.ts`) and
+    `checkDoctorMfa` (inline check used by mixed-role routes:
+    `careEvents.ts /:patientId` and `interventions.ts /recent`, where
+    patient self-access does not require MFA). MFA is bound to the
+    cookie-session user (`session.userId === auth.userId &&
+    session.role === 'doctor'`); bearer-authed requests can never
+    satisfy MFA, by design. Dashboard renders `MfaEnrollPage` (QR +
+    recovery codes screen) and `MfaVerifyPage` (TOTP / recovery code
+    toggle), gating BEFORE onboarding so PUT `/api/patients/clinic`
+    (under `requireDoctorMfa`) can succeed.
+-   **T008 - PHI-free push helper**: New `lib/pushSafe.ts` exposes
+    `sendSafePush(title, body)` with a hardcoded allowlist of PHI-safe
+    titles and bodies. Throws if either argument is not on the list.
+    Comment block documents the allowlist contract for future callers
+    so doctor-side push notifications can never accidentally leak
+    patient-identifying or symptom-revealing strings.
 
 ### Pilot Persistence Layer (added 2026-04-28)
 

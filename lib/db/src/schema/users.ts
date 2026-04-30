@@ -23,6 +23,23 @@ export const usersTable = pgTable("users", {
     () => telehealthPlatformsTable.id,
     { onDelete: "set null" },
   ),
+  // Doctor TOTP MFA (HIPAA pilot, T007). All three columns are
+  // nullable so adding them never breaks existing rows.
+  //   - mfaSecret     : RFC-6238 TOTP secret (base32). Stored as
+  //                     plain text for the pilot; treat the row as
+  //                     a credential and gate via DB access controls.
+  //                     A "pending" enrollment lives here until the
+  //                     first verify, at which point mfaEnrolledAt
+  //                     is set and the secret becomes "active".
+  //   - mfaEnrolledAt : timestamp of the verify that activated the
+  //                     secret. null = enrollment not yet completed.
+  //   - mfaRecoveryCodesHashed : sha256 hex digests of single-use
+  //                     recovery codes. Patients/clinicians never see
+  //                     the codes again after enrollment. NULL means
+  //                     no codes issued yet (legacy row).
+  mfaSecret: text("mfa_secret"),
+  mfaEnrolledAt: timestamp("mfa_enrolled_at"),
+  mfaRecoveryCodesHashed: text("mfa_recovery_codes_hashed").array(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

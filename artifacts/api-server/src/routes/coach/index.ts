@@ -8,6 +8,7 @@ import {
   careEventsTable,
   patientsTable,
 } from "@workspace/db";
+import { z } from "zod";
 import {
   classifyCategory,
   assessRisk,
@@ -17,6 +18,17 @@ import {
 import { mediumApiLimiter } from "../../middlewares/rateLimit";
 import { phiAudit } from "../../middlewares/phiAudit";
 import { hashApiToken } from "../../lib/apiTokens";
+import {
+  getCoachPilotMode,
+  isCoachSafeModeActive,
+} from "../../lib/coachSafeMode";
+import {
+  COACH_SEVERITIES,
+  type CoachSeverity,
+  getCoachTemplate,
+  listCoachCategories,
+} from "../../lib/coachTemplates";
+import { COACH_MESSAGE_CATEGORIES } from "@workspace/db";
 
 const router = Router();
 
@@ -360,6 +372,29 @@ router.post("/chat", async (req: Request, res: Response) => {
   req.log.info(
     `[coach/chat ${reqId}] received: stream=${wantsStream} ua_present=${!!req.get("user-agent")} bodyLen=${JSON.stringify(req.body || {}).length}b`,
   );
+
+  // T006: Safe-mode gate. In pilot/production we refuse free-text chat
+  // entirely and tell the client to switch to the structured flow.
+  // The 403 body is itself the entire UX contract: { error,
+  // safeMode, structuredEndpoint } -- the mobile client matches on
+  // `error === "free_text_disabled"` and renders the structured
+  // picker. Returning BEFORE we touch req.body (beyond length
+  // logging) means a misbehaving client cannot exfiltrate text via
+  // an OpenAI call in safe mode -- no code path below this gate
+  // runs.
+  if (isCoachSafeModeActive()) {
+    req.log.info(`[coach/chat ${reqId}] blocked: safe-mode active`);
+    res.status(403).json({
+      error: "free_text_disabled",
+      safeMode: true,
+      mode: "safe",
+      structuredEndpoint: "/api/coach/structured",
+      message:
+        "Free-text coach chat is disabled during the pilot to keep your messages private. Pick a category and severity instead -- we'll respond with guidance and loop in your care team if needed.",
+    });
+    return;
+  }
+
   try {
     const body = req.body as ChatRequestBody;
     const { message, healthContext, conversationHistory } = body;
@@ -1012,6 +1047,205 @@ router.post("/chat", async (req: Request, res: Response) => {
       res.end();
     }
   }
+});
+
+// =====================================================================
+// T006 -- Coach pilot mode endpoints
+// =====================================================================
+
+// GET /coach/mode -- the mobile app calls this on coach screen mount
+// to decide which UI to render. Public-by-default (matches /chat) so
+// the app can show the right experience even before login.
+router.get("/mode", (_req: Request, res: Response) => {
+  const mode = getCoachPilotMode();
+  res.json({
+    mode,
+    safeMode: mode === "safe",
+    categories: listCoachCategories(),
+    severities: COACH_SEVERITIES,
+    structuredEndpoint: "/api/coach/structured",
+  });
+});
+
+// POST /coach/structured -- the safe-mode replacement for /chat.
+// Accepts a strictly-validated (category, severity) pair (plus an
+// optional small allowlist of context tags) and returns a templated
+// response. NEVER calls OpenAI. NEVER stores free text. The audit
+// row is the only persistence side-effect besides coach_messages
+// (and care_events on escalation).
+// .strict() rejects unknown top-level keys. This is essential for the
+// "structured-only" contract: a client cannot smuggle a free-text key
+// (e.g. {category, severity, note: "..."}) into the request even if
+// the server would silently ignore it. We'd rather 400 loudly.
+const structuredCoachSchema = z
+  .object({
+    category: z.enum(COACH_MESSAGE_CATEGORIES as readonly [string, ...string[]]),
+    severity: z.enum(COACH_SEVERITIES as readonly [string, ...string[]]),
+    // Allowlisted context tags. We only accept values from this set so
+    // a malicious client cannot smuggle free text into the row via a
+    // "context tag". The set is intentionally tiny.
+    contextTags: z
+      .array(
+        z.enum([
+          "started_recently",
+          "after_dose_change",
+          "morning",
+          "evening",
+          "after_meal",
+          "with_food",
+          "ongoing",
+          "recurring",
+        ]),
+      )
+      .max(4)
+      .optional(),
+  })
+  .strict();
+
+router.post("/structured", async (req: Request, res: Response) => {
+  const reqId = Math.random().toString(36).slice(2, 8);
+
+  // Even in 'open' mode the structured endpoint is allowed -- it's
+  // just safer to use, never less safe -- so we don't gate on
+  // safe-mode here. The chat endpoint is the only one that toggles.
+
+  const parsed = structuredCoachSchema.safeParse(req.body);
+  if (!parsed.success) {
+    req.log.info(
+      { issues: parsed.error.issues.map((i) => i.path.join(".")) },
+      `[coach/structured ${reqId}] rejected: invalid payload`,
+    );
+    res.status(400).json({
+      error: "invalid_payload",
+      message:
+        "Pick one of the listed categories and a severity (mild, moderate, or severe).",
+    });
+    return;
+  }
+
+  const { category, severity, contextTags } = parsed.data;
+  const template = getCoachTemplate(
+    category as (typeof COACH_MESSAGE_CATEGORIES)[number],
+    severity as CoachSeverity,
+  );
+
+  // Resolve patient via the same hashed-bearer path the chat handler
+  // uses; persistence + audit attribution flow through this id.
+  // Anonymous (no bearer) calls still get a templated reply so the
+  // UI works pre-login, but nothing is persisted server-side.
+  const patientUserId = await resolvePatientUserId(req);
+
+  if (patientUserId !== null) {
+    const scope = await resolvePatientScope(patientUserId);
+
+    // Persist the user 'turn' as structured-only metadata. body=null
+    // by construction (the patient typed nothing); the (category,
+    // severity, templateId) triple is everything analytics needs.
+    try {
+      await db.insert(coachMessagesTable).values({
+        patientUserId,
+        role: "user",
+        body: null,
+        mode: "structured",
+        messageCategory: category as (typeof COACH_MESSAGE_CATEGORIES)[number],
+        riskCategory: template.riskCategory,
+        escalationRecommended: template.escalate,
+        escalationTriggered: template.escalate,
+        responseTemplateId: template.id,
+        modelProvider: "template",
+        safetyFlag: template.escalate && severity === "severe",
+        platformId: scope.platformId,
+        doctorUserId: scope.doctorUserId,
+        // 'message length' for a structured turn = number of context
+        // tags (lets analytics distinguish "single-tap" from "tagged"
+        // submissions without needing the tag values themselves).
+        messageLength: contextTags?.length ?? 0,
+      });
+    } catch (err) {
+      req.log.warn(
+        { err },
+        `[coach/structured ${reqId}] coach_messages user insert failed`,
+      );
+    }
+
+    // Persist the assistant 'turn' (templated text) as a sibling row
+    // -- mirrors how /chat persists assistant turns so the doctor
+    // dashboard can still group user+assistant pairs.
+    try {
+      await db.insert(coachMessagesTable).values({
+        patientUserId,
+        role: "assistant",
+        body: null,
+        mode: "structured",
+        messageCategory: category as (typeof COACH_MESSAGE_CATEGORIES)[number],
+        riskCategory: template.riskCategory,
+        escalationRecommended: template.escalate,
+        escalationTriggered: template.escalate,
+        responseTemplateId: template.id,
+        modelProvider: "template",
+        safetyFlag: template.escalate && severity === "severe",
+        platformId: scope.platformId,
+        doctorUserId: scope.doctorUserId,
+        messageLength: template.content.length,
+      });
+    } catch (err) {
+      req.log.warn(
+        { err },
+        `[coach/structured ${reqId}] coach_messages assistant insert failed`,
+      );
+    }
+
+    // Escalation -> care_events row. Same shape as the /chat path
+    // so the doctor queue treats both surfaces identically.
+    if (template.escalate) {
+      const severityBand =
+        template.riskCategory === "critical"
+          ? "high"
+          : template.riskCategory === "high"
+            ? "medium"
+            : "low";
+      try {
+        // source + actorUserId are NOT NULL on care_events; the patient
+        // initiated the escalation by submitting the structured turn,
+        // so attribute the event to them (mirrors the /chat path at
+        // ~line 893 above).
+        await db.insert(careEventsTable).values({
+          patientUserId,
+          actorUserId: patientUserId,
+          source: "patient",
+          type: "escalation_requested",
+          metadata: {
+            reason: "structured_coach_escalation",
+            channel: "coach_structured",
+            riskCategory: template.riskCategory,
+            messageCategory: category,
+            severity: severityBand,
+            severityPicked: severity,
+            templateId: template.id,
+            safetyFlag: template.escalate && severity === "severe",
+          },
+        });
+      } catch (err) {
+        req.log.warn(
+          { err },
+          `[coach/structured ${reqId}] care_event insert failed`,
+        );
+      }
+    }
+  }
+
+  req.log.info(
+    `[coach/structured ${reqId}] ok template=${template.id} escalated=${template.escalate} authed=${patientUserId !== null}`,
+  );
+
+  res.json({
+    content: template.content,
+    templateId: template.id,
+    category,
+    severity,
+    riskCategory: template.riskCategory,
+    escalated: template.escalate,
+  });
 });
 
 const WEEKLY_PLAN_PROMPT = `You are VIVA, a supportive health coach generating a personalized weekly plan for someone on GLP-1 medication.
