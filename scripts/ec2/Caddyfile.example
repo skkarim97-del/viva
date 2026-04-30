@@ -1,7 +1,7 @@
 # /etc/caddy/Caddyfile
 #
 # Caddy 2 automatically obtains and renews a Let's Encrypt cert as soon as
-# api.viva-ai.com resolves to this box's public IP and TCP/80 + TCP/443 are
+# api.itsviva.com resolves to this box's public IP and TCP/80 + TCP/443 are
 # reachable from the internet.
 #
 # Tail the logs while the cert is being issued:
@@ -13,10 +13,10 @@
     # acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
 
     # Operator email for cert expiry notifications.
-    email ops@viva-ai.com
+    email ops@itsviva.com
 }
 
-api.viva-ai.com {
+api.itsviva.com {
     encode gzip zstd
 
     # Forward every request to the Node API on localhost:8080.
@@ -26,7 +26,7 @@ api.viva-ai.com {
 
     # Access log -- 6-year retention matches HIPAA audit requirements.
     log {
-        output file /var/log/caddy/api.viva-ai.com.access.log {
+        output file /var/log/caddy/api.itsviva.com.access.log {
             roll_size     100mb
             roll_keep     60
             roll_keep_for 8760h

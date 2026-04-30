@@ -175,7 +175,7 @@ AWS_DB_SSL_CA_PATH=/opt/viva/rds-ca-bundle.pem
 # --- Browser CORS allowlist -------------------------------------------------
 # Comma-separated list of every browser origin that talks to /api.
 # Mobile native fetch sends no Origin header so it is unaffected.
-ALLOWED_ORIGINS=https://viva-ai.replit.app,https://dashboard.viva-ai.com
+ALLOWED_ORIGINS=https://viva-ai.replit.app
 
 # --- Sessions / operator auth ----------------------------------------------
 # Generate fresh values for the EC2 cutover:

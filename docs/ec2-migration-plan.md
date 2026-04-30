@@ -131,7 +131,7 @@ Write to `/etc/viva-api.env` (mode `0600`, owned by `root:viva`):
 | `LOG_LEVEL` | no | pino level | default `info` |
 | `AWS_DATABASE_URL` | yes | RDS connection string | set this (not `DATABASE_URL`) so the SSL branch in `lib/db/src/index.ts` activates |
 | `AWS_DB_SSL_CA_PATH` | yes on EC2 | Path to RDS CA bundle PEM | set to e.g. `/opt/viva/rds-ca-bundle.pem` to get `verify-full`; if omitted, falls back to `no-verify` |
-| `ALLOWED_ORIGINS` | yes | Comma-separated browser-origin allowlist | e.g. `https://viva-ai.replit.app,https://dashboard.viva-ai.com` -- only browser CORS, mobile native fetch is unaffected |
+| `ALLOWED_ORIGINS` | yes | Comma-separated browser-origin allowlist | e.g. `https://viva-ai.replit.app,https://dashboard.itsviva.com` -- only browser CORS, mobile native fetch is unaffected |
 | `SESSION_SECRET` | yes | Signs doctor session cookies | generate with `openssl rand -hex 32` |
 | `INTERNAL_API_KEY` | yes (operator routes) | Static operator bearer | generate with `openssl rand -hex 32` |
 | `INTERNAL_IP_ALLOWLIST` | yes (operator routes) | Comma-separated **exact** IPv4/IPv6 addresses that can hit `/api/internal/*` (CIDR not supported by current middleware) | the office / VPN egress IPs |
@@ -225,20 +225,20 @@ sudo journalctl -u viva-api -f
          -c "select now(), current_user, version()"'
      ```
 
-### T106: Caddy reverse proxy + TLS for api.viva-ai.com
+### T106: Caddy reverse proxy + TLS for api.itsviva.com
 - Blocked By: [T104]
-- Acceptance: `curl -I https://api.viva-ai.com/api/healthz` returns 200
+- Acceptance: `curl -I https://api.itsviva.com/api/healthz` returns 200
   with a valid Let's Encrypt cert, and the response body is
   `{"status":"ok"}`.
 - Steps:
   1. Point DNS first (so Caddy's HTTP-01 challenge resolves):
-     - In Route 53 (or wherever `viva-ai.com` is hosted), set
-       `api.viva-ai.com` `A` record to the EC2 **Elastic IP** (allocate
+     - In Route 53 (or wherever `itsviva.com` is hosted), set
+       `api.itsviva.com` `A` record to the EC2 **Elastic IP** (allocate
        and associate one so the IP survives stop/start).
      - TTL 60s during the cutover so you can roll back fast.
   2. `/etc/caddy/Caddyfile`:
      ```
-     api.viva-ai.com {
+     api.itsviva.com {
          encode gzip
          reverse_proxy 127.0.0.1:8080 {
              header_up X-Forwarded-Proto {scheme}
@@ -279,44 +279,44 @@ default-deny except the ephemeral return path.
   # 1. Local on the box (no proxy)
   curl -sS http://127.0.0.1:8080/api/healthz
   # 2. Through Caddy on localhost
-  curl -sSI https://api.viva-ai.com/api/healthz --resolve api.viva-ai.com:443:127.0.0.1
+  curl -sSI https://api.itsviva.com/api/healthz --resolve api.itsviva.com:443:127.0.0.1
   # 3. From the public internet (off the EC2 box)
-  curl -sSI https://api.viva-ai.com/api/healthz
+  curl -sSI https://api.itsviva.com/api/healthz
   # 4. Cert chain
-  echo | openssl s_client -connect api.viva-ai.com:443 -servername api.viva-ai.com 2>/dev/null \
+  echo | openssl s_client -connect api.itsviva.com:443 -servername api.itsviva.com 2>/dev/null \
     | openssl x509 -noout -issuer -subject -dates
   ```
   All should show HTTP/2 200 and the body `{"status":"ok"}`.
 
-### T109: Cut mobile + dashboard over to api.viva-ai.com
+### T109: Cut mobile + dashboard over to api.itsviva.com
 - Blocked By: [T108]
-- Acceptance: a fresh mobile build talks to `api.viva-ai.com`, dashboard
-  in the browser hits `api.viva-ai.com`, no requests in the new build go
+- Acceptance: a fresh mobile build talks to `api.itsviva.com`, dashboard
+  in the browser hits `api.itsviva.com`, no requests in the new build go
   to `viva-ai.replit.app`.
 - Code changes:
   1. **Mobile** -- `artifacts/pulse-pilot/lib/apiConfig.ts`:
      ```ts
-     const PRODUCTION_API_URL = "https://api.viva-ai.com/api";
+     const PRODUCTION_API_URL = "https://api.itsviva.com/api";
      ```
      Bump `app.json` `ios.buildNumber` and `android.versionCode`. Submit
      new TestFlight build + Play internal track.
   2. **Mobile** -- `artifacts/pulse-pilot/app.json`:
-     - `ios.associatedDomains`: `applinks:api.viva-ai.com` (or keep both
+     - `ios.associatedDomains`: `applinks:api.itsviva.com` (or keep both
        for the cutover window)
-     - `android.intentFilters[].data.host`: add `api.viva-ai.com`
+     - `android.intentFilters[].data.host`: add `api.itsviva.com`
   3. **Doctor dashboard** -- `artifacts/viva-dashboard`:
      - The dashboard uses a relative `/api` path. Two options:
        - **Easier:** keep serving the dashboard from Replit and add
-         `VITE_API_BASE_URL=https://api.viva-ai.com/api` to the dashboard
+         `VITE_API_BASE_URL=https://api.itsviva.com/api` to the dashboard
          build env. CORS on the API must then allow the dashboard origin.
        - **Cleaner:** also serve the dashboard from EC2 (Caddy can serve
-         the static `dist/` from `dashboard.viva-ai.com` as a separate
+         the static `dist/` from `dashboard.itsviva.com` as a separate
          site block). Dashboard then keeps its same-origin `/api`.
      - For pilot, pick the easier path.
   4. **CORS** -- the API now reads `ALLOWED_ORIGINS` from env. On the
      EC2 box, set:
      ```
-     ALLOWED_ORIGINS=https://viva-ai.replit.app,https://dashboard.viva-ai.com
+     ALLOWED_ORIGINS=https://viva-ai.replit.app,https://dashboard.itsviva.com
      ```
      Include every browser origin that needs to attach the doctor
      session cookie. The mobile app sends no `Origin` header and is
@@ -326,7 +326,7 @@ default-deny except the ephemeral return path.
   5. **iOS / Android associated domains JSON** -- the API serves
      `/.well-known/apple-app-site-association` and
      `/.well-known/assetlinks.json`. Confirm both still respond at
-     `https://api.viva-ai.com/.well-known/...` after cutover.
+     `https://api.itsviva.com/.well-known/...` after cutover.
 
 ### T110: Rollback plan
 - Blocked By: []
@@ -338,16 +338,16 @@ default-deny except the ephemeral return path.
      `AWS_DATABASE_URL`. Both backends share one database, so a flip in
      either direction is a no-op for data.
   2. Keep DNS TTL at 60 seconds during the cutover window.
-  3. Cutover step is a single DNS change: `api.viva-ai.com` A record
+  3. Cutover step is a single DNS change: `api.itsviva.com` A record
      swings between the EC2 Elastic IP and a `CNAME` to
      `viva-ai.replit.app`.
   4. **Mobile rollback is harder than DNS** because the prod URL is
      baked in at build time. Mitigation: ship the EC2-pointed build
      first to **TestFlight + Play internal only**. Only promote to App
-     Store / Play production after `api.viva-ai.com` has been stable for
+     Store / Play production after `api.itsviva.com` has been stable for
      >= 7 days. If problems appear after promotion, the bake-in URL
      means rollback is "ship a fix build," not "flip DNS." For that
-     reason, the safer pattern is to **point both `api.viva-ai.com` and
+     reason, the safer pattern is to **point both `api.itsviva.com` and
      `viva-ai.replit.app` at the same backend during the bake-in
      window**, so the rollback path is purely DNS even for the new
      mobile build.
@@ -389,7 +389,7 @@ default-deny except the ephemeral return path.
         mobile build over.
   - [ ] AWS GuardDuty enabled in the account.
   - [ ] Run the existing browser e2e + backend smoke test suite against
-        `https://api.viva-ai.com`.
+        `https://api.itsviva.com`.
 
 ## Time estimate
 
