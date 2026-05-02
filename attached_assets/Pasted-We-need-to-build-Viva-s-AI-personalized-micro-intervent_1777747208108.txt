@@ -1,0 +1,825 @@
+We need to build Viva’s AI-personalized micro-intervention loop as a core pilot feature, with strict HIPAA / PHI safeguards around OpenAI usage.
+
+Goal:
+Turn patient-reported symptoms, biometric/activity signals and recent behavior patterns into concise, personalized, trackable micro-interventions. The intervention should not be a generic static tip. It should explain what Viva noticed in the patient’s data, recommend one clear action, stay active until the patient gives feedback and escalate unresolved/worsening cases to the care team.
+
+This is a crucial pilot layer:
+- Patients get timely, personalized support between visits
+- Providers get leverage because Viva handles low-risk self-management first
+- Providers only get escalated when symptoms worsen, remain unresolved or patient requests review
+- Viva captures structured feedback on what worked, what did not work and what needs clinical review
+
+Critical constraints:
+- Do NOT change users.id from serial
+- Do NOT make risky DB changes
+- Do NOT break login, invite flow, check-in flow, Clinic dashboard or existing patient/doctor scoping
+- Do NOT make clinical/diagnostic claims
+- Do NOT allow AI to make medication, dose or treatment decisions
+- Use rules for trigger detection and escalation
+- Use AI only for concise personalization and wording
+- If OpenAI fails or PHI cannot be safely removed, use deterministic fallback templates
+- Keep patient-facing copy simple, short and easy for an average person to understand
+- Provider-facing copy should be clinical, concise and action-oriented
+- Reliability and clean logging matter more than overengineering
+
+Current product context:
+- Viva Care = patient mobile app
+- Viva Clinic = clinician dashboard
+- API server is Node/Express
+- DB is Postgres with Drizzle
+- Existing tables likely include patient_checkins, care_events, patient_profiles, patient_weights, patient_treatment_logs and analytics_events
+- Current interventions are generic symptom-based tips and need to become intelligent, personalized and trackable
+
+Build this in 11 parts.
+
+PART 1: HIPAA / PHI guardrail for OpenAI
+
+This is mandatory.
+
+Assume OpenAI should NOT receive PHI.
+
+Before sending anything to OpenAI, create a de-identified intervention context object.
+
+Do NOT send OpenAI:
+- patient name
+- email
+- phone number
+- address
+- DOB
+- exact age
+- clinic name
+- doctor/provider name
+- insurance information
+- free-text patient notes that may contain identifiers
+- raw medical record details
+- exact timestamps if not needed
+- invite tokens
+- user IDs
+- internal database IDs
+- direct identifiers
+- any unnecessary PHI
+
+Only send minimal de-identified signals needed to personalize the intervention:
+- symptom type
+- severity bucket, not raw note text
+- trend over last 7 days
+- hydration trend bucket
+- activity trend bucket
+- sleep trend bucket
+- weight trend bucket
+- relative dose timing, such as “within post-dose window”
+- prior intervention feedback
+- risk level
+- allowed recommendation categories
+
+Create helper function:
+
+buildDeidentifiedOpenAIInterventionPayload(context)
+
+It should return something like:
+
+{
+  "trigger": {
+    "type": "constipation",
+    "severityBucket": "moderate",
+    "riskLevel": "low"
+  },
+  "recentPattern": {
+    "symptomPattern": "reported 2 days in a row",
+    "hydrationTrend": "below usual",
+    "activityTrend": "steps down about 35% vs baseline",
+    "sleepTrend": "near baseline",
+    "weightTrend": "stable",
+    "doseTiming": "within post-dose window"
+  },
+  "priorInterventionFeedback": {
+    "lastRelevantFeedback": "hydration reminder helped last time",
+    "unresolvedSimilarIntervention": false
+  },
+  "allowedActionCategories": [
+    "sip water steadily",
+    "eat small bland meal",
+    "add protein",
+    "add fiber-rich foods",
+    "take short walk",
+    "rest/recovery",
+    "track dose-day timing",
+    "request care team review"
+  ]
+}
+
+Rules:
+- Never include raw patient free text in the OpenAI payload
+- Never include patient identifiers
+- Never include doctor or clinic identifiers
+- Never include exact dates if relative timing works
+- Never store raw OpenAI prompts containing patient context in logs
+- Never store raw OpenAI responses if they include unexpected identifiers
+- Log only safe metadata, like generated_by = rules_ai_deidentified
+- If de-identification fails, skip OpenAI and use fallback templates
+- Add tests verifying PHI fields are stripped before OpenAI calls
+
+OpenAI generation labels:
+- rules_ai_deidentified = OpenAI used with de-identified payload
+- rules_fallback = no OpenAI used
+- rules_only = deterministic rules only
+
+PART 2: Create intervention lifecycle model
+
+Add/confirm persistence for micro-interventions.
+
+Create a table if one does not already exist:
+
+patient_interventions
+- id serial primary key
+- patient_id integer not null references users(id)
+- doctor_id integer nullable references users(id)
+- trigger_type text not null
+  Examples:
+  nausea
+  constipation
+  low_energy
+  low_hydration
+  low_food_intake
+  missed_checkin
+  rapid_weight_change
+  worsening_symptom
+  repeated_symptom
+  patient_requested_review
+- symptom_type text nullable
+- severity integer nullable
+- status text not null default 'shown'
+  Allowed:
+  shown
+  accepted
+  dismissed
+  pending_feedback
+  feedback_collected
+  resolved
+  escalated
+  expired
+- risk_level text not null default 'low'
+  Allowed:
+  low
+  moderate
+  elevated
+- context_summary jsonb not null default '{}'
+  Important: stored internally only. This can include patient-specific clinical context because it stays in Viva DB, but do not send this full object to OpenAI.
+- deidentified_ai_payload jsonb nullable
+  Important: this should contain only the safe de-identified OpenAI payload, if OpenAI was used.
+- what_we_noticed text not null
+- recommendation text not null
+- follow_up_question text not null
+- recommendation_category text nullable
+- feedback_result text nullable
+  Allowed:
+  better
+  same
+  worse
+  didnt_try
+- patient_note text nullable
+  Important: do not send this to OpenAI
+- escalation_reason text nullable
+- generated_by text not null default 'rules_fallback'
+- accepted_at timestamp nullable
+- feedback_requested_at timestamp nullable
+- feedback_collected_at timestamp nullable
+- escalated_at timestamp nullable
+- resolved_at timestamp nullable
+- created_at timestamp not null default now()
+- updated_at timestamp not null default now()
+
+Add indexes:
+- patient_id
+- doctor_id
+- status
+- created_at
+- trigger_type
+- risk_level
+
+Lifecycle:
+shown -> accepted -> pending_feedback -> feedback_collected -> resolved
+shown -> dismissed
+shown/accepted/pending_feedback -> escalated
+pending_feedback -> expired if no feedback after reasonable window
+
+PART 3: Build patient context snapshot
+
+Create helper function:
+
+buildPatientInterventionContext(patientId)
+
+It should pull a compact internal context summary from the last 7 days plus today.
+
+Include:
+- latest check-in
+- symptom reported today
+- symptom severity today
+- symptoms reported in last 7 days
+- repeated symptoms count
+- worsening symptoms
+- hydration trend
+- food/protein intake trend if available
+- bowel movement trend if available
+- sleep trend if available
+- steps/activity trend if available
+- weight trend if available
+- medication/dose timing if available
+- dose change if available
+- prior interventions shown
+- prior interventions accepted
+- prior intervention feedback
+- open/pending interventions
+
+Return an internal JSON object like:
+
+{
+  "today": {
+    "symptoms": ["constipation"],
+    "severity": 2,
+    "hydration": "low",
+    "foodIntake": "normal",
+    "steps": 4200,
+    "sleepHours": 6.1
+  },
+  "last7Days": {
+    "constipationDays": 2,
+    "nauseaDays": 0,
+    "lowEnergyDays": 3,
+    "missedCheckins": 1,
+    "avgSteps": 5100,
+    "baselineSteps": 7600,
+    "stepsChangePct": -33,
+    "weightChangeLbs": -2.4
+  },
+  "treatment": {
+    "medication": "semaglutide",
+    "dose": "0.5mg",
+    "daysSinceLastDose": 2,
+    "recentDoseChange": false
+  },
+  "priorInterventions": {
+    "lastShown": "hydration",
+    "lastFeedback": "better",
+    "repeatedUnresolved": false
+  }
+}
+
+Do not fail if fields are missing. Use available data gracefully.
+
+Important:
+- This full context may stay inside Viva’s database and backend
+- Do not send this full context to OpenAI
+- OpenAI only receives the sanitized output from buildDeidentifiedOpenAIInterventionPayload(context)
+
+PART 4: Rule-based trigger engine
+
+Create function:
+
+detectInterventionTriggers(patientId, context)
+
+It should return an array of triggers.
+
+Trigger examples:
+
+1. Repeated constipation
+If constipation reported 2+ days in last 7 days:
+trigger_type = repeated_symptom
+symptom_type = constipation
+
+2. Constipation + low activity
+If constipation today and steps down >25% from baseline:
+trigger_type = constipation
+risk_level = low or moderate
+
+3. Constipation + low hydration
+If constipation today and hydration low:
+trigger_type = constipation
+risk_level = low or moderate
+
+4. Nausea + low food intake
+If nausea today and food intake low:
+trigger_type = nausea
+risk_level = moderate
+
+5. Nausea after dose timing
+If nausea today and daysSinceLastDose <= 3:
+trigger_type = nausea
+risk_level = low
+
+6. Low energy + poor sleep
+If low energy today and sleep below baseline:
+trigger_type = low_energy
+
+7. Low hydration
+If hydration low for 2+ days:
+trigger_type = low_hydration
+
+8. Rapid weight change
+If weight drop exceeds safe internal threshold or looks unusually fast:
+trigger_type = rapid_weight_change
+risk_level = elevated
+escalate if concerning
+
+9. Worsening symptom
+If severity increased vs. recent average:
+trigger_type = worsening_symptom
+risk_level = moderate
+
+10. Missed check-ins
+If missed check-in 2+ days:
+trigger_type = missed_checkin
+
+11. Patient requested review
+If patient taps/request care team:
+trigger_type = patient_requested_review
+risk_level = elevated
+
+Avoid duplicate spam:
+- Do not create a new intervention if patient has an active intervention for same symptom/trigger in status accepted or pending_feedback
+- Do not show more than 1 to 2 active interventions at a time
+- Prioritize elevated risk > moderate > low
+- If multiple triggers exist, select the most relevant one first
+
+PART 5: AI-personalized intervention generator
+
+Create function:
+
+generatePersonalizedIntervention(patientId, trigger, context)
+
+This should produce:
+
+{
+  "whatWeNoticed": "...",
+  "recommendation": "...",
+  "followUpQuestion": "...",
+  "riskLevel": "low|moderate|elevated",
+  "recommendationCategory": "hydration|activity|protein|fiber|small_meal|rest|tracking|care_team_review",
+  "escalationRecommended": false,
+  "escalationReason": null,
+  "generatedBy": "rules_ai_deidentified|rules_fallback|rules_only"
+}
+
+Process:
+1. Build internal context using buildPatientInterventionContext(patientId)
+2. Detect trigger using rules
+3. Check red flag escalation rules
+4. Build de-identified OpenAI payload using buildDeidentifiedOpenAIInterventionPayload(context)
+5. Validate payload contains no PHI
+6. If valid and OpenAI is configured, call OpenAI
+7. If OpenAI unavailable or validation fails, use fallback template
+8. Save the intervention with internal context_summary and safe deidentified_ai_payload if applicable
+
+OpenAI system prompt:
+
+You generate short, safe, patient-facing micro-interventions for a GLP-1 telehealth support app. You are not a doctor and must not diagnose, prescribe, change medication or provide emergency care instructions. Use the de-identified patient pattern to personalize the message. Keep the reading level simple. Be direct, supportive and concise. Return JSON only.
+
+The output must include:
+- whatWeNoticed: one sentence starting with data
+- recommendation: one sentence with one clear action
+- followUpQuestion: one sentence asking for feedback after the action
+- recommendationCategory
+- riskLevel
+- escalationRecommended
+- escalationReason
+
+Rules:
+- Do not diagnose
+- Do not mention medication changes
+- Do not mention dose changes
+- Do not claim causality
+- Use “may,” “could,” “Viva noticed,” “your care team should review” where needed
+- Keep it concise
+- Use only allowed action categories
+- Return JSON only
+
+Allowed recommendation categories:
+- Sip water steadily
+- Eat a small bland meal
+- Add protein
+- Add fiber-rich foods
+- Take a short walk
+- Rest/recovery
+- Track dose-day timing
+- Check back in later
+- Request care team review
+
+Patient-facing copy format must be exactly:
+
+whatWeNoticed:
+One sentence. Start with data.
+Example:
+"You’ve reported constipation 2 days in a row, and your steps were lower than usual yesterday."
+
+recommendation:
+One sentence. One clear action.
+Example:
+"After your next meal, take a 10-minute walk and drink a full glass of water."
+
+followUpQuestion:
+One sentence.
+Example:
+"After you try it, tell us if your constipation feels better, the same or worse."
+
+Keep total copy short. No long paragraphs.
+
+Fallback examples:
+
+Constipation + low steps:
+whatWeNoticed: "You’ve reported constipation 2 days in a row, and your activity was lower than usual yesterday."
+recommendation: "After your next meal, take a 10-minute walk and drink a full glass of water."
+followUpQuestion: "After you try it, tell us if your constipation feels better, the same or worse."
+
+Constipation + low hydration:
+whatWeNoticed: "You reported constipation today, and your hydration has been below your usual level."
+recommendation: "Drink one full glass of water now, then sip another over the next 2 hours."
+followUpQuestion: "After you try it, tell us if your stomach feels better, the same or worse."
+
+Nausea + low food:
+whatWeNoticed: "You reported nausea today, and your food intake has been lower than usual."
+recommendation: "Try a small, bland protein-forward snack like yogurt, soup or a smoothie, and sip water slowly."
+followUpQuestion: "After eating, tell us if your nausea feels better, the same or worse."
+
+Nausea + dose timing:
+whatWeNoticed: "Your nausea showed up within a few days of your recent dose."
+recommendation: "Keep meals smaller today and sip fluids slowly instead of drinking a lot at once."
+followUpQuestion: "Tell us if the nausea improves, stays the same or gets worse."
+
+Low energy + poor sleep:
+whatWeNoticed: "Your energy has been low, and your sleep was shorter than usual last night."
+recommendation: "Take a lighter day today and include protein with your next meal."
+followUpQuestion: "After your next meal, tell us if your energy feels better, the same or worse."
+
+Low hydration:
+whatWeNoticed: "Your hydration has been low for 2 days."
+recommendation: "Sip one full bottle of water over the next 2 hours."
+followUpQuestion: "Tell us if your energy or symptoms feel better afterward."
+
+Missed check-in:
+whatWeNoticed: "You haven’t checked in recently, so Viva may be missing important updates."
+recommendation: "Take a quick check-in now so your care team has a clearer picture."
+followUpQuestion: "After checking in, tell us if anything needs attention."
+
+Rapid weight drop:
+whatWeNoticed: "Your weight is down faster than usual this week, and your appetite has been lower."
+recommendation: "Add one protein-rich snack today, like Greek yogurt, tofu or a smoothie."
+followUpQuestion: "Would you like your care team to review this?"
+
+Elevated risk or red flags:
+whatWeNoticed: "Your symptoms have not improved and may need care team review."
+recommendation: "Request a care team review so your care team can decide the right next step."
+followUpQuestion: "Would you like to send this to your care team?"
+
+PART 6: API endpoints
+
+Add API endpoints:
+
+POST /api/patient/interventions/generate
+Auth required as patient.
+Purpose: generate intervention after check-in or on demand.
+Body:
+{
+  "source": "checkin|manual|scheduled",
+  "symptomType": "nausea|constipation|low_energy|...",
+  "severity": 1
+}
+Behavior:
+- Build internal context
+- Detect triggers
+- Generate one best intervention
+- Save to patient_interventions
+- Return active intervention
+- Do not send PHI to OpenAI
+
+GET /api/patient/interventions/active
+Auth required as patient.
+Return active interventions for current patient:
+statuses shown, accepted, pending_feedback, escalated
+
+POST /api/patient/interventions/:id/accept
+Auth required as patient.
+Behavior:
+- status becomes pending_feedback
+- accepted_at = now
+- feedback_requested_at = now + suggested delay, or now if scheduler is not available
+- Return updated intervention
+
+POST /api/patient/interventions/:id/dismiss
+Auth required as patient.
+Body:
+{
+  "reason": "not_relevant|not_now|other"
+}
+Behavior:
+- status dismissed
+- log care_event / analytics_event
+
+POST /api/patient/interventions/:id/feedback
+Auth required as patient.
+Body:
+{
+  "feedbackResult": "better|same|worse|didnt_try",
+  "patientNote": "optional"
+}
+Behavior:
+- status feedback_collected
+- feedback_collected_at = now
+- if better: mark resolved
+- if same: keep visible or generate second safe follow-up if appropriate
+- if worse: escalate or recommend care team review
+- if didnt_try: no outcome attribution
+- log care_event / analytics_event
+- Do not send patientNote to OpenAI
+- Return updated intervention
+
+POST /api/patient/interventions/:id/escalate
+Auth required as patient.
+Behavior:
+- status escalated
+- escalated_at = now
+- create care_event type escalation_requested or intervention_escalated
+- surface in Viva Clinic
+- Return success
+
+GET /api/clinic/interventions
+Auth required as doctor.
+Return patients with active escalated/worsening/unresolved interventions.
+
+GET /api/clinic/patients/:patientId/interventions
+Auth required as doctor.
+Return intervention history for that patient.
+
+Security:
+- Patients can only access their own interventions
+- Doctors can only access interventions for their assigned patients
+- Preserve existing auth patterns
+
+PART 7: Viva Care mobile UI
+
+Add intervention card in patient app after check-in and on home screen if active.
+
+Card layout:
+
+Title:
+"Personalized check-in"
+
+Section 1:
+"What Viva noticed"
+{whatWeNoticed}
+
+Section 2:
+"Try this today"
+{recommendation}
+
+Section 3:
+"Check back later"
+{followUpQuestion}
+
+Buttons when status = shown:
+- "I’ll do this"
+- "Not now"
+- "Ask my care team"
+
+When patient taps "I’ll do this":
+- Call accept endpoint
+- Card remains visible
+- Show status pill: "Pending feedback"
+- Show message:
+"Try this today, then tell us if it helped."
+
+When status = pending_feedback:
+Show buttons:
+- "Better"
+- "Same"
+- "Worse"
+- "I didn’t try it"
+
+After feedback:
+If better:
+"Glad it helped. Viva will remember this for future recommendations."
+
+If same:
+"Thanks. We’ll keep watching this and adjust your next recommendation."
+
+If worse:
+"This should be reviewed. You can ask your care team to take a look."
+Button: "Ask my care team"
+
+If didn’t try:
+"Thanks for letting us know. We won’t count this as working or not working."
+
+Keep UI concise. No long explanations.
+
+PART 8: Viva Clinic dashboard UI
+
+Surface this clearly to providers.
+
+On patient detail page:
+Add "Recent Interventions" card.
+
+Each item should show:
+- Date/time
+- Trigger
+- What Viva noticed
+- Recommendation shown
+- Patient status: accepted, dismissed, pending feedback, better, same, worse, didn’t try
+- Escalation status
+- Suggested provider action if needed
+
+Provider-facing examples:
+
+"Viva surfaced constipation support after 2 days of symptoms and lower activity. Patient accepted intervention, feedback pending."
+
+"Patient tried nausea intervention and reported worse. Review recommended."
+
+"Patient did not try prior intervention. Consider direct follow-up if symptoms persist."
+
+On main worklist:
+Add/confirm buckets:
+- "Patient Requested Review"
+- "Worsening After Intervention"
+- "Pending Feedback"
+- "Repeated Unresolved Symptoms"
+
+Prioritize:
+1. Patient requested review
+2. Worse after intervention
+3. Elevated risk
+4. Repeated unresolved symptoms
+5. Pending feedback
+
+PART 9: Analytics logging
+
+Every step should log analytics/care events.
+
+Events:
+- intervention_generated
+- intervention_shown
+- intervention_accepted
+- intervention_dismissed
+- intervention_feedback_better
+- intervention_feedback_same
+- intervention_feedback_worse
+- intervention_feedback_didnt_try
+- intervention_escalated
+- intervention_resolved
+- intervention_expired
+- intervention_ai_deidentified_payload_used
+- intervention_fallback_used
+- intervention_phi_guardrail_blocked_ai
+
+Include safe metadata:
+- patientId only internally
+- doctorId only internally
+- triggerType
+- symptomType
+- riskLevel
+- recommendationCategory
+- feedbackResult
+- source
+- generatedBy
+- timestamps
+
+Do not log:
+- OpenAI raw prompts containing patient context
+- raw patient notes
+- PHI in analytics metadata
+- names, emails, phone numbers, DOBs, clinic names or doctor names in AI logs
+
+Pilot metrics to support:
+- Total interventions generated
+- % accepted
+- % feedback collected
+- % reported helpful
+- % reported worse
+- % escalated
+- Time from trigger to intervention
+- Time from intervention to feedback
+- Patients with unresolved symptoms
+- Provider escalations created
+- Interventions by symptom type
+- % generated by AI de-identified vs fallback
+
+PART 10: Guardrails and safety rules
+
+Add red-flag escalation logic.
+
+If severe or concerning symptoms exist, do not give only self-management advice. Recommend care team review.
+
+Examples of escalation conditions:
+- Severe abdominal pain
+- Vomiting or unable to keep fluids down
+- Symptoms worsening after intervention
+- Repeated symptom for 3+ days with no improvement
+- Rapid weight loss plus low appetite/low intake
+- Dizziness/fainting if tracked/reported
+- Patient explicitly requests review
+
+Patient-facing language:
+"This may need care team review. Request a review so your care team can decide the right next step."
+
+Avoid:
+- Diagnosing
+- Medication changes
+- Dosage changes
+- Emergency instructions beyond existing product safety language
+- Overconfident statements like "this is caused by"
+
+Use:
+- "may be related to"
+- "could help"
+- "your care team should review"
+- "Viva noticed"
+
+PART 11: Acceptance criteria
+
+The feature is complete when:
+
+1. After a patient check-in with a symptom, Viva can generate a personalized intervention
+2. The intervention references at least one patient-specific data point when available
+3. The card has:
+   - What Viva noticed
+   - Try this today
+   - Check back later
+4. Patient can tap:
+   - I’ll do this
+   - Not now
+   - Ask my care team
+5. If patient taps I’ll do this, the card stays active as Pending Feedback
+6. Patient can later answer:
+   - Better
+   - Same
+   - Worse
+   - I didn’t try it
+7. Feedback is saved to DB
+8. Worse feedback creates or recommends escalation
+9. Provider dashboard can see escalated/worsening/unresolved interventions
+10. All actions are logged in analytics_events or care_events
+11. No patient can access another patient’s interventions
+12. No doctor can access patients outside their assigned scope
+13. If OpenAI fails, fallback recommendations still work
+14. Recommendations are concise, safe and non-diagnostic
+15. Existing check-in flow, login, invite flow and dashboard must not break
+16. OpenAI receives only de-identified payloads
+17. Raw PHI is never sent to OpenAI
+18. Raw OpenAI prompts with patient context are not stored in logs
+19. Patient free-text notes are never sent to OpenAI
+20. If PHI guardrail validation fails, generation falls back to deterministic templates
+
+PART 12: Smoke tests
+
+Please run or create smoke tests for:
+
+1. Patient with constipation + low steps
+Expected:
+Personalized intervention mentions constipation and lower activity
+Recommendation: walk + water
+Status: shown
+
+2. Patient accepts intervention
+Expected:
+Status becomes pending_feedback
+
+3. Patient submits feedback = better
+Expected:
+Status becomes feedback_collected or resolved
+Event logged
+
+4. Patient submits feedback = worse
+Expected:
+Status escalated or escalation recommended
+Provider dashboard shows patient
+
+5. Duplicate prevention
+Expected:
+No second constipation intervention if one is already pending_feedback
+
+6. OpenAI unavailable
+Expected:
+Fallback template generates valid intervention
+
+7. Doctor scope
+Expected:
+Doctor only sees interventions for their own patients
+
+8. Patient scope
+Expected:
+Patient cannot access another patient’s intervention by ID
+
+9. PHI stripping test
+Expected:
+OpenAI payload does not contain name, email, phone, DOB, address, clinic name, doctor name, raw notes, user IDs or exact timestamps
+
+10. Patient note safety test
+Expected:
+If patientNote contains identifying info, it is saved internally only and never sent to OpenAI
+
+11. AI guardrail failure
+Expected:
+If payload validation detects possible PHI, OpenAI is skipped and generatedBy = rules_fallback
+
+12. Logging safety
+Expected:
+No analytics event contains raw prompt, raw patient note or direct identifiers
+
+Keep this implementation production-safe and pilot-ready. Prioritize correctness, concise UX, patient feedback capture, provider leverage and PHI-safe AI usage.
