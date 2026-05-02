@@ -1,14 +1,19 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import bcrypt from "bcryptjs";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   db,
   usersTable,
   patientsTable,
   apiTokensTable,
+  patientCheckinsTable,
+  patientInterventionsTable,
+  careEventsTable,
 } from "@workspace/db";
 import { getDemoPlatformId } from "../lib/platforms";
 import { generateRawApiToken, hashApiToken } from "../lib/apiTokens";
+import { generatePersonalizedIntervention } from "../lib/interventionEngine";
+import { logger } from "../lib/logger";
 
 // Replit-preview-only convenience login. Lets the operator tap a
 // single button on the patient sign-in screen and land in the Today
@@ -235,6 +240,191 @@ async function selectDemoPatient(): Promise<{
   return row ?? null;
 }
 
+// -------------------------------------------------------------------
+// Demo Today-tab seeding
+// -------------------------------------------------------------------
+// After the operator logs in via this endpoint we want them to see
+// the new personalized intervention card immediately on the Today
+// tab -- without first having to hand-enter symptom sliders. We do
+// that here, server-side, so the mobile dev button stays a thin
+// "tap and go" shortcut.
+//
+// The seed:
+//   1. Upserts today's patient_checkins row for the demo patient
+//      with the spec values (energy=tired, nausea=moderate,
+//      appetite=low, digestion=constipated, bowel_movement=false).
+//      `onConflictDoUpdate` so a second login the same day re-seeds
+//      cleanly instead of inheriting yesterday's leftover edits.
+//   2. Soft-clears any still-active interventions for the demo
+//      patient (status -> dismissed). Without this the engine's
+//      duplicate-trigger suppression would block the new card AND
+//      stale rows would dominate the /active list.
+//   3. Calls generatePersonalizedIntervention() with a forced
+//      `nausea` trigger so the engine never no-ops on threshold
+//      math; the de-id payload still drives the AI/template branch
+//      normally so the rendered copy looks like real production
+//      output.
+//   4. If the engine returns null (no template matched) OR throws,
+//      inserts a hardcoded fallback row that matches the example
+//      copy in the task description so the operator always sees
+//      the three labeled sections + three buttons.
+//   5. Mirrors to care_events (recommendation_shown) so the
+//      dashboard worklist also surfaces the seeded row -- demo data
+//      flows through the same lanes as production data.
+//
+// This entire block is dev-only by mount: in production neither
+// the route nor this helper runs, so no demo data ever lands in a
+// production patient row. The function is also scoped strictly to
+// the seeded demo user id -- it cannot touch a real patient.
+const DEMO_FALLBACK_INTERVENTION = {
+  triggerType: "nausea" as const,
+  symptomType: "nausea",
+  severity: 3,
+  riskLevel: "moderate" as const,
+  whatWeNoticed:
+    "You reported moderate nausea, low appetite and constipation today.",
+  recommendation:
+    "Start with small sips of water and a light protein-forward snack, then take a short walk if your stomach feels okay.",
+  followUpQuestion:
+    "After you try it, tell us if your nausea and digestion feel better, the same or worse.",
+  recommendationCategory: "small_meal" as const,
+  generatedBy: "rules_fallback" as const,
+};
+
+function todayLocalYmd(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+async function seedDemoTodaysCheckinAndIntervention(
+  patientUserId: number,
+  doctorId: number,
+): Promise<void> {
+  const today = todayLocalYmd();
+
+  // 1. Upsert today's check-in row.
+  await db
+    .insert(patientCheckinsTable)
+    .values({
+      patientUserId,
+      date: today,
+      energy: "tired",
+      nausea: "moderate",
+      mood: 3,
+      appetite: "low",
+      digestion: "constipated",
+      bowelMovement: false,
+    })
+    .onConflictDoUpdate({
+      target: [patientCheckinsTable.patientUserId, patientCheckinsTable.date],
+      set: {
+        energy: "tired",
+        nausea: "moderate",
+        mood: 3,
+        appetite: "low",
+        digestion: "constipated",
+        bowelMovement: false,
+      },
+    });
+
+  // 2. Soft-clear stale active interventions for the demo patient.
+  await db
+    .update(patientInterventionsTable)
+    .set({ status: "dismissed", updatedAt: new Date() })
+    .where(
+      and(
+        eq(patientInterventionsTable.patientUserId, patientUserId),
+        inArray(patientInterventionsTable.status, [
+          "shown",
+          "accepted",
+          "pending_feedback",
+          "escalated",
+        ]),
+      ),
+    );
+
+  // 3. Try the real engine first so the operator sees production-shaped
+  //    copy whenever the templates / AI branch can produce one.
+  let row:
+    | {
+        id: number;
+        triggerType: string;
+        recommendationCategory: string | null;
+        generatedBy: string;
+        riskLevel: string;
+      }
+    | undefined;
+  try {
+    const generated = await generatePersonalizedIntervention({
+      patientUserId,
+      forcedTriggerType: "nausea",
+      forcedSymptomType: "nausea",
+      forcedSeverity: 3,
+    });
+    if (generated) {
+      const [inserted] = await db
+        .insert(patientInterventionsTable)
+        .values(generated.insertRow)
+        .returning();
+      row = inserted;
+    }
+  } catch (err) {
+    logger.warn(
+      {
+        err,
+        patientUserId,
+        event: "dev_demo_intervention_engine_failed",
+      },
+      "demo intervention engine failed; using hardcoded fallback",
+    );
+  }
+
+  // 4. Hardcoded fallback so the demo card is always visible.
+  if (!row) {
+    const [inserted] = await db
+      .insert(patientInterventionsTable)
+      .values({
+        patientUserId,
+        doctorId,
+        ...DEMO_FALLBACK_INTERVENTION,
+        contextSummary: { source: "dev_demo_seed_fallback" },
+        deidentifiedAiPayload: null,
+        escalationReason: null,
+      })
+      .returning();
+    row = inserted;
+  }
+
+  if (!row) return;
+
+  // 5. Mirror to care_events. Best-effort; a failure here must not
+  //    swallow the seeded intervention row.
+  try {
+    await db.insert(careEventsTable).values({
+      patientUserId,
+      actorUserId: null,
+      source: "viva",
+      type: "recommendation_shown",
+      metadata: {
+        intervention_id: row.id,
+        trigger_type: row.triggerType,
+        recommendation_category: row.recommendationCategory,
+        generated_by: row.generatedBy,
+        source: "dev_demo_seed",
+        risk_level: row.riskLevel,
+      },
+    });
+  } catch (err) {
+    logger.warn(
+      { err, interventionId: row.id, event: "dev_demo_care_event_failed" },
+      "demo care_event mirror failed",
+    );
+  }
+}
+
 router.post(
   "/login-demo-patient",
   async (req: Request, res: Response) => {
@@ -242,6 +432,24 @@ router.post(
       const doctor = await ensureDemoDoctor();
       const patient = await ensureDemoPatient(doctor.id, doctor.platformId);
       const token = await issueApiToken(patient.id, "patient");
+
+      // Seed today's check-in + a freshly generated personalized
+      // intervention so the Today tab visibly shows the new card on
+      // the next /active fetch. Wrapped in try/catch so a partial
+      // failure never blocks the bearer-token return -- without the
+      // token the operator cannot test anything else.
+      try {
+        await seedDemoTodaysCheckinAndIntervention(patient.id, doctor.id);
+      } catch (seedErr) {
+        req.log.warn(
+          {
+            err: seedErr,
+            event: "dev_demo_seed_failed",
+            patientUserId: patient.id,
+          },
+          "dev demo seed failed; returning token anyway",
+        );
+      }
 
       // Loud, structured log so anyone tailing the API can see this
       // endpoint was hit. Includes the patient id but no PII beyond
