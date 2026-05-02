@@ -12,6 +12,7 @@ import { isInviteTokenExpired } from "../lib/inviteTokens";
 import { getDemoPlatformId } from "../lib/platforms";
 import { generateRawApiToken, hashApiToken } from "../lib/apiTokens";
 import { strictAuthLimiter } from "../middlewares/rateLimit";
+import { requireAuth, type AuthedRequest } from "../middlewares/auth";
 
 // Issue a long-lived bearer token for the patient mobile app. Cookies
 // are not reliable on RN, so the app stores this in AsyncStorage and
@@ -320,16 +321,21 @@ router.post("/logout", (req: Request, res: Response) => {
   });
 });
 
-router.get("/me", async (req: Request, res: Response) => {
-  const userId = req.session.userId;
-  if (!userId) {
-    res.status(401).json({ error: "unauthorized" });
-    return;
-  }
+// /auth/me must accept BOTH the cookie session (browser dashboard for
+// doctors) and the Authorization: Bearer token (RN mobile app for
+// patients). Earlier this handler only consulted req.session.userId,
+// so any bearer-only client (the entire mobile patient flow) got 401
+// here -- and because sessionClient.me() interprets a 401 as "stale
+// token" and wipes the bearer from AsyncStorage, the very first
+// /auth/me call after dev / demo / real login would log the patient
+// straight back out, leaving every subsequent patient API call
+// unauthenticated. requireAuth handles both schemes uniformly.
+router.get("/me", requireAuth, async (req: Request, res: Response) => {
+  const auth = (req as AuthedRequest).auth;
   const [user] = await db
     .select()
     .from(usersTable)
-    .where(eq(usersTable.id, userId))
+    .where(eq(usersTable.id, auth.userId))
     .limit(1);
   if (!user) {
     res.status(401).json({ error: "unauthorized" });

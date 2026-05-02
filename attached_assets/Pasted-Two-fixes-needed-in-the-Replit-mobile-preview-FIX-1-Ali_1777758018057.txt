@@ -1,0 +1,68 @@
+Two fixes needed in the Replit mobile preview.
+
+FIX 1: Align "Care" under the viva logo
+
+On the patient login/onboarding page, the "Care" text under the viva. logo is not visually centered with the logo.
+
+Please update the logo lockup so:
+- "Care" is horizontally centered under the viva. wordmark
+- The combined viva. + Care lockup looks intentional and balanced
+- Do this on the patient onboarding/login screen shown in Replit preview
+- Keep the current font, size and styling unless a small alignment wrapper is needed
+
+Acceptance:
+The "Care" label should appear centered directly beneath the viva. logo, not offset.
+
+FIX 2: Personalized intervention still not showing in Replit preview
+
+In the Replit mobile preview, I selected negative symptoms:
+- Energy: Tired
+- Appetite: Low
+- Nausea: Moderate
+- Digestion: Constipated
+- Bowel Movement: No
+
+But no "Personalized check-in" intervention card appeared. The screen only shows:
+- Based on Your Check-ins
+- How are things today?
+- Your Plan
+
+This means the intervention generation or rendering flow is still broken in the actual preview.
+
+Please debug the live Replit preview path, not just backend tests.
+
+Required behavior:
+When the demo patient is logged in or when a patient selects negative symptoms, the Today tab should show a visible personalized intervention card.
+
+The card must show:
+- Personalized check-in
+- What Viva noticed
+- Try this today
+- Check back later
+- Buttons: I’ll do this, Not now, Ask my care team
+
+Please verify and fix:
+1. Is the logged-in user actually the demo patient?
+2. Did Login as Demo Patient seed an active intervention?
+3. Does GET /api/patient/interventions/active return an active intervention for this user?
+4. Is the Today tab calling /active after login and after symptom changes?
+5. Is the Today tab hiding the intervention card due to state, scroll position or conditional rendering?
+6. Is the card rendered above or below the symptom module?
+7. Is the active intervention being filtered out because of status, trigger type or stale local state?
+8. Is the app calling the correct backend URL in Replit preview?
+9. Are the negative symptom selections auto-saving to /me/checkins?
+10. Does /generate run after the auto-save succeeds?
+11. Does /active refetch after /generate succeeds?
+
+Important:
+Do not mark complete because the backend endpoint works in curl. The acceptance test is visual in the Replit preview.
+
+Acceptance:
+Open Replit preview → Login as Demo Patient → Today tab visibly shows the personalized intervention card.
+
+Second acceptance:
+Select Energy=Tired, Appetite=Low, Nausea=Moderate, Digestion=Constipated, Bowel Movement=No → the Today tab visibly shows or refreshes to the personalized intervention card.
+
+Do not show old generic cards.
+Do not show only the empty state.
+Do not require me to manually inspect API logs from my phone.
