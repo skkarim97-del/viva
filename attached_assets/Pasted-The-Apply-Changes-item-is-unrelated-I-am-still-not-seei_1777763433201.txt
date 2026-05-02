@@ -1,0 +1,63 @@
+The Apply Changes item is unrelated. I am still not seeing the Personalized check-in card in the live Replit preview.
+
+Please stop relying on backend tests or screenshots from a different test harness. Debug the exact preview currently shown in the Replit workspace.
+
+Current visible state:
+- Today tab shows "Based on Your Check-ins"
+- "How are things today?"
+- selected symptoms:
+  - Energy=Tired
+  - Appetite=Low
+  - Nausea=Moderate or Severe
+  - Digestion=Constipated
+  - Bowel Movement=No
+- Then it goes directly to "Your Plan"
+- There is NO Personalized check-in card above Your Plan
+
+Required result:
+The live Replit preview must show the Personalized check-in card directly between "How are things today?" and "Your Plan."
+
+Please do a live-preview debugging pass:
+
+1. Add a temporary dev-only debug strip above "Your Plan" showing:
+   - auth status
+   - current user role
+   - activeInterventions.length
+   - latest intervention status
+   - last /active response status
+   - last /generate response status
+   - last /me/checkins response status
+
+2. In the Today screen, log to console every time these happen:
+   - symptom selection changes
+   - autosave starts
+   - autosave succeeds/fails
+   - generate starts
+   - generate succeeds/fails
+   - active reload starts
+   - active reload succeeds/fails
+   - InterventionCard render condition evaluates true/false
+
+3. Confirm the actual visible Today screen file is the file being edited.
+
+4. Confirm the card is rendered directly above Your Plan in the same JSX branch that the preview is using.
+
+5. If activeInterventions.length > 0 but no card shows, fix the render condition.
+
+6. If activeInterventions.length = 0, fix the save/generate/refetch chain.
+
+7. If API calls are 401, fix auth/session.
+
+8. If the card exists lower on the page, move it above Your Plan.
+
+Do not mark complete until the live Replit preview visibly shows:
+- Personalized check-in
+- What Viva noticed
+- Try this today
+- Check back later
+- I’ll do this
+- Not now
+- Ask my care team
+
+Acceptance:
+Take a screenshot from the same Replit preview showing the card between "How are things today?" and "Your Plan."
