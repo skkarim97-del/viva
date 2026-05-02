@@ -259,52 +259,82 @@ export default function DashboardScreen() {
     void tryGenerate();
   }, [activeLoaded, hasActive, tryGenerate]);
 
-  // Re-trigger /generate after the patient updates today's symptom
-  // inputs. The inputs (energy / appetite / nausea / digestion / bowel)
-  // auto-persist via their setters, so by the time we fire here the
-  // server has the latest signals and the engine can produce a new
-  // personalized card. We debounce to coalesce rapid taps and skip
-  // entirely when an active intervention already exists -- the
-  // server's de-dupe would suppress the call anyway, but skipping
-  // saves a round trip.
+  // Pilot auto-save + generate. The patient's symptom sliders
+  // (energy / appetite / nausea / digestion / bowel) only update
+  // local React state -- they are NOT persisted to the backend
+  // until saveDailyCheckIn runs, and saveDailyCheckIn's only call
+  // site is the mental-state quick check-in modal "Done" button.
+  // For the pilot Today experience we want the personalized card
+  // to spawn as soon as the patient provides enough symptom data,
+  // without forcing them to also tap the mental-state modal.
   //
-  // We seed `lastGeneratedSignatureRef` with the signature observed
-  // when /active first lands so the watcher does NOT fire on initial
-  // mount for inputs the patient logged earlier in the day. It only
-  // fires when the signature changes AFTER the initial load.
+  // This effect, debounced 1.2s, runs whenever the symptom
+  // signature changes AND the minimum required fields (energy +
+  // nausea) are set. It:
+  //   1. POSTs the current symptom snapshot to /me/checkins so
+  //      the engine has a fresh row in patient_checkins to read.
+  //   2. Awaits that POST before calling /generate, so we never
+  //      run the engine against stale or missing DB data.
+  //   3. Snaps the signature on success so a no-op symptom
+  //      change (or the same signature returning later) doesn't
+  //      re-fire.
+  //
+  // We seed lastSavedSignatureRef with the first observed
+  // signature once /active resolves, so we don't auto-fire for
+  // inputs the patient logged earlier in the day; only edits
+  // diverging from that snapshot trigger the auto-save chain.
   const symptomSignature = `${glp1Energy ?? ""}|${appetite ?? ""}|${nausea ?? ""}|${digestion ?? ""}|${bowelMovementToday ?? ""}`;
-  const lastGeneratedSignatureRef = useRef<string | null>(null);
+  const hasMinSymptomData = !!(glp1Energy && nausea);
+  const lastSavedSignatureRef = useRef<string | null>(null);
   useEffect(() => {
     if (!activeLoaded) return;
-    if (lastGeneratedSignatureRef.current === null) {
-      // First observation post-active-load: snapshot the current
-      // signature so we don't auto-fire for the patient's existing
-      // morning entries. Subsequent edits will diverge from this
-      // snapshot and trigger the debounced /generate.
-      lastGeneratedSignatureRef.current = symptomSignature;
+    if (lastSavedSignatureRef.current === null) {
+      lastSavedSignatureRef.current = symptomSignature;
       return;
     }
     if (hasActive) return;
-    if (lastGeneratedSignatureRef.current === symptomSignature) return;
-    if (symptomSignature === "||||") return; // nothing logged yet today
-    const handle = setTimeout(() => {
-      // Snapshot the signature BEFORE awaiting tryGenerate. We only
-      // advance the watcher's "last generated" pointer when the
-      // request actually started -- if tryGenerate returns "queued"
-      // (blocked by an in-flight call), we leave the signature
-      // unchanged so a subsequent edit can re-trigger a fresh
-      // generate after the in-flight one settles. The follow-up
-      // that tryGenerate runs internally still covers the queued
-      // case for the SAME signature.
+    if (!hasMinSymptomData) return;
+    if (lastSavedSignatureRef.current === symptomSignature) return;
+    const handle = setTimeout(async () => {
       const snapshot = symptomSignature;
-      void tryGenerate().then((outcome) => {
-        if (outcome === "started") {
-          lastGeneratedSignatureRef.current = snapshot;
-        }
-      });
+      const todayYmd = new Date().toISOString().split("T")[0]!;
+      try {
+        // Await the actual POST so the engine sees the row.
+        // submitCheckin is awaitable (sessionApi -> /me/checkins).
+        // We default mood to 3 when no mental state exists --
+        // matches saveDailyCheckIn's fallback in AppContext.
+        await sessionApi.submitCheckin({
+          date: todayYmd,
+          energy: glp1Energy!,
+          nausea: nausea!,
+          mood: 3,
+          appetite: appetite ?? null,
+          digestion: digestion ?? null,
+          bowelMovement: bowelMovementToday,
+        });
+      } catch {
+        // 401 / network error -- bail without advancing signature
+        // so a later retry (after auth recovery) can succeed.
+        return;
+      }
+      const outcome = await tryGenerate();
+      if (outcome === "started") {
+        lastSavedSignatureRef.current = snapshot;
+      }
     }, 1200);
     return () => clearTimeout(handle);
-  }, [activeLoaded, symptomSignature, hasActive, tryGenerate]);
+  }, [
+    activeLoaded,
+    symptomSignature,
+    hasActive,
+    hasMinSymptomData,
+    glp1Energy,
+    nausea,
+    appetite,
+    digestion,
+    bowelMovementToday,
+    tryGenerate,
+  ]);
 
   const onInterventionAccept = React.useCallback(
     async (id: number) => {
@@ -1280,7 +1310,7 @@ export default function DashboardScreen() {
             /active is still loading on first paint, we render
             nothing to avoid a flicker between empty-state prompt
             and card. */}
-        {activeLoaded && activeInterventions.length === 0 && !todayCheckIn && (
+        {activeLoaded && activeInterventions.length === 0 && !hasMinSymptomData && (
           <View
             style={[
               styles.dayCard,
