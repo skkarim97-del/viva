@@ -101,6 +101,7 @@ export default function ConnectScreen() {
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
         >
+          <View style={styles.content}>
           <Image
             source={require("@/assets/viva-wordmark-navy.png")}
             style={styles.brand}
@@ -290,6 +291,7 @@ export default function ConnectScreen() {
             Your clinician will only see the check-ins you submit through this
             app. You can sign out any time from Settings.
           </Text>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -299,6 +301,11 @@ export default function ConnectScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.light.background },
   scroll: { padding: 24, paddingBottom: 64 },
+  content: {
+    width: "100%",
+    maxWidth: 340,
+    alignSelf: "center",
+  },
   brand: {
     width: 96,
     height: 44,
