@@ -1,0 +1,80 @@
+The new AI-personalized intervention loop may be implemented in backend, but the mobile UI is still showing the old generic intervention cards.
+
+Current visible cards still say things like:
+- "Ease your nausea"
+- "Sip about ½ cup of water slowly..."
+- "Get things moving"
+- "Stand up and stretch gently..."
+- "Steady your appetite"
+
+This is NOT the new personalized intervention experience.
+
+Please audit and fix the mobile intervention rendering.
+
+Goal:
+The Today tab should show the new patient_interventions-based card, not the old static/generic micro-action cards.
+
+Required UX:
+Each personalized intervention card must show:
+
+Title:
+"Personalized check-in"
+
+Section:
+"What Viva noticed"
+Example:
+"You’ve reported constipation 2 days in a row, and your activity was lower than usual yesterday."
+
+Section:
+"Try this today"
+Example:
+"After your next meal, take a 10-minute walk and drink a full glass of water."
+
+Section:
+"Check back later"
+Example:
+"After you try it, tell us if your constipation feels better, the same or worse."
+
+Buttons when status = shown:
+- "I’ll do this"
+- "Not now"
+- "Ask my care team"
+
+After tapping "I’ll do this":
+- Card stays visible
+- Status becomes "Pending feedback"
+- Show feedback buttons:
+  - "Better"
+  - "Same"
+  - "Worse"
+  - "I didn’t try it"
+
+Please investigate:
+1. Where the old generic intervention cards are generated and rendered
+2. Whether they come from a local static template system
+3. Whether the new /api/patient/interventions/active endpoint is being called on the Today tab
+4. Whether /api/patient/interventions/generate is called after check-in
+5. Whether the new InterventionCard component is actually mounted in the visible Today screen
+6. Whether old generic cards should be hidden, replaced or migrated into the new patient_interventions lifecycle
+7. Whether the app is pointed at the correct API environment
+
+Fix:
+- Replace the old generic intervention card rendering with the new patient_interventions card
+- Do not show old generic cards unless they are converted into patient_interventions records
+- After check-in, generate or fetch the new personalized intervention
+- Ensure the visible card references at least one patient-specific signal when available
+- Ensure the card has the feedback lifecycle
+- Ensure clicking "I’ll do this" changes status to pending_feedback
+- Ensure Better/Same/Worse/I didn’t try it saves feedback
+- Ensure Worse escalates to Clinic dashboard
+
+Acceptance test:
+When a patient reports constipation and has low activity, the visible Today card should NOT say only:
+"Stand up and stretch gently for about 2 minutes."
+
+It should say something like:
+"What Viva noticed: You’ve reported constipation 2 days in a row, and your activity was lower than usual yesterday.
+Try this today: After your next meal, take a 10-minute walk and drink a full glass of water.
+Check back later: After you try it, tell us if your constipation feels better, the same or worse."
+
+Also confirm the old cards no longer appear above the new card.

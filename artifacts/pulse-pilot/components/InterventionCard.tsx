@@ -1,12 +1,21 @@
 // Today-tab card that surfaces an AI-personalized micro-intervention
-// (Phase 3 of the intervention loop). Renders ABOVE SymptomTipCard so
-// the patient sees the personalized recommendation first; the static
-// symptom tips remain as the fallback layer beneath.
+// (Phase 3 of the intervention loop). When this card is rendering, the
+// legacy SymptomTipCard layer is intentionally suppressed by the
+// parent so the patient sees ONE prioritized recommendation that
+// references their own signals, instead of a generic static tip on
+// top of the personalized one.
+//
+// Visible structure (spec):
+//   Title:   "Personalized check-in"
+//   Section: "What Viva noticed"   -> intervention.whatWeNoticed
+//   Section: "Try this today"      -> intervention.recommendation
+//   Section: "Check back later"    -> intervention.followUpQuestion
 //
 // State machine:
-//   shown              -> "Try this" / "Not now"  buttons
-//   accepted           -> "Got it - try" + ghost reminder
-//   pending_feedback   -> "Better / Same / Worse" buttons
+//   shown              -> "I'll do this" / "Not now" / "Ask my care team"
+//   accepted           -> "Got it - we'll check in later" pill
+//   pending_feedback   -> "Pending feedback" pill +
+//                         Better / Same / Worse / "I didn't try it"
 //                         (worse server-side AUTO-ESCALATES the row to
 //                          status="escalated" on /feedback; the card
 //                          does NOT issue a separate /escalate call.)
@@ -79,6 +88,13 @@ function categoryIcon(
   }
 }
 
+// Default copy for the "Check back later" line when the engine
+// returned a row without a follow-up question. This is rare -- all
+// fallback templates in templates.ts ship with a question -- but we
+// fail safe so the section never renders blank.
+const DEFAULT_FOLLOWUP =
+  "After you try it, tell us if it feels better, the same or worse.";
+
 export function InterventionCard({
   intervention,
   navy,
@@ -92,9 +108,9 @@ export function InterventionCard({
   onFeedback,
   onEscalate,
 }: InterventionCardProps) {
-  const [busy, setBusy] = useState<null | "accept" | "dismiss" | "feedback" | "escalate">(
-    null,
-  );
+  const [busy, setBusy] = useState<
+    null | "accept" | "dismiss" | "feedback" | "escalate"
+  >(null);
 
   const status = intervention.status;
   const icon = useMemo(
@@ -117,6 +133,12 @@ export function InterventionCard({
     setBusy("dismiss");
     haptic();
     try { await onDismiss(intervention.id); } finally { setBusy(null); }
+  };
+  const handleEscalate = async () => {
+    if (busy) return;
+    setBusy("escalate");
+    haptic();
+    try { await onEscalate(intervention.id); } finally { setBusy(null); }
   };
   const handleFeedback = async (result: FeedbackResult) => {
     if (busy) return;
@@ -143,6 +165,10 @@ export function InterventionCard({
     return null;
   }
 
+  const followUpText = intervention.followUpQuestion?.trim()
+    ? intervention.followUpQuestion
+    : DEFAULT_FOLLOWUP;
+
   return (
     <View
       style={[
@@ -157,20 +183,45 @@ export function InterventionCard({
         <View style={[styles.iconWrap, { backgroundColor: accent + "18" }]}>
           <Feather name={icon} size={16} color={accent} />
         </View>
-        <Text style={[styles.eyebrow, { color: mutedForeground }]}>
-          {status === "escalated" ? "CARE TEAM NOTIFIED" : "PERSONALIZED FOR TODAY"}
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.eyebrow, { color: mutedForeground }]}>
+            {status === "escalated" ? "CARE TEAM NOTIFIED" : "FOR YOU TODAY"}
+          </Text>
+          <Text style={[styles.title, { color: navy }]}>
+            Personalized check-in
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={[styles.sectionLabel, { color: mutedForeground }]}>
+          What Viva noticed
+        </Text>
+        <Text style={[styles.sectionBody, { color: navy }]}>
+          {intervention.whatWeNoticed}
         </Text>
       </View>
 
-      <Text style={[styles.noticed, { color: navy }]}>
-        {intervention.whatWeNoticed}
-      </Text>
-      <Text style={[styles.recommendation, { color: navy }]}>
-        {intervention.recommendation}
-      </Text>
+      <View style={styles.section}>
+        <Text style={[styles.sectionLabel, { color: mutedForeground }]}>
+          Try this today
+        </Text>
+        <Text style={[styles.sectionBody, { color: navy, fontWeight: "600" }]}>
+          {intervention.recommendation}
+        </Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={[styles.sectionLabel, { color: mutedForeground }]}>
+          Check back later
+        </Text>
+        <Text style={[styles.sectionBody, { color: navy }]}>
+          {followUpText}
+        </Text>
+      </View>
 
       {status === "shown" && (
-        <View style={styles.buttonRow}>
+        <View style={styles.shownActions}>
           <Pressable
             onPress={handleAccept}
             disabled={!!busy}
@@ -184,32 +235,63 @@ export function InterventionCard({
             ) : (
               <>
                 <Feather name="check" size={14} color="#fff" />
-                <Text style={styles.primaryButtonText}>Try this</Text>
+                <Text style={styles.primaryButtonText}>I'll do this</Text>
               </>
             )}
           </Pressable>
-          <Pressable
-            onPress={handleDismiss}
-            disabled={!!busy}
-            style={({ pressed }) => [
-              styles.secondaryButton,
-              { borderColor: background, opacity: pressed || busy ? 0.7 : 1 },
-            ]}
-          >
-            <Text style={[styles.secondaryButtonText, { color: mutedForeground }]}>
-              Not now
-            </Text>
-          </Pressable>
+          <View style={styles.secondaryRow}>
+            <Pressable
+              onPress={handleDismiss}
+              disabled={!!busy}
+              style={({ pressed }) => [
+                styles.secondaryButton,
+                { borderColor: background, opacity: pressed || busy ? 0.7 : 1 },
+              ]}
+            >
+              {busy === "dismiss" ? (
+                <ActivityIndicator size="small" color={mutedForeground} />
+              ) : (
+                <Text
+                  style={[styles.secondaryButtonText, { color: mutedForeground }]}
+                >
+                  Not now
+                </Text>
+              )}
+            </Pressable>
+            <Pressable
+              onPress={handleEscalate}
+              disabled={!!busy}
+              style={({ pressed }) => [
+                styles.secondaryButton,
+                { borderColor: background, opacity: pressed || busy ? 0.7 : 1 },
+              ]}
+            >
+              {busy === "escalate" ? (
+                <ActivityIndicator size="small" color={mutedForeground} />
+              ) : (
+                <View style={styles.iconAndText}>
+                  <Feather
+                    name="message-circle"
+                    size={13}
+                    color={mutedForeground}
+                  />
+                  <Text
+                    style={[
+                      styles.secondaryButtonText,
+                      { color: mutedForeground },
+                    ]}
+                  >
+                    Ask my care team
+                  </Text>
+                </View>
+              )}
+            </Pressable>
+          </View>
         </View>
       )}
 
-      {status === "accepted" && intervention.followUpQuestion && (
-        <Text style={[styles.helperText, { color: mutedForeground }]}>
-          {intervention.followUpQuestion}
-        </Text>
-      )}
       {status === "accepted" && (
-        <View style={styles.buttonRow}>
+        <View style={styles.acceptedRow}>
           <View
             style={[
               styles.acceptedPill,
@@ -226,10 +308,25 @@ export function InterventionCard({
 
       {status === "pending_feedback" && (
         <>
+          <View style={styles.pendingPillRow}>
+            <View
+              style={[
+                styles.pendingPill,
+                { backgroundColor: mutedForeground + "18" },
+              ]}
+            >
+              <Feather name="clock" size={12} color={mutedForeground} />
+              <Text
+                style={[styles.pendingPillText, { color: mutedForeground }]}
+              >
+                Pending feedback
+              </Text>
+            </View>
+          </View>
           <Text style={[styles.helperText, { color: mutedForeground }]}>
             How do you feel now?
           </Text>
-          <View style={styles.feedbackRow}>
+          <View style={styles.feedbackGrid}>
             <FeedbackButton
               label="Better"
               icon="smile"
@@ -257,6 +354,15 @@ export function InterventionCard({
               mutedForeground={mutedForeground}
               background={background}
             />
+            <FeedbackButton
+              label="I didn't try it"
+              icon="slash"
+              tint={mutedForeground}
+              busy={busy === "feedback"}
+              onPress={() => handleFeedback("didnt_try")}
+              mutedForeground={mutedForeground}
+              background={background}
+            />
           </View>
         </>
       )}
@@ -278,7 +384,7 @@ export function InterventionCard({
       )}
 
       {status === "escalated" && (
-        <View style={[styles.escalatedRow]}>
+        <View style={styles.escalatedRow}>
           <Feather name="alert-circle" size={14} color={warning} />
           <Text style={[styles.escalatedText, { color: warning }]}>
             Your care team will follow up.
@@ -332,35 +438,43 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 18,
     padding: 18,
-    gap: 10,
+    gap: 12,
     borderWidth: 1,
   },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 10,
   },
   iconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
   },
   eyebrow: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.7,
+    marginBottom: 2,
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  section: {
+    gap: 4,
+  },
+  sectionLabel: {
     fontSize: 11,
     fontWeight: "700",
-    letterSpacing: 0.6,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
   },
-  noticed: {
+  sectionBody: {
     fontSize: 14,
-    fontWeight: "500",
-    opacity: 0.85,
-  },
-  recommendation: {
-    fontSize: 16,
-    fontWeight: "600",
-    lineHeight: 22,
+    lineHeight: 20,
   },
   helperText: {
     fontSize: 13,
@@ -372,18 +486,21 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     marginTop: 4,
   },
-  buttonRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
+  shownActions: {
+    gap: 8,
     marginTop: 6,
+  },
+  secondaryRow: {
+    flexDirection: "row",
+    gap: 8,
   },
   primaryButton: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 6,
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderRadius: 12,
   },
   primaryButtonText: {
@@ -392,14 +509,26 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   secondaryButton: {
-    paddingHorizontal: 14,
+    flex: 1,
+    paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   secondaryButtonText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "500",
+  },
+  iconAndText: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  acceptedRow: {
+    flexDirection: "row",
+    marginTop: 4,
   },
   acceptedPill: {
     flexDirection: "row",
@@ -413,13 +542,33 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
   },
-  feedbackRow: {
+  pendingPillRow: {
     flexDirection: "row",
+    marginTop: 4,
+  },
+  pendingPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+  },
+  pendingPillText: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
+  feedbackGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
     marginTop: 6,
   },
   feedbackButton: {
-    flex: 1,
+    flexBasis: "48%",
+    flexGrow: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",

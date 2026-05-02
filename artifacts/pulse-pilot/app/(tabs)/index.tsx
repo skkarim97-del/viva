@@ -161,42 +161,150 @@ export default function DashboardScreen() {
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   // ----- AI-personalized micro-intervention loop (Phase 3) -----
-  // Renders ABOVE SymptomTipCard. We load any active interventions on
-  // mount, kick off a one-shot generate when the screen first opens
-  // (so a patient who already submitted a check-in today still sees
-  // a recommendation), and refetch /active after every card action.
+  // The personalized card REPLACES the legacy SymptomTipCard layer
+  // whenever an active row exists -- the parent suppresses the
+  // static-tip block below in that case so the patient sees ONE
+  // prioritized recommendation that references their own signals,
+  // instead of a generic static tip stacked on top of it.
+  //
+  // Lifecycle:
+  //   1. Load /active on mount.
+  //   2. If empty, kick off /generate (source=checkin) so a patient
+  //      who already logged a check-in today still gets a card.
+  //   3. Refetch /active after every card action.
+  //   4. When the patient changes any symptom input today AND there's
+  //      no active intervention yet, debounce-call /generate again so
+  //      a freshly logged signal can spawn a personalized card.
+  //
   // All network calls are best-effort -- a failure must never block
   // the rest of the Today screen from rendering.
   const [activeInterventions, setActiveInterventions] = useState<PatientIntervention[]>([]);
-  const generateAttemptedRef = useRef(false);
+  // We must NOT fire /generate before the first /active fetch lands --
+  // otherwise on a slow network the mount effect would always race
+  // ahead of the active-load and pointlessly ask the engine to
+  // generate while a row may already exist. `activeLoaded` flips true
+  // exactly once after the first /active call completes (success OR
+  // failure), and gates both auto-generate effects below.
+  const [activeLoaded, setActiveLoaded] = useState(false);
   const reloadActiveInterventions = React.useCallback(async () => {
     try {
       const items = await interventionsApi.active();
       setActiveInterventions(items);
     } catch {
       /* swallow -- best effort */
+    } finally {
+      setActiveLoaded(true);
     }
   }, []);
   useEffect(() => {
     void reloadActiveInterventions();
   }, [reloadActiveInterventions]);
+
+  // Single in-flight /generate guard. Prevents the mount effect and
+  // the symptom-input watcher from racing each other (or themselves)
+  // when the network is slow -- without this guard a debounce that
+  // fires while a previous /generate is still pending would issue a
+  // duplicate request, which the server's trigger-based dedupe might
+  // not collapse under concurrent latency. Wraps every UI-initiated
+  // /generate call.
+  //
+  // Returns "started" if the request actually went out, "queued" if
+  // it was blocked by an in-flight call (the symptom-input watcher
+  // uses this to NOT advance its signature snapshot, so a follow-up
+  // edit during the in-flight window still gets a chance to fire).
+  const generateInFlightRef = useRef(false);
+  const queuedFollowUpRef = useRef(false);
+  const tryGenerate = React.useCallback(async (): Promise<"started" | "queued"> => {
+    if (generateInFlightRef.current) {
+      // Mark that a follow-up was requested while we were busy. The
+      // in-flight call will run one extra /generate after it settles
+      // so a legitimate symptom-change trigger isn't dropped.
+      queuedFollowUpRef.current = true;
+      return "queued";
+    }
+    // Drain loop: run the initial request, then keep running one
+    // /generate per queued follow-up until the queue settles. Without
+    // this loop a second-order overlap (queued during the follow-up's
+    // own in-flight window) would set the flag again but never drain,
+    // dropping a legitimate symptom-change trigger that has no further
+    // signature change to retry.
+    do {
+      queuedFollowUpRef.current = false;
+      generateInFlightRef.current = true;
+      try {
+        const created = await interventionsApi.generate({ source: "checkin" });
+        if (created) await reloadActiveInterventions();
+      } finally {
+        generateInFlightRef.current = false;
+      }
+    } while (queuedFollowUpRef.current);
+    return "started";
+  }, [reloadActiveInterventions]);
+
+  // Track whether we've already issued a /generate for the CURRENT
+  // empty-active state. Resets to false whenever activeInterventions
+  // becomes non-empty (so the next time it goes empty -- e.g. after a
+  // feedback collection drops the row -- we'll attempt one more
+  // generate). We also re-attempt when symptom inputs change below.
+  const hasActive = activeInterventions.length > 0;
+  const generateAttemptedRef = useRef(false);
   useEffect(() => {
-    // After the first /active fetch, if there's nothing active and we
-    // haven't already attempted this session, ask the engine to
-    // generate one. The engine returns null when conditions aren't
-    // met, so this is safe to call unconditionally.
-    if (generateAttemptedRef.current) return;
-    if (activeInterventions.length > 0) {
-      generateAttemptedRef.current = true;
+    if (!activeLoaded) return; // wait for first /active to land
+    if (hasActive) {
+      generateAttemptedRef.current = false;
       return;
     }
+    if (generateAttemptedRef.current) return;
     generateAttemptedRef.current = true;
-    void (async () => {
-      const created = await interventionsApi.generate({ source: "checkin" });
-      if (created) await reloadActiveInterventions();
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeInterventions.length]);
+    void tryGenerate();
+  }, [activeLoaded, hasActive, tryGenerate]);
+
+  // Re-trigger /generate after the patient updates today's symptom
+  // inputs. The inputs (energy / appetite / nausea / digestion / bowel)
+  // auto-persist via their setters, so by the time we fire here the
+  // server has the latest signals and the engine can produce a new
+  // personalized card. We debounce to coalesce rapid taps and skip
+  // entirely when an active intervention already exists -- the
+  // server's de-dupe would suppress the call anyway, but skipping
+  // saves a round trip.
+  //
+  // We seed `lastGeneratedSignatureRef` with the signature observed
+  // when /active first lands so the watcher does NOT fire on initial
+  // mount for inputs the patient logged earlier in the day. It only
+  // fires when the signature changes AFTER the initial load.
+  const symptomSignature = `${glp1Energy ?? ""}|${appetite ?? ""}|${nausea ?? ""}|${digestion ?? ""}|${bowelMovementToday ?? ""}`;
+  const lastGeneratedSignatureRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!activeLoaded) return;
+    if (lastGeneratedSignatureRef.current === null) {
+      // First observation post-active-load: snapshot the current
+      // signature so we don't auto-fire for the patient's existing
+      // morning entries. Subsequent edits will diverge from this
+      // snapshot and trigger the debounced /generate.
+      lastGeneratedSignatureRef.current = symptomSignature;
+      return;
+    }
+    if (hasActive) return;
+    if (lastGeneratedSignatureRef.current === symptomSignature) return;
+    if (symptomSignature === "||||") return; // nothing logged yet today
+    const handle = setTimeout(() => {
+      // Snapshot the signature BEFORE awaiting tryGenerate. We only
+      // advance the watcher's "last generated" pointer when the
+      // request actually started -- if tryGenerate returns "queued"
+      // (blocked by an in-flight call), we leave the signature
+      // unchanged so a subsequent edit can re-trigger a fresh
+      // generate after the in-flight one settles. The follow-up
+      // that tryGenerate runs internally still covers the queued
+      // case for the SAME signature.
+      const snapshot = symptomSignature;
+      void tryGenerate().then((outcome) => {
+        if (outcome === "started") {
+          lastGeneratedSignatureRef.current = snapshot;
+        }
+      });
+    }, 1200);
+    return () => clearTimeout(handle);
+  }, [activeLoaded, symptomSignature, hasActive, tryGenerate]);
 
   const onInterventionAccept = React.useCallback(
     async (id: number) => {
@@ -1161,10 +1269,14 @@ export default function DashboardScreen() {
           </View>
         )}
 
-        {/* Symptom-tip cards. Render directly under the inputs the
-            patient just touched so the cause-and-effect is obvious:
-            "I logged nausea -> here's the tip". */}
-        {symptomTips.length > 0 && (
+        {/* Legacy symptom-tip cards. SUPPRESSED when an AI-personalized
+            intervention is active -- the personalized card above already
+            references the patient's own signals, so showing a generic
+            static tip on top of it would be redundant and contradictory.
+            The static tips remain as the fallback layer for patients
+            who don't have an active intervention (engine returned no
+            row, or the network was unavailable). */}
+        {activeInterventions.length === 0 && symptomTips.length > 0 && (
           <View style={{ marginBottom: 4 }}>
             {symptomTips.map((tip, idx) => {
               // Promote the card to "Better/Same/Worse" follow-up
