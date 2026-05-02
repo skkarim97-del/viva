@@ -1269,76 +1269,30 @@ export default function DashboardScreen() {
           </View>
         )}
 
-        {/* Legacy symptom-tip cards. SUPPRESSED when an AI-personalized
-            intervention is active -- the personalized card above already
-            references the patient's own signals, so showing a generic
-            static tip on top of it would be redundant and contradictory.
-            The static tips remain as the fallback layer for patients
-            who don't have an active intervention (engine returned no
-            row, or the network was unavailable). */}
-        {activeInterventions.length === 0 && symptomTips.length > 0 && (
-          <View style={{ marginBottom: 4 }}>
-            {symptomTips.map((tip, idx) => {
-              // Promote the card to "Better/Same/Worse" follow-up
-              // mode ONLY the day immediately after the patient
-              // acknowledged guidance -- per spec the question is
-              // "is this getting better since yesterday?". We do not
-              // re-prompt if guidance was acked 3+ days ago and the
-              // symptom returned: that's a fresh case and gets the
-              // normal "Got it" ack flow instead.
-              const today = new Date();
-              const todayYmd = today.toISOString().split("T")[0]!;
-              const yesterday = new Date(today);
-              yesterday.setDate(yesterday.getDate() - 1);
-              const yesterdayYmd = yesterday.toISOString().split("T")[0]!;
-              const lastAck = guidanceAckHistory[tip.symptom];
-              const isFollowup = lastAck === yesterdayYmd;
-              // Use the title we captured at ack time, not today's
-              // derived tip.title -- otherwise nausea (whose title
-              // varies with severity) would silently quote the wrong
-              // intervention if severity shifted overnight.
-              const ackedTitleEntry = guidanceAckTitleHistory[tip.symptom];
-              const ackedInterventionTitle =
-                ackedTitleEntry && ackedTitleEntry.date === lastAck
-                  ? ackedTitleEntry.title
-                  : undefined;
-              return (
-                <SymptomTipCard
-                  key={tip.symptom}
-                  tip={tip}
-                  mode={isFollowup ? "followup" : "ack"}
-                  ackedInterventionTitle={ackedInterventionTitle}
-                  // Top tip gets full emphasis; subsequent tips render
-                  // as quieter secondary cards so attention lands on
-                  // one action at a time.
-                  priority={idx === 0 ? "primary" : "secondary"}
-                  clinicianNotified={!!clinicianRequestedToday[tip.symptom]}
-                  navy={c.foreground}
-                  accent={c.accent}
-                  cardBg={c.card}
-                  background={c.background}
-                  mutedForeground={c.mutedForeground}
-                  warning={c.warning}
-                  onAcknowledge={onAckSymptomTip}
-                  onTrendResponse={(s, r, title) => {
-                    recordSymptomTrend(s, r, title);
-                    // Treat answering as also dismissing the card --
-                    // matches the "Got it" flow. Snapshot current
-                    // severity so the same re-trigger rules apply.
-                    const snap = symptomTips.find((x) => x.symptom === s);
-                    setDismissedTips((prev) => {
-                      const next = new Map(prev);
-                      next.set(s, {
-                        severity: snap?.severity ?? 1,
-                        ackedAt: Date.now(),
-                      });
-                      return next;
-                    });
-                  }}
-                  onRequestClinician={requestClinicianForSymptom}
-                />
-              );
-            })}
+        {/* Pilot empty-state. The legacy SymptomTipCard fallback has
+            been removed from the Today tab so the patient never sees
+            generic static tips ("Ease your nausea", "Stand up and
+            stretch", etc.) alongside the AI-personalized loop. When
+            no active personalized intervention exists, we show a
+            single short prompt directing the patient to complete
+            today's check-in -- saving the check-in fires /generate,
+            which spawns the new "Personalized check-in" card. While
+            /active is still loading on first paint, we render
+            nothing to avoid a flicker between empty-state prompt
+            and card. */}
+        {activeLoaded && activeInterventions.length === 0 && !todayCheckIn && (
+          <View
+            style={[
+              styles.dayCard,
+              { backgroundColor: c.card, marginBottom: 12 },
+            ]}
+          >
+            <Text style={[styles.dayTitle, { color: c.foreground, marginBottom: 6 }]}>
+              Personalized check-in
+            </Text>
+            <Text style={{ color: c.mutedForeground, lineHeight: 20 }}>
+              Complete today's check-in to get a personalized recommendation.
+            </Text>
           </View>
         )}
 
