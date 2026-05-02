@@ -125,15 +125,15 @@ export async function generatePersonalizedIntervention(
     };
   } else {
     const detected = detectInterventionTriggers(context);
-    // Active trigger types we should de-dupe against. ANY trigger
+    // Active interventions we should de-dupe against. ANY trigger
     // currently shown/accepted/pending_feedback/escalated for this
-    // patient is suppressed (spec Part 4 "Avoid duplicate spam").
-    // We pull the distinct trigger-type set straight from context;
-    // using only `lastShownTriggerType` here would let duplicates of
-    // OTHER still-active trigger types slip through when a patient
-    // has multiple concurrent active interventions.
-    const activeTypes = context.priorInterventions.activeTriggerTypes;
-    trigger = pickBestTrigger(detected, activeTypes);
+    // patient is suppressed (spec Part 4 "Avoid duplicate spam"),
+    // EXCEPT when the patient's new severity for that same trigger
+    // strictly exceeds the existing active row's severity -- then
+    // we allow regeneration so the card reflects the escalation.
+    // The route handler dismisses the superseded row before insert.
+    const activeBrief = context.priorInterventions.activeInterventions;
+    trigger = pickBestTrigger(detected, activeBrief);
   }
   if (!trigger) {
     // Nothing to do -- patient is healthy or already has an active

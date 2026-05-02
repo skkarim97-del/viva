@@ -157,6 +157,29 @@ router.post("/generate", async (req, res: Response) => {
       return;
     }
 
+    // If the engine produced a trigger that matches an EXISTING active
+    // intervention for this patient, that means the new severity
+    // strictly exceeds the old one (the engine's de-dupe only allows
+    // through escalations). Dismiss the superseded row so /active
+    // returns exactly one card and the patient sees the fresh copy.
+    const supersededIds = (
+      generated.insertRow.contextSummary?.priorInterventions
+        ?.activeInterventions ?? []
+    )
+      .filter((a) => a.type === generated.insertRow.triggerType)
+      .map((a) => a.id);
+    if (supersededIds.length > 0) {
+      await db
+        .update(patientInterventionsTable)
+        .set({ status: "dismissed", updatedAt: new Date() })
+        .where(
+          and(
+            eq(patientInterventionsTable.patientUserId, userId),
+            inArray(patientInterventionsTable.id, supersededIds),
+          ),
+        );
+    }
+
     const [row] = await db
       .insert(patientInterventionsTable)
       .values(generated.insertRow)

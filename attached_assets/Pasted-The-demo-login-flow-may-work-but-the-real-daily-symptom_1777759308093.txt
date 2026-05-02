@@ -1,0 +1,77 @@
+The demo login flow may work, but the real daily symptom input flow is still broken in the Replit preview.
+
+In the visible Today tab, I selected:
+- Energy: Tired
+- Appetite: Low
+- Nausea: Severe
+- Digestion: Constipated
+- Bowel Movement: No
+
+Expected:
+A visible Personalized check-in card should appear between "How are things today?" and "Your Plan."
+
+Actual:
+No personalized intervention appears. The screen goes directly from "How are things today?" to "Your Plan."
+
+This means the actual daily symptom input path is still not working.
+
+Please debug the live Replit preview flow from symptom tap to visible card.
+
+Required behavior:
+After selecting negative symptoms, especially Severe nausea + constipation + no bowel movement, the Today tab must show the personalized intervention card without requiring manual save, reload or dev login.
+
+Card must appear directly under the "How are things today?" module and above "Your Plan."
+
+Card must show:
+- Personalized check-in
+- What Viva noticed
+- Try this today
+- Check back later
+- Buttons: I’ll do this, Not now, Ask my care team
+
+Please verify and fix:
+1. Do symptom button taps trigger the debounced auto-save?
+2. Does auto-save call POST /api/me/checkins with the selected values?
+3. Does /me/checkins return 200 or 201?
+4. Does /api/patient/interventions/generate fire only after /me/checkins succeeds?
+5. Does /generate return 200 or 201?
+6. Does /api/patient/interventions/active refetch after generate?
+7. Does /active return the new intervention?
+8. Is the new intervention inserted into React state?
+9. Is any existing active intervention suppressing the new one due to dedup logic?
+10. Is severe nausea being treated as escalation-only and therefore not rendered in the patient card?
+11. Is the InterventionCard hidden because of status, riskLevel, triggerType or stale state?
+12. Is the Today screen rendering the card in the wrong place or below the scroll area?
+13. Is the user still authenticated after symptom input?
+14. Is the app using the correct backend URL in the Replit preview?
+
+Important:
+Do not mark this complete based on backend curl or demo login only.
+
+Acceptance test:
+In the live Replit preview:
+1. Login as Demo Patient
+2. Go to Today
+3. Select Energy=Tired
+4. Select Appetite=Low
+5. Select Nausea=Severe
+6. Select Digestion=Constipated
+7. Select Bowel Movement=No
+8. Within 1-2 seconds, a visible Personalized check-in card appears directly above Your Plan
+
+For severe nausea, acceptable copy could be:
+What Viva noticed:
+"You reported severe nausea today, along with low appetite and constipation."
+
+Try this today:
+"Start with small sips of water and request care team review if symptoms are worsening or hard to manage."
+
+Check back later:
+"Tell us if this feels better, the same or worse after you try it."
+
+Buttons:
+I’ll do this / Not now / Ask my care team
+
+If the issue is auth, logs should show the exact failing request and response.
+If the issue is frontend state, fix the state update so the card renders immediately after generate.
+If the issue is backend dedup, allow symptom changes to refresh or replace the active demo intervention.

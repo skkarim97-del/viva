@@ -80,6 +80,14 @@ export interface PatientInterventionContext {
     // orchestrator to suppress duplicate generation across ALL
     // active rows -- not just the most recent one.
     activeTriggerTypes: ReadonlyArray<PatientInterventionTriggerType>;
+    // Per-active-row {type, severity, id} so the orchestrator can
+    // allow severity-escalation supersede (moderate -> severe) and
+    // the route handler can dismiss the superseded row.
+    activeInterventions: ReadonlyArray<{
+      id: number;
+      type: PatientInterventionTriggerType;
+      severity: number | null;
+    }>;
   };
 }
 
@@ -358,6 +366,14 @@ export async function buildPatientInterventionContext(
   const activeTriggerTypes = Array.from(
     new Set(activeRows.map((i) => i.triggerType)),
   );
+  // Brief shape (id + type + severity) so the orchestrator can decide
+  // whether a higher-severity detected trigger should supersede an
+  // already-active row of the same type.
+  const activeInterventions = activeRows.map((i) => ({
+    id: i.id,
+    type: i.triggerType,
+    severity: i.severity ?? null,
+  }));
   // Repeated unresolved: any intervention in the last 14 days with
   // feedback="worse" OR status="escalated" that hasn't been resolved.
   const repeatedUnresolved = priorInterventions.some(
@@ -414,6 +430,7 @@ export async function buildPatientInterventionContext(
       repeatedUnresolved,
       activeStatuses,
       activeTriggerTypes,
+      activeInterventions,
     },
   };
 }

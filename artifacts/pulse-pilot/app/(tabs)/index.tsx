@@ -292,7 +292,12 @@ export default function DashboardScreen() {
       lastSavedSignatureRef.current = symptomSignature;
       return;
     }
-    if (hasActive) return;
+    // NOTE: previously bailed when hasActive=true. That blocked the
+    // patient's edits from ever reaching /me/checkins or /generate
+    // once any intervention was visible -- so escalating severity
+    // (moderate -> severe) silently no-op'd. The server engine de-dupes
+    // on its own (allowing supersede when severity escalates), so the
+    // frontend just needs to fire the chain on every signature change.
     if (!hasMinSymptomData) return;
     if (lastSavedSignatureRef.current === symptomSignature) return;
     const handle = setTimeout(async () => {
@@ -326,7 +331,6 @@ export default function DashboardScreen() {
   }, [
     activeLoaded,
     symptomSignature,
-    hasActive,
     hasMinSymptomData,
     glp1Energy,
     nausea,

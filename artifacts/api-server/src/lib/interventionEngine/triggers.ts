@@ -79,19 +79,59 @@ export function detectCosignals(
   return out;
 }
 
+// Per-trigger-type severity. The orchestrator's supersede logic
+// compares "new severity for THIS trigger type" against the active
+// row's stored severity, so each trigger must carry a number that
+// reflects its OWN symptom -- not the day's overall max severity.
+// Without this, a severe-nausea update would inflate the constipation
+// trigger's severity and incorrectly supersede an active constipation
+// card. Returns null when the symptom isn't present (the trigger
+// shouldn't fire in that case anyway).
+function severityForTriggerType(
+  ctx: PatientInterventionContext,
+  type: PatientInterventionTriggerType,
+): number | null {
+  const t = ctx.today;
+  switch (type) {
+    case "nausea":
+      if (t.nausea === "severe") return 5;
+      if (t.nausea === "moderate") return 3;
+      if (t.nausea === "mild") return 1;
+      return null;
+    case "low_energy":
+      if (t.energy === "depleted") return 4;
+      if (t.energy === "tired") return 2;
+      return null;
+    case "constipation":
+    case "repeated_symptom":
+      // Binary symptom; surface "1" when present so any same-type
+      // active row blocks supersede (severity never exceeds itself).
+      return t.digestion === "constipated" ? 1 : null;
+    default:
+      // For triggers without a clean per-symptom mapping (rapid
+      // weight change, missed check-in, low hydration, worsening,
+      // patient-requested), keep the day's max so existing behavior
+      // is preserved.
+      return t.severity;
+  }
+}
+
 export function detectInterventionTriggers(
   ctx: PatientInterventionContext,
 ): DetectedTrigger[] {
   const triggers: DetectedTrigger[] = [];
   const t = ctx.today;
   const w = ctx.last7Days;
+  const sevNausea = severityForTriggerType(ctx, "nausea");
+  const sevConstipation = severityForTriggerType(ctx, "constipation");
+  const sevLowEnergy = severityForTriggerType(ctx, "low_energy");
 
   // 1. Repeated constipation
   if (w.constipationDays >= 2) {
     triggers.push({
       type: "repeated_symptom",
       symptomType: "constipation",
-      severity: t.severity,
+      severity: sevConstipation,
       riskLevel: "moderate",
       reason: `constipation reported ${w.constipationDays} of last 7 days`,
     });
@@ -106,7 +146,7 @@ export function detectInterventionTriggers(
     triggers.push({
       type: "constipation",
       symptomType: "constipation",
-      severity: t.severity,
+      severity: sevConstipation,
       riskLevel: "moderate",
       reason: `constipation today + steps down ${Math.abs(w.stepsChangePct)}%`,
     });
@@ -120,7 +160,7 @@ export function detectInterventionTriggers(
     triggers.push({
       type: "constipation",
       symptomType: "constipation",
-      severity: t.severity,
+      severity: sevConstipation,
       riskLevel: "low",
       reason: "constipation + low hydration today",
     });
@@ -135,7 +175,7 @@ export function detectInterventionTriggers(
     triggers.push({
       type: "nausea",
       symptomType: "nausea",
-      severity: t.severity,
+      severity: sevNausea,
       riskLevel: "moderate",
       reason: "nausea + low food intake today",
     });
@@ -151,7 +191,7 @@ export function detectInterventionTriggers(
     triggers.push({
       type: "nausea",
       symptomType: "nausea",
-      severity: t.severity,
+      severity: sevNausea,
       riskLevel: "low",
       reason: "nausea within 3 days of last dose",
     });
@@ -166,7 +206,7 @@ export function detectInterventionTriggers(
     triggers.push({
       type: "low_energy",
       symptomType: "low_energy",
-      severity: t.severity,
+      severity: sevLowEnergy,
       riskLevel: "low",
       reason: "low energy + sleep below baseline",
     });
@@ -229,7 +269,7 @@ export function detectInterventionTriggers(
     triggers.push({
       type: "constipation",
       symptomType: "constipation",
-      severity: t.severity,
+      severity: sevConstipation,
       riskLevel: "low",
       reason: "constipation reported today",
     });
@@ -242,7 +282,7 @@ export function detectInterventionTriggers(
     triggers.push({
       type: "nausea",
       symptomType: "nausea",
-      severity: t.severity,
+      severity: sevNausea,
       riskLevel: "low",
       reason: "nausea reported today",
     });
@@ -254,7 +294,7 @@ export function detectInterventionTriggers(
     triggers.push({
       type: "low_energy",
       symptomType: "low_energy",
-      severity: t.severity,
+      severity: sevLowEnergy,
       riskLevel: "low",
       reason: "low energy reported today",
     });
@@ -268,13 +308,26 @@ export function detectInterventionTriggers(
 //   * elevated > moderate > low
 //   * skip triggers we already have an active intervention for
 //     (de-dupe -- spec Part 4 "Avoid duplicate spam")
+//   * EXCEPTION: when the patient's NEW severity for the same
+//     trigger type strictly exceeds the active row's severity
+//     (e.g. nausea moderate -> severe), allow regeneration so the
+//     visible card reflects the escalation. The orchestrator /
+//     route handler is responsible for dismissing the superseded
+//     row before inserting the new one.
 export function pickBestTrigger(
   detected: DetectedTrigger[],
-  activeTriggerTypes: ReadonlyArray<PatientInterventionTriggerType>,
+  active: ReadonlyArray<{
+    type: PatientInterventionTriggerType;
+    severity: number | null;
+  }>,
 ): DetectedTrigger | null {
-  const filtered = detected.filter(
-    (t) => !activeTriggerTypes.includes(t.type),
-  );
+  const filtered = detected.filter((t) => {
+    const existing = active.find((a) => a.type === t.type);
+    if (!existing) return true;
+    const newSev = t.severity ?? 0;
+    const oldSev = existing.severity ?? 0;
+    return newSev > oldSev;
+  });
   if (filtered.length === 0) return null;
   // Sort: highest priority first; on tie keep input order.
   const sorted = [...filtered].sort(
