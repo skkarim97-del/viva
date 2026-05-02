@@ -14,6 +14,13 @@ interface AuthState {
   user: AuthedUser | null;
   signIn: (email: string, password: string) => Promise<void>;
   activate: (token: string, password: string) => Promise<void>;
+  // Replit-preview-only shortcut. Hits /api/dev/login-demo-patient
+  // and lands the operator in the Today tab as a seeded fake patient.
+  // The endpoint only exists when the API server is running with
+  // NODE_ENV !== "production" or ENABLE_DEV_LOGIN === "true"; in a
+  // production bundle the network call returns 404 and the caller
+  // should surface "not available".
+  devDemoLogin: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -61,6 +68,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(u);
   }, []);
 
+  const devDemoLogin = useCallback(async () => {
+    const u = await sessionApi.devDemoLogin();
+    // Round-trip /auth/me so the same code path that hydrates a normal
+    // sign-in confirms the token is valid before we land in (tabs).
+    // If /auth/me throws we still keep the user the dev endpoint
+    // returned -- the gate just becomes "did the dev endpoint work".
+    try {
+      const me = await sessionApi.me();
+      if (me) {
+        setUser(me);
+        return;
+      }
+    } catch {
+      /* keep the user from devDemoLogin */
+    }
+    setUser(u);
+  }, []);
+
   const signOut = useCallback(async () => {
     await sessionApi.logout();
     setUser(null);
@@ -71,8 +96,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ loading, user, signIn, activate, signOut }),
-    [loading, user, signIn, activate, signOut],
+    () => ({ loading, user, signIn, activate, devDemoLogin, signOut }),
+    [loading, user, signIn, activate, devDemoLogin, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

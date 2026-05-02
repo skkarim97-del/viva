@@ -11,9 +11,10 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 
 import colors from "@/constants/colors";
+import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 import { extractInviteToken, HttpError } from "@/lib/api/sessionClient";
 
@@ -26,7 +27,11 @@ type Mode = "activate" | "signin";
 // Either path ends with a stored bearer token and a populated AuthContext,
 // after which RootLayout renders the rest of the app.
 export default function ConnectScreen() {
-  const { activate, signIn } = useAuth();
+  const { activate, signIn, devDemoLogin } = useAuth();
+  // Dev login bypasses the local onboarding wizard so the operator
+  // lands directly on Today. We need updateProfile from AppContext to
+  // flip onboardingComplete the same way the wizard's Done button does.
+  const { updateProfile } = useApp();
   // Deep-link prefill: viva://invite/<token> and the universal-link
   // equivalent both forward into /connect with ?token=<token>. We
   // accept the param as the initial value so the user just chooses a
@@ -214,6 +219,73 @@ export default function ConnectScreen() {
             </Text>
           </Pressable>
 
+          {/*
+            Replit-preview-only convenience login. Gated on __DEV__ so
+            the entire button (label, handler, divider, helper text)
+            tree-shakes out of production bundles. Tapping it hits
+            /api/dev/login-demo-patient, stores the returned bearer
+            token in AsyncStorage under the same key normal sign-in
+            uses, and lets RootLayoutNav redirect into (tabs) once the
+            user state lands. The endpoint itself is also gated server-
+            side; if a production API somehow receives the call the
+            button surfaces a clear "not available" error.
+          */}
+          {__DEV__ && (
+            <>
+              <View style={styles.devDivider}>
+                <View style={styles.devDividerLine} />
+                <Text style={styles.devDividerLabel}>DEV ONLY</Text>
+                <View style={styles.devDividerLine} />
+              </View>
+              <Pressable
+                style={[styles.devCta, busy && { opacity: 0.6 }]}
+                onPress={async () => {
+                  setError(null);
+                  setBusy(true);
+                  try {
+                    await devDemoLogin();
+                    // Mark the local onboarding wizard as complete so
+                    // RootLayoutNav's gate routes the demo session into
+                    // (tabs) instead of /onboarding/index. Without this
+                    // a fresh device with no AsyncStorage profile would
+                    // bounce through the multi-step wizard before ever
+                    // reaching Today.
+                    updateProfile({ onboardingComplete: true });
+                    // Expo Router's <Stack initialRouteName=...> only
+                    // applies to the FIRST mount; toggling user state
+                    // post-mount does NOT auto-navigate. The normal
+                    // sign-in path lives with this because operators
+                    // rarely cold-start at /connect after authenticating;
+                    // the dev shortcut needs explicit replace() so the
+                    // tester sees Today immediately.
+                    router.replace("/(tabs)");
+                  } catch (e) {
+                    if (e instanceof HttpError && e.status === 404) {
+                      setError(
+                        "Demo login is not available on this server.",
+                      );
+                    } else {
+                      setError(
+                        "Demo login failed. Check the API server logs.",
+                      );
+                    }
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+                disabled={busy}
+              >
+                <Text style={styles.devCtaLabel}>
+                  {busy ? "Working..." : "Login as Demo Patient"}
+                </Text>
+              </Pressable>
+              <Text style={styles.devHelper}>
+                Replit preview only. Skips invite + password and lands
+                you in the Today tab as a seeded fake patient.
+              </Text>
+            </>
+          )}
+
           <Text style={styles.helper}>
             Your clinician will only see the check-ins you submit through this
             app. You can sign out any time from Settings.
@@ -305,6 +377,43 @@ const styles = StyleSheet.create({
     fontFamily: "Montserrat_400Regular",
     fontSize: 12,
     lineHeight: 18,
+    color: colors.light.mutedForeground,
+    textAlign: "center",
+  },
+  devDivider: {
+    marginTop: 28,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  devDividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.light.border,
+  },
+  devDividerLabel: {
+    fontFamily: "Montserrat_700Bold",
+    fontSize: 11,
+    letterSpacing: 1.2,
+    color: colors.light.mutedForeground,
+  },
+  devCta: {
+    marginTop: 16,
+    backgroundColor: "#F59E0B",
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: "center",
+  },
+  devCtaLabel: {
+    fontFamily: "Montserrat_700Bold",
+    fontSize: 16,
+    color: "#1F2937",
+  },
+  devHelper: {
+    marginTop: 10,
+    fontFamily: "Montserrat_400Regular",
+    fontSize: 12,
+    lineHeight: 17,
     color: colors.light.mutedForeground,
     textAlign: "center",
   },

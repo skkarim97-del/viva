@@ -160,6 +160,27 @@ export const sessionApi = {
     };
   },
 
+  // Replit-preview-only dev shortcut. POSTs to /dev/login-demo-patient
+  // (which only exists when NODE_ENV !== "production" or
+  // ENABLE_DEV_LOGIN === "true"), stores the bearer token in
+  // AsyncStorage under the same TOKEN_KEY normal login uses, and
+  // returns the seeded demo patient. Surfaces a 404 verbatim when the
+  // endpoint is unmounted in production so the caller can render a
+  // clear "not available" message instead of a generic network error.
+  devDemoLogin: async (): Promise<AuthedUser> => {
+    const res = await request<AuthResponse>(
+      "POST",
+      "/dev/login-demo-patient",
+    );
+    await setToken(res.token);
+    return {
+      id: res.id ?? res.user?.id!,
+      email: res.email ?? res.user?.email!,
+      name: res.name ?? res.user?.name!,
+      role: res.role ?? res.user?.role ?? "patient",
+    };
+  },
+
   logout: async (): Promise<void> => {
     await setToken(null);
   },

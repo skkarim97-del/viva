@@ -36,113 +36,6 @@ The system is a pnpm workspace monorepo using Node.js 24 and TypeScript 5.9. The
     -   **Dividers**: HairlineWidth only, using background color.
 -   **Brand**: "Viva" wordmark (`assets/viva-logo-cropped.png`). "Viva" is the master brand; product surfaces are labelled separately as Care (mobile), Clinic (doctors), and Analytics (internal).
 
-### GLP-1 Data Model
-
--   **User Profile**: Captures GLP-1 medication details, baseline side effects, protein/hydration confidence, meals per day, and strength training.
--   **Medication Profile**: Stores normalized medication data, doses, frequency, and titration history.
--   **Medication Log Entry**: Records medication intake.
--   **GLP-1 Daily Inputs**: Tracks energy, appetite, nausea, and digestion.
--   **Mental State Check-in**: Records mental state for plan generation.
-
-### HIPAA-Readiness Hardening (added 2026-04-30)
-
-Pre-customer security pass (T001-T008). Sequence and decisions captured in
-`.local/session_plan.md`. All eight tasks complete.
-
--   **T001 - Log redaction & housekeeping**: Removed `backups/` (gitignored,
-    untracked). Extended pino redact in `artifacts/api-server/src/lib/logger.ts`
-    to scrub `req.body`, `*.body`, `*.message`, `*.token`, `*.secret`, and
-    `*.response.data` from structured logs. Coach error log no longer dumps
-    OpenAI response bodies.
--   **T002 - Hashed bearer tokens**: New `lib/apiTokens.ts` (sha256-hex via
-    `generateRawApiToken`/`hashApiToken`). `routes/auth.ts.issueApiToken`
-    stores the hash; `middlewares/auth.ts` hashes the incoming bearer before
-    DB lookup. Migration of the 15 active production tokens was done in
-    place (one-shot SQL UPDATE rewriting each `token` PK value to its
-    SHA-256 hex), so no patients had to re-login. The `api_tokens.token`
-    column type is unchanged (still `text` PK).
--   **T003 - Rate limiting + operator IP allowlist**: Added
-    `middlewares/rateLimit.ts` (`strictAuthLimiter` 10/15min on auth and
-    invite endpoints, `mediumApiLimiter` 60/min on coach/patients/me/internal,
-    `lenientGlobalLimiter`) and `middlewares/ipAllowlist.ts`
-    (`operatorIpAllowlist` reads `INTERNAL_IP_ALLOWLIST`; warns and allows
-    when unset for dev). Mounted router-level so per-route omissions are
-    impossible.
--   **T004 - PHI access audit log**: New `phi_access_logs` table (serial PK,
-    nullable FKs with `ON DELETE SET NULL` so audit rows survive user
-    deletion). Mounted `middlewares/phiAudit.ts` at the router level on
-    `patients.ts`, `careEvents.ts`, and `internal.ts`. Writes are
-    fire-and-forget on `res.on('finish')` so the request path never blocks
-    or fails on an audit insert. Captures actor (user id + role), action
-    (read/write/delete derived from HTTP verb), target patient/platform id,
-    route, method, status code, and SHA-256-hashed ip + user-agent. Never
-    captures request body, query string, or response body. Operator audit
-    rows use `actor_user_id = NULL`, `actor_role = 'operator'`.
--   **T005 - Authorization audit**: New `lib/canAccessPatient.ts` is the
-    single source of truth for "is this doctor allowed to read/write this
-    patient's PHI?". `careEvents.ts.ownsPatient` now delegates to it;
-    `patients.ts` keeps `loadOwnedPatient` (which also returns the row)
-    but the underlying ownership predicate matches. Full route-x-check
-    matrix written to `docs/authz-audit.md`. Audit found no missing
-    guards on PHI routes.
--   **T006 - AI coach safe mode**: New `lib/coachSafeMode.ts`
-    (`getCoachPilotMode`, env `COACH_PILOT_MODE`, defaults `safe` in
-    production) and `lib/coachTemplates.ts` (24 in-code templates: 8
-    categories x 3 severities, with STANDARD / SAFETY / ESCALATION
-    footers). When safe mode is on, `POST /api/coach/chat` returns 403
-    `free_text_disabled`. New `GET /api/coach/mode` advertises mode +
-    options, `POST /api/coach/structured` returns the templated
-    response and persists user + assistant rows to `coach_messages`
-    with `body=null` and `responseTemplateId` set; `urgent_concern.severe`
-    fires a `care_events` escalation. Mobile `coach.tsx` swaps to a
-    structured composer (category grid + severity row + optional context
-    tags) when safe mode is active and falls back to the free-text input
-    when open. No OpenAI calls in safe mode. Zero schema changes.
--   **T007 - Doctor TOTP MFA**: 3 nullable cols added to `users`
-    (`mfa_secret`, `mfa_enrolled_at`, `mfa_recovery_codes_hashed text[]`)
-    and a new `sessions` table for `connect-pg-simple`. Pushed to BOTH
-    local heliumdb AND AWS RDS via `pnpm push-force` (lib/db prefers
-    `AWS_DATABASE_URL` at runtime; drizzle.config.ts only reads
-    `DATABASE_URL`, so AWS pushes need the env override). New
-    `lib/mfa.ts` (otplib RFC-6238, sha256 recovery code hashes) and
-    `routes/mfa.ts` mounted at `/me/mfa` BEFORE the patient-only `/me`
-    router. Endpoints: `GET /status`, `POST /enroll/start`,
-    `POST /enroll/verify`, `POST /verify` (XOR strict: code XOR
-    recoveryCode), `POST /disable`. All use `.strict()` schemas;
-    `enroll/start`, `enroll/verify`, `verify`, `disable` are rate-limited
-    via `strictAuthLimiter`. Recovery codes are single-use and consumed
-    atomically via `UPDATE ... SET ... = array_remove(...) WHERE ... =
-    ANY(...) RETURNING id` (no select-then-update race).
-    `middlewares/auth.ts` exposes `requireDoctorMfa` (router-level on
-    `patients.ts` and PHI write endpoints in `careEvents.ts`) and
-    `checkDoctorMfa` (inline check used by mixed-role routes:
-    `careEvents.ts /:patientId` and `interventions.ts /recent`, where
-    patient self-access does not require MFA). MFA is bound to the
-    cookie-session user (`session.userId === auth.userId &&
-    session.role === 'doctor'`); bearer-authed requests can never
-    satisfy MFA, by design. Dashboard renders `MfaEnrollPage` (QR +
-    recovery codes screen) and `MfaVerifyPage` (TOTP / recovery code
-    toggle), gating BEFORE onboarding so PUT `/api/patients/clinic`
-    (under `requireDoctorMfa`) can succeed.
--   **T008 - PHI-free push helper**: New `lib/pushSafe.ts` exposes
-    `sendSafePush(title, body)` with a hardcoded allowlist of PHI-safe
-    titles and bodies. Throws if either argument is not on the list.
-    Comment block documents the allowlist contract for future callers
-    so doctor-side push notifications can never accidentally leak
-    patient-identifying or symptom-revealing strings.
-
-### Pilot Persistence Layer (added 2026-04-28)
-
-Server-side persistence so doctors and analytics see real patient activity (previously most state lived only in mobile AsyncStorage).
-
--   **patient_profiles** (`patient_user_id` PK): one-row-per-patient onboarding snapshot. POST `/api/me/profile` blind-upserts; nullable fields use coalesce semantics so partial patches never wipe earlier values. `goals` jsonb uses replace semantics so deselects work. Doctor-readable via `loadOwnedPatient`.
--   **patient_health_daily_summaries** (`(patient_user_id, summary_date)` unique): daily Apple Health rollup. POST `/api/me/health/daily-summary` upserts, coalesce on every metric. Mobile fires from a `useEffect` watching `todayMetrics` with a (date, signature) ref to dedupe.
--   **patient_treatment_logs** (append-only, indexed by `(patient_user_id, created_at)`): patient-confirmed med/dose/frequency events. Mobile inserts only when `updateProfile` actually changes brand, dose, unit, or frequency vs the prior profile.
--   **coach_messages** (indexed by `(patient_user_id, created_at)`): user + assistant turns from `/api/coach/chat`. Persistence is fire-and-forget on both sides so a DB hiccup never blocks the chat.
--   **Treatment-stop intent detection**: `detectTreatmentStopConcern` in `coach/index.ts` requires both a stop verb and a treatment anchor token; when both fire, an `escalation_requested` care_event is inserted with `metadata.reason='treatment_stop_question'`. Conservative on purpose; false negatives are acceptable, false positives are not.
--   **Bearer-token resolution on /coach/chat**: `resolvePatientUserId` is best-effort. If the bearer is missing or invalid, persistence is silently skipped; the chat itself still streams normally.
--   **Doctor read endpoints**: `/api/patients/:id/health/daily-summary` and `/api/patients/:id/treatment-log` are gated by `loadOwnedPatient` (404 on non-ownership, no enumeration leak).
-
 ### Technical Implementations & Features
 
 -   **Onboarding**: A 13-step GLP-1 specific flow covering personal details, medication, lifestyle, and integrations.
@@ -158,13 +51,13 @@ Server-side persistence so doctors and analytics see real patient activity (prev
 -   **Adaptive Intelligence Layer**: Detects user data patterns (rolling averages, post-dose effects, behavioral patterns) and adjusts plan outputs.
 -   **Risk Engine**: Provides medication-aware risk scores translated into empathetic user messages.
 -   **Insights Engine**: Provides GLP-1 specific week summaries, coach insights, sleep intelligence, and daily analytics.
--   **Health Data Providers**: Integrates with Apple Health (HealthKit) on iOS for read-only access. Displays clean empty states if no data is connected; no mock data.
+-   **Health Data Providers**: Integrates with Apple Health (HealthKit) on iOS for read-only access. Displays clean empty states if no data is connected.
 -   **Settings Screen**: Mirrors onboarding profile fields (Medication, Dosage, Weight, Goal Weight, Goals).
 -   **Weekly Weight Log**: Server-backed weight history, with mobile auto-prompts and manual logging.
 -   **Weekly Completion**: Tracks completed days within the current calendar week.
 -   **State Management**: Context-based state management (AppContext) for GLP-1 specific fields and logging.
 -   **Navigation**: Tab bar for Today, Plan, Trends, Settings, with modals for subscription and stack navigation for onboarding.
--   **Doctor Dashboard**: A standalone React + Vite web app served at the production root (`/`) for care teams, featuring patient lists, patient details, and care team notes. The legacy `/viva-dashboard/...` path 301-redirects to the equivalent location at the root for backward compatibility with old links.
+-   **Doctor Dashboard**: A standalone React + Vite web app served at the production root (`/`) for care teams, featuring patient lists, patient details, and care team notes.
 -   **Check-in Sync Queue**: Persistent queue (`checkinSync.ts`) for mirroring patient daily state, handling pending snapshots, guidance acks, and escalation requests with retries.
 -   **Daily Check-in Reminders**: Local-only push reminders for the patient app (`reminders.ts`), scheduled at 12:00 PM and 7:00 PM, with logic to prevent duplicates after check-in.
 -   **Invite & Activation**: Invite tokens with a 14-day TTL, atomic activation process, and specific HTTP status codes for various activation states. Patient invites are keyed on phone number.
@@ -172,6 +65,12 @@ Server-side persistence so doctors and analytics see real patient activity (prev
 -   **Measurement + Intelligence Layer**: Adds per-signal confidence, communication mode derivation, intervention/outcome telemetry, and internal analytics.
 -   **Health KPIs**: Reports raw-signal health KPIs (e.g., % users completing next-day check-in after intervention, % users improving engagement) over a 14-day window for internal analytics.
 -   **Treatment Status**: Doctor-owned source of truth for patient GLP-1 therapy status (`active`, `stopped`, `unknown`), including stop reasons and derived stop timing.
+
+### System Design Choices
+
+-   **GLP-1 Data Model**: Includes User Profile, Medication Profile, Medication Log Entry, GLP-1 Daily Inputs, and Mental State Check-in.
+-   **HIPAA-Readiness Hardening**: Implemented log redaction, hashed bearer tokens, rate limiting, operator IP allowlist, PHI access audit logs, authorization audit, AI coach safe mode, Doctor TOTP MFA, and PHI-free push helper.
+-   **Pilot Persistence Layer**: Server-side persistence for patient data including `patient_profiles`, `patient_health_daily_summaries`, `patient_treatment_logs`, `coach_messages`, treatment-stop intent detection, and doctor read endpoints.
 
 ## External Dependencies
 

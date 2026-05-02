@@ -13,6 +13,7 @@ import careEventsRouter from "./careEvents";
 import analyticsRouter from "./analytics";
 import patientInterventionsRouter from "./patientInterventions";
 import clinicInterventionsRouter from "./clinicInterventions";
+import devRouter, { isDevLoginEnabled } from "./dev";
 
 const router: IRouter = Router();
 
@@ -43,5 +44,14 @@ router.use("/clinic/interventions", clinicInterventionsRouter);
 // rather than the doctor session, so signed-in clinicians cannot pull
 // product analytics through their browser session.
 router.use("/internal", internalRouter);
+
+// Replit-preview-only dev login shortcut. The router is only mounted
+// when NODE_ENV !== "production" or ENABLE_DEV_LOGIN === "true"; in
+// production the entire /api/dev/* surface is absent and any caller
+// gets the standard 404 from the outer router. The mounted router
+// also re-checks the gate on every request as defense in depth.
+if (isDevLoginEnabled()) {
+  router.use("/dev", devRouter);
+}
 
 export default router;
