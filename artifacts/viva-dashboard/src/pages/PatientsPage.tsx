@@ -1,7 +1,12 @@
 import { useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type Action, type PatientRow } from "@/lib/api";
+import {
+  api,
+  type Action,
+  type ClinicWorklistIntervention,
+  type PatientRow,
+} from "@/lib/api";
 import { PatientGroup } from "@/components/PatientGroup";
 import { AddNoteModal } from "@/components/AddNoteModal";
 import { InvitePatientModal } from "@/components/InvitePatientModal";
@@ -102,6 +107,71 @@ export function PatientsPage() {
     () => new Set(needsReview.data?.ids ?? []),
     [needsReview.data],
   );
+
+  // Phase 4 intervention worklist. Returns the flat list of active
+  // interventions (shown / accepted / pending_feedback / escalated)
+  // for this doctor's panel; we bucket them client-side into the four
+  // priority lanes below. Polled at the same cadence as needsReview so
+  // the dashboard reflects new feedback within ~30s.
+  const interventionsWorklist = useQuery({
+    queryKey: ["clinic-interventions-worklist"],
+    queryFn: api.clinicInterventionsWorklist,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+  });
+  const interventionBuckets = useMemo(() => {
+    const empty = {
+      patientRequested: [] as ClinicWorklistIntervention[],
+      worse: [] as ClinicWorklistIntervention[],
+      elevated: [] as ClinicWorklistIntervention[],
+      repeated: [] as ClinicWorklistIntervention[],
+    };
+    const list = interventionsWorklist.data?.interventions ?? [];
+    if (list.length === 0) return empty;
+    // Each intervention falls into the FIRST matching bucket (top
+    // priority wins). This keeps a single row from double-counting
+    // even when multiple signals are true (e.g. patient asked AND
+    // riskLevel=elevated). One patient may still appear in multiple
+    // buckets if they have multiple distinct active interventions.
+    //
+    // The predicates use the CANONICAL values emitted by the backend
+    // (lib/db PATIENT_INTERVENTION_* enums). Most importantly:
+    //   * worse -> we key off feedbackResult, NOT status, because the
+    //     server auto-escalates a worse-feedback row, so its status is
+    //     already "escalated" by the time it reaches the worklist.
+    //   * patientRequested -> we ONLY check triggerType. The server
+    //     also writes escalationReason="patient_feedback_worse" on the
+    //     worse path; if we keyed off escalationReason here, every
+    //     worse row would mis-route into patientRequested.
+    const seen = new Set<number>();
+    const place = (bucket: ClinicWorklistIntervention[], iv: ClinicWorklistIntervention) => {
+      if (seen.has(iv.id)) return;
+      seen.add(iv.id);
+      bucket.push(iv);
+    };
+    for (const iv of list) {
+      if (iv.triggerType === "patient_requested_review") {
+        place(empty.patientRequested, iv);
+      }
+    }
+    for (const iv of list) {
+      if (iv.feedbackResult === "worse") {
+        place(empty.worse, iv);
+      }
+    }
+    for (const iv of list) {
+      if (iv.riskLevel === "elevated") {
+        place(empty.elevated, iv);
+      }
+    }
+    for (const iv of list) {
+      if (iv.triggerType === "repeated_symptom") {
+        place(empty.repeated, iv);
+      }
+    }
+    return empty;
+  }, [interventionsWorklist.data]);
   const [, setLocation] = useLocation();
   // Worklist composition.
   //
@@ -310,6 +380,21 @@ export function PatientsPage() {
           clinicalCount={issueCounts.clinical}
           onFocusReviewNow={focusRequestedReview}
           onFocusFollowUpToday={() => focusGroup("needs_followup")}
+        />
+      )}
+
+      {/* Phase 4 intervention worklist. Renders the four priority
+          buckets (Patient requested -> Worse -> Elevated -> Repeated)
+          ABOVE the existing action buckets so the doctor's eye lands
+          on the highest-leverage actions first. Each bucket is its
+          own collapsible section; an empty bucket is hidden so the
+          page stays compact. The existing `requestedReview` care-event
+          section below is preserved -- it surfaces patients who
+          asked for help via the older symptom-tip flow, while these
+          buckets surface the AI/personalised intervention loop. */}
+      {q.data && q.data.length > 0 && (
+        <InterventionWorklist
+          buckets={interventionBuckets}
         />
       )}
 
@@ -806,4 +891,205 @@ function PatientCard({ p, needsReview, onAddNote }: CardProps) {
       </div>
     </Link>
   );
+}
+
+// ---- InterventionWorklist (Phase 4) ----------------------------------------
+// Renders the four priority buckets returned by /api/clinic/interventions:
+//   1. Patient requested  (orange) -- patient explicitly asked for help
+//   2. Worse              (red)    -- patient said the recommendation was worse
+//   3. Elevated           (amber)  -- AI/risk model flagged high or urgent
+//   4. Repeated           (purple) -- same trigger fired without resolution
+//
+// Each non-empty bucket gets its own collapsible section. The bucket
+// shows the patient name, what was recommended, and how long ago the
+// intervention was generated. Clicking a row routes to the patient
+// detail page where the doctor can take action.
+
+const INTERVENTION_BUCKET_META: Array<{
+  key: keyof InterventionWorklistBuckets;
+  label: string;
+  helper: string;
+  dot: string;
+  pillBg: string;
+  pillFg: string;
+}> = [
+  {
+    key: "patientRequested",
+    label: "Patient requested",
+    helper: "patient asked to talk",
+    dot: "#FF9500",
+    pillBg: "rgba(255,149,0,0.15)",
+    pillFg: "#9A5A00",
+  },
+  {
+    key: "worse",
+    label: "Worse after recommendation",
+    helper: "patient says it's worse",
+    dot: "#FF3B30",
+    pillBg: "rgba(255,59,48,0.12)",
+    pillFg: "#B5251D",
+  },
+  {
+    key: "elevated",
+    label: "Elevated risk",
+    helper: "AI surfaced high risk",
+    dot: "#F2A900",
+    pillBg: "rgba(242,169,0,0.15)",
+    pillFg: "#7A5400",
+  },
+  {
+    key: "repeated",
+    label: "Repeated symptom",
+    helper: "no improvement yet",
+    dot: "#A569FF",
+    pillBg: "rgba(165,105,255,0.15)",
+    pillFg: "#6336A8",
+  },
+];
+
+interface InterventionWorklistBuckets {
+  patientRequested: ClinicWorklistIntervention[];
+  worse: ClinicWorklistIntervention[];
+  elevated: ClinicWorklistIntervention[];
+  repeated: ClinicWorklistIntervention[];
+}
+
+function InterventionWorklist({
+  buckets,
+}: {
+  buckets: InterventionWorklistBuckets;
+}) {
+  const total =
+    buckets.patientRequested.length +
+    buckets.worse.length +
+    buckets.elevated.length +
+    buckets.repeated.length;
+  if (total === 0) return null;
+  return (
+    <div className="mb-6">
+      {INTERVENTION_BUCKET_META.map((meta) => {
+        const rows = buckets[meta.key];
+        if (rows.length === 0) return null;
+        return (
+          <InterventionBucketSection
+            key={meta.key}
+            label={meta.label}
+            helper={meta.helper}
+            dot={meta.dot}
+            pillBg={meta.pillBg}
+            pillFg={meta.pillFg}
+            rows={rows}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function InterventionBucketSection({
+  label,
+  helper,
+  dot,
+  pillBg,
+  pillFg,
+  rows,
+}: {
+  label: string;
+  helper: string;
+  dot: string;
+  pillBg: string;
+  pillFg: string;
+  rows: ClinicWorklistIntervention[];
+}) {
+  const [open, setOpen] = useState(true);
+  return (
+    <section className="scroll-mt-6 mb-4">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-3 px-1 py-2 mb-2"
+      >
+        <span
+          aria-hidden
+          className="inline-block w-2.5 h-2.5 rounded-full shrink-0"
+          style={{ backgroundColor: dot }}
+        />
+        <span className="font-display text-[15px] font-bold text-foreground">
+          {label}
+        </span>
+        <span
+          className="text-xs font-semibold rounded-full px-2.5 py-0.5"
+          style={{ backgroundColor: pillBg, color: pillFg }}
+        >
+          {rows.length}
+        </span>
+        <span className="text-xs font-medium text-muted-foreground">
+          {helper}
+        </span>
+        <span className="flex-1" />
+        <span
+          className="text-muted-foreground text-sm font-semibold transition-transform"
+          style={{ transform: open ? "rotate(90deg)" : "rotate(0deg)" }}
+          aria-hidden
+        >
+          ›
+        </span>
+      </button>
+      {open && (
+        <ul className="space-y-2">
+          {rows.map((iv) => (
+            <li key={iv.id}>
+              <Link
+                href={`/patients/${iv.patientUserId}`}
+                className="flex items-start gap-3 bg-card rounded-2xl px-4 py-3 hover:opacity-90 transition-opacity"
+              >
+                <span
+                  aria-hidden
+                  className="inline-block w-2 h-2 rounded-full shrink-0 mt-2"
+                  style={{ backgroundColor: dot }}
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-foreground text-sm">
+                      {iv.patient?.name ?? `Patient #${iv.patientUserId}`}
+                    </span>
+                    <span className="text-xs text-muted-foreground font-medium">
+                      {humanTrigger(iv.triggerType)}
+                    </span>
+                    {iv.generatedBy === "rules_fallback" && (
+                      <span className="text-[10px] font-semibold text-muted-foreground rounded-full px-2 py-0.5 bg-background">
+                        Fallback
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-foreground font-medium mt-0.5 leading-snug truncate">
+                    {iv.recommendation}
+                  </p>
+                </div>
+                <span className="text-muted-foreground text-xs shrink-0 mt-1">
+                  {relativeTime(iv.createdAt)}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+const TRIGGER_LABEL_W: Record<string, string> = {
+  nausea: "Nausea",
+  constipation: "Constipation",
+  low_energy: "Low energy",
+  low_hydration: "Low hydration",
+  low_food_intake: "Low food intake",
+  missed_checkin: "Missed check-in",
+  rapid_weight_change: "Weight change",
+  worsening_symptom: "Worsening symptom",
+  repeated_symptom: "Repeated symptom",
+  patient_requested_review: "Patient requested",
+};
+function humanTrigger(t: string): string {
+  return TRIGGER_LABEL_W[t] ?? t.replace(/_/g, " ");
 }

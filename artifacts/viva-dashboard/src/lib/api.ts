@@ -239,6 +239,109 @@ export interface CareEventsResponse {
   events: CareEvent[];
 }
 
+// ---- Intervention loop types (clinic side) ---------------------------------
+// Mirror the server's patient_interventions schema. We only type the
+// fields the dashboard renders; the server may emit additional fields
+// (deidentified payloads, full context summaries) that we ignore.
+
+// Mirrors PATIENT_INTERVENTION_STATUSES in lib/db. There is no
+// per-feedback-result status -- after /feedback the row goes to
+// `feedback_collected` (better/same/didnt_try) or `escalated`
+// (worse, auto-escalate). The dashboard inspects feedbackResult
+// directly for tone, not status.
+export type InterventionStatus =
+  | "shown"
+  | "accepted"
+  | "dismissed"
+  | "pending_feedback"
+  | "feedback_collected"
+  | "resolved"
+  | "escalated"
+  | "expired";
+
+// Mirrors PATIENT_INTERVENTION_TRIGGER_TYPES in lib/db.
+export type InterventionTriggerType =
+  | "nausea"
+  | "constipation"
+  | "low_energy"
+  | "low_hydration"
+  | "low_food_intake"
+  | "missed_checkin"
+  | "rapid_weight_change"
+  | "worsening_symptom"
+  | "repeated_symptom"
+  | "patient_requested_review";
+
+export type InterventionFeedbackResult =
+  | "better"
+  | "same"
+  | "worse"
+  | "didnt_try";
+
+export type InterventionRiskLevel = "low" | "moderate" | "elevated";
+
+export type InterventionGeneratedBy =
+  | "rules_ai_deidentified"
+  | "rules_fallback"
+  | "rules_only";
+
+export interface ClinicIntervention {
+  id: number;
+  patientUserId: number;
+  doctorId: number | null;
+  triggerType: InterventionTriggerType;
+  symptomType: string | null;
+  severity: number | null;
+  status: InterventionStatus;
+  riskLevel: InterventionRiskLevel;
+  whatWeNoticed: string;
+  recommendation: string;
+  followUpQuestion: string | null;
+  recommendationCategory: string;
+  feedbackResult: InterventionFeedbackResult | null;
+  patientNote: string | null;
+  escalationReason: string | null;
+  generatedBy: InterventionGeneratedBy;
+  acceptedAt: string | null;
+  feedbackCollectedAt: string | null;
+  escalatedAt: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Worklist payload returned by GET /api/clinic/interventions.
+// The server returns a flat list of active interventions (statuses
+// shown / accepted / pending_feedback / escalated) joined with the
+// patient's display name + email. The dashboard buckets client-side
+// in strict priority order (each row goes to the FIRST matching bucket):
+//   1. patientRequested  -- triggerType === "patient_requested_review"
+//                           ONLY. We do NOT key off escalationReason
+//                           because the server auto-sets it to
+//                           "patient_feedback_worse" on worse-feedback,
+//                           which would otherwise shadow the worse
+//                           bucket below.
+//   2. worse             -- feedbackResult === "worse" (status will be
+//                           "escalated" after auto-escalate, which is
+//                           why we don't gate on status).
+//   3. elevated          -- riskLevel === "elevated".
+//   4. repeated          -- triggerType === "repeated_symptom".
+export interface ClinicWorklistIntervention extends ClinicIntervention {
+  patient: {
+    id: number;
+    name: string | null;
+    email: string | null;
+  };
+}
+
+export interface ClinicInterventionsWorklist {
+  interventions: ClinicWorklistIntervention[];
+}
+
+export interface ClinicPatientInterventionsResponse {
+  interventions: ClinicIntervention[];
+}
+
 // API base URL is configurable at build time via VITE_API_BASE_URL.
 // Default "/api" is what we use in production today: the clinic
 // deployment proxies same-origin /api/* requests to the api-server,
@@ -392,6 +495,27 @@ export const api = {
     request<{ ok: true }>("POST", "/me/mfa/verify", input),
   mfaDisable: (code: string) =>
     request<{ ok: true }>("POST", "/me/mfa/disable", { code }),
+
+  // ---- Clinic interventions (Phase 4) -------------------------------------
+  // Doctor-scoped reads only -- the patient app handles writes via the
+  // /api/patient/interventions/* endpoints. The worklist endpoint feeds
+  // the new Patient Requested / Worse / Elevated / Repeated buckets on
+  // the worklist page; the per-patient endpoint feeds the "Recent
+  // Interventions" card on the patient detail page.
+  clinicInterventionsWorklist: () =>
+    request<ClinicInterventionsWorklist>(
+      "GET",
+      "/clinic/interventions",
+    ),
+  clinicPatientInterventions: (patientId: number) =>
+    request<ClinicPatientInterventionsResponse>(
+      "GET",
+      // Server mounts the clinic intervention router at
+      // /clinic/interventions, so the per-patient history sits at
+      // /clinic/interventions/patients/:id (NOT /clinic/patients/:id/interventions,
+      // which is reserved for the legacy patient-summary route).
+      `/clinic/interventions/patients/${patientId}`,
+    ),
 };
 
 export { HttpError };

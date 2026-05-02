@@ -11,6 +11,8 @@ import interventionsRouter from "./interventions";
 import outcomesRouter from "./outcomes";
 import careEventsRouter from "./careEvents";
 import analyticsRouter from "./analytics";
+import patientInterventionsRouter from "./patientInterventions";
+import clinicInterventionsRouter from "./clinicInterventions";
 
 const router: IRouter = Router();
 
@@ -28,6 +30,15 @@ router.use("/interventions", interventionsRouter);
 router.use("/outcomes", outcomesRouter);
 router.use("/care-events", careEventsRouter);
 router.use("/analytics", analyticsRouter);
+// AI-personalized micro-intervention loop (HIPAA pilot). Patient
+// router covers the lifecycle (generate/active/accept/dismiss/
+// feedback/escalate); clinic router exposes the doctor-facing
+// worklist + per-patient history. Mounted under /patient/* and
+// /clinic/* to match spec Part 6's URL contract; /clinic does NOT
+// share a prefix with /care-events because the worklist needs a
+// single dedicated entry point.
+router.use("/patient/interventions", patientInterventionsRouter);
+router.use("/clinic/interventions", clinicInterventionsRouter);
 // Operator-only metrics. Gated by its own bearer key (INTERNAL_API_KEY)
 // rather than the doctor session, so signed-in clinicians cannot pull
 // product analytics through their browser session.

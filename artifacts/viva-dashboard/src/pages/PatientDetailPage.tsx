@@ -6,6 +6,7 @@ import {
   api,
   type CareEvent,
   type Checkin,
+  type ClinicIntervention,
   type PatientDetail,
   type PatientWeightSummary,
   type Risk,
@@ -558,6 +559,12 @@ export function PatientDetailPage({ id }: { id: number }) {
   const care = useQuery({
     queryKey: ["patient", id, "care-events"],
     queryFn: () => api.careEvents(id),
+  });
+  // AI-personalized interventions (Phase 4) -- 60 most recent, server-ordered
+  // by created_at desc. Drives the "Recent Interventions" card below.
+  const interventions = useQuery({
+    queryKey: ["patient", id, "interventions"],
+    queryFn: () => api.clinicPatientInterventions(id),
   });
   const markReviewed = useMutation({
     mutationFn: () => api.markPatientReviewed(id),
@@ -1177,6 +1184,17 @@ export function PatientDetailPage({ id }: { id: number }) {
           leaving the page. We hide the high-volume viva-side
           coach_message / recommendation_shown rows here -- those live
           in analytics, not in the per-patient view. */}
+      {/* Recent Interventions card (Phase 4). Surfaces what Viva
+          recommended to this patient and how they responded so the
+          doctor has the AI/rules-fallback context next to the
+          care-loop audit trail below. Only renders when there's at
+          least one row to show. */}
+      {interventions.data && interventions.data.interventions.length > 0 && (
+        <RecentInterventionsCard
+          interventions={interventions.data.interventions.slice(0, 8)}
+        />
+      )}
+
       {care.data && care.data.events.length > 0 && (() => {
         const visible = care.data.events.filter(
           (e) =>
@@ -1221,6 +1239,171 @@ export function PatientDetailPage({ id }: { id: number }) {
       })()}
     </div>
   );
+}
+
+// ---- RecentInterventionsCard ----------------------------------------------
+// Phase 4 surface for the AI-personalized micro-intervention loop. Renders
+// a compact list of the most recent interventions for this patient, with
+// the trigger on the left, a short summary in the middle, and the
+// patient's response on the right. Status badges follow the same color
+// system used by the worklist buckets:
+//   patient_requested -> orange (matches "Patient requested review")
+//   worse             -> red    (signal for "patient told us it's worse")
+//   high/urgent       -> amber  (clinically elevated)
+//   accepted/done     -> blue   (positive engagement)
+//   neutral           -> gray
+//
+// The card is read-only -- doctors take action through the existing
+// notes / treatment-status / mark-reviewed controls; this card just
+// gives them the AI context.
+
+function RecentInterventionsCard({
+  interventions,
+}: {
+  interventions: ClinicIntervention[];
+}) {
+  return (
+    <section className="bg-card rounded-[20px] p-6">
+      <SectionTitle>Recent interventions</SectionTitle>
+      <ul className="space-y-3">
+        {interventions.map((iv) => {
+          const tone = interventionTone(iv);
+          return (
+            <li
+              key={iv.id}
+              className="flex items-start gap-3 text-sm"
+            >
+              <span
+                aria-hidden
+                className="inline-block w-2 h-2 rounded-full shrink-0 mt-1.5"
+                style={{ backgroundColor: tone.dot }}
+              />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-semibold text-foreground">
+                    {triggerLabel(iv.triggerType)}
+                  </span>
+                  <span
+                    className="text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5"
+                    style={{
+                      backgroundColor: tone.pillBg,
+                      color: tone.pillFg,
+                    }}
+                  >
+                    {tone.label}
+                  </span>
+                  {iv.generatedBy === "rules_fallback" && (
+                    <span className="text-[10px] font-semibold text-muted-foreground rounded-full px-2 py-0.5 bg-background">
+                      Fallback
+                    </span>
+                  )}
+                </div>
+                <p className="text-foreground font-medium mt-0.5 leading-snug">
+                  {iv.recommendation}
+                </p>
+                {iv.patientNote && (
+                  <p className="text-xs text-muted-foreground italic mt-1 leading-snug">
+                    Patient said: "{iv.patientNote}"
+                  </p>
+                )}
+              </div>
+              <span className="text-muted-foreground text-xs shrink-0 mt-0.5">
+                {relativeTime(iv.createdAt)}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+const TRIGGER_LABEL: Record<string, string> = {
+  nausea: "Nausea",
+  constipation: "Constipation",
+  low_energy: "Low energy",
+  low_hydration: "Low hydration",
+  low_food_intake: "Low food intake",
+  missed_checkin: "Missed check-in",
+  rapid_weight_change: "Weight change",
+  worsening_symptom: "Worsening symptom",
+  repeated_symptom: "Repeated symptom",
+  patient_requested_review: "Patient requested review",
+};
+
+function triggerLabel(t: string): string {
+  return TRIGGER_LABEL[t] ?? t.replace(/_/g, " ");
+}
+
+interface InterventionTone {
+  label: string;
+  dot: string;
+  pillBg: string;
+  pillFg: string;
+}
+
+function interventionTone(iv: ClinicIntervention): InterventionTone {
+  // Tone priority order matches the worklist bucket order. We key off
+  // the same canonical fields the worklist does -- patientRequested by
+  // triggerType only (escalationReason is auto-set on worse and would
+  // otherwise shadow the worse case below), worse by feedbackResult
+  // (status will be "escalated" after auto-escalate), elevated by the
+  // canonical "elevated" risk level (NOT high/urgent which the server
+  // never emits).
+  if (iv.triggerType === "patient_requested_review") {
+    return {
+      label: "Patient asked",
+      dot: "#FF9500",
+      pillBg: "rgba(255,149,0,0.15)",
+      pillFg: "#9A5A00",
+    };
+  }
+  if (iv.feedbackResult === "worse") {
+    return {
+      label: "Worse",
+      dot: "#FF3B30",
+      pillBg: "rgba(255,59,48,0.12)",
+      pillFg: "#B5251D",
+    };
+  }
+  if (iv.riskLevel === "elevated") {
+    return {
+      label: "Elevated",
+      dot: "#F2A900",
+      pillBg: "rgba(242,169,0,0.15)",
+      pillFg: "#7A5400",
+    };
+  }
+  if (iv.feedbackResult === "better") {
+    return {
+      label: "Better",
+      dot: "#34C759",
+      pillBg: "rgba(52,199,89,0.15)",
+      pillFg: "#1F7A36",
+    };
+  }
+  if (iv.status === "accepted" || iv.status === "pending_feedback") {
+    return {
+      label: "Accepted",
+      dot: "#5AC8FA",
+      pillBg: "rgba(90,200,250,0.15)",
+      pillFg: "#0A6E92",
+    };
+  }
+  if (iv.status === "dismissed") {
+    return {
+      label: "Dismissed",
+      dot: "#8A94A6",
+      pillBg: "rgba(138,148,166,0.15)",
+      pillFg: "#5A6478",
+    };
+  }
+  return {
+    label: iv.status.replace(/_/g, " "),
+    dot: "#8A94A6",
+    pillBg: "rgba(138,148,166,0.15)",
+    pillFg: "#5A6478",
+  };
 }
 
 // Compact human label for the care-events audit trail. Kept as a plain

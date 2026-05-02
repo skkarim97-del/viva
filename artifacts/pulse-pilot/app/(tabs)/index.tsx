@@ -22,6 +22,12 @@ import { InputRow } from "@/components/InputRow";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SymptomTipCard } from "@/components/SymptomTipCard";
+import { InterventionCard } from "@/components/InterventionCard";
+import {
+  interventionsApi,
+  type PatientIntervention,
+  type FeedbackResult,
+} from "@/lib/api/interventionsClient";
 import WeightLogModal from "@/components/WeightLogModal";
 import { sessionApi } from "@/lib/api/sessionClient";
 import { logIntervention, type InterventionType } from "@/lib/intervention/logger";
@@ -153,6 +159,102 @@ export default function DashboardScreen() {
     availableMetricTypes,
   } = useApp();
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
+
+  // ----- AI-personalized micro-intervention loop (Phase 3) -----
+  // Renders ABOVE SymptomTipCard. We load any active interventions on
+  // mount, kick off a one-shot generate when the screen first opens
+  // (so a patient who already submitted a check-in today still sees
+  // a recommendation), and refetch /active after every card action.
+  // All network calls are best-effort -- a failure must never block
+  // the rest of the Today screen from rendering.
+  const [activeInterventions, setActiveInterventions] = useState<PatientIntervention[]>([]);
+  const generateAttemptedRef = useRef(false);
+  const reloadActiveInterventions = React.useCallback(async () => {
+    try {
+      const items = await interventionsApi.active();
+      setActiveInterventions(items);
+    } catch {
+      /* swallow -- best effort */
+    }
+  }, []);
+  useEffect(() => {
+    void reloadActiveInterventions();
+  }, [reloadActiveInterventions]);
+  useEffect(() => {
+    // After the first /active fetch, if there's nothing active and we
+    // haven't already attempted this session, ask the engine to
+    // generate one. The engine returns null when conditions aren't
+    // met, so this is safe to call unconditionally.
+    if (generateAttemptedRef.current) return;
+    if (activeInterventions.length > 0) {
+      generateAttemptedRef.current = true;
+      return;
+    }
+    generateAttemptedRef.current = true;
+    void (async () => {
+      const created = await interventionsApi.generate({ source: "checkin" });
+      if (created) await reloadActiveInterventions();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeInterventions.length]);
+
+  const onInterventionAccept = React.useCallback(
+    async (id: number) => {
+      try { await interventionsApi.accept(id); } catch { /* swallow */ }
+      await reloadActiveInterventions();
+    },
+    [reloadActiveInterventions],
+  );
+  const onInterventionDismiss = React.useCallback(
+    async (id: number) => {
+      try { await interventionsApi.dismiss(id); } catch { /* swallow */ }
+      await reloadActiveInterventions();
+    },
+    [reloadActiveInterventions],
+  );
+  const onInterventionFeedback = React.useCallback(
+    async (id: number, result: FeedbackResult) => {
+      // Server transitions the row to either `feedback_collected`
+      // (better/same/didnt_try) or `escalated` (worse, auto-escalate).
+      // /active intentionally OMITS `feedback_collected` from its
+      // response (it only returns shown/accepted/pending_feedback/
+      // escalated), so a plain refetch would hide the row before the
+      // patient gets to see the "Thanks for letting us know" copy.
+      // We therefore optimistically merge the feedback response into
+      // local state, hold for ~2.5s so the thank-you renders, and
+      // THEN refetch -- which drops the now-collected row from the
+      // active list. The escalated path still refetches immediately
+      // because /active does include escalated rows.
+      try {
+        const resp = await interventionsApi.feedback(id, result);
+        const updated = resp?.intervention;
+        if (updated) {
+          setActiveInterventions((prev) =>
+            prev.map((iv) => (iv.id === id ? updated : iv)),
+          );
+          if (updated.status === "feedback_collected") {
+            setTimeout(() => {
+              void reloadActiveInterventions();
+            }, 2500);
+            return;
+          }
+        }
+      } catch {
+        /* swallow */
+      }
+      await reloadActiveInterventions();
+    },
+    [reloadActiveInterventions],
+  );
+  const onInterventionEscalate = React.useCallback(
+    async (id: number) => {
+      try {
+        await interventionsApi.escalate(id, "want_to_talk_to_doctor");
+      } catch { /* swallow */ }
+      await reloadActiveInterventions();
+    },
+    [reloadActiveInterventions],
+  );
 
   const [askInput, setAskInput] = useState("");
   const [askMessages, setAskMessages] = useState<ChatMessage[]>([]);
@@ -1032,6 +1134,32 @@ export default function DashboardScreen() {
             <InputRow label="Bowel movement today" options={BOWEL_OPTIONS} selected={bowelSelectedKey} onSelect={selectBowelMovement} containerBg={c.background} />
           </View>
         </View>
+
+        {/* AI-personalized micro-interventions. Rendered ABOVE the
+            static SymptomTipCard layer so the personalized
+            recommendation always lands first; the symptom-tip
+            fallback below covers cases where the engine returned
+            nothing or the network was unavailable. */}
+        {activeInterventions.length > 0 && (
+          <View style={{ marginBottom: 12, gap: 12 }}>
+            {activeInterventions.map((iv) => (
+              <InterventionCard
+                key={iv.id}
+                intervention={iv}
+                navy={c.foreground}
+                accent={c.accent}
+                cardBg={c.card}
+                background={c.background}
+                mutedForeground={c.mutedForeground}
+                warning={c.warning}
+                onAccept={onInterventionAccept}
+                onDismiss={onInterventionDismiss}
+                onFeedback={onInterventionFeedback}
+                onEscalate={onInterventionEscalate}
+              />
+            ))}
+          </View>
+        )}
 
         {/* Symptom-tip cards. Render directly under the inputs the
             patient just touched so the cause-and-effect is obvious:
