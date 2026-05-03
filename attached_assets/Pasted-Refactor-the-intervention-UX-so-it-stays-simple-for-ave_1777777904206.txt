@@ -1,0 +1,240 @@
+Refactor the intervention UX so it stays simple for average GLP-1 patients, but the recommendations themselves are stronger clinical micro-protocols that can actually help mitigate symptoms and support treatment persistence.
+
+Important context:
+This feature is a major part of Viva’s value prop. It should not feel like generic wellness advice such as “eat a little” or “sip water.” It needs to feel like automated first-line symptom support that can reduce side-effect burden, keep patients on treatment and save providers time.
+
+Goal:
+Keep the simplified guided UX:
+- one clear primary next step visible first
+- secondary ideas collapsed or lighter
+- outcome feedback after action
+- escalation only if symptoms worsen or unresolved issues repeat
+
+But upgrade the intervention content:
+- more specific
+- more clinically useful
+- still patient-friendly
+- not overly technical
+- clear enough for a normal patient to follow
+
+1. Keep the guided single-step structure
+
+Default view should still show:
+- Today’s next step
+- What we noticed
+- one primary intervention
+- collapsed “More support for today”
+- no default Ask my care team button
+
+Do not return to showing 4 large cards by default.
+
+2. Update primary card copy to be more clinically meaningful
+
+For nausea primary recommendation, use:
+
+Badge:
+“Start here”
+
+Title:
+“Settle nausea without skipping nutrition”
+
+Body:
+“Try 3 to 5 bites of a bland protein option like Greek yogurt, tofu, soup or a smoothie. Then take small sips of water over 20 to 30 minutes. Avoid greasy, spicy or large meals for now.”
+
+Helper line:
+“This helps reduce nausea while keeping some protein and fluids in your system.”
+
+Buttons:
+- “I’ll try this”
+- “Show me another option”
+
+3. Use stronger symptom-specific micro-protocols
+
+Update recommendation builder copy to use more concrete first-line support.
+
+Nausea support:
+Title:
+“Settle nausea without skipping nutrition”
+Body:
+“Try 3 to 5 bites of a bland protein option like Greek yogurt, tofu, soup or a smoothie. Then take small sips of water over 20 to 30 minutes. Avoid greasy, spicy or large meals for now.”
+Helper:
+“This helps reduce nausea while keeping some protein and fluids in your system.”
+
+Nausea alternate:
+Title:
+“Try something even gentler”
+Body:
+“Try crackers, ginger tea or a few bites of soup. Keep portions small and pause if nausea increases.”
+Helper:
+“Small amounts are often easier to tolerate than a full meal.”
+
+Low appetite support:
+Title:
+“Protect your protein intake”
+Body:
+“Aim for a small protein serving every few hours today, even if it is only Greek yogurt, tofu, soup or a smoothie.”
+Helper:
+“This can help prevent low intake from turning into low energy or missed nutrition.”
+
+Low appetite alternate:
+Title:
+“Use liquid nutrition if solid food feels hard”
+Body:
+“Try a smoothie, protein shake or soup instead of a full meal. Take it slowly over 20 to 30 minutes.”
+Helper:
+“Liquid options can be easier when appetite is low.”
+
+Low energy support:
+Title:
+“Support energy without forcing a meal”
+Body:
+“Try a small protein plus carb option like yogurt with fruit, soup with tofu or a smoothie, then rest for 10 minutes.”
+Helper:
+“This gives your body fuel without requiring a large meal.”
+
+Low energy alternate:
+Title:
+“Reset with fluids and a short break”
+Body:
+“Take small sips of water, sit or lie down for 10 minutes, then try a small snack if you feel ready.”
+Helper:
+“Low intake and dehydration can make fatigue worse.”
+
+Constipation support:
+Title:
+“Reduce constipation risk today”
+Body:
+“Add fiber gradually with foods like berries, chia, beans or vegetables. Keep sipping fluids and take a short walk if you can tolerate it.”
+Helper:
+“Fiber works best when paired with fluids and movement.”
+
+Constipation alternate:
+Title:
+“Use a gentler bowel-support step”
+Body:
+“Try warm fluids, a short walk or a fiber-rich snack. Avoid suddenly adding a large amount of fiber at once.”
+Helper:
+“Gradual changes are less likely to worsen bloating.”
+
+Hydration support:
+Title:
+“Rehydrate without upsetting your stomach”
+Body:
+“Take a few small sips every 5 to 10 minutes for the next hour. If plain water feels hard, try an electrolyte drink or diluted beverage.”
+Helper:
+“Small, steady sips are usually easier than drinking a lot at once.”
+
+Hydration alternate:
+Title:
+“Try fluids that are easier to tolerate”
+Body:
+“Try ice chips, warm tea, diluted juice or an electrolyte drink. Keep the amount small and steady.”
+Helper:
+“The goal is steady fluids without triggering nausea.”
+
+4. Prioritize recommendations by symptom impact
+
+Select the primary intervention using this order:
+1. moderate or severe nausea
+2. very low appetite
+3. constipation
+4. low appetite
+5. low energy
+6. low hydration
+
+Reason:
+Nausea and low intake can drive discontinuation because they make patients feel like treatment is intolerable. Constipation can also become a major persistence issue if not managed early.
+
+5. Improve “What we noticed” with simple clinical logic
+
+Example:
+“You reported nausea, low appetite, low energy and constipation today. We’ll start with nausea because it can make eating and hydration harder.”
+
+Keep this short.
+
+6. Rename collapsed secondary section
+
+Use:
+“More support for today”
+
+Subtitle:
+“Other steps that may help with appetite, energy or digestion.”
+
+Collapsed by default.
+
+Expanded rows should be compact and show:
+- action-oriented title
+- one-line body
+- optional helper text only if space allows
+- small “Try this” button
+
+7. Update feedback copy
+
+After “I’ll try this”, show:
+
+“How do you feel after trying this?”
+
+Buttons:
+- “Better”
+- “About the same”
+- “Worse”
+
+If Better:
+“Good. Keep following your plan and check in again if symptoms come back.”
+
+If About the same:
+“Thanks. Let’s try a different step before escalating.”
+
+Buttons:
+- “Show me another option”
+- “Check again later”
+
+If Worse:
+“Sorry that got worse. Viva can suggest another step now or flag this for your care team.”
+
+Buttons:
+- “Try another option”
+- “Ask my care team”
+
+8. Guardrail copy
+
+Keep a subtle footer:
+“Viva supports between-visit care. If symptoms feel severe, urgent or unusual, contact your care team or seek medical help.”
+
+9. Do not make medical claims too strongly
+
+Avoid wording like:
+- “This will fix nausea”
+- “This prevents stopping treatment”
+- “This treats side effects”
+
+Use:
+- “may help”
+- “can support”
+- “helps reduce risk”
+- “can make symptoms easier to manage”
+
+10. Preserve backend behavior
+
+Do not break:
+- onAccept
+- onFeedback
+- escalation callback
+- local state persistence
+- recommendation row keys
+- analytics events if implemented
+
+11. Verify
+
+Run:
+- typecheck
+- lint if available
+- mobile/web preview
+
+Acceptance criteria:
+- The UX remains simple and friendly
+- The visible intervention feels clinically useful, not generic
+- The primary step gives a concrete mini-protocol
+- Secondary recommendations are available without overwhelming the patient
+- Feedback flow adapts the next step
+- Care team escalation only appears after worsening or unresolved symptoms

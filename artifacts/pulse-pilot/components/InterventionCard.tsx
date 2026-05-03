@@ -1,32 +1,48 @@
 // Today-tab card that surfaces an AI-personalized micro-intervention.
 //
-// Patient-facing UX (simplified rework):
+// Patient-facing UX (clinical micro-protocol rework):
 //   Title:    "Today's next steps"
 //   Subtitle: "Based on your check-in, here's what may help today."
 //   Section:  "What we noticed"
-//             A short, plain-language sentence built from the symptom
-//             categories present in the synthesized recommendation.
-//   Primary:  One prominent action card for the highest-priority
-//             symptom. Action-oriented title (e.g. "Eat something
-//             light and sip water slowly"), short body, helper line,
-//             and two buttons: "I'll try this" / "Another idea".
-//             "Another idea" toggles the body to a category fallback
-//             alternate and changes the buttons to
-//             "I'll try this" / "Back".
-//   Section:  "Other things that may help today" -- compact secondary
-//             rows for the remaining symptoms with a small "Try this"
-//             button each.
+//             Plain-language sentence built from the symptom
+//             categories present, plus a short "we'll start with X
+//             because Y" reasoning clause when more than one symptom
+//             is present.
+//   Primary:  One prominent "Start here" action card for the
+//             highest-priority symptom, drawn from the
+//             RECOMMENDATIONS map (clinical micro-protocol with a
+//             concrete next step, e.g. "Settle nausea without
+//             skipping nutrition: try 3 to 5 bites of bland protein
+//             and small sips of water over 20-30 minutes...").
+//             Buttons: "I'll try this" / "Show me another option".
+//             "Show me another option" swaps to the category's
+//             alternate micro-protocol and flips the right button to
+//             "Back".
+//   Section:  "More support for today" -- COLLAPSED by default with
+//             a tappable header showing a count + chevron. Subtitle
+//             "Other steps that may help with appetite, energy or
+//             digestion." Expanded rows reuse the same micro-protocol
+//             content as the primary card, in compact form.
 //   Footer:   Subtle clinical guardrail copy.
 //
-// Per-row state machine (preserved from the prior rework):
-//   default   -> "I'll try this" (+ "Another idea" on primary)
+// Per-row state machine:
+//   default   -> "I'll try this" / "Show me another option"
 //   committed -> "How do you feel after trying it?" ->
 //                 Better / About the same / Worse
-//   better    -> "Glad that helped" + change-response link
-//   no_change -> "Thanks -- we'll keep watching this." + link
-//   worse     -> "Sorry that didn't help. Would you like another
-//                 suggestion or support from your care team?" ->
-//                 "Try another idea" / "Ask my care team"
+//   better    -> "Good. Keep following your plan and check in again
+//                 if symptoms come back." (+ change-response link)
+//   no_change -> "Thanks. Let's try a different step before
+//                 escalating." -> "Show me another option" /
+//                 "Check again later". "Check again later" collapses
+//                 the panel to a quiet ack.
+//   worse     -> "Sorry that got worse. Viva can suggest another
+//                 step now or flag this for your care team." ->
+//                 "Try another option" / "Ask my care team"
+//
+// Priority ordering (see priorityRank): moderate/severe nausea ->
+// very low appetite -> constipation -> low appetite -> mild nausea ->
+// low energy -> low hydration. Reflects what most often drives GLP-1
+// discontinuation and what becomes a persistence problem if untreated.
 //
 // Server contract (preserved):
 //   - First per-row "I'll try this" tap fires onAccept ONCE per
@@ -127,58 +143,131 @@ function categoryFromLabel(
   }
 }
 
-// Priority rank: lower = more urgent. Severity (numeric, higher =
-// more severe) bumps nausea + intake categories.
+// Priority rank: lower = more urgent. Ordering reflects what most
+// often drives GLP-1 discontinuation (nausea + low intake) and what
+// becomes a persistence problem if untreated (constipation):
+//   1. moderate or severe nausea
+//   2. very low appetite
+//   3. constipation
+//   4. low appetite
+//   5. mild nausea
+//   6. low energy
+//   7. low hydration
+// Severity is the intervention-level numeric severity; we don't have
+// per-row severity from the server, so it's used as a proxy for the
+// row's clinical urgency.
 function priorityRank(cat: RecCategory, severity: number | null | undefined): number {
   const sev = typeof severity === "number" ? severity : 0;
-  const isSevere = sev >= 4;
   switch (cat) {
     case "nausea":
-      return isSevere ? 1 : 2;
+      // moderate (sev>=3) or severe (sev>=4) nausea -> top.
+      // Mild nausea drops below the appetite/constipation tier.
+      return sev >= 3 ? 1 : 5;
     case "appetite":
-      return isSevere ? 3 : 4;
-    case "energy":
-      return isSevere ? 5 : 6;
+      // very low (sev>=4) leaps above constipation; ordinary low
+      // sits below it.
+      return sev >= 4 ? 2 : 4;
     case "constipation":
-      return 7;
+      return 3;
+    case "energy":
+      return 6;
     case "hydration":
-      return 8;
+      return 7;
     default:
       return 9;
   }
 }
 
-// Action-oriented headline for the primary card. Replaces the
-// clinical "Nausea support"-style label with something a patient can
-// act on.
-const ACTION_TITLE: Record<RecCategory, string> = {
-  nausea: "Eat something light and sip water slowly",
-  appetite: "Add a protein-rich snack later",
-  energy: "Take a short break to rest",
-  constipation: "Add fiber and keep sipping water",
-  hydration: "Sip water steadily through the day",
-  other: "Try a small step that feels manageable",
-};
-
-// Short title for compact secondary rows. Same plain language style.
-const SHORT_TITLE: Record<RecCategory, string> = {
-  nausea: "Eat something light",
-  appetite: "Add a protein-rich snack later",
-  energy: "Take a short break to rest",
-  constipation: "Add fiber and keep sipping water",
-  hydration: "Sip water steadily",
-  other: "Try a small supportive step",
-};
-
-// One-line "this may help with..." line shown beneath the primary
-// card body. Kept warm and non-clinical.
-const HELPER_LINE: Record<RecCategory, string> = {
-  nausea: "This may help with nausea and make eating feel easier.",
-  appetite: "This may help your energy and recovery between meals.",
-  energy: "This may help your energy through the day.",
-  constipation: "This may help things feel more comfortable.",
-  hydration: "Steady sips help most other symptoms feel easier.",
-  other: "Small steps can add up across the day.",
+// Clinical micro-protocols. Each category exposes a primary
+// recommendation (the headline next step) AND an alternate (used
+// when the patient taps "Show me another option" on the primary card
+// or "Try another option" from the worse panel). Copy uses hedged
+// language ("may help", "can support") -- never "this will fix" or
+// "this prevents stopping treatment" -- and stays patient-friendly
+// while being specific enough to feel clinical instead of generic.
+interface RecContent {
+  title: string;
+  body: string;
+  helper: string;
+}
+const RECOMMENDATIONS: Record<
+  RecCategory,
+  { primary: RecContent; alternate: RecContent }
+> = {
+  nausea: {
+    primary: {
+      title: "Settle nausea without skipping nutrition",
+      body: "Try 3 to 5 bites of a bland protein option like Greek yogurt, tofu, soup or a smoothie. Then take small sips of water over 20 to 30 minutes. Avoid greasy, spicy or large meals for now.",
+      helper:
+        "This helps reduce nausea while keeping some protein and fluids in your system.",
+    },
+    alternate: {
+      title: "Try something even gentler",
+      body: "Try crackers, ginger tea or a few bites of soup. Keep portions small and pause if nausea increases.",
+      helper: "Small amounts are often easier to tolerate than a full meal.",
+    },
+  },
+  appetite: {
+    primary: {
+      title: "Protect your protein intake",
+      body: "Aim for a small protein serving every few hours today, even if it is only Greek yogurt, tofu, soup or a smoothie.",
+      helper:
+        "This can help prevent low intake from turning into low energy or missed nutrition.",
+    },
+    alternate: {
+      title: "Use liquid nutrition if solid food feels hard",
+      body: "Try a smoothie, protein shake or soup instead of a full meal. Take it slowly over 20 to 30 minutes.",
+      helper: "Liquid options can be easier when appetite is low.",
+    },
+  },
+  energy: {
+    primary: {
+      title: "Support energy without forcing a meal",
+      body: "Try a small protein plus carb option like yogurt with fruit, soup with tofu or a smoothie, then rest for 10 minutes.",
+      helper: "This gives your body fuel without requiring a large meal.",
+    },
+    alternate: {
+      title: "Reset with fluids and a short break",
+      body: "Take small sips of water, sit or lie down for 10 minutes, then try a small snack if you feel ready.",
+      helper: "Low intake and dehydration can make fatigue worse.",
+    },
+  },
+  constipation: {
+    primary: {
+      title: "Reduce constipation risk today",
+      body: "Add fiber gradually with foods like berries, chia, beans or vegetables. Keep sipping fluids and take a short walk if you can tolerate it.",
+      helper: "Fiber works best when paired with fluids and movement.",
+    },
+    alternate: {
+      title: "Use a gentler bowel-support step",
+      body: "Try warm fluids, a short walk or a fiber-rich snack. Avoid suddenly adding a large amount of fiber at once.",
+      helper: "Gradual changes are less likely to worsen bloating.",
+    },
+  },
+  hydration: {
+    primary: {
+      title: "Rehydrate without upsetting your stomach",
+      body: "Take a few small sips every 5 to 10 minutes for the next hour. If plain water feels hard, try an electrolyte drink or diluted beverage.",
+      helper: "Small, steady sips are usually easier than drinking a lot at once.",
+    },
+    alternate: {
+      title: "Try fluids that are easier to tolerate",
+      body: "Try ice chips, warm tea, diluted juice or an electrolyte drink. Keep the amount small and steady.",
+      helper: "The goal is steady fluids without triggering nausea.",
+    },
+  },
+  other: {
+    primary: {
+      title: "Try a small step that feels manageable",
+      body: "Choose one small action you can take right now -- a few sips of water, a few bites of a familiar food, or a brief rest in a quiet spot.",
+      helper: "Small, low-effort steps add up across the day.",
+    },
+    alternate: {
+      title: "Try a different small step",
+      body: "Pick something even simpler -- a few sips of fluid, slow breathing for a minute, or sitting somewhere comfortable.",
+      helper: "Lowering the barrier can make it easier to follow through.",
+    },
+  },
 };
 
 // Plain-language fragment used to compose the "What we noticed"
@@ -192,18 +281,17 @@ const NOTICED_PHRASE: Record<RecCategory, string> = {
   other: "some symptoms",
 };
 
-// Single fallback alternate per category. "Another idea" toggles to
-// this copy and changes the buttons to "I'll try this" / "Back".
-const FALLBACK_ALTERNATES: Record<RecCategory, string> = {
-  nausea:
-    "Try ginger tea, crackers or another bland snack, and avoid large portions for now.",
+// Short clinical reasoning appended to "What we noticed" when there
+// is more than one symptom -- explains in one phrase WHY the primary
+// category is starting first.
+const REASON_FOR_PRIMARY: Record<RecCategory, string> = {
+  nausea: "because it can make eating and hydration harder",
   appetite:
-    "Try a few bites of something easy to tolerate, like yogurt, tofu, soup or a smoothie.",
-  energy: "Take a short rest, hydrate slowly and add protein when you can.",
-  constipation:
-    "Try a fiber-rich food like berries, chia, beans or vegetables, and keep sipping water.",
-  hydration: "Take a few small sips every 5 to 10 minutes for the next hour.",
-  other: "Try a small step that feels manageable right now and check back in later.",
+    "because keeping protein steady can support your energy and recovery",
+  energy: "because small, supportive steps can help your energy through the day",
+  constipation: "because addressing it early helps prevent it from worsening",
+  hydration: "because steady hydration can make most other symptoms easier",
+  other: "",
 };
 
 // Per-row state machine. Each row drives its own progression.
@@ -414,6 +502,15 @@ export function InterventionCard({
     Record<string, SectionStatus>
   >({});
   const [sectionAlt, setSectionAlt] = useState<Record<string, boolean>>({});
+  // Per-row "Check again later" flag. When true for a key, the row's
+  // no_change branch collapses from the two-button "try again before
+  // escalating" panel down to a quiet ack with a Change-response
+  // link. Memory-only -- a fresh app launch resurfaces the panel.
+  const [noChangeAck, setNoChangeAck] = useState<Record<string, boolean>>({});
+  // Whether the "More support for today" section is expanded. The
+  // spec asks for it to be COLLAPSED by default so the patient sees
+  // exactly one next step on first open.
+  const [secondaryExpanded, setSecondaryExpanded] = useState(false);
 
   // Race-safety for AsyncStorage:
   //   (a) Hydration race -- multiGet may resolve AFTER a user tap.
@@ -558,9 +655,23 @@ export function InterventionCard({
   const handleRowReset = useCallback(
     (key: string) => {
       void setRowStatus(key, null);
+      // Clear the "check again later" ack so the patient gets the
+      // full no_change panel again next time they go through the
+      // outcome flow.
+      setNoChangeAck((prev) => {
+        if (!prev[key]) return prev;
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
     },
     [setRowStatus],
   );
+
+  const handleRowDismissNoChange = useCallback((key: string) => {
+    safeLog("intervention_check_again_later");
+    setNoChangeAck((prev) => ({ ...prev, [key]: true }));
+  }, []);
 
   const handleRowToggleAlternate = useCallback(
     (key: string) => {
@@ -570,8 +681,15 @@ export function InterventionCard({
         return { ...prev, [key]: !wasShowing };
       });
       // Reset the row to default so the patient can tap "I'll try
-      // this" on the alternate copy.
+      // this" on the alternate copy. Also clear the no_change ack
+      // since we're effectively starting a fresh attempt.
       void setRowStatus(key, null);
+      setNoChangeAck((prev) => {
+        if (!prev[key]) return prev;
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
     },
     [setRowStatus],
   );
@@ -621,7 +739,18 @@ export function InterventionCard({
       seen.add(r.category);
       phrases.push(NOTICED_PHRASE[r.category]);
     }
-    return `You reported ${joinList(phrases)} today.`;
+    let sentence = `You reported ${joinList(phrases)} today.`;
+    // When more than one symptom is present, briefly explain WHY
+    // we're starting with the chosen primary. This makes the order
+    // feel intentional ("nausea first because it can make eating
+    // harder") instead of arbitrary.
+    const primaryCat = orderedRows[0]!.category;
+    const reason = REASON_FOR_PRIMARY[primaryCat];
+    const primaryPhrase = NOTICED_PHRASE[primaryCat];
+    if (phrases.length > 1 && reason.length > 0) {
+      sentence += ` We'll start with ${primaryPhrase} ${reason}.`;
+    }
+    return sentence;
   }, [orderedRows, intervention.whatWeNoticed]);
 
   // Reference unused legacy props/state so TS stays quiet.
@@ -711,6 +840,7 @@ export function InterventionCard({
           originalBody={primary.section.body}
           showingAlternate={!!sectionAlt[primary.key]}
           status={sectionStatus[primary.key] ?? null}
+          noChangeDismissed={!!noChangeAck[primary.key]}
           navy={navy}
           mutedForeground={mutedForeground}
           border={background}
@@ -720,37 +850,80 @@ export function InterventionCard({
           onToggleAlternate={() => handleRowToggleAlternate(primary.key)}
           onOutcome={(outcome) => handleRowOutcome(primary.key, outcome)}
           onReset={() => handleRowReset(primary.key)}
+          onDismissNoChange={() => handleRowDismissNoChange(primary.key)}
           onAskCareTeam={() => handleRowAskCareTeam(primary.key)}
         />
       )}
 
-      {/* -- Secondary rows ---------------------------------------- */}
+      {/* -- More support for today (collapsed by default) -------- */}
       {secondaries.length > 0 && (
         <View style={styles.section}>
-          <Text style={[styles.sectionLabel, { color: mutedForeground }]}>
-            Other things that may help today
-          </Text>
-          <View style={styles.rowsWrap}>
-            {secondaries.map((r) => (
-              <SecondaryActionRow
-                key={r.key}
-                category={r.category}
-                originalBody={r.section.body}
-                showingAlternate={!!sectionAlt[r.key]}
-                status={sectionStatus[r.key] ?? null}
-                navy={navy}
-                mutedForeground={mutedForeground}
-                border={background}
-                accent={accent}
-                warning={warning}
-                onCommit={() => handleRowCommit(r.key)}
-                onToggleAlternate={() => handleRowToggleAlternate(r.key)}
-                onOutcome={(outcome) => handleRowOutcome(r.key, outcome)}
-                onReset={() => handleRowReset(r.key)}
-                onAskCareTeam={() => handleRowAskCareTeam(r.key)}
+          <Pressable
+            onPress={() => {
+              tap();
+              setSecondaryExpanded((v) => !v);
+              if (!secondaryExpanded) safeLog("intervention_secondary_expanded");
+            }}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: secondaryExpanded }}
+            accessibilityLabel={
+              secondaryExpanded
+                ? `Hide ${secondaries.length} more support options`
+                : `Show ${secondaries.length} more support options`
+            }
+            style={({ pressed }) => [
+              styles.moreSupportHeader,
+              { borderColor: background, opacity: pressed ? 0.7 : 1 },
+            ]}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.moreSupportTitle, { color: navy }]}>
+                More support for today
+              </Text>
+              <Text
+                style={[styles.moreSupportSubtitle, { color: mutedForeground }]}
+              >
+                Other steps that may help with appetite, energy or digestion.
+              </Text>
+            </View>
+            <View style={styles.moreSupportMeta}>
+              <Text
+                style={[styles.moreSupportCount, { color: mutedForeground }]}
+              >
+                {secondaries.length}
+              </Text>
+              <Feather
+                name={secondaryExpanded ? "chevron-up" : "chevron-down"}
+                size={16}
+                color={mutedForeground}
               />
-            ))}
-          </View>
+            </View>
+          </Pressable>
+          {secondaryExpanded && (
+            <View style={styles.rowsWrap}>
+              {secondaries.map((r) => (
+                <SecondaryActionRow
+                  key={r.key}
+                  category={r.category}
+                  originalBody={r.section.body}
+                  showingAlternate={!!sectionAlt[r.key]}
+                  status={sectionStatus[r.key] ?? null}
+                  noChangeDismissed={!!noChangeAck[r.key]}
+                  navy={navy}
+                  mutedForeground={mutedForeground}
+                  border={background}
+                  accent={accent}
+                  warning={warning}
+                  onCommit={() => handleRowCommit(r.key)}
+                  onToggleAlternate={() => handleRowToggleAlternate(r.key)}
+                  onOutcome={(outcome) => handleRowOutcome(r.key, outcome)}
+                  onReset={() => handleRowReset(r.key)}
+                  onDismissNoChange={() => handleRowDismissNoChange(r.key)}
+                  onAskCareTeam={() => handleRowAskCareTeam(r.key)}
+                />
+              ))}
+            </View>
+          )}
         </View>
       )}
 
@@ -773,13 +946,21 @@ export function InterventionCard({
 }
 
 // =====================================================================
-// PrimaryActionCard -- the prominent "Start with this" card.
+// PrimaryActionCard -- the prominent "Start here" card.
 // =====================================================================
 interface ActionRowProps {
   category: RecCategory;
+  // Server-provided body. Only used as a fallback for the "other"
+  // category where we don't have a canned clinical micro-protocol.
+  // For the five known symptom categories, the body comes from
+  // RECOMMENDATIONS[category].primary.body / .alternate.body.
   originalBody: string;
   showingAlternate: boolean;
   status: SectionStatus | null;
+  // Whether the patient has dismissed the no_change two-button panel
+  // by tapping "Check again later". When true, the no_change branch
+  // renders a quiet ack instead of the action panel.
+  noChangeDismissed: boolean;
   navy: string;
   mutedForeground: string;
   border: string;
@@ -789,6 +970,7 @@ interface ActionRowProps {
   onToggleAlternate: () => void;
   onOutcome: (outcome: "better" | "no_change" | "worse") => void;
   onReset: () => void;
+  onDismissNoChange: () => void;
   onAskCareTeam: () => void;
 }
 
@@ -805,6 +987,7 @@ function PrimaryActionCard({
   originalBody,
   showingAlternate,
   status,
+  noChangeDismissed,
   navy,
   mutedForeground,
   border,
@@ -814,11 +997,21 @@ function PrimaryActionCard({
   onToggleAlternate,
   onOutcome,
   onReset,
+  onDismissNoChange,
   onAskCareTeam,
 }: ActionRowProps) {
-  const title = ACTION_TITLE[category];
-  const helper = HELPER_LINE[category];
-  const body = showingAlternate ? FALLBACK_ALTERNATES[category] : originalBody;
+  const variant = showingAlternate
+    ? RECOMMENDATIONS[category].alternate
+    : RECOMMENDATIONS[category].primary;
+  const title = variant.title;
+  const helper = variant.helper;
+  // For "other" we don't have category-specific clinical copy, so fall
+  // back to the server's body when not showing the alternate. Known
+  // categories always use the canned clinical micro-protocol.
+  const body =
+    category === "other" && !showingAlternate
+      ? originalBody || variant.body
+      : variant.body;
   const titleA11y = title.toLowerCase();
   const offerEscalation = shouldOfferEscalation(category, status);
 
@@ -833,7 +1026,7 @@ function PrimaryActionCard({
         <View style={[styles.startHerePill, { backgroundColor: START_HERE_BG }]}>
           <Feather name="zap" size={10} color={START_HERE_FG} />
           <Text style={[styles.startHerePillText, { color: START_HERE_FG }]}>
-            Start with this
+            Start here
           </Text>
         </View>
       </View>
@@ -850,7 +1043,7 @@ function PrimaryActionCard({
         </Text>
       )}
 
-      {/* -- Default: I'll try this / Another idea (or Back) ------- */}
+      {/* -- Default: I'll try this / Show me another option (or Back) -- */}
       {status == null && (
         <View style={styles.btnRow}>
           <Pressable
@@ -883,7 +1076,7 @@ function PrimaryActionCard({
             accessibilityLabel={
               showingAlternate
                 ? `Go back to original suggestion for ${titleA11y}`
-                : `Show another idea for ${titleA11y}`
+                : `Show me another option for ${titleA11y}`
             }
             style={({ pressed }) => [
               styles.btnSecondary,
@@ -891,7 +1084,7 @@ function PrimaryActionCard({
             ]}
           >
             <Text style={[styles.btnText, { color: mutedForeground, fontWeight: "600" }]}>
-              {showingAlternate ? "Back" : "Another idea"}
+              {showingAlternate ? "Back" : "Show me another option"}
             </Text>
           </Pressable>
         </View>
@@ -946,19 +1139,67 @@ function PrimaryActionCard({
         <AcknowledgeRow
           icon="smile"
           tint={SUCCESS_FG}
-          text="Glad that helped."
+          text="Good. Keep following your plan and check in again if symptoms come back."
           onReset={onReset}
           mutedForeground={mutedForeground}
           a11y={titleA11y}
         />
       )}
 
-      {/* -- About the same -- quiet acknowledgement --------------- */}
-      {status === "no_change" && (
+      {/* -- About the same: two-button "try again before escalating"
+            panel. Patient can pick another option or defer. Once
+            "Check again later" is tapped, we collapse to a quiet ack. */}
+      {status === "no_change" && !noChangeDismissed && (
+        <View style={styles.escalateWrap}>
+          <Text style={[styles.escalateCopy, { color: navy }]}>
+            Thanks. Let&apos;s try a different step before escalating.
+          </Text>
+          <View style={styles.btnRow}>
+            <Pressable
+              onPress={() => {
+                tap();
+                onToggleAlternate();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`Show me another option for ${titleA11y}`}
+              style={({ pressed }) => [
+                styles.btnPrimary,
+                {
+                  borderColor: accent,
+                  backgroundColor: accent,
+                  opacity: pressed ? 0.8 : 1,
+                },
+              ]}
+            >
+              <Feather name="refresh-cw" size={13} color="#FFFFFF" />
+              <Text style={[styles.btnText, { color: "#FFFFFF", fontWeight: "700" }]}>
+                Show me another option
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                tap();
+                onDismissNoChange();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`Check ${titleA11y} again later`}
+              style={({ pressed }) => [
+                styles.btnSecondary,
+                { borderColor: border, opacity: pressed ? 0.75 : 1 },
+              ]}
+            >
+              <Text style={[styles.btnText, { color: mutedForeground, fontWeight: "600" }]}>
+                Check again later
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+      {status === "no_change" && noChangeDismissed && (
         <AcknowledgeRow
-          icon="meh"
+          icon="clock"
           tint={mutedForeground}
-          text="Thanks -- we'll keep watching this."
+          text="Thanks -- we'll check back later."
           onReset={onReset}
           mutedForeground={mutedForeground}
           a11y={titleA11y}
@@ -969,8 +1210,8 @@ function PrimaryActionCard({
       {status === "worse" && offerEscalation && (
         <View style={styles.escalateWrap}>
           <Text style={[styles.escalateCopy, { color: navy }]}>
-            Sorry that didn&apos;t help. Would you like another suggestion or
-            support from your care team?
+            Sorry that got worse. Viva can suggest another step now or flag
+            this for your care team.
           </Text>
           <View style={styles.btnRow}>
             <Pressable
@@ -979,7 +1220,7 @@ function PrimaryActionCard({
                 onToggleAlternate();
               }}
               accessibilityRole="button"
-              accessibilityLabel={`Try another idea for ${titleA11y}`}
+              accessibilityLabel={`Try another option for ${titleA11y}`}
               style={({ pressed }) => [
                 styles.btnSecondary,
                 { borderColor: border, opacity: pressed ? 0.75 : 1 },
@@ -987,7 +1228,7 @@ function PrimaryActionCard({
             >
               <Feather name="refresh-cw" size={12} color={mutedForeground} />
               <Text style={[styles.btnText, { color: mutedForeground, fontWeight: "600" }]}>
-                Try another idea
+                Try another option
               </Text>
             </Pressable>
             <Pressable
@@ -1019,14 +1260,16 @@ function PrimaryActionCard({
 }
 
 // =====================================================================
-// SecondaryActionRow -- compact row for "Other things that may help".
-// Same state machine, much lighter visual treatment.
+// SecondaryActionRow -- compact row for "More support for today".
+// Same state machine, much lighter visual treatment. Sources its
+// content from the same RECOMMENDATIONS map as the primary card.
 // =====================================================================
 function SecondaryActionRow({
   category,
   originalBody,
   showingAlternate,
   status,
+  noChangeDismissed,
   navy,
   mutedForeground,
   border,
@@ -1036,10 +1279,17 @@ function SecondaryActionRow({
   onToggleAlternate,
   onOutcome,
   onReset,
+  onDismissNoChange,
   onAskCareTeam,
 }: ActionRowProps) {
-  const title = SHORT_TITLE[category];
-  const body = showingAlternate ? FALLBACK_ALTERNATES[category] : originalBody;
+  const variant = showingAlternate
+    ? RECOMMENDATIONS[category].alternate
+    : RECOMMENDATIONS[category].primary;
+  const title = variant.title;
+  const body =
+    category === "other" && !showingAlternate
+      ? originalBody || variant.body
+      : variant.body;
   const titleA11y = title.toLowerCase();
   const offerEscalation = shouldOfferEscalation(category, status);
 
@@ -1128,18 +1378,64 @@ function SecondaryActionRow({
         <AcknowledgeRow
           icon="smile"
           tint={SUCCESS_FG}
-          text="Glad that helped."
+          text="Good. Keep following your plan and check in again if symptoms come back."
           onReset={onReset}
           mutedForeground={mutedForeground}
           a11y={titleA11y}
         />
       )}
 
-      {status === "no_change" && (
+      {status === "no_change" && !noChangeDismissed && (
+        <View style={styles.escalateWrap}>
+          <Text style={[styles.escalateCopy, { color: navy }]}>
+            Thanks. Let&apos;s try a different step before escalating.
+          </Text>
+          <View style={styles.btnRow}>
+            <Pressable
+              onPress={() => {
+                tap();
+                onToggleAlternate();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`Show me another option for ${titleA11y}`}
+              style={({ pressed }) => [
+                styles.btnPrimary,
+                {
+                  borderColor: accent,
+                  backgroundColor: accent,
+                  opacity: pressed ? 0.8 : 1,
+                },
+              ]}
+            >
+              <Feather name="refresh-cw" size={13} color="#FFFFFF" />
+              <Text style={[styles.btnText, { color: "#FFFFFF", fontWeight: "700" }]}>
+                Show me another option
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                tap();
+                onDismissNoChange();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`Check ${titleA11y} again later`}
+              style={({ pressed }) => [
+                styles.btnSecondary,
+                { borderColor: border, opacity: pressed ? 0.75 : 1 },
+              ]}
+            >
+              <Text style={[styles.btnText, { color: mutedForeground, fontWeight: "600" }]}>
+                Check again later
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+      {status === "no_change" && noChangeDismissed && (
         <AcknowledgeRow
-          icon="meh"
+          icon="clock"
           tint={mutedForeground}
-          text="Thanks -- we'll keep watching this."
+          text="Thanks -- we'll check back later."
           onReset={onReset}
           mutedForeground={mutedForeground}
           a11y={titleA11y}
@@ -1149,8 +1445,8 @@ function SecondaryActionRow({
       {status === "worse" && offerEscalation && (
         <View style={styles.escalateWrap}>
           <Text style={[styles.escalateCopy, { color: navy }]}>
-            Sorry that didn&apos;t help. Would you like another suggestion or
-            support from your care team?
+            Sorry that got worse. Viva can suggest another step now or flag
+            this for your care team.
           </Text>
           <View style={styles.btnRow}>
             <Pressable
@@ -1159,7 +1455,7 @@ function SecondaryActionRow({
                 onToggleAlternate();
               }}
               accessibilityRole="button"
-              accessibilityLabel={`Try another idea for ${titleA11y}`}
+              accessibilityLabel={`Try another option for ${titleA11y}`}
               style={({ pressed }) => [
                 styles.btnSecondary,
                 { borderColor: border, opacity: pressed ? 0.75 : 1 },
@@ -1167,7 +1463,7 @@ function SecondaryActionRow({
             >
               <Feather name="refresh-cw" size={12} color={mutedForeground} />
               <Text style={[styles.btnText, { color: mutedForeground, fontWeight: "600" }]}>
-                Try another idea
+                Try another option
               </Text>
             </Pressable>
             <Pressable
@@ -1354,6 +1650,37 @@ const styles = StyleSheet.create({
   sectionBody: {
     fontSize: 14,
     lineHeight: 20,
+  },
+  // -- More support for today (collapsible secondary header) -------
+  moreSupportHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    backgroundColor: "rgba(255, 255, 255, 0.6)",
+  },
+  moreSupportTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  moreSupportSubtitle: {
+    fontSize: 12,
+    fontWeight: "500",
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  moreSupportMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  moreSupportCount: {
+    fontSize: 12,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
   },
   // -- Primary action card ------------------------------------------
   primaryCard: {
