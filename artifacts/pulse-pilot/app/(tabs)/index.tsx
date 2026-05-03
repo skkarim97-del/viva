@@ -1003,6 +1003,44 @@ export default function DashboardScreen() {
           </View>
         )}
 
+        {/* AI-personalized micro-interventions ("Today's next steps").
+            Positioned directly under the top status card so the
+            patient sees what to DO immediately after seeing what
+            Viva NOTICED. This is the headline value of the Today
+            tab, so it sits above Treatment / insights / check-in /
+            Plan. Renders only once the patient has met the minimum
+            check-in (energy + nausea, see hasMinSymptomData) and an
+            active intervention exists; the fallback slot lower in
+            the screen handles the unusual no-min-data case. */}
+        {activeInterventions.length > 0 && hasMinSymptomData && (
+          <View style={{ marginTop: 4, marginBottom: 4, gap: 14 }}>
+            {activeInterventions.map((iv) => (
+              <InterventionCard
+                key={iv.id}
+                intervention={iv}
+                navy={c.foreground}
+                accent={c.accent}
+                cardBg={c.card}
+                background={c.background}
+                mutedForeground={c.mutedForeground}
+                warning={c.warning}
+                hasHealthData={hasHealthData}
+                liveCheckin={{
+                  nausea,
+                  appetite,
+                  energy: glp1Energy,
+                  digestion,
+                  bowel: bowelSelectedKey,
+                }}
+                onAccept={onInterventionAccept}
+                onDismiss={onInterventionDismiss}
+                onFeedback={onInterventionFeedback}
+                onEscalate={onInterventionEscalate}
+              />
+            ))}
+          </View>
+        )}
+
         {profile.medicationProfile && (() => {
           const mp = profile.medicationProfile!;
           const isWeekly = mp.frequency !== "daily";
@@ -1311,53 +1349,6 @@ export default function DashboardScreen() {
           </View>
         </Modal>
 
-        {/* AI-personalized micro-interventions. The personalized
-            "Today's next step" card is the headline value of the
-            Today tab, so once the patient has completed the minimum
-            check-in (energy + nausea, see hasMinSymptomData) and an
-            active intervention exists, we hoist the card ABOVE the
-            "How are things?" check-in section. This keeps the
-            recommendation from being buried beneath the daily
-            input UI on return visits.
-
-            When no min check-in exists yet (first-of-the-day visit),
-            the card renders BELOW the check-in instead so the
-            patient lands on "How are things?" first; once they
-            answer enough rows to trigger /generate, the next render
-            pass naturally promotes the card to the top.
-
-            When no active intervention exists, nothing is rendered
-            here at all -- the legacy empty-state prompt below still
-            handles that case. */}
-        {activeInterventions.length > 0 && hasMinSymptomData && (
-          <View style={{ marginTop: 4, marginBottom: 16, gap: 14 }}>
-            {activeInterventions.map((iv) => (
-              <InterventionCard
-                key={iv.id}
-                intervention={iv}
-                navy={c.foreground}
-                accent={c.accent}
-                cardBg={c.card}
-                background={c.background}
-                mutedForeground={c.mutedForeground}
-                warning={c.warning}
-                hasHealthData={hasHealthData}
-                liveCheckin={{
-                  nausea,
-                  appetite,
-                  energy: glp1Energy,
-                  digestion,
-                  bowel: bowelSelectedKey,
-                }}
-                onAccept={onInterventionAccept}
-                onDismiss={onInterventionDismiss}
-                onFeedback={onInterventionFeedback}
-                onEscalate={onInterventionEscalate}
-              />
-            ))}
-          </View>
-        )}
-
         <View style={[styles.inputContainer, { backgroundColor: c.card }]}>
           <View style={styles.inputHeader}>
             <Feather name="edit-3" size={14} color={c.accent} />
@@ -1525,6 +1516,15 @@ export default function DashboardScreen() {
           </Pressable>
         )}
 
+        {/* Pilot focus: behavioral signals, personalized interventions,
+            and care-team escalation -- not chatbot coaching. The
+            standalone "Your Coach" section is intentionally hidden
+            from the Today feed for now. The underlying chat code
+            (sendCoachMessage, summarizeCoachThread, the /coach tab,
+            askMessages/chatMessages state) remains intact and
+            available; we're only removing the Today-tab surface so
+            we can re-enable it later without rebuilding it. */}
+        {false && (
         <View style={[styles.askCard, { backgroundColor: c.card }]}>
           {/* Always-on section header so the chat bar below never floats
               without context. Order: header → short dynamic coach summary
@@ -1558,26 +1558,34 @@ export default function DashboardScreen() {
           {chatMessages.length > 0 && !showChat && (() => {
             const summary = summarizeCoachThread(chatMessages);
             if (!summary) return null;
+            // Non-null assertion: this code path is currently dead
+            // (the parent View is wrapped in {false && (...)} while
+            // the Today coach surface is hidden for the pilot), and
+            // TS narrowing of `summary` from the `if (!summary)`
+            // guard is not flowing into the destructure on this
+            // build. The `!` is a small, contained workaround and
+            // disappears once we re-enable the coach surface.
+            const { topic, takeaway, nextStep, exchangeCount } = summary!;
             return (
               <Pressable onPress={() => { haptic(); router.push("/(tabs)/coach"); }}>
                 <View style={[styles.askBubble, { backgroundColor: c.background, gap: 6 }]}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                     <Feather name="message-square" size={11} color={c.accent} />
                     <Text style={{ color: c.accent, fontFamily: "Montserrat_600SemiBold", fontSize: 11, letterSpacing: 0.3, textTransform: "uppercase" }} numberOfLines={1}>
-                      {summary.topic}
+                      {topic}
                     </Text>
                     <Text style={{ color: c.mutedForeground, fontFamily: "Montserrat_500Medium", fontSize: 11 }}>
-                      {String.fromCharCode(183)} {summary.exchangeCount} {summary.exchangeCount === 1 ? "msg" : "msgs"}
+                      {String.fromCharCode(183)} {exchangeCount} {exchangeCount === 1 ? "msg" : "msgs"}
                     </Text>
                   </View>
                   <Text style={[styles.askMsgText, { color: c.foreground }]} numberOfLines={2}>
-                    {summary.takeaway}
+                    {takeaway}
                   </Text>
-                  {summary.nextStep ? (
+                  {nextStep ? (
                     <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 6, marginTop: 2 }}>
                       <Feather name="arrow-right" size={12} color={c.accent} style={{ marginTop: 3 }} />
                       <Text style={{ color: c.mutedForeground, fontFamily: "Montserrat_500Medium", fontSize: 13, flex: 1 }} numberOfLines={2}>
-                        {summary.nextStep}
+                        {nextStep}
                       </Text>
                     </View>
                   ) : null}
@@ -1622,6 +1630,7 @@ export default function DashboardScreen() {
             </View>
           )}
         </View>
+        )}
 
         {!todayCheckIn && completedCount >= 3 && (
           <Pressable
