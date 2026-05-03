@@ -1409,15 +1409,13 @@ export function InterventionCard({
   const secondaries = displayRows.slice(1);
 
   // Badge label/tone reflects the most urgent signal we currently
-  // know about. Escalated state always wins; otherwise severe live
-  // symptoms surface as "Heavier today" so the patient understands
-  // we noticed without us auto-escalating.
+  // know about. Escalated state always wins. We deliberately do NOT
+  // repeat the high-level severity wording ("Heavier today") here:
+  // that lives in the top status banner so the page only says it
+  // once. This card stays connected to the same severity through
+  // its amber accent (useWarningTone) and the care-team CTA below.
   const badgeLabel =
-    status === "escalated"
-      ? "Care team notified"
-      : liveSeverity === "severe"
-        ? "Heavier today"
-        : "For you today";
+    status === "escalated" ? "Care team notified" : "For you today";
   const useWarningTone =
     status === "escalated" || liveSeverity === "severe";
 
@@ -1600,25 +1598,12 @@ export function InterventionCard({
               </Text>
             </View>
           )}
-          {liveSeverity === "severe" && (
-            <View
-              style={[
-                styles.signalChip,
-                {
-                  backgroundColor: warning + "1A",
-                  borderColor: warning + "44",
-                },
-              ]}
-            >
-              <Feather name="alert-triangle" size={11} color={warning} />
-              <Text
-                style={[styles.signalChipText, { color: warning }]}
-                numberOfLines={1}
-              >
-                Heavier today
-              </Text>
-            </View>
-          )}
+          {/* The "Heavier today" severity chip used to live here, but
+              the top status banner already announces that state.
+              Repeating it inside Symptom support made the page feel
+              alarming and over-labeled. The amber-toned badge above
+              and the care-team CTA below carry the same signal
+              visually without saying it twice. */}
           {liveSeverity === "mild" && (
             <View
               style={[

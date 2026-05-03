@@ -1,0 +1,57 @@
+Please clean up the Today tab color system so it feels cohesive across the whole app.
+
+Current issue:
+The page uses too many different accent colors at once:
+- amber/orange on the status and Symptom support
+- purple for symptom selections
+- red/pink for negative selections
+- green for positive selections
+- blue for primary CTAs
+
+This makes the app feel less polished.
+
+Goal:
+Create a consistent severity/accent system across:
+- top status card
+- Symptom support card
+- Today’s check-in controls
+- care-team CTA
+
+Color rules:
+1. Blue = primary Viva action / neutral support
+2. Green = steady / good / stable
+3. Amber = heavier symptoms / attention / review recommended
+4. Red = true urgent/red-flag only, avoid in normal symptom selection
+5. Purple should be removed or minimized if it conflicts with the severity system
+
+Apply consistently:
+- If the top status says steady/good, matching accents in Symptom support and Today’s check-in should feel green/blue
+- If symptoms are heavier, use amber in top status and Symptom support
+- For symptom selections:
+  - positive selections like Great, Strong, None, Fine, Yes should use green/blue
+  - moderate selections should use blue or soft amber
+  - severe/heavier selections should use amber, not red unless urgent
+  - avoid purple for normal selected symptom states unless it is part of the main brand system
+
+Also remove redundant “Heavier today” labeling:
+- Do not show “Heavier today” in multiple places at the same time
+- Keep it in only one high-signal location, preferably the top status banner OR the Symptom support signal chip, not both
+- My preference: keep the high-level status in the top status banner and remove the duplicate “Heavier today” chip inside Symptom support
+- Symptom support can still have a subtler chip like “Recent symptoms” or “Today’s symptoms”
+
+Specific cleanup:
+1. Remove duplicate “Heavier today” chip from the Symptom support card if the top status banner already says it
+2. Keep Symptom support visually connected through border/accent color, not repeated text
+3. Make Today’s check-in selected colors follow the same severity system
+4. Reduce purple usage in selected symptom buttons if it clashes with the rest of the app
+5. Keep primary action buttons blue
+6. Keep care-team CTA amber only when review is recommended
+
+Acceptance:
+The Today tab should feel like one cohesive design system:
+- no duplicate “Heavier today” labels
+- colors map consistently to symptom severity
+- less purple/red noise
+- amber only signals attention
+- blue remains the main action color
+- green signals steady/good
