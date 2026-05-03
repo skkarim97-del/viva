@@ -1054,10 +1054,161 @@ router.get(
         pilot = undefined;
       }
 
+      // ----- Plan adherence block -------------------------------------
+      // Pilot KPI: of the personalized plan items shown to patients,
+      // what fraction got actioned? Reads ONLY from analytics_events
+      // (no schema joins) so a stale clinical write cannot corrupt the
+      // number. Returns null when zero plan_item_* events exist so the
+      // analytics page can render an honest empty state instead of a
+      // misleading 0%.
+      let planAdherence:
+        | {
+            windowDays: number;
+            totalPatientsWithPlanItems: number;
+            itemsCompleted: number;
+            itemsSkipped: number;
+            itemsViewedNotActioned: number;
+            byCategory: Array<{
+              category: string;
+              completed: number;
+              skipped: number;
+              viewedOnly: number;
+              completionRate: number;
+            }>;
+          }
+        | null = null;
+      try {
+        const adherenceRows = await db.execute(sql`
+          WITH ev AS (
+            SELECT
+              user_id,
+              event_name,
+              COALESCE(payload->>'category', 'uncategorized') AS category
+            FROM ${analyticsEventsTable}
+            WHERE created_at >= NOW() - INTERVAL '30 days'
+              AND user_type = 'patient'
+              AND event_name IN ('plan_item_completed','plan_item_skipped','plan_item_viewed')
+          )
+          SELECT
+            category,
+            SUM(CASE WHEN event_name = 'plan_item_completed' THEN 1 ELSE 0 END)::int AS completed,
+            SUM(CASE WHEN event_name = 'plan_item_skipped'   THEN 1 ELSE 0 END)::int AS skipped,
+            SUM(CASE WHEN event_name = 'plan_item_viewed'    THEN 1 ELSE 0 END)::int AS viewed,
+            COUNT(DISTINCT user_id)::int AS distinct_users
+          FROM ev
+          GROUP BY category
+          ORDER BY completed DESC NULLS LAST, skipped DESC NULLS LAST
+        `);
+        type AdherenceRow = {
+          category: string;
+          completed: number;
+          skipped: number;
+          viewed: number;
+          distinct_users: number;
+        };
+        const rows = adherenceRows.rows as AdherenceRow[];
+        const totalAny = rows.reduce(
+          (a, r) => a + r.completed + r.skipped + r.viewed,
+          0,
+        );
+        if (totalAny > 0) {
+          // Distinct users across categories. Recompute via a separate
+          // aggregate to avoid double-counting users active in 2+
+          // categories.
+          const distinctUsersRow = await db.execute(sql`
+            SELECT COUNT(DISTINCT user_id)::int AS n
+            FROM ${analyticsEventsTable}
+            WHERE created_at >= NOW() - INTERVAL '30 days'
+              AND user_type = 'patient'
+              AND event_name IN ('plan_item_completed','plan_item_skipped','plan_item_viewed')
+          `);
+          const totalPatients =
+            (distinctUsersRow.rows[0] as { n: number } | undefined)?.n ?? 0;
+          const totalCompleted = rows.reduce((a, r) => a + r.completed, 0);
+          const totalSkipped = rows.reduce((a, r) => a + r.skipped, 0);
+          const totalViewedOnly = Math.max(
+            rows.reduce((a, r) => a + r.viewed, 0) -
+              totalCompleted -
+              totalSkipped,
+            0,
+          );
+          planAdherence = {
+            windowDays: 30,
+            totalPatientsWithPlanItems: totalPatients,
+            itemsCompleted: totalCompleted,
+            itemsSkipped: totalSkipped,
+            itemsViewedNotActioned: totalViewedOnly,
+            byCategory: rows.map((r) => {
+              const denom = r.completed + r.skipped;
+              const viewedOnly = Math.max(r.viewed - r.completed - r.skipped, 0);
+              return {
+                category: r.category,
+                completed: r.completed,
+                skipped: r.skipped,
+                viewedOnly,
+                completionRate: denom > 0 ? r.completed / denom : 0,
+              };
+            }),
+          };
+        }
+      } catch (err) {
+        logger.warn({ err }, "plan_adherence_compute_failed");
+        planAdherence = null;
+      }
+
+      // ----- Open escalations block -----------------------------------
+      // Single denormalized number for the analytics overview, derived
+      // from care_events directly (NOT a join to patients). An open
+      // escalation is one whose latest 'escalation_requested' is newer
+      // than the latest 'doctor_reviewed' for the same patient.
+      let openEscalations:
+        | { open: number; reviewedLast7d: number; followUpPendingLast7d: number }
+        | undefined;
+      try {
+        const escRows = await db.execute(sql`
+          WITH latest AS (
+            SELECT
+              patient_user_id,
+              MAX(occurred_at) FILTER (WHERE type = 'escalation_requested') AS last_esc,
+              MAX(occurred_at) FILTER (WHERE type = 'doctor_reviewed')      AS last_rev,
+              MAX(occurred_at) FILTER (WHERE type = 'follow_up_completed')  AS last_fup
+            FROM ${careEventsTable}
+            GROUP BY patient_user_id
+          )
+          SELECT
+            COUNT(*) FILTER (
+              WHERE last_esc IS NOT NULL
+                AND (last_rev IS NULL OR last_esc > last_rev)
+            )::int AS open,
+            COUNT(*) FILTER (
+              WHERE last_rev IS NOT NULL AND last_rev >= NOW() - INTERVAL '7 days'
+            )::int AS reviewed_last_7d,
+            COUNT(*) FILTER (
+              WHERE last_esc IS NOT NULL
+                AND last_esc >= NOW() - INTERVAL '7 days'
+                AND (last_fup IS NULL OR last_esc > last_fup)
+            )::int AS follow_up_pending_last_7d
+          FROM latest
+        `);
+        const r = escRows.rows[0] as
+          | { open: number; reviewed_last_7d: number; follow_up_pending_last_7d: number }
+          | undefined;
+        openEscalations = {
+          open: r?.open ?? 0,
+          reviewedLast7d: r?.reviewed_last_7d ?? 0,
+          followUpPendingLast7d: r?.follow_up_pending_last_7d ?? 0,
+        };
+      } catch (err) {
+        logger.warn({ err }, "open_escalations_compute_failed");
+        openEscalations = undefined;
+      }
+
       res.json({
         generatedAt: new Date().toISOString(),
         windowDays: 7,
         pilot,
+        planAdherence,
+        openEscalations,
         health: {
           windowDays: healthWindowDays,
           nextDayCheckinAfterIntervention: {

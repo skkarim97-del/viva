@@ -425,6 +425,193 @@ async function seedDemoTodaysCheckinAndIntervention(
   }
 }
 
+// ---------------------------------------------------------------------
+// POST /api/dev/reset-demo-patient
+//
+// Dev-only "reset to a known scenario" helper for the seeded demo
+// patient. Lets the operator flip between three pre-baked clinical
+// presentations on the same demo account so a stakeholder demo can
+// walk through stable -> moderate -> severe without seeding fresh
+// patients each time.
+//
+// Hard guarantees:
+//   - Returns 404 in production (router-level gate above already
+//     enforces this; we re-check here as defense in depth).
+//   - Only ever touches the demo patient row -- looked up by the
+//     hardcoded fake email DEV_DEMO_PATIENT_EMAIL. Never accepts an
+//     arbitrary patient_id or email from the request body.
+//   - Idempotent: replays of the same scenario converge to the same
+//     post-state. Today's check-in is upserted, stale active
+//     interventions are soft-cleared, escalation flags are written
+//     directly into care_events.
+//   - Body shape: { scenario: "stable" | "moderate" | "severe" }.
+//     Anything else returns 400.
+// ---------------------------------------------------------------------
+type DemoScenario = "stable" | "moderate" | "severe";
+
+const DEMO_SCENARIO_CHECKINS: Record<DemoScenario, {
+  energy: "great" | "good" | "tired" | "depleted";
+  nausea: "none" | "mild" | "moderate" | "severe";
+  mood: number;
+  appetite: "strong" | "normal" | "low" | "very_low";
+  digestion: "fine" | "bloated" | "constipated" | "diarrhea";
+  bowelMovement: boolean;
+}> = {
+  stable: {
+    energy: "good",
+    nausea: "none",
+    mood: 4,
+    appetite: "normal",
+    digestion: "fine",
+    bowelMovement: true,
+  },
+  moderate: {
+    energy: "tired",
+    nausea: "mild",
+    mood: 3,
+    appetite: "low",
+    digestion: "bloated",
+    bowelMovement: true,
+  },
+  severe: {
+    energy: "depleted",
+    nausea: "severe",
+    mood: 2,
+    appetite: "very_low",
+    digestion: "diarrhea",
+    bowelMovement: false,
+  },
+};
+
+router.post(
+  "/reset-demo-patient",
+  async (req: Request, res: Response) => {
+    if (!isDevLoginEnabled()) {
+      res.status(404).json({ error: "not_found" });
+      return;
+    }
+    const scenario = req.body?.scenario as unknown;
+    if (
+      scenario !== "stable" &&
+      scenario !== "moderate" &&
+      scenario !== "severe"
+    ) {
+      res.status(400).json({
+        error: "invalid_scenario",
+        allowed: ["stable", "moderate", "severe"],
+      });
+      return;
+    }
+
+    try {
+      const doctor = await ensureDemoDoctor();
+      const patient = await ensureDemoPatient(doctor.id, doctor.platformId);
+      const today = todayLocalYmd();
+      const checkin = DEMO_SCENARIO_CHECKINS[scenario as DemoScenario];
+
+      // 1. Upsert today's check-in for the demo patient.
+      await db
+        .insert(patientCheckinsTable)
+        .values({
+          patientUserId: patient.id,
+          date: today,
+          ...checkin,
+        })
+        .onConflictDoUpdate({
+          target: [patientCheckinsTable.patientUserId, patientCheckinsTable.date],
+          set: { ...checkin },
+        });
+
+      // 2. Soft-clear stale active interventions so the next /active
+      //    fetch is clean and a freshly seeded card (severe scenario)
+      //    isn't competing with old rows.
+      await db
+        .update(patientInterventionsTable)
+        .set({ status: "dismissed", updatedAt: new Date() })
+        .where(
+          and(
+            eq(patientInterventionsTable.patientUserId, patient.id),
+            inArray(patientInterventionsTable.status, [
+              "shown",
+              "accepted",
+              "pending_feedback",
+              "escalated",
+            ]),
+          ),
+        );
+
+      // 3. Mark any open escalations as reviewed so the dashboard
+      //    inbox starts each scenario from a clean slate. Then, for
+      //    the severe scenario only, fire a fresh escalation so the
+      //    provider escalation banner becomes visible immediately.
+      await db.insert(careEventsTable).values({
+        patientUserId: patient.id,
+        actorUserId: doctor.id,
+        source: "doctor",
+        type: "doctor_reviewed",
+        metadata: {
+          source: "dev_demo_reset",
+          scenario,
+        },
+      });
+
+      let escalationFired = false;
+      if (scenario === "severe") {
+        await db.insert(careEventsTable).values({
+          patientUserId: patient.id,
+          actorUserId: patient.id,
+          source: "patient",
+          type: "escalation_requested",
+          metadata: {
+            source: "dev_demo_reset",
+            scenario,
+          },
+        });
+        escalationFired = true;
+
+        // Re-seed today's intervention so the severe scenario also
+        // has a card visible in the patient app.
+        try {
+          await seedDemoTodaysCheckinAndIntervention(patient.id, doctor.id);
+        } catch (seedErr) {
+          req.log.warn(
+            {
+              err: seedErr,
+              event: "dev_demo_reset_seed_failed",
+              patientUserId: patient.id,
+              scenario,
+            },
+            "dev demo reset seed failed; reset proceeded anyway",
+          );
+        }
+      }
+
+      req.log.warn(
+        {
+          event: "dev_demo_reset",
+          patientUserId: patient.id,
+          scenario,
+          escalationFired,
+        },
+        "DEV DEMO RESET USED",
+      );
+
+      res.status(200).json({
+        ok: true,
+        scenario,
+        patientUserId: patient.id,
+        escalationFired,
+      });
+    } catch (err) {
+      req.log.error(
+        { err, event: "dev_demo_reset_failed" },
+        "dev demo reset failed",
+      );
+      res.status(500).json({ error: "dev_reset_failed" });
+    }
+  },
+);
+
 router.post(
   "/login-demo-patient",
   async (req: Request, res: Response) => {

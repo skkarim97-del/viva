@@ -97,18 +97,24 @@ const TINT_AMBER = "#FF9500";
 const TINT_RED = "#FF453A";
 const TINT_MUTED = "#8E8E93";
 
+// Severity color rule (pre-pilot): RED is reserved for true urgent
+// states only (severe nausea, diarrhea). "Depleted" energy and
+// "Very Low" appetite are heavier-end attention states but not
+// medically urgent on their own -- they belong in amber, alongside
+// "Tired" and "Low", with a darker tone to communicate the heavier
+// end of the same severity band without flipping to alert red.
 const ENERGY_OPTIONS: { key: NonNullable<EnergyDaily>; label: string; tint: string }[] = [
   { key: "great", label: "Great", tint: TINT_GREEN },
   { key: "good", label: "Good", tint: TINT_BLUE },
   { key: "tired", label: "Tired", tint: TINT_AMBER_SOFT },
-  { key: "depleted", label: "Depleted", tint: TINT_RED },
+  { key: "depleted", label: "Depleted", tint: TINT_AMBER },
 ];
 
 const APPETITE_OPTIONS: { key: NonNullable<AppetiteLevel>; label: string; tint: string }[] = [
   { key: "strong", label: "Strong", tint: TINT_GREEN },
   { key: "normal", label: "Normal", tint: TINT_BLUE },
   { key: "low", label: "Low", tint: TINT_AMBER_SOFT },
-  { key: "very_low", label: "Very Low", tint: TINT_RED },
+  { key: "very_low", label: "Very Low", tint: TINT_AMBER },
 ];
 
 const NAUSEA_OPTIONS: { key: NonNullable<NauseaLevel>; label: string; tint: string }[] = [
@@ -1136,17 +1142,17 @@ export default function DashboardScreen() {
                     {thisWeekDoseEntry ? (
                       <>
                         <Feather name="check-circle" size={13} color={c.success} />
-                        <Text style={[styles.treatmentStatusText, { color: c.success }]}>
+                        <Text style={[styles.treatmentStatusText, { color: c.success }]} numberOfLines={1} ellipsizeMode="tail">
                           Dose logged this week
                         </Text>
-                        <Text style={[styles.treatmentStatusSub, { color: c.mutedForeground }]}>
+                        <Text style={[styles.treatmentStatusSub, { color: c.mutedForeground }]} numberOfLines={1} ellipsizeMode="tail">
                           Taken on {selectedDayLabel}
                         </Text>
                       </>
                     ) : (
                       <>
                         <Feather name="circle" size={13} color={c.mutedForeground} />
-                        <Text style={[styles.treatmentStatusText, { color: c.mutedForeground }]}>
+                        <Text style={[styles.treatmentStatusText, { color: c.mutedForeground }]} numberOfLines={1} ellipsizeMode="tail">
                           Not logged yet this week
                         </Text>
                       </>

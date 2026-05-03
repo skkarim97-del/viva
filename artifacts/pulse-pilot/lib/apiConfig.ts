@@ -101,10 +101,16 @@ function resolveApiBase(): string {
 
 export const API_BASE = resolveApiBase();
 
-console.log("[API_BASE] Resolved to:", API_BASE);
-console.log("[API_BASE] EXPO_PUBLIC_API_URL:", EXPO_PUBLIC_API_URL || "(not set)");
-console.log("[API_BASE] EXPO_PUBLIC_DOMAIN:", EXPO_PUBLIC_DOMAIN || "(not set)");
-console.log("[API_BASE] Platform:", Platform.OS, "IS_DEV:", IS_DEV);
+// Diagnostic logs gated behind __DEV__: in a shipped pilot bundle
+// the user shouldn't see API_BASE diagnostics in any console attached
+// to the device. The production sanity assertion below stays
+// unconditional -- a misconfigured prod build SHOULD shout.
+if (IS_DEV) {
+  console.log("[API_BASE] Resolved to:", API_BASE);
+  console.log("[API_BASE] EXPO_PUBLIC_API_URL:", EXPO_PUBLIC_API_URL || "(not set)");
+  console.log("[API_BASE] EXPO_PUBLIC_DOMAIN:", EXPO_PUBLIC_DOMAIN || "(not set)");
+  console.log("[API_BASE] Platform:", Platform.OS, "IS_DEV:", IS_DEV);
+}
 
 // Production-side sanity assertion: in a shipped bundle, API_BASE MUST equal
 // PRODUCTION_API_URL. If it doesn't, something has gone very wrong (e.g. a

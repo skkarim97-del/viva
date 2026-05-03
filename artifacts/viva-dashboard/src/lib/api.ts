@@ -132,6 +132,13 @@ export interface Checkin {
   mood: number;
   notes: string | null;
   createdAt: string;
+  // Extended check-in fields. The backend route returns the full
+  // patient_checkins row, so these are always present in practice;
+  // they're typed as optional/nullable here to stay tolerant of older
+  // rows seeded before the schema was extended.
+  appetite?: "strong" | "normal" | "low" | "very_low" | null;
+  digestion?: "fine" | "bloated" | "constipated" | "diarrhea" | null;
+  bowelMovement?: boolean | null;
 }
 
 export interface FiredRule {

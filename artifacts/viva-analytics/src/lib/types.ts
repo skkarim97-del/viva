@@ -35,6 +35,33 @@ export interface OperatingBlock {
   doctors: DoctorsBlock;
 }
 
+// Plan adherence: pilot KPI block derived from analytics_events rows
+// where event_name in ('plan_item_completed','plan_item_skipped',
+// 'plan_item_viewed'). Backend returns `null` instead of zeroed
+// counters when no plan_item_* events exist yet, so the analytics page
+// can render an honest "no data yet" state instead of a misleading
+// 0% adherence number.
+export interface PlanAdherenceBlock {
+  windowDays: number;
+  totalPatientsWithPlanItems: number;
+  itemsCompleted: number;
+  itemsSkipped: number;
+  itemsViewedNotActioned: number;
+  byCategory: Array<{
+    category: string;
+    completed: number;
+    skipped: number;
+    viewedOnly: number;
+    completionRate: number; // completed / (completed + skipped)
+  }>;
+}
+
+export interface OpenEscalationsBlock {
+  open: number;
+  reviewedLast7d: number;
+  followUpPendingLast7d: number;
+}
+
 export interface TreatmentStatusBlock {
   totalPatients: number;
   active: number;
@@ -299,6 +326,10 @@ export interface AnalyticsSummary {
   drilldown?: DrilldownBlock;
   dataSanity?: DataSanityBlock;
   pilot?: PilotBlock;
+  // null means "no plan_item_* analytics events yet" -- the operator
+  // sees an honest empty state, not a misleading 0% adherence number.
+  planAdherence?: PlanAdherenceBlock | null;
+  openEscalations?: OpenEscalationsBlock;
 }
 
 // ---------------------------------------------------------- display maps

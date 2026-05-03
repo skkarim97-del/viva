@@ -1,0 +1,417 @@
+Please do a focused pre-pilot polish pass. Do NOT add new patient-facing features. Leave the Symptom support compact-bar idea for later.
+
+Goal:
+Make the current MVP stronger for pilot demos and early customer conversations by tightening:
+1. Provider dashboard escalation card
+2. Viva Analytics pilot readout page
+3. Final copy/UI QA
+4. Demo mode reset
+
+Do not redesign the whole product.
+Do not change core intervention logic unless needed to fix bugs.
+Do not remove existing data flows.
+Do not send PHI to OpenAI.
+Keep HIPAA/OpenAI guardrails intact.
+
+==================================================
+1. PROVIDER DASHBOARD ESCALATION CARD
+==================================================
+
+Goal:
+When a patient is escalated, the provider should immediately understand:
+- what changed
+- why Viva surfaced the patient
+- what Viva recommended
+- what the patient did
+- what the patient reported
+- what the provider should review
+
+Current issue:
+Escalations should not look like a generic “patient requested review.” They need structured, useful clinical context.
+
+Please audit the Viva Clinic provider dashboard and find where escalated patients / review requests are shown.
+
+Update the escalation card or patient detail escalation section to include:
+
+A. Clear header
+Example:
+Review requested
+or
+Patient needs review
+
+B. Priority / reason chip
+Examples:
+- Nausea worsening
+- Severe symptoms
+- Symptoms not improving
+- Patient requested review
+- Reported worse after support
+- Around dose timing
+- Low intake + nausea
+
+C. Current symptoms
+Show structured symptom state:
+- Energy: Tired
+- Appetite: Low
+- Nausea: Severe
+- Digestion: Constipated
+- Bowel movement: No
+
+D. Recent trend
+Show short trend if available:
+- Nausea has shown up 2 times this week
+- Appetite has been lower across recent check-ins
+- Symptoms appear around dose timing
+- Activity is lower than usual, if Apple Health data exists
+- No trend yet, if not enough data
+
+Do not overclaim causation. Use “shown up,” “appears,” “tends to,” or “recently.”
+
+E. Viva recommendation shown
+Show what the patient saw:
+- Primary recommendation title
+- Recommendation body
+- Support categories if available, e.g. hydration, appetite, digestion
+
+Example:
+Viva recommended:
+“Settle nausea without skipping nutrition”
+Try a few bites of a bland, protein-forward snack and sip water slowly.
+
+F. Patient action / feedback
+Show:
+- Patient tapped “I’ll try this” or not
+- Another option tapped, if available
+- Feedback: Better / Same / Worse
+- Review requested timestamp
+
+Examples:
+Patient action:
+Tried recommendation · Feedback: Worse
+
+or:
+Patient requested review before trying support
+
+G. Suggested provider action
+Keep this non-prescriptive:
+- Review symptoms and recent support history
+- Consider whether outreach is needed
+- Review if symptoms are persistent, worsening, or hard to manage
+
+Avoid medication advice or dose-change recommendations.
+
+H. Review workflow
+If currently supported:
+- Mark reviewed
+- Log action taken
+- Follow-up sent
+- No action needed
+
+If not currently supported, do not build a large workflow. At minimum, make sure the escalation card has enough context and a clear “Reviewed” action if already available.
+
+Data source requirements:
+Use existing DB data where available:
+- care_events
+- patient_checkins
+- patient_interventions
+- analytics_events
+- patient_treatment_logs
+- health summaries if available
+- patient_plan_items if useful
+
+Do not duplicate data if already in one place.
+Do not expose patients outside provider scope.
+
+Acceptance:
+- Provider can open Clinic and understand why a patient was escalated in under 10 seconds
+- Escalation card shows symptoms, trend, Viva recommendation, patient feedback, timestamp and review reason
+- No generic contextless escalation cards remain
+- Provider scoping remains intact
+- No PHI is sent to OpenAI
+
+==================================================
+2. VIVA ANALYTICS PILOT READOUT PAGE
+==================================================
+
+Goal:
+Make Viva Analytics clearly support the 30-day pilot readout.
+
+The page should show pilot KPIs that match the sales deck:
+- engagement
+- risk visibility
+- intervention performance
+- provider leverage
+- plan adherence
+- Apple Health connection
+
+Please audit Viva Analytics and confirm which KPI cards already exist. Then add or refine only what is needed.
+
+Recommended pilot KPI sections:
+
+A. Patient activation and engagement
+Cards:
+- Invites sent
+- Patients activated
+- Activation rate
+- Active today
+- Check-in completion rate
+- Avg check-ins per patient
+- Daily active patients / weekly active patients if available
+
+B. Signal capture
+Cards:
+- Symptom check-ins captured
+- Symptom changes captured
+- Top symptoms reported
+- Patients with worsening symptoms
+- Patients with improving symptoms
+- Apple Health connection rate
+- Patients with wearable data synced
+
+C. Intervention performance
+Cards:
+- Interventions generated
+- Intervention acceptance rate
+- Another option tapped
+- Feedback collected rate
+- Better / Same / Worse split
+- Resolved through automation
+- Escalated to provider
+
+D. Provider leverage
+Cards:
+- Patients escalated
+- Escalations reviewed
+- Avg time to provider action
+- Provider actions taken
+- Open escalations
+- % escalations with patient feedback context
+
+E. Plan adherence
+Cards:
+- Plan items suggested
+- Patient overrides
+- Plan item completion rate
+- Completion by category:
+  - Move
+  - Fuel
+  - Hydrate
+  - Recover
+
+F. Retention-adjacent signals
+Cards:
+- Patients still active after X days
+- Patients with 3+ check-ins
+- Patients with 3+ interventions
+- Patients with unresolved symptoms
+- Patients with repeated symptom patterns
+
+Important:
+If any metric cannot be fully supported yet, either:
+- hide it
+- show a clearly labeled empty state
+- or mark as “tracking soon”
+Do not fake data.
+
+Data source requirements:
+Use AWS DB data:
+- users / invite records
+- patient_checkins
+- analytics_events.payload
+- care_events
+- patient_interventions
+- patient_plan_items
+- patient_integrations
+- health summaries
+- provider action tables if available
+
+Make sure analytics_events.payload and event_date are queryable for:
+- patient_checkin_updated
+- plan_item_overridden
+- plan_item_completed
+- integration_status_changed
+- intervention events where available
+
+Design requirements:
+- Keep page clean and executive-readable
+- Use sections with clear headings
+- Cards should show metric, value, and short label
+- Avoid dense raw tables unless useful
+- Make this usable in a pilot readout meeting
+
+Acceptance:
+- Viva Analytics can show a credible 30-day pilot readout
+- Metrics align with deck thesis: visibility, intervention, provider leverage
+- No fake metrics
+- Empty states are honest and clean
+- Data comes from AWS DB
+- Customer/platform-level aggregation is preserved if already supported
+
+==================================================
+3. FINAL COPY / UI QA
+==================================================
+
+Goal:
+Remove anything that makes the app feel unfinished.
+
+Do a full visual/copy QA pass across:
+- Viva Care Today tab
+- Week tab
+- Trends tab
+- Settings / Treatment screens
+- Viva Clinic
+- Viva Analytics
+- onboarding and login screens
+
+Check for:
+- clipped text
+- cut-off buttons
+- raw debug strings
+- stale labels
+- old “Plan” tab label where it should say “Week”
+- old “Today’s next steps” label where it should say “Symptom support”
+- old “Your Coach” section on Today
+- inconsistent capitalization
+- inconsistent icons
+- inconsistent colors
+- red used for normal symptoms instead of only severe/urgent states
+- duplicate “Heavier today” labels
+- overly long card titles
+- awkward copy
+- visible placeholder/mock text
+- broken empty states
+- layout spacing issues
+- buttons that look tappable but do nothing
+- inconsistent loading/error states
+
+Specific QA items:
+1. No visible debug text anywhere
+2. No text clipped in top status card
+3. No “Didn’t try it” clipped anywhere
+4. No old Coach card on Today
+5. Week tab name is Week
+6. Symptom support title is consistent
+7. Recent patterns subtitle references Apple Health only when connected
+8. Apple Health is never referenced as used when disconnected
+9. Care team CTA has success/error state
+10. All section headers have consistent icon spacing
+11. Your treatment spacing feels even above and below
+12. Colors follow the severity system:
+   - green = steady
+   - blue = neutral/action
+   - amber/orange = attention/heavier
+   - red = true urgent/highest severity only
+
+Acceptance:
+- App feels polished enough for pilot demo
+- No obvious visual bugs
+- No stale labels
+- No debug strings
+- No inconsistent color usage
+- No broken buttons in visible UI
+
+==================================================
+4. DEMO MODE RESET
+==================================================
+
+Goal:
+Add a safe dev-only demo reset so we can reliably show stable, moderate and severe scenarios during demos without manually fighting app state.
+
+Important:
+This must be dev-only.
+Do not enable in production.
+Do not affect real patients.
+Use demo doctor / demo patients only.
+Do not delete real data.
+Do not expose this to production users.
+
+Preferred implementation:
+Add a dev-only endpoint and/or dev-only button.
+
+Option A: Backend endpoint
+POST /api/dev/reset-demo-patient
+
+Body:
+{
+  "scenario": "stable" | "moderate" | "severe"
+}
+
+Behavior:
+- Only enabled in development or ENABLE_DEV_LOGIN=true
+- Finds or creates demo patient
+- Clears or supersedes active demo-only intervention state as needed
+- Seeds today’s check-in for the selected scenario
+- Seeds relevant plan items
+- Seeds integration state if helpful
+- Seeds health data if scenario requires it
+- Returns demo patient token or confirms reset
+
+Scenarios:
+
+Stable:
+- Energy: Good or Great
+- Appetite: Normal or Strong
+- Nausea: None
+- Digestion: Fine
+- Bowel movement: Yes
+- Symptom support should be preventive or minimized
+
+Moderate:
+- Energy: Tired
+- Appetite: Low
+- Nausea: Moderate
+- Digestion: Constipated
+- Bowel movement: No
+- Symptom support should show moderate support
+
+Severe:
+- Energy: Depleted
+- Appetite: Very Low
+- Nausea: Severe
+- Digestion: Diarrhea or Constipated
+- Bowel movement: No
+- Symptom support should show heavier support and care-team review option
+
+Option B: Dev-only UI button
+On dev login or demo screen, show:
+- Reset demo: Stable
+- Reset demo: Moderate
+- Reset demo: Severe
+
+After tapping:
+- loads Today tab
+- card reflects selected scenario
+- no manual symptom entry required
+
+Data cleanup rules:
+- only touch demo patient records
+- do not delete shared schema data
+- avoid destructive deletes if superseding/expiring old demo records works
+- make reset idempotent
+- repeated reset should not create duplicate active cards
+- demo rows should be clearly attributable to source = demo_seed or dev_reset
+
+Acceptance:
+- In Replit preview, I can reset demo patient to Stable, Moderate, or Severe
+- Today tab immediately reflects the scenario
+- Symptom support and status banner update correctly
+- No duplicate cards
+- Provider dashboard can show demo escalation scenario if severe review is requested
+- Dev reset endpoint returns 404 or disabled behavior in production
+
+==================================================
+FINAL REPORT
+==================================================
+
+After completing this pass, report:
+
+1. Provider escalation card changes
+2. Analytics readout changes
+3. Copy/UI QA fixes
+4. Demo reset implementation
+5. Any bugs found and fixed
+6. Any known limitations
+7. Whether all changes are dev-safe / production-safe
+8. Updated pilot readiness score out of 10
+
+Do not mark complete until you have verified the visible Replit preview and backend smoke tests where applicable.

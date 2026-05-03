@@ -693,34 +693,164 @@ export function PatientDetailPage({ id }: { id: number }) {
           fired since. After reviewing, collapses to a quiet line so
           the audit trail is still visible without screaming for
           attention. */}
-      {care.data?.escalationOpen && care.data.lastEscalationAt && (
-        <div
-          className="rounded-[20px] px-5 py-4 flex items-center gap-4 flex-wrap"
-          style={{
-            backgroundColor: "rgba(255,149,0,0.10)",
-            color: "#8B4F00",
-          }}
-        >
-          <span aria-hidden className="text-lg">🛟</span>
-          <div className="flex-1 min-w-[200px]">
-            <div className="font-semibold text-sm">
-              Patient requested more support
+      {care.data?.escalationOpen && care.data.lastEscalationAt && (() => {
+        // Pre-pilot escalation card: the previous version was a single
+        // amber strip with just "Patient requested more support" and a
+        // timestamp, which forced the clinician to scroll through the
+        // detail page to figure out *why*. We now surface the
+        // already-fetched checkin + intervention context inline so the
+        // doctor can triage without context-switching. All data is
+        // already in the page's React Query cache (checkins, care,
+        // interventions) -- no new fetches required.
+        const latestCheckin = checkins.data?.[0] ?? null;
+        const latestIntervention = interventions.data?.interventions?.[0] ?? null;
+        const reasonLabel = (() => {
+          // Prefer the most recent escalation event metadata if present.
+          // Falls back to deriving from the latest checkin's worst-tone
+          // symptom so the chip is never empty.
+          const lastEscEvent = care.data!.events.find(
+            (e) =>
+              e.type === "escalation_requested" &&
+              e.occurredAt === care.data!.lastEscalationAt,
+          );
+          const src = (lastEscEvent?.metadata as { source?: string } | null)?.source;
+          if (src === "today") return "From Today screen";
+          if (src === "intervention_feedback_worse") return "Intervention reported worse";
+          if (src === "intervention_screen") return "From intervention card";
+          return "Patient request";
+        })();
+
+        // Pull a small structured "current symptoms" line from the most
+        // recent checkin. We only show fields with attention-worthy
+        // values so the line stays scannable; a healthy checkin
+        // collapses to "No symptoms flagged today".
+        const symptomChips: string[] = [];
+        if (latestCheckin) {
+          if (latestCheckin.nausea === "severe") symptomChips.push("Severe nausea");
+          else if (latestCheckin.nausea === "moderate") symptomChips.push("Moderate nausea");
+          if (latestCheckin.energy === "depleted") symptomChips.push("Energy depleted");
+          else if (latestCheckin.energy === "tired") symptomChips.push("Tired");
+          if (latestCheckin.appetite === "very_low") symptomChips.push("Very low appetite");
+          else if (latestCheckin.appetite === "low") symptomChips.push("Low appetite");
+          if (latestCheckin.digestion === "diarrhea") symptomChips.push("Diarrhea");
+          else if (latestCheckin.digestion === "constipated") symptomChips.push("Constipated");
+          if (latestCheckin.bowelMovement === false) symptomChips.push("No BM");
+        }
+
+        const recommendationShown = latestIntervention?.recommendation?.trim() || null;
+        const patientFeedback = (() => {
+          if (!latestIntervention) return null;
+          const r = latestIntervention.feedbackResult;
+          if (r === "better") return { tone: "good" as const, label: "Felt better after Viva's suggestion" };
+          if (r === "same") return { tone: "neutral" as const, label: "No change after Viva's suggestion" };
+          if (r === "worse") return { tone: "alert" as const, label: "Felt worse after Viva's suggestion" };
+          if (r === "didnt_try") return { tone: "neutral" as const, label: "Didn't try Viva's suggestion" };
+          if (latestIntervention.status === "shown") return { tone: "neutral" as const, label: "Suggestion shown — no feedback yet" };
+          return null;
+        })();
+
+        return (
+          <div
+            className="rounded-[20px] px-5 py-4 flex flex-col gap-3"
+            style={{
+              backgroundColor: "rgba(255,149,0,0.10)",
+              color: "#8B4F00",
+            }}
+          >
+            {/* Header row: icon + title + reason chip + relative time + CTA */}
+            <div className="flex items-start gap-4 flex-wrap">
+              <span aria-hidden className="text-lg leading-none mt-0.5">🛟</span>
+              <div className="flex-1 min-w-[220px]">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="font-semibold text-sm">
+                    Patient requested more support
+                  </div>
+                  <span
+                    className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                    style={{ backgroundColor: "rgba(139,79,0,0.14)", color: "#8B4F00" }}
+                  >
+                    {reasonLabel}
+                  </span>
+                </div>
+                <div className="text-xs mt-0.5 opacity-80 font-medium">
+                  {relativeTime(care.data.lastEscalationAt)}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => markReviewed.mutate()}
+                disabled={markReviewed.isPending}
+                className="rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-60"
+                style={{ backgroundColor: "#142240", color: "#fff" }}
+              >
+                {markReviewed.isPending ? "Marking..." : "Mark as reviewed"}
+              </button>
             </div>
-            <div className="text-xs mt-0.5 opacity-80 font-medium">
-              {relativeTime(care.data.lastEscalationAt)}
+
+            {/* Structured context grid. Two rows of clinician-grade
+                detail rendered inside the same card so triage doesn't
+                require scrolling further down the page. */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-8">
+              <div className="rounded-xl px-3 py-2" style={{ backgroundColor: "rgba(255,255,255,0.55)" }}>
+                <div className="text-[10px] font-semibold uppercase tracking-wide opacity-70">
+                  Current symptoms
+                  {latestCheckin?.date ? (
+                    <span className="ml-1 font-medium opacity-80 normal-case tracking-normal">
+                      · today's check-in
+                    </span>
+                  ) : null}
+                </div>
+                <div className="mt-1 text-xs font-medium" style={{ color: "#3a2400" }}>
+                  {symptomChips.length > 0
+                    ? symptomChips.join(" · ")
+                    : latestCheckin
+                      ? "No symptoms flagged on today's check-in."
+                      : "No recent check-in on file."}
+                </div>
+              </div>
+              <div className="rounded-xl px-3 py-2" style={{ backgroundColor: "rgba(255,255,255,0.55)" }}>
+                <div className="text-[10px] font-semibold uppercase tracking-wide opacity-70">
+                  Viva recommendation shown
+                </div>
+                <div className="mt-1 text-xs font-medium line-clamp-3" style={{ color: "#3a2400" }}>
+                  {recommendationShown ?? "No personalized intervention shown yet."}
+                </div>
+              </div>
+            </div>
+
+            {patientFeedback ? (
+              <div className="pl-8">
+                <span
+                  className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                  style={{
+                    backgroundColor:
+                      patientFeedback.tone === "alert"
+                        ? "rgba(255,69,58,0.14)"
+                        : patientFeedback.tone === "good"
+                          ? "rgba(52,199,89,0.16)"
+                          : "rgba(20,34,64,0.10)",
+                    color:
+                      patientFeedback.tone === "alert"
+                        ? "#7a1a14"
+                        : patientFeedback.tone === "good"
+                          ? "#1f5a36"
+                          : "#142240",
+                  }}
+                >
+                  Patient action: {patientFeedback.label}
+                </span>
+              </div>
+            ) : null}
+
+            {/* Suggested provider action -- a single non-prescriptive
+                line. Wording stays generic on purpose so it never
+                substitutes for clinical judgment. */}
+            <div className="pl-8 text-[11px] italic opacity-80">
+              Suggested next step: review today's symptoms and reach out via your usual channel.
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => markReviewed.mutate()}
-            disabled={markReviewed.isPending}
-            className="rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-60"
-            style={{ backgroundColor: "#142240", color: "#fff" }}
-          >
-            {markReviewed.isPending ? "Marking..." : "Mark as reviewed"}
-          </button>
-        </div>
-      )}
+        );
+      })()}
       {care.data && !care.data.escalationOpen && care.data.lastReviewAt && (
         <div className="text-xs text-muted-foreground font-medium">
           {(() => {

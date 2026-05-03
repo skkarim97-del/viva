@@ -124,6 +124,114 @@ export function OperatingPage({ data }: { data: AnalyticsSummary }) {
         />
       </div>
 
+      {/* PILOT KPI -- plan adherence. Backed by analytics_events
+          plan_item_* rows. Renders an honest empty state when the
+          backend returned `null` (no plan_item_* events yet) instead
+          of a misleading 0%. */}
+      <SectionHead hint="From analytics_events: plan_item_completed / skipped / viewed (last 30d)">
+        Pilot KPI · personalized plan adherence
+      </SectionHead>
+      {data.planAdherence ? (
+        (() => {
+          const pa = data.planAdherence;
+          const denom = pa.itemsCompleted + pa.itemsSkipped;
+          const overall = denom > 0 ? pa.itemsCompleted / denom : 0;
+          return (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                <StatCard
+                  label="Patients with plan items"
+                  value={pa.totalPatientsWithPlanItems}
+                  sub={`Last ${pa.windowDays}d, distinct`}
+                  accent="#38B6FF"
+                />
+                <StatCard
+                  label="Items completed"
+                  value={pa.itemsCompleted}
+                  sub={`${pa.itemsSkipped} skipped, ${pa.itemsViewedNotActioned} viewed only`}
+                  accent="#34C759"
+                />
+                <StatCard
+                  label="Completion rate"
+                  value={pctStr(overall)}
+                  sub={`Completed ÷ (completed + skipped), ${denom} actions`}
+                  accent="#34C759"
+                />
+                <StatCard
+                  label="Categories with activity"
+                  value={pa.byCategory.length}
+                  sub="Distinct plan categories"
+                  accent="#142240"
+                />
+              </div>
+              {pa.byCategory.length > 0 ? (
+                <div className="rounded-[14px] border border-black/10 overflow-hidden mt-2">
+                  <table className="w-full text-xs">
+                    <thead className="bg-black/[0.03]">
+                      <tr className="text-left font-semibold">
+                        <th className="px-3 py-2">Category</th>
+                        <th className="px-3 py-2 text-right">Completed</th>
+                        <th className="px-3 py-2 text-right">Skipped</th>
+                        <th className="px-3 py-2 text-right">Viewed only</th>
+                        <th className="px-3 py-2 text-right">Completion rate</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pa.byCategory.map((r) => (
+                        <tr key={r.category} className="border-t border-black/5">
+                          <td className="px-3 py-2 font-medium">{r.category}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{r.completed}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{r.skipped}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{r.viewedOnly}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{pctStr(r.completionRate)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+            </>
+          );
+        })()
+      ) : (
+        <Empty>
+          No plan_item_* analytics events in the window yet. Adherence will
+          start populating once patients begin actioning their personalized
+          plan items.
+        </Empty>
+      )}
+
+      {/* PILOT KPI -- open escalations. Backed by care_events directly.
+          Shows current backlog plus 7d activity so an empty inbox doesn't
+          read as "nothing happening" when the team has been clearing it. */}
+      <SectionHead hint="From care_events: latest escalation > latest doctor_reviewed per patient">
+        Pilot KPI · escalation queue
+      </SectionHead>
+      {data.openEscalations ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+          <StatCard
+            label="Open escalations"
+            value={data.openEscalations.open}
+            sub="Awaiting doctor_reviewed"
+            accent={data.openEscalations.open > 0 ? "#FF9500" : "#34C759"}
+          />
+          <StatCard
+            label="Reviewed in last 7d"
+            value={data.openEscalations.reviewedLast7d}
+            sub="Doctor cleared the badge"
+            accent="#34C759"
+          />
+          <StatCard
+            label="Follow-up pending (7d)"
+            value={data.openEscalations.followUpPendingLast7d}
+            sub="Reviewed but not yet followed up"
+            accent="#142240"
+          />
+        </div>
+      ) : (
+        <Empty>No escalation data available right now.</Empty>
+      )}
+
       {/* TERTIARY -- nice to know, not pilot-defining. Apple Health
           adoption matters longer-term but not for "did the loop work
           this month". */}
