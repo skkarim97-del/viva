@@ -1,0 +1,80 @@
+Please refine the Today tab severity color system for the top status banner and Symptom support card.
+
+Goal:
+Make the top status banner and Symptom support card feel visually connected, but keep the patient experience calm, supportive and not alarmist.
+
+Core idea:
+The top status banner shows what Viva noticed.
+The Symptom support card shows what to do about it.
+They should share the same severity/accent system.
+
+Important:
+Avoid red in the normal patient experience.
+Red can feel scary in a health app and should be reserved only for true urgent/red-flag states.
+
+Severity color system:
+
+1. Stable / good
+Use calm blue or soft green accents.
+Examples:
+- Steady gains
+- Stable today
+- Looking steady
+
+2. Mild symptoms
+Use calm blue accents.
+Tone should feel preventive.
+Examples:
+- Stay ahead today
+- Light support
+
+3. Moderate symptoms
+Use blue with a subtle amber accent if needed.
+Tone should feel supportive, not alarming.
+Examples:
+- Symptoms are showing up
+- Support recommended
+
+4. Heavier / worsening symptoms
+Use amber/orange accents.
+Do not use red.
+Examples:
+- Heavier today
+- Nausea is heavier today
+- Extra support today
+
+5. Severe or review-worthy symptoms
+Use stronger amber/orange and make the care-team CTA more visible.
+Still avoid red unless it is a true red-flag condition.
+Examples:
+- Care team review may help
+- Extra support recommended
+
+6. True urgent/red-flag state only
+Use red only for rare urgent states such as:
+- severe abdominal pain
+- fainting
+- unable to keep fluids down
+- severe/worsening symptoms requiring urgent review
+- any existing clinical red-flag logic
+
+Apply the severity accent consistently to:
+- top status banner badge/chip
+- Symptom support signal chip
+- Symptom support accent only if needed
+- Ask my care team CTA prominence when review is recommended
+
+Design guidance:
+- Keep the Symptom support card background mostly neutral or light blue
+- Keep the primary “I’ll try this” button blue
+- Use amber as the main attention color
+- Avoid making the whole card orange
+- Avoid red unless urgent/red-flag
+- Keep the UI calm, premium and Apple-like
+
+Acceptance:
+- When the status is steady/good, both the status banner and Symptom support use calm blue/green accents
+- When symptoms are heavier, both use amber accents
+- Normal nausea, low appetite, constipation or tiredness should not trigger red
+- Red only appears for true urgent/red-flag logic
+- The page should feel coordinated, not scary

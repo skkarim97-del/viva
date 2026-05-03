@@ -980,7 +980,7 @@ export default function DashboardScreen() {
             active intervention exists; the fallback slot lower in
             the screen handles the unusual no-min-data case. */}
         {activeInterventions.length > 0 && hasMinSymptomData && (
-          <View style={{ marginTop: 4, marginBottom: 4, gap: 14 }}>
+          <View style={{ marginBottom: 12, gap: 14 }}>
             {activeInterventions.map((iv) => (
               <InterventionCard
                 key={iv.id}
