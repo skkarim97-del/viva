@@ -201,85 +201,188 @@ interface RecContent {
   body: string;
   helper: string;
 }
-const RECOMMENDATIONS: Record<
-  RecCategory,
-  { primary: RecContent; alternate: RecContent }
-> = {
+const RECOMMENDATIONS: Record<RecCategory, { variants: RecContent[] }> = {
   nausea: {
-    primary: {
-      title: "Settle nausea without skipping nutrition",
-      body: "Try 3 to 5 bites of yogurt, tofu, soup or a smoothie. Then sip water slowly for 20 to 30 minutes.",
-      helper:
-        "This may help nausea while keeping protein and fluids in your system.",
-    },
-    alternate: {
-      title: "Try something even gentler",
-      body: "Try crackers, ginger tea or a few bites of soup. Keep portions small and pause if nausea increases.",
-      helper: "Small amounts are often easier to tolerate than a full meal.",
-    },
+    variants: [
+      {
+        title: "Settle nausea without skipping nutrition",
+        body: "Try 3 to 5 bites of yogurt, tofu, soup or a smoothie. Then sip water slowly for 20 to 30 minutes.",
+        helper:
+          "This may help nausea while keeping protein and fluids in your system.",
+      },
+      {
+        title: "Start with slow hydration",
+        body: "Sip water or an electrolyte drink slowly for 20 to 30 minutes before trying food. Small sips, not gulps.",
+        helper:
+          "Steady fluids first can settle the stomach before you reintroduce food.",
+      },
+      {
+        title: "Try something even gentler",
+        body: "Try crackers, ginger tea or a few bites of soup. Keep portions small and pause if nausea increases.",
+        helper: "Small amounts are often easier to tolerate than a full meal.",
+      },
+      {
+        title: "Rest briefly before eating",
+        body: "Sit or lie down quietly for 5 to 10 minutes, then try a small bite of bland protein like yogurt or tofu.",
+        helper: "A short rest before food can reduce the urge to skip the meal.",
+      },
+    ],
   },
   appetite: {
-    primary: {
-      title: "Protect your protein intake",
-      body: "Aim for a small protein serving every few hours today, even if it is only Greek yogurt, tofu, soup or a smoothie.",
-      helper:
-        "This can help prevent low intake from turning into low energy or missed nutrition.",
-    },
-    alternate: {
-      title: "Use liquid nutrition if solid food feels hard",
-      body: "Try a smoothie, protein shake or soup instead of a full meal. Take it slowly over 20 to 30 minutes.",
-      helper: "Liquid options can be easier when appetite is low.",
-    },
+    variants: [
+      {
+        title: "Protect your protein intake",
+        body: "Aim for a small protein serving every few hours today, even if it is only Greek yogurt, tofu, soup or a smoothie.",
+        helper:
+          "This can help prevent low intake from turning into low energy or missed nutrition.",
+      },
+      {
+        title: "Keep it light today",
+        body: "Aim for a small, easy-to-tolerate meal instead of forcing a full one. Consistency matters more than volume.",
+        helper: "Smaller, more frequent bites are usually easier when appetite is low.",
+      },
+      {
+        title: "Use liquid nutrition if solid food feels hard",
+        body: "Try a smoothie, protein shake or soup instead of a full meal. Take it slowly over 20 to 30 minutes.",
+        helper: "Liquid options can be easier when appetite is low.",
+      },
+      {
+        title: "Pick bland, low-friction foods",
+        body: "Try toast, rice, oatmeal or crackers with a small protein on the side. Skip greasy or strongly flavored foods today.",
+        helper: "Bland foods are less likely to worsen nausea or appetite loss.",
+      },
+    ],
   },
   energy: {
-    primary: {
-      title: "Support energy without forcing a meal",
-      body: "Try a small protein plus carb option like yogurt with fruit, soup with tofu or a smoothie, then rest for 10 minutes.",
-      helper: "This gives your body fuel without requiring a large meal.",
-    },
-    alternate: {
-      title: "Reset with fluids and a short break",
-      body: "Take small sips of water, sit or lie down for 10 minutes, then try a small snack if you feel ready.",
-      helper: "Low intake and dehydration can make fatigue worse.",
-    },
+    variants: [
+      {
+        title: "Support energy without forcing a meal",
+        body: "Try a small protein plus carb option like yogurt with fruit, soup with tofu or a smoothie, then rest for 10 minutes.",
+        helper: "This gives your body fuel without requiring a large meal.",
+      },
+      {
+        title: "Take a lighter day",
+        body: "Plan rest blocks today and add protein with your next meal. Save bigger tasks for tomorrow.",
+        helper: "Pacing yourself helps your energy hold up across the day.",
+      },
+      {
+        title: "Reset with fluids and a short break",
+        body: "Take small sips of water, sit or lie down for 10 minutes, then try a small snack if you feel ready.",
+        helper: "Low intake and dehydration can make fatigue worse.",
+      },
+      {
+        title: "Add protein with your next meal",
+        body: "Pair your next bite with a protein source like Greek yogurt, eggs, beans or a smoothie with protein powder.",
+        helper: "Protein steadies energy more reliably than carbs alone.",
+      },
+    ],
   },
   constipation: {
-    primary: {
-      title: "Reduce constipation risk today",
-      body: "Add fiber gradually with foods like berries, chia, beans or vegetables. Keep sipping fluids and take a short walk if you can tolerate it.",
-      helper: "Fiber works best when paired with fluids and movement.",
-    },
-    alternate: {
-      title: "Use a gentler bowel-support step",
-      body: "Try warm fluids, a short walk or a fiber-rich snack. Avoid suddenly adding a large amount of fiber at once.",
-      helper: "Gradual changes are less likely to worsen bloating.",
-    },
+    variants: [
+      {
+        title: "Reduce constipation risk today",
+        body: "Add fiber gradually with foods like berries, chia, beans or vegetables. Keep sipping fluids and take a short walk if you can tolerate it.",
+        helper: "Fiber works best when paired with fluids and movement.",
+      },
+      {
+        title: "Keep fluids steady today",
+        body: "Sip water or warm fluids over the next few hours. Warm liquids in the morning can help things move.",
+        helper: "Steady hydration is one of the simplest ways to support digestion.",
+      },
+      {
+        title: "Try a short walk if you feel up for it",
+        body: "Even 5 to 10 minutes of gentle movement can help. Pair it with fluids before and after.",
+        helper: "Light movement can help digestion without taxing your energy.",
+      },
+      {
+        title: "Use a gentler bowel-support step",
+        body: "Try warm fluids, a short walk or a fiber-rich snack. Avoid suddenly adding a large amount of fiber at once.",
+        helper: "Gradual changes are less likely to worsen bloating.",
+      },
+    ],
   },
   hydration: {
-    primary: {
-      title: "Rehydrate without upsetting your stomach",
-      body: "Take a few small sips every 5 to 10 minutes for the next hour. If plain water feels hard, try an electrolyte drink or diluted beverage.",
-      helper: "Small, steady sips are usually easier than drinking a lot at once.",
-    },
-    alternate: {
-      title: "Try fluids that are easier to tolerate",
-      body: "Try ice chips, warm tea, diluted juice or an electrolyte drink. Keep the amount small and steady.",
-      helper: "The goal is steady fluids without triggering nausea.",
-    },
+    variants: [
+      {
+        title: "Rehydrate without upsetting your stomach",
+        body: "Take a few small sips every 5 to 10 minutes for the next hour. If plain water feels hard, try an electrolyte drink or diluted beverage.",
+        helper: "Small, steady sips are usually easier than drinking a lot at once.",
+      },
+      {
+        title: "Sip steadily over the next hour or two",
+        body: "Aim for small sips every 10 minutes instead of drinking a lot at once. Steady is easier than fast.",
+        helper: "Steady fluids tend to absorb better and feel gentler on your stomach.",
+      },
+      {
+        title: "Try fluids that are easier to tolerate",
+        body: "Try ice chips, warm tea, diluted juice or an electrolyte drink. Keep the amount small and steady.",
+        helper: "The goal is steady fluids without triggering nausea.",
+      },
+      {
+        title: "Pair fluids with a bland snack",
+        body: "A few crackers or a small piece of toast alongside slow sips of water can be gentler than fluids alone.",
+        helper: "A small bland snack can settle the stomach while you rehydrate.",
+      },
+    ],
   },
   other: {
-    primary: {
-      title: "Try a small step that feels manageable",
-      body: "Choose one small action you can take right now -- a few sips of water, a few bites of a familiar food, or a brief rest in a quiet spot.",
-      helper: "Small, low-effort steps add up across the day.",
-    },
-    alternate: {
-      title: "Try a different small step",
-      body: "Pick something even simpler -- a few sips of fluid, slow breathing for a minute, or sitting somewhere comfortable.",
-      helper: "Lowering the barrier can make it easier to follow through.",
-    },
+    variants: [
+      {
+        title: "Try a small step that feels manageable",
+        body: "Choose one small action you can take right now -- a few sips of water, a few bites of a familiar food, or a brief rest in a quiet spot.",
+        helper: "Small, low-effort steps add up across the day.",
+      },
+      {
+        title: "Try a different small step",
+        body: "Pick something even simpler -- a few sips of fluid, slow breathing for a minute, or sitting somewhere comfortable.",
+        helper: "Lowering the barrier can make it easier to follow through.",
+      },
+    ],
   },
 };
+
+// Patient-friendly noun for each category, used in the
+// "More support for today" subtitle, e.g. "2 more supports for
+// appetite and digestion". Distinct from NOTICED_PHRASE which uses
+// symptom-style language like "low appetite" / "nausea".
+const CATEGORY_NOUN: Record<RecCategory, string> = {
+  nausea: "nausea",
+  appetite: "appetite",
+  energy: "energy",
+  constipation: "digestion",
+  hydration: "hydration",
+  other: "support",
+};
+
+// Stable per-category salt so different categories don't all land on
+// the same variant index for the same intervention id on the same day.
+const CATEGORY_SALT: Record<RecCategory, number> = {
+  nausea: 0,
+  appetite: 1,
+  energy: 2,
+  constipation: 3,
+  hydration: 4,
+  other: 5,
+};
+
+// Pick a deterministic primary + alternate variant for this category
+// using the intervention id and current day. Same intervention shows
+// the same variant within a day, but different interventions (and
+// the same intervention across days) cycle through the variant list.
+// "Another option" toggles to the next variant in the cycle.
+function pickVariants(
+  category: RecCategory,
+  interventionId: number,
+): { primary: RecContent; alternate: RecContent } {
+  const variants = RECOMMENDATIONS[category].variants;
+  const day = Math.floor(Date.now() / 86_400_000);
+  const len = variants.length;
+  const salt = CATEGORY_SALT[category];
+  const raw = (interventionId + day + salt) % len;
+  const primaryIdx = ((raw % len) + len) % len;
+  const alternateIdx = (primaryIdx + 1) % len;
+  return { primary: variants[primaryIdx]!, alternate: variants[alternateIdx]! };
+}
 
 // Plain-language fragment used to compose the "What we noticed"
 // sentence. Joined with commas + "and" before the last item.
@@ -312,7 +415,8 @@ type SectionStatus =
   | "skipped"
   | "better"
   | "no_change"
-  | "worse";
+  | "worse"
+  | "didnt_try";
 
 // Statuses that have a render branch in the simplified UX. Legacy
 // values from the prior rework ("not_for_me", "skipped") and the
@@ -326,6 +430,7 @@ const VALID_STATUSES: ReadonlySet<string> = new Set([
   "better",
   "no_change",
   "worse",
+  "didnt_try",
 ]);
 
 function coercePersistedStatus(raw: string | null): SectionStatus | null {
@@ -406,6 +511,11 @@ interface InterventionCardProps {
   background: string;
   mutedForeground: string;
   warning: string;
+  // Whether HealthKit / Apple Health data is connected for this
+  // patient. Drives the subtitle copy: when true we reference
+  // "Apple Health trends" so the subtitle reflects the actual signal
+  // mix; when false we omit it.
+  hasHealthData?: boolean;
 
   onAccept: (id: number) => Promise<void>;
   onDismiss: (id: number) => Promise<void>;
@@ -457,6 +567,7 @@ export function InterventionCard({
   background: _themeBackground,
   mutedForeground: _themeMuted,
   warning,
+  hasHealthData = false,
   onAccept,
   onDismiss,
   onFeedback,
@@ -654,10 +765,14 @@ export function InterventionCard({
   );
 
   const handleRowOutcome = useCallback(
-    (key: string, outcome: "better" | "no_change" | "worse") => {
+    (
+      key: string,
+      outcome: "better" | "no_change" | "worse" | "didnt_try",
+    ) => {
       void setRowStatus(key, outcome);
       if (outcome === "better") safeLog("intervention_feedback_better");
       else if (outcome === "no_change") safeLog("intervention_feedback_no_change");
+      else if (outcome === "didnt_try") safeLog("intervention_feedback_didnt_try");
       else safeLog("intervention_feedback_worse");
     },
     [setRowStatus],
@@ -827,7 +942,9 @@ export function InterventionCard({
             Today&apos;s next steps
           </Text>
           <Text style={[styles.subtitle, { color: mutedForeground }]}>
-            Based on your check-in, here&apos;s what may help today.
+            {hasHealthData
+              ? "Based on your check-in, recent symptoms and Apple Health trends"
+              : "Based on your check-in and recent symptoms"}
           </Text>
         </View>
       </View>
@@ -848,6 +965,7 @@ export function InterventionCard({
       {primary && (
         <PrimaryActionCard
           category={primary.category}
+          interventionId={intervention.id}
           originalBody={primary.section.body}
           showingAlternate={!!sectionAlt[primary.key]}
           status={sectionStatus[primary.key] ?? null}
@@ -906,9 +1024,21 @@ export function InterventionCard({
               <Text
                 style={[styles.moreSupportSubtitle, { color: mutedForeground }]}
               >
-                {`${secondaries.length} more ${
-                  secondaries.length === 1 ? "step" : "steps"
-                } for appetite, energy and digestion`}
+                {(() => {
+                  // De-dupe categories across secondary rows so
+                  // "appetite + appetite" doesn't appear twice; map
+                  // each to a patient-friendly noun via CATEGORY_NOUN.
+                  const seen = new Set<RecCategory>();
+                  const nouns: string[] = [];
+                  for (const r of secondaries) {
+                    if (seen.has(r.category)) continue;
+                    seen.add(r.category);
+                    nouns.push(CATEGORY_NOUN[r.category]);
+                  }
+                  const word =
+                    secondaries.length === 1 ? "support" : "supports";
+                  return `${secondaries.length} more ${word} for ${joinList(nouns)}`;
+                })()}
               </Text>
             </View>
             <View style={styles.moreSupportMeta}>
@@ -930,6 +1060,7 @@ export function InterventionCard({
                 <SecondaryActionRow
                   key={r.key}
                   category={r.category}
+                  interventionId={intervention.id}
                   originalBody={r.section.body}
                   showingAlternate={!!sectionAlt[r.key]}
                   status={sectionStatus[r.key] ?? null}
@@ -975,16 +1106,21 @@ export function InterventionCard({
 // =====================================================================
 interface ActionRowProps {
   category: RecCategory;
+  // Stable id of the parent intervention. Used by pickVariants() to
+  // deterministically rotate which variant of the recommendation we
+  // show for this category, so the same patient doesn't see the
+  // identical "snack" suggestion every day.
+  interventionId: number;
   // Server-provided body. Only used as a fallback for the "other"
   // category where we don't have a canned clinical micro-protocol.
-  // For the five known symptom categories, the body comes from
-  // RECOMMENDATIONS[category].primary.body / .alternate.body.
+  // For the five known symptom categories, the body comes from the
+  // picked variant in RECOMMENDATIONS[category].variants.
   originalBody: string;
   showingAlternate: boolean;
   status: SectionStatus | null;
-  // Whether the patient has dismissed the no_change two-button panel
-  // by tapping "Check again later". When true, the no_change branch
-  // renders a quiet ack instead of the action panel.
+  // Legacy: used to live with a 2-button no_change panel. The current
+  // UX collapses no_change to a single ack so this prop is no longer
+  // read, but it's kept on the interface to keep call sites stable.
   noChangeDismissed: boolean;
   navy: string;
   mutedForeground: string;
@@ -993,8 +1129,11 @@ interface ActionRowProps {
   warning: string;
   onCommit: () => void;
   onToggleAlternate: () => void;
-  onOutcome: (outcome: "better" | "no_change" | "worse") => void;
+  onOutcome: (
+    outcome: "better" | "no_change" | "worse" | "didnt_try",
+  ) => void;
   onReset: () => void;
+  // Legacy: see noChangeDismissed above.
   onDismissNoChange: () => void;
   onAskCareTeam: () => void;
 }
@@ -1009,10 +1148,11 @@ function tap(): void {
 
 function PrimaryActionCard({
   category,
+  interventionId,
   originalBody,
   showingAlternate,
   status,
-  noChangeDismissed,
+  noChangeDismissed: _noChangeDismissed,
   navy,
   mutedForeground,
   border,
@@ -1022,12 +1162,14 @@ function PrimaryActionCard({
   onToggleAlternate,
   onOutcome,
   onReset,
-  onDismissNoChange,
+  onDismissNoChange: _onDismissNoChange,
   onAskCareTeam,
 }: ActionRowProps) {
-  const variant = showingAlternate
-    ? RECOMMENDATIONS[category].alternate
-    : RECOMMENDATIONS[category].primary;
+  const picked = useMemo(
+    () => pickVariants(category, interventionId),
+    [category, interventionId],
+  );
+  const variant = showingAlternate ? picked.alternate : picked.primary;
   const title = variant.title;
   const helper = variant.helper;
   // For "other" we don't have category-specific clinical copy, so fall
@@ -1119,7 +1261,7 @@ function PrimaryActionCard({
       {status === "committed" && (
         <View style={styles.outcomeWrap}>
           <Text style={[styles.outcomePrompt, { color: navy }]}>
-            How do you feel after trying it?
+            Did this help?
           </Text>
           <View style={styles.outcomeRow}>
             <OutcomeButton
@@ -1134,7 +1276,7 @@ function PrimaryActionCard({
               accessibilityLabel={`Feeling better after ${titleA11y}`}
             />
             <OutcomeButton
-              label="About the same"
+              label="Same"
               icon="meh"
               tint={mutedForeground}
               border={border}
@@ -1155,6 +1297,17 @@ function PrimaryActionCard({
               }}
               accessibilityLabel={`Worse after ${titleA11y}`}
             />
+            <OutcomeButton
+              label="Didn't try"
+              icon="minus-circle"
+              tint={mutedForeground}
+              border={border}
+              onPress={() => {
+                tap();
+                onOutcome("didnt_try");
+              }}
+              accessibilityLabel={`Didn't try ${titleA11y}`}
+            />
           </View>
         </View>
       )}
@@ -1164,67 +1317,37 @@ function PrimaryActionCard({
         <AcknowledgeRow
           icon="smile"
           tint={SUCCESS_FG}
-          text="Good. Keep following your plan and check in again if symptoms come back."
+          text="Got it. Viva will remember this helped."
           onReset={onReset}
           mutedForeground={mutedForeground}
           a11y={titleA11y}
         />
       )}
 
-      {/* -- About the same: two-button "try again before escalating"
-            panel. Patient can pick another option or defer. Once
-            "Check again later" is tapped, we collapse to a quiet ack. */}
-      {status === "no_change" && !noChangeDismissed && (
-        <View style={styles.escalateWrap}>
-          <Text style={[styles.escalateCopy, { color: navy }]}>
-            Thanks. Let&apos;s try a different step before escalating.
-          </Text>
-          <View style={styles.btnRow}>
-            <Pressable
-              onPress={() => {
-                tap();
-                onToggleAlternate();
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={`Show me another option for ${titleA11y}`}
-              style={({ pressed }) => [
-                styles.btnPrimary,
-                {
-                  borderColor: accent,
-                  backgroundColor: accent,
-                  opacity: pressed ? 0.8 : 1,
-                },
-              ]}
-            >
-              <Feather name="refresh-cw" size={13} color="#FFFFFF" />
-              <Text style={[styles.btnText, { color: "#FFFFFF", fontFamily: "Montserrat_700Bold", fontWeight: "700" }]}>
-                Another option
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                tap();
-                onDismissNoChange();
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={`Check ${titleA11y} again later`}
-              style={({ pressed }) => [
-                styles.btnSecondary,
-                { borderColor: border, opacity: pressed ? 0.75 : 1 },
-              ]}
-            >
-              <Text style={[styles.btnText, { color: mutedForeground, fontFamily: "Montserrat_600SemiBold", fontWeight: "600" }]}>
-                Check again later
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-      )}
-      {status === "no_change" && noChangeDismissed && (
+      {/* -- Same: quiet ack. Per the redesign spec we no longer
+            front-load a "try a different step before escalating"
+            panel here -- the patient can still tap "Change response"
+            in the ack to revisit, and the escalation path lives on
+            the Worse branch. */}
+      {status === "no_change" && (
         <AcknowledgeRow
-          icon="clock"
+          icon="meh"
           tint={mutedForeground}
-          text="Thanks -- we'll check back later."
+          text="Thanks. We'll adjust future recommendations."
+          onReset={onReset}
+          mutedForeground={mutedForeground}
+          a11y={titleA11y}
+        />
+      )}
+
+      {/* -- Didn't try: quiet ack so the row doesn't penalize the
+            patient for skipping. Resetting reopens the outcome
+            prompt if they later want to log a real outcome. */}
+      {status === "didnt_try" && (
+        <AcknowledgeRow
+          icon="minus-circle"
+          tint={mutedForeground}
+          text="Got it. We won't count that one."
           onReset={onReset}
           mutedForeground={mutedForeground}
           a11y={titleA11y}
@@ -1235,8 +1358,8 @@ function PrimaryActionCard({
       {status === "worse" && offerEscalation && (
         <View style={styles.escalateWrap}>
           <Text style={[styles.escalateCopy, { color: navy }]}>
-            Sorry that got worse. Viva can suggest another step now or flag
-            this for your care team.
+            This should be reviewed. You can ask your care team to take a
+            look.
           </Text>
           <View style={styles.btnRow}>
             <Pressable
@@ -1291,10 +1414,11 @@ function PrimaryActionCard({
 // =====================================================================
 function SecondaryActionRow({
   category,
+  interventionId,
   originalBody,
   showingAlternate,
   status,
-  noChangeDismissed,
+  noChangeDismissed: _noChangeDismissed,
   navy,
   mutedForeground,
   border,
@@ -1304,12 +1428,14 @@ function SecondaryActionRow({
   onToggleAlternate,
   onOutcome,
   onReset,
-  onDismissNoChange,
+  onDismissNoChange: _onDismissNoChange,
   onAskCareTeam,
 }: ActionRowProps) {
-  const variant = showingAlternate
-    ? RECOMMENDATIONS[category].alternate
-    : RECOMMENDATIONS[category].primary;
+  const picked = useMemo(
+    () => pickVariants(category, interventionId),
+    [category, interventionId],
+  );
+  const variant = showingAlternate ? picked.alternate : picked.primary;
   const title = variant.title;
   const body =
     category === "other" && !showingAlternate
@@ -1359,7 +1485,7 @@ function SecondaryActionRow({
       {status === "committed" && (
         <View style={styles.outcomeWrap}>
           <Text style={[styles.outcomePromptSmall, { color: navy }]}>
-            How do you feel after trying it?
+            Did this help?
           </Text>
           <View style={styles.outcomeRow}>
             <OutcomeButton
@@ -1395,6 +1521,17 @@ function SecondaryActionRow({
               }}
               accessibilityLabel={`Worse after ${titleA11y}`}
             />
+            <OutcomeButton
+              label="Didn't try"
+              icon="minus-circle"
+              tint={mutedForeground}
+              border={border}
+              onPress={() => {
+                tap();
+                onOutcome("didnt_try");
+              }}
+              accessibilityLabel={`Didn't try ${titleA11y}`}
+            />
           </View>
         </View>
       )}
@@ -1403,64 +1540,29 @@ function SecondaryActionRow({
         <AcknowledgeRow
           icon="smile"
           tint={SUCCESS_FG}
-          text="Good. Keep following your plan and check in again if symptoms come back."
+          text="Got it. Viva will remember this helped."
           onReset={onReset}
           mutedForeground={mutedForeground}
           a11y={titleA11y}
         />
       )}
 
-      {status === "no_change" && !noChangeDismissed && (
-        <View style={styles.escalateWrap}>
-          <Text style={[styles.escalateCopy, { color: navy }]}>
-            Thanks. Let&apos;s try a different step before escalating.
-          </Text>
-          <View style={styles.btnRow}>
-            <Pressable
-              onPress={() => {
-                tap();
-                onToggleAlternate();
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={`Show me another option for ${titleA11y}`}
-              style={({ pressed }) => [
-                styles.btnPrimary,
-                {
-                  borderColor: accent,
-                  backgroundColor: accent,
-                  opacity: pressed ? 0.8 : 1,
-                },
-              ]}
-            >
-              <Feather name="refresh-cw" size={13} color="#FFFFFF" />
-              <Text style={[styles.btnText, { color: "#FFFFFF", fontFamily: "Montserrat_700Bold", fontWeight: "700" }]}>
-                Another option
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                tap();
-                onDismissNoChange();
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={`Check ${titleA11y} again later`}
-              style={({ pressed }) => [
-                styles.btnSecondary,
-                { borderColor: border, opacity: pressed ? 0.75 : 1 },
-              ]}
-            >
-              <Text style={[styles.btnText, { color: mutedForeground, fontFamily: "Montserrat_600SemiBold", fontWeight: "600" }]}>
-                Check again later
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-      )}
-      {status === "no_change" && noChangeDismissed && (
+      {status === "no_change" && (
         <AcknowledgeRow
-          icon="clock"
+          icon="meh"
           tint={mutedForeground}
-          text="Thanks -- we'll check back later."
+          text="Thanks. We'll adjust future recommendations."
+          onReset={onReset}
+          mutedForeground={mutedForeground}
+          a11y={titleA11y}
+        />
+      )}
+
+      {status === "didnt_try" && (
+        <AcknowledgeRow
+          icon="minus-circle"
+          tint={mutedForeground}
+          text="Got it. We won't count that one."
           onReset={onReset}
           mutedForeground={mutedForeground}
           a11y={titleA11y}
@@ -1470,8 +1572,8 @@ function SecondaryActionRow({
       {status === "worse" && offerEscalation && (
         <View style={styles.escalateWrap}>
           <Text style={[styles.escalateCopy, { color: navy }]}>
-            Sorry that got worse. Viva can suggest another step now or flag
-            this for your care team.
+            This should be reviewed. You can ask your care team to take a
+            look.
           </Text>
           <View style={styles.btnRow}>
             <Pressable
@@ -1593,7 +1695,14 @@ function OutcomeButton({
       ]}
     >
       <Feather name={icon} size={13} color={tint} />
-      <Text style={[styles.outcomeBtnText, { color: tint }]}>{label}</Text>
+      <Text
+        style={[styles.outcomeBtnText, { color: tint }]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.85}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -1856,16 +1965,16 @@ const styles = StyleSheet.create({
   },
   outcomeRow: {
     flexDirection: "row",
-    gap: 6,
+    gap: 5,
   },
   outcomeBtn: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 4,
+    gap: 3,
     paddingVertical: 8,
-    paddingHorizontal: 6,
+    paddingHorizontal: 4,
     borderRadius: 10,
     borderWidth: 1,
     backgroundColor: "#FFFFFF",

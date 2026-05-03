@@ -1341,6 +1341,7 @@ export default function DashboardScreen() {
                 background={c.background}
                 mutedForeground={c.mutedForeground}
                 warning={c.warning}
+                hasHealthData={hasHealthData}
                 onAccept={onInterventionAccept}
                 onDismiss={onInterventionDismiss}
                 onFeedback={onInterventionFeedback}
@@ -1384,6 +1385,7 @@ export default function DashboardScreen() {
                 background={c.background}
                 mutedForeground={c.mutedForeground}
                 warning={c.warning}
+                hasHealthData={hasHealthData}
                 onAccept={onInterventionAccept}
                 onDismiss={onInterventionDismiss}
                 onFeedback={onInterventionFeedback}

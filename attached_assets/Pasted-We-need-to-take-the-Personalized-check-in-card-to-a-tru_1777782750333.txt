@@ -1,0 +1,292 @@
+We need to take the Personalized check-in card to a true 10/10. This is a core part of Viva’s value prop: helping patients manage symptoms between visits so they can stay on treatment while giving providers leverage.
+
+Current issue:
+The card is cleaner than before, but it still feels like a smart tip card. It needs to feel like a premium, high-retention health-tech intervention layer.
+
+Goal:
+Make the card feel sleek, Apple-like, intelligent, personalized, concise and action-oriented.
+
+The patient should immediately understand:
+1. What Viva noticed
+2. Why this recommendation is showing up
+3. What to do first
+4. What else may help
+5. How to get care-team help if needed
+
+Important:
+Do not overcomplicate the UI.
+Do not create a wall of text.
+Do not show multiple full intervention cards.
+Do not use generic repetitive recommendations every time.
+Do not break the current symptom input flow.
+Do not enable demo-only behavior in production.
+
+Core UX change:
+The intervention card should feel like a personalized “next-best action” module, not a generic recommendation card.
+
+Use this structure:
+
+CARD HEADER
+Title:
+Today’s next steps
+
+Subtitle:
+Based on your check-in, recent symptoms and Apple Health trends
+
+If Apple Health / HealthKit data is not available, use:
+Based on your check-in and recent symptoms
+
+WHAT VIVA NOTICED
+Keep this short and specific. 1-2 lines max.
+
+Examples:
+- “Nausea and low appetite showed up again today. Your activity is also lower than usual.”
+- “You reported nausea, low appetite and constipation today, so we’re focusing on hydration, nutrition and digestion support.”
+- “Nausea is the main thing to address first today, especially with lower appetite showing up too.”
+
+This section should reflect:
+- today’s symptoms
+- recent symptom history if available
+- Apple Health / HealthKit trends if available
+- prior intervention feedback if available
+
+START HERE
+Show one primary recommendation first. This is the main next-best action.
+
+Example:
+Title:
+Settle nausea without skipping nutrition
+
+Body:
+Start with 3 to 5 bites of yogurt, tofu, soup or a smoothie. Then sip water slowly for 20 to 30 minutes.
+
+Small explanation:
+This may help nausea while keeping protein and fluids in your system.
+
+Buttons:
+- I’ll try this
+- Another option
+
+MORE SUPPORT FOR TODAY
+Show a collapsed row by default.
+
+Example:
+More support for today
+2 more supports for appetite and digestion
+
+When expanded, show short secondary support rows:
+- Appetite support
+- Energy support
+- Digestion support
+- Hydration support
+Only show rows relevant to the current symptoms.
+
+Each row should be concise:
+Appetite support:
+Keep it light today. Aim for a small, easy-to-tolerate meal instead of forcing a full meal.
+
+Energy support:
+Take a lighter day and add protein with your next meal.
+
+Constipation support:
+If you feel up for it, take a short walk and keep fluids steady.
+
+Hydration support:
+Sip water steadily over the next 1-2 hours instead of drinking a lot at once.
+
+FEEDBACK / LEARNING
+After the patient taps “I’ll try this,” the card should move into feedback mode.
+
+Show:
+Did this help?
+
+Buttons:
+- Better
+- Same
+- Worse
+- Didn’t try it
+
+If Better:
+Show a short confirmation:
+“Got it. Viva will remember this helped.”
+
+If Same:
+Show:
+“Thanks. We’ll adjust future recommendations.”
+
+If Worse:
+Show:
+“This should be reviewed. You can ask your care team to take a look.”
+Then visually emphasize:
+Ask my care team
+
+CARE TEAM ACTION
+Keep “Ask my care team” available, but do not make it visually dominant in the default state unless:
+- symptom is severe
+- symptom is worsening
+- feedback is Worse
+- pattern is repeated
+- red-flag logic says escalation is appropriate
+
+When escalation is recommended, make the care-team action more prominent.
+
+PERSONALIZATION REQUIREMENTS
+The card must use more than today’s symptom label when data is available.
+
+It should consider:
+- today’s symptoms
+- severity
+- symptom combinations
+- last 7 days of check-ins
+- repeated symptoms
+- worsening symptoms
+- prior recommendation feedback
+- Apple Health / HealthKit data if available:
+  - steps/activity vs baseline
+  - sleep vs baseline
+  - resting trends if already available in the app
+  - activity decline around symptom days
+
+Example:
+If nausea appears 2 times this week:
+“Nausea has shown up more than once this week.”
+
+If appetite has been low for multiple check-ins:
+“Your appetite has been lower than usual.”
+
+If activity is down:
+“Your activity is lower than your usual baseline.”
+
+If prior feedback exists:
+“Slow hydration helped last time, so we’re starting there.”
+
+RECOMMENDATION VARIETY
+The system should not repeat the same recommendation every time.
+
+Use safe variety within guardrails.
+
+For nausea, rotate among:
+- slow hydration
+- small bland protein snack
+- smaller meals
+- avoiding greasy/spicy foods for now
+- rest briefly before eating
+- dose-day tracking cue
+- care-team review if severe/persistent/worse
+
+For low appetite, rotate among:
+- small meal instead of full meal
+- protein-rich snack
+- liquid/easy-to-tolerate option
+- focus on consistency over volume
+- bland foods if nausea is also present
+
+For constipation, rotate among:
+- steady fluids
+- short walk
+- fiber-rich food
+- bowel movement tracking
+- care-team review if persistent/worsening
+
+For low energy, rotate among:
+- lighter day
+- protein with next meal
+- rest break
+- hydration check
+- sleep/activity trend awareness
+
+Recommendation selection should consider:
+- what was shown recently
+- what the patient marked as Better
+- what the patient marked as Same/Worse
+- the current symptom mix
+- severity
+
+Do not make unsafe medication, dosage or diagnosis recommendations.
+
+COPY STYLE
+Keep it punchy and easy to read.
+
+Prefer:
+- “Start here”
+- “What may help most today”
+- “Nausea is the main thing to address first today”
+- “Slow hydration helped last time, so we’re starting there”
+
+Avoid:
+- long paragraphs
+- generic “try X” every time
+- clinical jargon
+- scary wording
+- overexplaining
+- too many uppercase labels
+
+VISUAL DESIGN
+Make the card feel premium and Apple-like:
+- cleaner hierarchy
+- more whitespace
+- softer card surfaces
+- fewer heavy borders
+- subtle shadow
+- restrained blue accent
+- less text density
+- rounded but not childish
+- smooth expansion for “More support”
+- subtle fade/slide when the card appears or updates
+
+The user should feel:
+“This app is paying attention to me.”
+
+Not:
+“This is a list of generic GLP-1 tips.”
+
+PLACEMENT
+The card should appear high on the Today tab:
+- Once enough check-in data exists, show it above the symptom input module or immediately below it, whichever feels best in the current layout
+- It must appear above “Your Plan”
+- It should not get buried
+
+LIVE UPDATE BEHAVIOR
+When symptoms change live, update the same card within ~1-2 seconds.
+
+Example:
+If patient changes nausea from moderate to severe:
+- update What Viva noticed
+- update primary recommendation if needed
+- update escalation prominence if needed
+
+If patient changes digestion to constipated:
+- add digestion/constipation support to More support
+
+Do not create duplicate cards.
+
+HIPAA / PHI SAFETY
+Keep existing HIPAA/OpenAI guardrails:
+- no PHI sent to OpenAI
+- only de-identified symptom/trend payloads
+- no names, emails, DOBs, clinic names, provider names, raw notes or exact identifiers
+- fallback templates if AI fails or PHI guardrail blocks the call
+
+ACCEPTANCE CRITERIA
+In Replit preview, the card should look and feel like a premium guided action module.
+
+For a patient with:
+- Energy: Tired
+- Appetite: Low
+- Nausea: Moderate or Severe
+- Digestion: Constipated
+- Bowel Movement: No
+
+The card should:
+1. Show one unified card only
+2. Say “Today’s next steps”
+3. Reference today’s symptoms
+4. Reference recent symptoms or Apple Health trends if available
+5. Pick one primary “Start here” action
+6. Show secondary support in a clean collapsed “More support for today” section
+7. Avoid a wall of text
+8. Update live when symptoms change
+9. Use varied recommendations, not the same nausea snack every time
+10. Keep “Ask my care team” available and emphasize it when symptoms are severe/worsening or feedback is Worse
+
+Please implement this as a polished product UX, not just a content rewrite.
