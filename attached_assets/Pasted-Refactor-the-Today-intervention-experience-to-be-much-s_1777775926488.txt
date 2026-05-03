@@ -1,0 +1,194 @@
+Refactor the Today intervention experience to be much simpler, friendlier and easier for an average GLP-1 patient to understand.
+
+The current version is too heavy. It has too many boxes, labels, chips and summary stats. It feels more like a system dashboard than a patient support experience.
+
+Goal:
+Create a much simpler, more intuitive intervention UX that still preserves the core value prop:
+- Viva notices issues between visits
+- Viva gives the patient a clear next step
+- Viva captures feedback
+- Viva escalates only if needed
+- the experience feels calm, supportive and easy to engage with
+
+Design principles:
+- prioritize clarity over complexity
+- one clear next step first
+- progressive disclosure for secondary actions
+- warm, friendly language
+- minimal visual clutter
+- keep it lightweight for first-time users
+
+Implement the following changes:
+
+1. Simplify the card header
+Use:
+
+Title:
+“Today’s next steps”
+
+Subtitle:
+“Based on your check-in, here’s what may help today.”
+
+Keep the overall light blue Viva card style.
+
+2. Simplify the “What Viva noticed” section
+Replace the current longer explanation with a short, patient-friendly summary.
+
+Example:
+“What we noticed”
+“You reported nausea, low appetite and low energy today.”
+
+Do not add extra explanation about issue counts or prioritization here.
+
+3. Remove the summary stats module
+Remove:
+- “4 issues surfaced”
+- “1 needs attention now”
+- “3 supportive steps”
+
+These are too clinical and create clutter.
+
+4. Remove the progress bar and progress count from the top
+Do not show “0 of 4 steps started” or a progress bar at the top of the experience.
+
+If progress is kept at all, it should be very subtle and secondary, not a dominant element.
+
+5. Replace the large multi-card list with one primary action first
+Show one primary intervention card at the top.
+
+Use the highest-priority symptom category to choose the primary recommendation.
+For current demo data, nausea should be primary.
+
+Structure:
+
+Small badge:
+“Start with this”
+
+Title:
+Simple, action-oriented title, not technical.
+Example:
+“Eat something light and sip water slowly”
+
+Body:
+“Try a small bland snack like yogurt, soup or a smoothie, and take a few slow sips of water.”
+
+Helper line:
+“This may help with nausea and make eating feel easier.”
+
+Buttons:
+Primary: “I’ll try this”
+Secondary: “Another idea”
+
+Important:
+Use plain, human-friendly language.
+Avoid overly clinical labels like “Nausea support” as the main headline if a simpler action phrase works better.
+
+6. Secondary actions should be visually lighter
+Below the primary action, add a section:
+“Other things that may help today”
+
+This section should be compact and visually secondary.
+
+Show the remaining recommendations as smaller rows, not full large cards.
+
+Each row should have:
+- short title
+- one-line description
+- small action button or tap target
+
+Example rows:
+- “Add a protein-rich snack later”
+- “Take a short break to rest”
+- “Add fiber and keep sipping water”
+
+Do not show giant stacked full cards for all recommendations by default.
+
+7. Keep per-row state logic, but simplify the presentation
+Preserve the existing interaction model:
+- default
+- committed
+- better / no_change / worse
+- escalation only after worse
+
+But present it more simply.
+
+After a patient taps “I’ll try this”, show:
+“How do you feel after trying it?”
+
+Buttons:
+- “Better”
+- “About the same”
+- “Worse”
+
+Use “About the same” instead of “No change” because it is more natural.
+
+8. Simplify “Not for me”
+Replace “Not for me” with “Another idea” on the primary recommendation.
+
+For secondary rows, you may keep:
+- “Try this”
+or
+- tap row to open
+
+If the user taps “Another idea”, show an alternate suggestion for the same issue.
+
+Example for nausea:
+“Try crackers, ginger tea or another bland snack, and avoid a large meal for now.”
+
+Then allow:
+- “I’ll try this”
+- “Back”
+
+9. Escalation only when needed
+If the patient taps “Worse”, show:
+“Sorry that didn’t help. Would you like another suggestion or support from your care team?”
+
+Buttons:
+- “Try another idea”
+- “Ask my care team”
+
+Do not show “Ask my care team” by default anywhere else.
+
+10. Tone and copy
+Make the tone:
+- supportive
+- simple
+- calm
+- clear
+
+Avoid:
+- overly clinical phrasing
+- jargon
+- dense prioritization language
+- too much text
+
+11. Visual simplification
+Make the UI cleaner by:
+- removing most chips and status labels
+- reducing repeated card styling
+- reducing vertical clutter
+- using one prominent primary card and compact secondary rows
+- preserving the Viva palette and rounded styling
+
+12. Keep analytics and backend behavior intact
+Do not break current behavior:
+- onAccept
+- onFeedback
+- escalation callback
+- AsyncStorage / hydration / persistence logic
+
+Only simplify and improve the presentation and patient-facing interaction flow.
+
+13. Verification
+Run:
+- typecheck
+- lint if available
+- mobile/web preview
+
+Acceptance criteria:
+- a first-time GLP-1 patient can immediately understand what Viva is asking them to do
+- the primary action is obvious
+- the experience feels simple and supportive
+- secondary recommendations are available but visually lighter
+- escalation appears only when needed
+- the screen feels like a helpful guide, not a dashboard
