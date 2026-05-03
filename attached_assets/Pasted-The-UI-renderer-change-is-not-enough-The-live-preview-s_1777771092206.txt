@@ -1,0 +1,62 @@
+The UI renderer change is not enough. The live preview still shows a single nausea recommendation, not multi-row support.
+
+Current visible card:
+WHAT VIVA NOTICED
+"You reported nausea today, and your food intake has been lower than usual."
+
+TRY THIS TODAY
+"Try a small, bland protein-forward snack..."
+
+This means the backend/generator is still returning one single recommendation, so the new row UI has nothing to render.
+
+Please fix the actual generated payload/copy so the intervention includes all active symptom support sections.
+
+For the current check-in:
+- Appetite: Low
+- Nausea: Moderate
+- Bowel Movement: Yes in this screenshot, so do not include constipation unless digestion is also constipated
+- If Energy is Tired, include energy support
+- If Digestion is Constipated or Bowel Movement is No, include constipation support
+
+Required result:
+The card should render one master Personalized check-in card with separate interactive rows under TRY THIS TODAY.
+
+Example when Energy=Tired, Appetite=Low, Nausea=Moderate, Digestion=Constipated, Bowel Movement=No:
+
+WHAT VIVA NOTICED
+"Viva noticed nausea, low appetite, low energy and constipation in your check-in today."
+
+TRY THIS TODAY
+Row 1:
+Nausea support
+Try small sips of water and a bland, protein-forward snack.
+Buttons: Did this / Didn’t do this
+
+Row 2:
+Appetite support
+Keep it light today and aim for a small, easy-to-tolerate meal.
+Buttons: Did this / Didn’t do this
+
+Row 3:
+Energy support
+Add protein to your next meal and take a short break to rest.
+Buttons: Did this / Didn’t do this
+
+Row 4:
+Constipation support
+If you feel up for it, take a short walk and keep fluids steady.
+Buttons: Did this / Didn’t do this
+
+CHECK BACK LATER
+"Tell us what helped, what didn’t and if anything feels worse."
+
+Important:
+- Do not rely on parsing a single paragraph if the backend only returns one recommendation
+- Either return structured recommendation items from the backend, or guarantee the recommendation text contains clear labeled sections that the frontend can split into rows
+- Live symptom changes must update the same card within 1-2 seconds
+- Do not show duplicate full cards
+- Do not include constipation if bowel movement is Yes and digestion is not constipated
+- Do not mark complete until the live Replit preview visibly shows the rows
+
+Acceptance:
+In the live Replit preview, with Energy=Tired, Appetite=Low, Nausea=Moderate, Digestion=Constipated, Bowel Movement=No, I should see one card with 3-4 separate interactive rows, each with Did this / Didn’t do this.
