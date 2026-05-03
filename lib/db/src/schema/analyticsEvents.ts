@@ -5,6 +5,7 @@ import {
   text,
   timestamp,
   index,
+  jsonb,
 } from "drizzle-orm/pg-core";
 
 // ----------------------------------------------------------------------
@@ -47,6 +48,23 @@ export const analyticsEventsTable = pgTable(
     // Used by the hourly usage chart to bucket on the patient's
     // local hour rather than server time when available.
     timezone: text("timezone"),
+    // Optional structured payload. Used by event-typed rows that need
+    // to carry context beyond user/session/platform -- e.g.
+    // `patient_checkin_updated`, which records previous + current
+    // symptom state, the changed-fields list, the upstream source
+    // (today_checkin_autosave, manual_save, onboarding, demo_seed),
+    // and whether the change kicked off intervention regeneration.
+    // PHI-discipline: callers must NOT put free-text notes, names, or
+    // any clinician-identifying info in here. Symptom enums + booleans
+    // are pilot-grade analytics and the only thing currently written.
+    // Nullable so existing event rows remain valid and so generic
+    // pings (page views, etc.) don't have to invent a payload.
+    payload: jsonb("payload").$type<Record<string, unknown>>(),
+    // YYYY-MM-DD bucket for date-scoped events (e.g. the check-in
+    // edit timeline). Pilot dashboards use this to align state-change
+    // events with the daily check-in row without parsing payload JSON.
+    // Nullable for non-date-scoped events.
+    eventDate: text("event_date"),
   },
   (t) => ({
     byCreated: index("analytics_events_created_idx").on(t.createdAt),
@@ -60,6 +78,15 @@ export const analyticsEventsTable = pgTable(
       t.createdAt,
     ),
     bySession: index("analytics_events_session_idx").on(t.sessionId),
+    // Used by per-patient symptom-edit timeline queries (latest change
+    // for a patient on a date) -- keeps the dashboard query off a
+    // sequential scan as the table grows.
+    byUserDateEvent: index("analytics_events_user_date_event_idx").on(
+      t.userType,
+      t.userId,
+      t.eventDate,
+      t.eventName,
+    ),
   }),
 );
 

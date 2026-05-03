@@ -116,6 +116,16 @@ export interface CheckinPayload {
   hydration?: "hydrated" | "good" | "low" | "dehydrated" | null;
   bowelMovement?: boolean | null;
   doseTakenToday?: boolean | null;
+  // Pilot analytics tag for the symptom-edit timeline. Locked to a
+  // closed allowlist on the server (Zod enum) so this can never
+  // smuggle free text into analytics_events.payload. Optional --
+  // older builds and offline-replayed payloads omit it and the
+  // server falls back to "manual_save".
+  source?:
+    | "today_checkin_autosave"
+    | "manual_save"
+    | "onboarding"
+    | "demo_seed";
 }
 
 export type SymptomKind = "nausea" | "constipation" | "low_appetite";

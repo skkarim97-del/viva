@@ -380,6 +380,14 @@ export default function DashboardScreen() {
           appetite: appetite ?? null,
           digestion: digestion ?? null,
           bowelMovement: bowelMovementToday,
+          // Tags this save as the Today-screen 1.2s autosave so the
+          // pilot symptom-edit timeline (patient_checkin_updated
+          // event in analytics_events) can distinguish it from the
+          // mental-state modal Done button (manual_save) and from
+          // demo seeding. Server-side this also flips
+          // triggeredInterventionRefresh=true on the event row,
+          // since this code path always follows up with /generate.
+          source: "today_checkin_autosave",
         });
         savedOk = true;
       } catch {

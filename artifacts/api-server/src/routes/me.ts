@@ -8,6 +8,7 @@ import {
   patientHealthDailySummariesTable,
   patientTreatmentLogsTable,
   patientProfilesTable,
+  analyticsEventsTable,
 } from "@workspace/db";
 import { requirePatient, type AuthedRequest } from "../middlewares/auth";
 import { computeRisk } from "../lib/risk";
@@ -97,7 +98,40 @@ const checkinSchema = z.object({
       low_appetite: z.boolean().optional(),
     })
     .nullish(),
+  // Pilot analytics tag for the symptom-edit timeline. Locked to a
+  // closed allowlist (NOT free text) so the analytics_events.payload
+  // column can never receive PHI through this field even if a buggy
+  // build or hostile client tries to smuggle text through it. Older
+  // clients that omit source -> server defaults to "manual_save".
+  // Unknown values are coerced server-side to "unknown" rather than
+  // being persisted verbatim.
+  //   today_checkin_autosave -- the Today screen's 1.2s debounced
+  //     auto-save fired by the symptom-signature watcher
+  //   manual_save            -- explicit Done button
+  //   onboarding             -- first-run check-in capture
+  //   demo_seed              -- dev/demo bootstrap inserts
+  source: z
+    .enum([
+      "today_checkin_autosave",
+      "manual_save",
+      "onboarding",
+      "demo_seed",
+    ])
+    .nullish(),
 });
+
+// Closed set of analytics payload keys the symptom-edit event is
+// allowed to write. Anything outside this list is dropped before the
+// insert -- defense in depth so a future contributor can't widen the
+// payload shape and accidentally let PHI through.
+const ALLOWED_CHECKIN_EVENT_KEYS = new Set([
+  "source",
+  "previous",
+  "current",
+  "changedFields",
+  "isFirstSaveOfDay",
+  "triggeredInterventionRefresh",
+]);
 
 router.post("/checkins", async (req, res: Response) => {
   const userId = (req as AuthedRequest).auth.userId;
@@ -124,6 +158,23 @@ router.post("/checkins", async (req, res: Response) => {
       ? { guidanceShown: v.guidanceShown ?? {} }
       : {}),
   };
+  // Snapshot the prior row (if any) BEFORE the upsert so the
+  // analytics emitter below can diff previous vs current. This is
+  // the only way to capture a worse-to-better symptom transition
+  // for the pilot timeline -- patient_checkins itself is a single
+  // upserted row per day, so once the new values are written the
+  // prior state is gone.
+  const [previousRow] = await db
+    .select()
+    .from(patientCheckinsTable)
+    .where(
+      and(
+        eq(patientCheckinsTable.patientUserId, userId),
+        eq(patientCheckinsTable.date, v.date),
+      ),
+    )
+    .limit(1);
+
   // Upsert by (patient_user_id, date) so the patient can edit today's
   // entry without creating duplicates.
   const [row] = await db
@@ -151,6 +202,107 @@ router.post("/checkins", async (req, res: Response) => {
       },
     })
     .returning();
+
+  // -- Pilot analytics: append-only symptom-input timeline ----------
+  //
+  // patient_checkins is upserted per day, so it tracks "current
+  // state". For the pilot we ALSO need the full history of
+  // meaningful symptom edits within the day (worse->better, nausea
+  // -> digestion, etc.) so dashboards can answer questions like
+  // "how often do symptoms improve after a micro-intervention" and
+  // "time from worsening to support shown".
+  //
+  // We diff only the symptom inputs the rules engine and the
+  // recommendation card actually consume: energy, nausea, appetite,
+  // digestion, hydration, bowelMovement, doseTakenToday. mood is
+  // intentionally excluded -- the Today autosave hardcodes mood=3,
+  // which would otherwise show up as a phantom "changedFields"
+  // every save. notes is excluded for PHI hygiene -- analytics rows
+  // must never carry free-text patient input.
+  //
+  // Anti-spam: we only append an event when at least one tracked
+  // field actually changed, OR when this is the first check-in of
+  // the day (previousRow == null). Identical re-saves are dropped.
+  //
+  // Best-effort insert wrapped in try/catch + req.log.warn -- per
+  // the table's contract analytics MUST NEVER break a product flow.
+  type SymptomShape = {
+    energy: string | null;
+    nausea: string | null;
+    appetite: string | null;
+    digestion: string | null;
+    hydration: string | null;
+    bowelMovement: boolean | null;
+    doseTakenToday: boolean | null;
+  };
+  const pickSymptoms = (r: typeof row | undefined): SymptomShape | null =>
+    r
+      ? {
+          energy: r.energy ?? null,
+          nausea: r.nausea ?? null,
+          appetite: r.appetite ?? null,
+          digestion: r.digestion ?? null,
+          hydration: r.hydration ?? null,
+          bowelMovement: r.bowelMovement ?? null,
+          doseTakenToday: r.doseTakenToday ?? null,
+        }
+      : null;
+  const previous = pickSymptoms(previousRow);
+  const current = pickSymptoms(row);
+  if (current) {
+    const changedFields: string[] = previous
+      ? (Object.keys(current) as (keyof SymptomShape)[]).filter(
+          (k) => previous[k] !== current[k],
+        )
+      : (Object.keys(current) as (keyof SymptomShape)[]);
+    const isFirstSave = !previous;
+    if (isFirstSave || changedFields.length > 0) {
+      // The Zod enum already rejects unknown sources at the boundary;
+      // this fallback covers the legitimate "older client omits the
+      // field" case, never an arbitrary string.
+      const source = v.source ?? "manual_save";
+      // Only autosave-driven edits trigger a /generate refresh on the
+      // client. Manual/onboarding/demo paths don't, so we record the
+      // signal honestly rather than always claiming true.
+      const triggeredInterventionRefresh =
+        source === "today_checkin_autosave";
+      // Build the payload, then sanitize through the closed allowlist
+      // so we can never accidentally persist a key that wasn't
+      // explicitly approved (defense in depth -- the input has
+      // already been validated by checkinSchema).
+      const rawPayload: Record<string, unknown> = {
+        source,
+        previous,
+        current,
+        changedFields,
+        isFirstSaveOfDay: isFirstSave,
+        triggeredInterventionRefresh,
+      };
+      const safePayload: Record<string, unknown> = {};
+      for (const k of Object.keys(rawPayload)) {
+        if (ALLOWED_CHECKIN_EVENT_KEYS.has(k)) safePayload[k] = rawPayload[k];
+      }
+      try {
+        await db.insert(analyticsEventsTable).values({
+          userType: "patient",
+          userId,
+          eventName: "patient_checkin_updated",
+          eventDate: v.date,
+          // sessionId/platform/timezone are populated by the regular
+          // /analytics/events client pipeline; this server-side emit
+          // doesn't have them and that's OK -- userId + eventDate +
+          // createdAt are sufficient for the timeline view.
+          payload: safePayload,
+        });
+      } catch (err) {
+        req.log.warn(
+          { err, userId, date: v.date },
+          "patient_checkin_updated_event_insert_failed",
+        );
+      }
+    }
+  }
+
   res.status(201).json(row);
 });
 
