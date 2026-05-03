@@ -1,0 +1,77 @@
+The recent update did not meaningfully change the UX. It mostly changed copy, but the card still feels visually the same and not premium enough.
+
+Also the “Didn’t...” feedback button is cut off. Fix that immediately:
+- Replace “Didn’t try it” with “Skipped”
+- Or make the feedback buttons wrap cleanly
+- No truncated button labels
+
+Now improve the actual UX, not just copy.
+
+Current issues:
+- The card still feels like a prototype content block
+- Visual hierarchy is weak
+- Too much small text
+- The primary action does not feel high-value enough
+- Apple Health / recent history are not surfaced in a visible, compelling way
+- “More support for today” is too subtle
+- The card does not feel like a core feature that can keep patients on treatment
+
+Please make the card more premium and differentiated.
+
+Concrete changes:
+
+1. Add a compact “Signal summary” row near the top
+This should show 2-3 small chips when data is available:
+- Today: Nausea + low energy
+- Trend: Nausea 2x this week
+- Health: Activity lower than usual
+
+If Apple Health is unavailable, show:
+- Based on today’s check-in
+- Recent symptoms
+
+This makes the card feel data-driven immediately.
+
+2. Make the primary action more visually prominent
+The “Start here” tile should feel like the main next-best action:
+- stronger title
+- cleaner spacing
+- slightly larger primary action title
+- less body text
+- clearer “why this helps” line
+
+3. Make “More support for today” more useful
+Instead of a tiny collapsed row that feels hidden, show it as:
+“More support”
+with visible mini chips:
+- Appetite
+- Energy
+- Digestion
+
+Then expand to secondary actions.
+
+4. Simplify feedback buttons
+Use:
+- Better
+- Same
+- Worse
+- Skipped
+
+No truncated labels.
+
+5. Make the card feel more Apple-like
+- More whitespace
+- Softer background
+- Cleaner sections
+- Less tiny text
+- Better spacing
+- Fewer cramped labels
+- Subtle shadow
+- No crowded chip rows
+
+6. Keep it concise
+The card should be easy to understand in 5 seconds.
+
+Acceptance:
+In the Replit preview, the card should visibly look different and more premium, not just have slightly different copy.
+It should include a clear signal summary, a stronger primary action, cleaner feedback buttons, and no truncated text.

@@ -895,6 +895,41 @@ export function InterventionCard({
 
   const badgeLabel = status === "escalated" ? "Care team notified" : "For you today";
 
+  // Patient-friendly nouns for the symptoms we're targeting today.
+  // Used by both the top "Today:" signal chip and the "More support"
+  // mini-chips. We always exclude the primary category from the
+  // secondary list so a category never appears twice.
+  const allCategoryNouns: string[] = [];
+  {
+    const seen = new Set<RecCategory>();
+    for (const r of orderedRows) {
+      if (seen.has(r.category)) continue;
+      seen.add(r.category);
+      allCategoryNouns.push(CATEGORY_NOUN[r.category]);
+    }
+  }
+  const secondaryCategoryNouns: string[] = [];
+  {
+    const seen = new Set<RecCategory>();
+    if (primary) seen.add(primary.category);
+    for (const r of secondaries) {
+      if (seen.has(r.category)) continue;
+      seen.add(r.category);
+      secondaryCategoryNouns.push(CATEGORY_NOUN[r.category]);
+    }
+  }
+  // Cap the "Today:" chip label at three nouns so it never wraps.
+  // Anything beyond three is conveyed by "More support" chips below.
+  const todayChipLabel =
+    allCategoryNouns.length > 0
+      ? `Today: ${joinList(allCategoryNouns.slice(0, 3))}`
+      : null;
+
+  // The verbose "What we noticed" sentence is now superseded by the
+  // signal chips. Keep the useMemo result reachable so the var isn't
+  // marked as dead, but it's no longer rendered.
+  void noticedSentence;
+
   return (
     <Animated.View
       style={[
@@ -949,17 +984,71 @@ export function InterventionCard({
         </View>
       </View>
 
-      {/* -- What we noticed --------------------------------------- */}
-      {noticedSentence.length > 0 && (
-        <View style={styles.section}>
-          <Text style={[styles.sectionLabel, { color: mutedForeground }]}>
-            What we noticed
-          </Text>
-          <Text style={[styles.sectionBody, { color: navy }]}>
-            {noticedSentence}
-          </Text>
+      {/* -- Signal summary chips ----------------------------------
+            Compact, data-driven row that replaces the long "What we
+            noticed" sentence. Goal: communicate "this is built from
+            your real data" in under a second of glance time. */}
+      {/* The data-source fallback chip ("Apple Health" / "Recent
+          symptoms") always renders, so the row is always non-empty
+          while we have at least the patient's own check-in. */}
+      <View style={styles.signalChipsRow}>
+          {todayChipLabel && (
+            <View
+              style={[
+                styles.signalChip,
+                {
+                  backgroundColor: accent + "14",
+                  borderColor: accent + "33",
+                },
+              ]}
+            >
+              <Feather name="activity" size={11} color={accent} />
+              <Text
+                style={[styles.signalChipText, { color: accent }]}
+                numberOfLines={1}
+              >
+                {todayChipLabel}
+              </Text>
+            </View>
+          )}
+          {hasHealthData ? (
+            <View
+              style={[
+                styles.signalChip,
+                {
+                  backgroundColor: "rgba(31, 79, 138, 0.06)",
+                  borderColor: "rgba(31, 79, 138, 0.12)",
+                },
+              ]}
+            >
+              <Feather name="heart" size={11} color={navy} />
+              <Text
+                style={[styles.signalChipText, { color: navy }]}
+                numberOfLines={1}
+              >
+                Apple Health
+              </Text>
+            </View>
+          ) : (
+            <View
+              style={[
+                styles.signalChip,
+                {
+                  backgroundColor: "rgba(31, 79, 138, 0.06)",
+                  borderColor: "rgba(31, 79, 138, 0.12)",
+                },
+              ]}
+            >
+              <Feather name="clipboard" size={11} color={navy} />
+              <Text
+                style={[styles.signalChipText, { color: navy }]}
+                numberOfLines={1}
+              >
+                Recent symptoms
+              </Text>
+            </View>
+          )}
         </View>
-      )}
 
       {/* -- Primary action ---------------------------------------- */}
       {primary && (
@@ -1017,29 +1106,35 @@ export function InterventionCard({
               { borderColor: background, opacity: pressed ? 0.7 : 1 },
             ]}
           >
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, gap: 8 }}>
               <Text style={[styles.moreSupportTitle, { color: navy }]}>
-                More support for today
+                More support
               </Text>
-              <Text
-                style={[styles.moreSupportSubtitle, { color: mutedForeground }]}
-              >
-                {(() => {
-                  // De-dupe categories across secondary rows so
-                  // "appetite + appetite" doesn't appear twice; map
-                  // each to a patient-friendly noun via CATEGORY_NOUN.
-                  const seen = new Set<RecCategory>();
-                  const nouns: string[] = [];
-                  for (const r of secondaries) {
-                    if (seen.has(r.category)) continue;
-                    seen.add(r.category);
-                    nouns.push(CATEGORY_NOUN[r.category]);
-                  }
-                  const word =
-                    secondaries.length === 1 ? "support" : "supports";
-                  return `${secondaries.length} more ${word} for ${joinList(nouns)}`;
-                })()}
-              </Text>
+              {/* Mini category chips -- shows the patient at a glance
+                  WHAT the additional supports cover, not just "N more
+                  things". Tapping the row still expands. */}
+              {secondaryCategoryNouns.length > 0 && (
+                <View style={styles.supportChipsRow}>
+                  {secondaryCategoryNouns.map((noun) => (
+                    <View
+                      key={noun}
+                      style={[
+                        styles.supportChip,
+                        {
+                          backgroundColor: "rgba(31, 79, 138, 0.07)",
+                          borderColor: "rgba(31, 79, 138, 0.10)",
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[styles.supportChipText, { color: navy }]}
+                      >
+                        {noun.charAt(0).toUpperCase() + noun.slice(1)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
             <View style={styles.moreSupportMeta}>
               <Text
@@ -1201,13 +1296,21 @@ function PrimaryActionCard({
       <Text style={[styles.primaryTitle, { color: navy }]}>{title}</Text>
       <Text style={[styles.primaryBody, { color: navy }]}>{body}</Text>
 
-      {/* Helper line only on the default state -- once the patient
-          has acted, the row becomes a feedback prompt and we keep
-          the surface uncluttered. */}
-      {status == null && (
-        <Text style={[styles.helperLine, { color: mutedForeground }]}>
-          {helper}
-        </Text>
+      {/* "Why this helps" -- only on the default state. Once the
+          patient has acted, the row becomes a feedback prompt and
+          we keep the surface uncluttered. The labeled treatment
+          (small caps label + accent dot + helper sentence) reads as
+          a clinical justification rather than fine print. */}
+      {status == null && helper.trim().length > 0 && (
+        <View style={styles.whyRow}>
+          <View style={[styles.whyDot, { backgroundColor: accent }]} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.whyLabel, { color: mutedForeground }]}>
+              Why this helps
+            </Text>
+            <Text style={[styles.whyText, { color: navy }]}>{helper}</Text>
+          </View>
+        </View>
       )}
 
       {/* -- Default: I'll try this / Show me another option (or Back) -- */}
@@ -1298,7 +1401,7 @@ function PrimaryActionCard({
               accessibilityLabel={`Worse after ${titleA11y}`}
             />
             <OutcomeButton
-              label="Didn't try"
+              label="Skipped"
               icon="minus-circle"
               tint={mutedForeground}
               border={border}
@@ -1306,7 +1409,7 @@ function PrimaryActionCard({
                 tap();
                 onOutcome("didnt_try");
               }}
-              accessibilityLabel={`Didn't try ${titleA11y}`}
+              accessibilityLabel={`Skipped ${titleA11y}`}
             />
           </View>
         </View>
@@ -1522,7 +1625,7 @@ function SecondaryActionRow({
               accessibilityLabel={`Worse after ${titleA11y}`}
             />
             <OutcomeButton
-              label="Didn't try"
+              label="Skipped"
               icon="minus-circle"
               tint={mutedForeground}
               border={border}
@@ -1530,7 +1633,7 @@ function SecondaryActionRow({
                 tap();
                 onOutcome("didnt_try");
               }}
-              accessibilityLabel={`Didn't try ${titleA11y}`}
+              accessibilityLabel={`Skipped ${titleA11y}`}
             />
           </View>
         </View>
@@ -1709,10 +1812,79 @@ function OutcomeButton({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 22,
-    padding: 18,
-    gap: 16,
+    borderRadius: 24,
+    padding: 20,
+    gap: 18,
     borderWidth: StyleSheet.hairlineWidth,
+  },
+  // -- Signal summary chips ----------------------------------------
+  signalChipsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  signalChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  signalChipText: {
+    fontSize: 11.5,
+    fontFamily: "Montserrat_600SemiBold",
+    fontWeight: "600",
+    letterSpacing: 0.1,
+  },
+  // -- More support: mini category chips ---------------------------
+  supportChipsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 5,
+  },
+  supportChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  supportChipText: {
+    fontSize: 11,
+    fontFamily: "Montserrat_600SemiBold",
+    fontWeight: "600",
+    letterSpacing: 0.1,
+  },
+  // -- Primary card "Why this helps" --------------------------------
+  whyRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    marginTop: 4,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(31, 79, 138, 0.10)",
+  },
+  whyDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginTop: 6,
+  },
+  whyLabel: {
+    fontSize: 10,
+    fontFamily: "Montserrat_700Bold",
+    fontWeight: "700",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    marginBottom: 2,
+  },
+  whyText: {
+    fontFamily: "Montserrat_500Medium",
+    fontSize: 13,
+    fontWeight: "500",
+    lineHeight: 18,
   },
   cardFeatured: {
     borderWidth: StyleSheet.hairlineWidth,
@@ -1825,10 +1997,10 @@ const styles = StyleSheet.create({
   // -- Primary action card ------------------------------------------
   // Softer, less boxy: hairline border + subtle long-radius shadow.
   primaryCard: {
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 18,
     gap: 10,
     ...Platform.select({
       web: {
@@ -1861,16 +2033,17 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1,
   },
   primaryTitle: {
-    fontSize: 17,
+    fontSize: 19,
     fontFamily: "Montserrat_700Bold",
-    fontWeight: "800",
-    lineHeight: 22,
+    fontWeight: "700",
+    lineHeight: 25,
+    marginTop: 2,
   },
   primaryBody: {
     fontSize: 14,
     lineHeight: 20,
-    fontFamily: "Montserrat_500Medium",
-    fontWeight: "500",
+    fontFamily: "Montserrat_400Regular",
+    fontWeight: "400",
   },
   helperLine: {
     fontFamily: "Montserrat_400Regular",
