@@ -437,14 +437,21 @@ router.patch("/checkins/escalate", async (req, res: Response) => {
     .set({ clinicianRequested: merged })
     .where(eq(patientCheckinsTable.id, existing.id));
 
-  // -- care_event emission with rich-but-PHI-free context ----------
+  // -- care_event emission with structured (non-free-text) context -
   //
   // The other escalation path (POST /me/interventions/:id/escalate)
   // already inserts a care_event row. The sticky-flag path
   // historically did not, so the funnel undercounted patient-led
-  // escalations. We close that gap here. All metadata fields are
-  // ENUMS or NUMBERS or BOOLEANS -- never free patient text -- so
-  // care_events.metadata stays PHI-clean by construction.
+  // escalations. We close that gap here.
+  //
+  // Storage destination: care_events lives in the SAME AWS HIPAA-
+  // protected RDS as patient_checkins, so clinical context (severity
+  // enums, dose-taken, AH metric snapshot) is appropriate here --
+  // it's the exact data the on-call clinician needs to triage.
+  // What this row deliberately does NOT carry: free-text patient
+  // notes, weights, contact info, DOB, or any field that wasn't
+  // already captured under the same patient record. Nothing here is
+  // ever written to analytics_events or sent to OpenAI.
   if (!wasAlreadyRequested) {
     try {
       // Latest live intervention for this patient (any status, last
@@ -1304,6 +1311,32 @@ router.post("/health/daily-summary", async (req, res: Response) => {
       },
     })
     .returning();
+
+  // Bump patient_integrations.lastSyncAt so the dashboard "data
+  // freshness" indicator and analytics "AH connected & active in
+  // last 7d" KPI reflect that the device is actually streaming. We
+  // only do this for apple_health source; other sources (manual,
+  // import) shouldn't claim integration freshness. Best-effort:
+  // never block the data write on the freshness bump.
+  if (d.source === "apple_health") {
+    try {
+      await db
+        .update(patientIntegrationsTable)
+        .set({ lastSyncAt: new Date() })
+        .where(
+          and(
+            eq(patientIntegrationsTable.patientUserId, userId),
+            eq(patientIntegrationsTable.provider, "apple_health"),
+          ),
+        );
+    } catch (err) {
+      req.log.warn(
+        { err, userId },
+        "apple_health_integration_lastSyncAt_update_failed",
+      );
+    }
+  }
+
   res.status(201).json(row);
 });
 
