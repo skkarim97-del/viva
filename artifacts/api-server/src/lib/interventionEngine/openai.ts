@@ -34,13 +34,15 @@ export interface AiInterventionResult {
 
 const SYSTEM_PROMPT = `You generate short, safe, patient-facing micro-interventions for a GLP-1 telehealth support app. You are not a doctor and must not diagnose, prescribe, change medication or provide emergency care instructions. Use the de-identified patient pattern to personalize the message. Keep the reading level simple. Be direct, supportive and concise. Return JSON only.
 
+The patient may report MULTIPLE concurrent symptoms in a single check-in. The input field "triggers" is the full list of currently relevant symptoms; "trigger" is the highest-priority one. You must produce ONE unified intervention that addresses every entry in "triggers".
+
 The output MUST be a single JSON object with these keys:
-- whatWeNoticed: one sentence starting with data
-- recommendation: one sentence with one clear action
-- followUpQuestion: one sentence asking for feedback after the action
-- recommendationCategory: one of [hydration, activity, protein, fiber, small_meal, rest, tracking, care_team_review]
-- riskLevel: one of [low, moderate, elevated]
-- escalationRecommended: boolean
+- whatWeNoticed: one sentence that names every symptom present in "triggers" (e.g. "Viva noticed nausea, low appetite and constipation in your check-in today.") and refers to the recent pattern
+- recommendation: one supportive paragraph. When "triggers" has 2 or more entries, format it as ONE short section per trigger separated by a blank line (\\n\\n), each prefixed with a label like "Nausea support: <one clear action>". When "triggers" has exactly one entry, return one sentence with one clear action and no label.
+- followUpQuestion: one sentence asking for feedback after the patient tries the suggestions
+- recommendationCategory: one of [hydration, activity, protein, fiber, small_meal, rest, tracking, care_team_review] -- pick the category that best matches the highest-priority trigger
+- riskLevel: one of [low, moderate, elevated] -- the maximum across all triggers
+- escalationRecommended: boolean -- true if any trigger has riskLevel "elevated"
 - escalationReason: string or null
 
 Rules:
@@ -49,7 +51,7 @@ Rules:
 - Do not mention dose changes
 - Do not claim causality
 - Use "may," "could," "Viva noticed," "your care team should review" where needed
-- Keep it concise
+- Keep each per-symptom section to one sentence with one clear action
 - Use only the listed recommendation categories
 - Return JSON only, no preamble, no markdown fence`;
 
@@ -87,7 +89,11 @@ function validateAiResult(raw: unknown): AiInterventionResult {
   if (
     typeof recommendation !== "string" ||
     recommendation.length < 10 ||
-    recommendation.length > 280
+    // Multi-symptom synthesis can produce up to ~3-4 short sections;
+    // raise the cap from the original single-sentence 280 to 1200 so
+    // a 4-trigger combined output (e.g. nausea + appetite +
+    // constipation + low energy) still fits without truncation.
+    recommendation.length > 1200
   ) {
     throw new Error("ai_invalid_recommendation");
   }
@@ -139,7 +145,10 @@ export async function callOpenAiForIntervention(
 ): Promise<AiInterventionResult> {
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-mini",
-    max_completion_tokens: 400,
+    // Headroom for multi-section output: one labeled sentence per
+    // trigger plus the lead/follow-up. 700 keeps cost low while
+    // safely accommodating the worst-case 4-symptom synthesis.
+    max_completion_tokens: 700,
     response_format: { type: "json_object" },
     messages: [
       { role: "system", content: SYSTEM_PROMPT },

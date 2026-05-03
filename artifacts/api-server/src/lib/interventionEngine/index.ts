@@ -31,9 +31,10 @@ import {
   detectInterventionTriggers,
   detectCosignals,
   pickBestTrigger,
+  pickRelevantTriggers,
   type DetectedTrigger,
 } from "./triggers";
-import { pickTemplate } from "./templates";
+import { pickTemplate, renderSynthesizedFallback } from "./templates";
 import {
   buildDeidentifiedOpenAIInterventionPayload,
   validateNoPhi,
@@ -110,8 +111,17 @@ export async function generatePersonalizedIntervention(
   const cosignals = detectCosignals(context);
   const events: InterventionAnalyticsEvent[] = [];
 
-  // -- Pick trigger --------------------------------------------------
+  // -- Pick trigger(s) ----------------------------------------------
+  // Two trigger collections drive the unified-card synthesis:
+  //   * `trigger` (primary, singular) -- becomes the row's
+  //     `triggerType` column and drives supersede/de-dupe semantics
+  //     in the route handler. Honours forcedTriggerType.
+  //   * `relevantTriggers` -- the FULL deduped list of concurrent
+  //     symptom triggers for today, used for multi-section synthesis
+  //     by the AI prompt and the fallback renderer. Always includes
+  //     the primary as its first element.
   let trigger: DetectedTrigger | null;
+  let relevantTriggers: DetectedTrigger[] = [];
   if (input.forcedTriggerType) {
     trigger = {
       type: input.forcedTriggerType,
@@ -123,23 +133,43 @@ export async function generatePersonalizedIntervention(
           : "low",
       reason: `forced by caller: ${input.forcedTriggerType}`,
     };
+    relevantTriggers = [trigger];
   } else {
     const detected = detectInterventionTriggers(context);
-    // Active interventions we should de-dupe against. ANY trigger
-    // currently shown/accepted/pending_feedback/escalated for this
-    // patient is suppressed (spec Part 4 "Avoid duplicate spam"),
-    // EXCEPT when the patient's new severity for that same trigger
-    // strictly exceeds the existing active row's severity -- then
-    // we allow regeneration so the card reflects the escalation.
-    // The route handler dismisses the superseded row before insert.
-    const activeBrief = context.priorInterventions.activeInterventions;
-    trigger = pickBestTrigger(detected, activeBrief);
+    relevantTriggers = pickRelevantTriggers(detected);
+    // Pick the PRIMARY trigger (the one whose type lands in the row's
+    // `triggerType` column and drives recommendationCategory). For
+    // unified-card synthesis we want the primary to come from the
+    // FILTERED relevantTriggers list (which excludes meta-signals
+    // like repeated_symptom / worsening_symptom / missed_checkin
+    // when concrete symptom triggers exist). Falling back to
+    // pickBestTrigger over the raw `detected` list would re-introduce
+    // a meta primary and pollute the synthesized sections.
+    if (relevantTriggers.length > 0) {
+      // relevantTriggers is already sorted by risk priority + severity.
+      trigger = relevantTriggers[0]!;
+    } else {
+      // No relevant triggers means `detected` was either empty or
+      // contained only meta signals; in the meta-only case
+      // pickBestTrigger correctly surfaces them so the patient still
+      // sees a card. The activeBrief de-dupe is preserved here for
+      // the rare insert-only path; for the live-update path the route
+      // handler always updates the existing row in place.
+      const activeBrief = context.priorInterventions.activeInterventions;
+      trigger = pickBestTrigger(detected, activeBrief);
+    }
   }
   if (!trigger) {
-    // Nothing to do -- patient is healthy or already has an active
-    // intervention. Caller should treat null as "no new intervention
-    // generated" (200 with empty payload).
+    // Nothing to do -- patient is healthy. Caller should treat null
+    // as "no intervention generated" (200 with empty payload).
     return null;
+  }
+  // Ensure the primary trigger is represented in relevantTriggers.
+  // For the auto-detect path this is already true (we picked primary
+  // FROM the list). This guard covers the forcedTriggerType path
+  // where the caller-supplied trigger may not be in `detected`.
+  if (!relevantTriggers.some((t) => t.type === trigger!.type)) {
+    relevantTriggers = [trigger, ...relevantTriggers];
   }
 
   // -- Build de-id payload ------------------------------------------
@@ -147,6 +177,13 @@ export async function generatePersonalizedIntervention(
     triggerType: trigger.type,
     riskLevel: trigger.riskLevel,
     context,
+    additionalTriggers: relevantTriggers
+      .filter((t) => t.type !== trigger!.type)
+      .map((t) => ({
+        type: t.type,
+        riskLevel: t.riskLevel,
+        severity: t.severity,
+      })),
   });
 
   // -- Decide AI vs fallback ----------------------------------------
@@ -209,11 +246,11 @@ export async function generatePersonalizedIntervention(
         },
         "intervention_openai_failed_falling_back",
       );
-      result = renderFromTemplate(trigger, cosignals, context);
+      result = renderFromTemplate(trigger, relevantTriggers, cosignals, context);
       events.push("intervention_fallback_used");
     }
   } else {
-    result = renderFromTemplate(trigger, cosignals, context);
+    result = renderFromTemplate(trigger, relevantTriggers, cosignals, context);
     events.push("intervention_fallback_used");
   }
 
@@ -243,6 +280,7 @@ export async function generatePersonalizedIntervention(
 
 function renderFromTemplate(
   trigger: DetectedTrigger,
+  relevantTriggers: ReadonlyArray<DetectedTrigger>,
   cosignals: ReadonlyArray<
     "low_steps" | "low_hydration" | "low_food_intake" | "post_dose" | "poor_sleep" | "low_appetite" | "elevated"
   >,
@@ -257,6 +295,30 @@ function renderFromTemplate(
   generatedBy: PatientInterventionGeneratedBy;
   aiPayloadStored: null;
 } {
+  // Multi-symptom synthesis path: when 2+ relevant triggers are
+  // present, compose a single unified intervention with one section
+  // per symptom. Falls back to the single-template path on null
+  // (e.g. all triggers lack a matching template -- shouldn't happen
+  // in practice but the guard keeps the engine total).
+  if (relevantTriggers.length >= 2) {
+    const synthesized = renderSynthesizedFallback(
+      relevantTriggers.map((t) => ({ type: t.type, riskLevel: t.riskLevel })),
+      cosignals,
+    );
+    if (synthesized) {
+      return {
+        whatWeNoticed: synthesized.whatWeNoticed,
+        recommendation: synthesized.recommendation,
+        followUpQuestion: synthesized.followUpQuestion,
+        recommendationCategory: synthesized.recommendationCategory,
+        escalationRecommended: synthesized.escalationRecommended,
+        riskLevel: synthesized.riskLevel,
+        generatedBy: "rules_fallback",
+        aiPayloadStored: null,
+      };
+    }
+  }
+
   const tpl = pickTemplate(trigger.type, cosignals);
   if (!tpl) {
     // Spec invariant violated -- every trigger should have a

@@ -303,6 +303,194 @@ export const INTERVENTION_TEMPLATES: ReadonlyArray<InterventionTemplate> = [
   },
 ];
 
+// =====================================================================
+// Multi-symptom synthesis (fallback path)
+// =====================================================================
+// When the patient reports multiple concurrent symptoms (e.g.
+// nausea + low appetite + constipation) AND we are in the fallback
+// path (AI mode off OR OpenAI failed OR PHI guardrail blocked AI),
+// we still need to surface ONE unified Personalized check-in card.
+// Strategy:
+//   * Pick the highest-priority trigger as the "primary" -- its
+//     template drives whatWeNoticed (the lead sentence) and the
+//     followUpQuestion (asked once, not per-symptom).
+//   * For every relevant trigger, pull its catchall template and
+//     compose a "Symptom support" section into a single combined
+//     `recommendation` string. Sections are joined with double
+//     newlines so the card renderer can either render them as a
+//     paragraph block or split on \n\n if it wants visible sections.
+//   * The recommendationCategory comes from the primary trigger's
+//     template so the analytics taxonomy stays meaningful.
+//   * escalationRecommended is true if ANY trigger's template flags it.
+//   * riskLevel is the max across all triggers' templates and the
+//     primary trigger's own riskLevel.
+
+export interface SynthesizedFallbackResult {
+  whatWeNoticed: string;
+  recommendation: string;
+  followUpQuestion: string;
+  recommendationCategory: PatientInterventionRecommendationCategory | null;
+  riskLevel: PatientInterventionRiskLevel;
+  escalationRecommended: boolean;
+  templateIdsUsed: string[];
+}
+
+// Friendly labels per trigger type for the synthesized section
+// headers ("Nausea support: ...", "Constipation support: ..."). Kept
+// here (not in the trigger-detection module) because this is a
+// presentation concern -- the engine doesn't otherwise need it.
+const TRIGGER_LABEL: Record<PatientInterventionTriggerType, string> = {
+  nausea: "Nausea support",
+  constipation: "Constipation support",
+  low_energy: "Energy support",
+  low_food_intake: "Appetite support",
+  low_hydration: "Hydration support",
+  rapid_weight_change: "Weight check",
+  worsening_symptom: "Symptom check",
+  missed_checkin: "Check-in reminder",
+  repeated_symptom: "Repeat-symptom note",
+  patient_requested_review: "Care team review",
+};
+
+const RISK_PRIORITY_LOCAL: Record<PatientInterventionRiskLevel, number> = {
+  elevated: 3,
+  moderate: 2,
+  low: 1,
+};
+
+function maxRisk(
+  a: PatientInterventionRiskLevel,
+  b: PatientInterventionRiskLevel,
+): PatientInterventionRiskLevel {
+  return RISK_PRIORITY_LOCAL[a] >= RISK_PRIORITY_LOCAL[b] ? a : b;
+}
+
+// Build a unified what-we-noticed lead sentence that names every
+// detected symptom in plain English. Falls back to the primary
+// template's whatWeNoticed when only one trigger is present so we
+// don't rewrite working copy unnecessarily.
+function buildLeadSentence(
+  triggers: ReadonlyArray<{
+    type: PatientInterventionTriggerType;
+    primaryWhatWeNoticed: string;
+  }>,
+): string {
+  if (triggers.length === 0) return "";
+  if (triggers.length === 1) {
+    return triggers[0]!.primaryWhatWeNoticed;
+  }
+  const phrases: string[] = [];
+  const seen = new Set<string>();
+  for (const t of triggers) {
+    const phrase = (() => {
+      switch (t.type) {
+        case "nausea":
+          return "nausea";
+        case "constipation":
+          return "constipation";
+        case "low_energy":
+          return "low energy";
+        case "low_food_intake":
+          return "low appetite";
+        case "low_hydration":
+          return "low hydration";
+        case "rapid_weight_change":
+          return "a faster weight drop than usual";
+        default:
+          return null;
+      }
+    })();
+    if (phrase && !seen.has(phrase)) {
+      seen.add(phrase);
+      phrases.push(phrase);
+    }
+  }
+  if (phrases.length === 0) {
+    return triggers[0]!.primaryWhatWeNoticed;
+  }
+  const joined =
+    phrases.length === 1
+      ? phrases[0]!
+      : phrases.length === 2
+        ? `${phrases[0]} and ${phrases[1]}`
+        : `${phrases.slice(0, -1).join(", ")} and ${phrases[phrases.length - 1]}`;
+  return `Viva noticed ${joined} in your check-in today.`;
+}
+
+export function renderSynthesizedFallback(
+  triggers: ReadonlyArray<{
+    type: PatientInterventionTriggerType;
+    riskLevel: PatientInterventionRiskLevel;
+  }>,
+  availableCosignals: ReadonlyArray<InterventionTemplate["cosignals"][number]>,
+): SynthesizedFallbackResult | null {
+  if (triggers.length === 0) return null;
+
+  // Pull the matching template for each trigger.
+  type Section = {
+    type: PatientInterventionTriggerType;
+    template: InterventionTemplate;
+    triggerRisk: PatientInterventionRiskLevel;
+  };
+  const sections: Section[] = [];
+  for (const t of triggers) {
+    const tpl = pickTemplate(t.type, availableCosignals);
+    if (!tpl) continue;
+    sections.push({ type: t.type, template: tpl, triggerRisk: t.riskLevel });
+  }
+  if (sections.length === 0) return null;
+
+  const primary = sections[0]!;
+
+  // Lead sentence: name every symptom for the multi-trigger case;
+  // delegate to the single template otherwise.
+  const lead = buildLeadSentence(
+    sections.map((s) => ({
+      type: s.type,
+      primaryWhatWeNoticed: s.template.whatWeNoticed,
+    })),
+  );
+
+  // Recommendation: one section per trigger when there are 2+
+  // symptoms, joined by double newlines. With only one trigger we
+  // just use the template's recommendation verbatim so the existing
+  // single-symptom copy is unchanged.
+  const recommendation =
+    sections.length === 1
+      ? primary.template.recommendation
+      : sections
+          .map(
+            (s) =>
+              `${TRIGGER_LABEL[s.type] ?? "Symptom support"}: ${s.template.recommendation}`,
+          )
+          .join("\n\n");
+
+  // Follow-up: ask once. Use the primary template's follow-up so the
+  // copy stays specific to the highest-priority symptom.
+  const followUpQuestion = primary.template.followUpQuestion;
+
+  // Risk: max of all triggers and all template risk levels.
+  let risk: PatientInterventionRiskLevel = "low";
+  for (const s of sections) {
+    risk = maxRisk(risk, s.template.riskLevel);
+    risk = maxRisk(risk, s.triggerRisk);
+  }
+
+  const escalationRecommended = sections.some(
+    (s) => s.template.escalationRecommended,
+  );
+
+  return {
+    whatWeNoticed: lead,
+    recommendation,
+    followUpQuestion,
+    recommendationCategory: primary.template.recommendationCategory,
+    riskLevel: risk,
+    escalationRecommended,
+    templateIdsUsed: sections.map((s) => s.template.id),
+  };
+}
+
 // Pick the best template for (trigger, available cosignals).
 // Returns null if no template for that trigger exists -- callers
 // should treat that as a programming error (every trigger MUST have

@@ -335,3 +335,63 @@ export function pickBestTrigger(
   );
   return sorted[0] ?? null;
 }
+
+// Pick the FULL set of relevant triggers for synthesis into a single
+// unified Personalized check-in card. Unlike pickBestTrigger, this
+// does NOT dedupe against active interventions -- the synthesis flow
+// always wants a fresh combined view of the patient's current
+// symptoms regardless of what's already on screen, because the route
+// handler updates the single active row in place.
+//
+// Rules:
+//   * One DetectedTrigger per `type` (highest-severity wins on ties)
+//   * Sorted: elevated > moderate > low, then by severity desc
+//   * Never returns the engine-only `worsening_symptom` /
+//     `missed_checkin` / `repeated_symptom` triggers unless they
+//     are the ONLY thing detected -- those are meta-signals, not
+//     symptom-level triggers, and would otherwise muddy the
+//     synthesized "Recommended today" sections.
+export function pickRelevantTriggers(
+  detected: ReadonlyArray<DetectedTrigger>,
+): DetectedTrigger[] {
+  // Dedupe by type, keeping the highest-severity instance of each
+  // type. This collapses e.g. "constipation + low_steps" and
+  // "constipation + low_hydration" into a single constipation
+  // entry that carries the higher risk level / severity.
+  const byType = new Map<PatientInterventionTriggerType, DetectedTrigger>();
+  for (const t of detected) {
+    const existing = byType.get(t.type);
+    if (!existing) {
+      byType.set(t.type, t);
+      continue;
+    }
+    const existingPriority = RISK_PRIORITY[existing.riskLevel];
+    const candidatePriority = RISK_PRIORITY[t.riskLevel];
+    if (
+      candidatePriority > existingPriority ||
+      (candidatePriority === existingPriority &&
+        (t.severity ?? 0) > (existing.severity ?? 0))
+    ) {
+      byType.set(t.type, t);
+    }
+  }
+  const all = Array.from(byType.values());
+
+  // Filter out meta-signals if any concrete symptom triggers exist.
+  // Meta-signals are useful as a sole fallback ("we noticed you
+  // missed check-ins") but they shouldn't compete for a section
+  // header alongside nausea/constipation.
+  const META_TYPES = new Set<PatientInterventionTriggerType>([
+    "worsening_symptom",
+    "missed_checkin",
+    "repeated_symptom",
+  ]);
+  const concrete = all.filter((t) => !META_TYPES.has(t.type));
+  const pool = concrete.length > 0 ? concrete : all;
+
+  return [...pool].sort((a, b) => {
+    const dr = RISK_PRIORITY[b.riskLevel] - RISK_PRIORITY[a.riskLevel];
+    if (dr !== 0) return dr;
+    return (b.severity ?? 0) - (a.severity ?? 0);
+  });
+}

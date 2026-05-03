@@ -149,79 +149,173 @@ router.post("/generate", async (req, res: Response) => {
       forcedSeverity: severityArg,
     });
 
+    // Unified-card invariant: at most ONE active Personalized
+    // check-in row per patient at a time. Two paths:
+    //   A. An active row exists AND is still in "shown" status (the
+    //      patient hasn't acted on it yet) -- UPDATE it in place with
+    //      the freshly synthesized multi-symptom content. This is
+    //      what makes slider edits live-update the visible card
+    //      within the 1.2s frontend debounce instead of producing a
+    //      stack of cards.
+    //   B. Otherwise (no active row, OR the active row is past
+    //      "shown" -- accepted/pending_feedback/escalated -- and we
+    //      shouldn't disrupt that flow):
+    //        * If the active row is past "shown", return it as-is.
+    //        * If no active row exists, INSERT a new one. Any prior
+    //          same-trigger active rows that the engine flagged for
+    //          supersede are dismissed first so /active still returns
+    //          exactly one card.
+    // We query active rows BEFORE branching on `generated` so that
+    // the locked-active path (accepted/pending_feedback/escalated)
+    // also wins when the engine produced no new triggers (e.g. the
+    // patient already acted on the card and nothing new is detected
+    // -- we must NOT clobber that locked row by returning null).
+    const activeRows = await db
+      .select()
+      .from(patientInterventionsTable)
+      .where(
+        and(
+          eq(patientInterventionsTable.patientUserId, userId),
+          inArray(patientInterventionsTable.status, ACTIVE_STATUSES),
+        ),
+      )
+      .orderBy(desc(patientInterventionsTable.createdAt));
+
+    const liveEditable = activeRows.find((r) => r.status === "shown") ?? null;
+    const lockedActive = activeRows.find((r) => r.status !== "shown") ?? null;
+
     if (!generated) {
-      // No new intervention -- patient is healthy or already has an
-      // active intervention for the relevant symptom. Return 200 with
-      // active=null so the mobile UI can decide what to render.
+      // No triggers detected. If the patient already engaged with a
+      // locked card (accepted / awaiting feedback / escalated), keep
+      // surfacing it so feedback flow isn't disrupted. Otherwise
+      // there's truly nothing to show.
+      if (lockedActive) {
+        res.json({ intervention: lockedActive });
+        return;
+      }
       res.json({ intervention: null, reason: "no_trigger_or_active" });
       return;
     }
 
-    // If the engine produced a trigger that matches an EXISTING active
-    // intervention for this patient, that means the new severity
-    // strictly exceeds the old one (the engine's de-dupe only allows
-    // through escalations). Dismiss the superseded row so /active
-    // returns exactly one card and the patient sees the fresh copy.
-    const supersededIds = (
-      generated.insertRow.contextSummary?.priorInterventions
-        ?.activeInterventions ?? []
-    )
-      .filter((a) => a.type === generated.insertRow.triggerType)
-      .map((a) => a.id);
-    if (supersededIds.length > 0) {
-      await db
+    let row: PatientIntervention | undefined;
+    let liveUpdated = false;
+
+    if (liveEditable) {
+      // Path A: update in place. Refresh the synthesized fields,
+      // bump the trigger metadata to the new primary, and persist.
+      // Status stays "shown" so the patient's existing card just
+      // re-renders with new copy.
+      const [updated] = await db
         .update(patientInterventionsTable)
-        .set({ status: "dismissed", updatedAt: new Date() })
-        .where(
-          and(
-            eq(patientInterventionsTable.patientUserId, userId),
-            inArray(patientInterventionsTable.id, supersededIds),
-          ),
-        );
+        .set({
+          triggerType: generated.insertRow.triggerType,
+          symptomType: generated.insertRow.symptomType,
+          severity: generated.insertRow.severity,
+          riskLevel: generated.insertRow.riskLevel,
+          contextSummary: generated.insertRow.contextSummary,
+          deidentifiedAiPayload: generated.insertRow.deidentifiedAiPayload,
+          whatWeNoticed: generated.insertRow.whatWeNoticed,
+          recommendation: generated.insertRow.recommendation,
+          followUpQuestion: generated.insertRow.followUpQuestion,
+          recommendationCategory: generated.insertRow.recommendationCategory,
+          escalationReason: generated.insertRow.escalationReason,
+          generatedBy: generated.insertRow.generatedBy,
+          updatedAt: new Date(),
+        })
+        .where(eq(patientInterventionsTable.id, liveEditable.id))
+        .returning();
+      row = updated;
+      liveUpdated = true;
+    } else if (lockedActive) {
+      // The patient has already engaged with the active card
+      // (accepted / awaiting feedback / escalated). Don't replace it
+      // and don't pile on a new one -- just return the existing row
+      // so the mobile client can keep rendering it.
+      res.json({ intervention: lockedActive });
+      return;
+    } else {
+      // Path B: no active row. Dismiss any same-trigger superseded
+      // rows that the engine flagged (rare in the unified-card model
+      // but kept for parity with prior behavior) and insert fresh.
+      const supersededIds = (
+        generated.insertRow.contextSummary?.priorInterventions
+          ?.activeInterventions ?? []
+      )
+        .filter((a) => a.type === generated.insertRow.triggerType)
+        .map((a) => a.id);
+      if (supersededIds.length > 0) {
+        await db
+          .update(patientInterventionsTable)
+          .set({ status: "dismissed", updatedAt: new Date() })
+          .where(
+            and(
+              eq(patientInterventionsTable.patientUserId, userId),
+              inArray(patientInterventionsTable.id, supersededIds),
+            ),
+          );
+      }
+      const [inserted] = await db
+        .insert(patientInterventionsTable)
+        .values(generated.insertRow)
+        .returning();
+      row = inserted;
     }
 
-    const [row] = await db
-      .insert(patientInterventionsTable)
-      .values(generated.insertRow)
-      .returning();
     if (!row) {
       res.status(500).json({ error: "insert_failed" });
       return;
     }
 
-    // Mirror to care_events (recommendation_shown). The dashboard's
-    // existing "Care loop activity" section reads care_events directly,
-    // so this row is what makes the new intervention surface there.
-    db.insert(careEventsTable)
-      .values({
-        patientUserId: userId,
-        actorUserId: null,
-        source: "viva",
-        type: "recommendation_shown",
-        metadata: {
-          intervention_id: row.id,
-          trigger_type: row.triggerType,
-          recommendation_category: row.recommendationCategory,
-          generated_by: row.generatedBy,
-          source,
-          risk_level: row.riskLevel,
-        },
-      })
-      .catch((err) => {
-        logger.warn(
-          { err, interventionId: row.id },
-          "intervention_care_event_insert_failed",
-        );
-      });
+    // Mirror to care_events (recommendation_shown) ONLY for newly
+    // inserted rows. Live updates to an already-shown card don't
+    // re-fire the "shown" event -- the patient hasn't been shown a
+    // new card, just refreshed copy on the same one. Without this
+    // guard the dashboard funnel would over-count impressions every
+    // time a slider moved.
+    if (!liveUpdated) {
+      db.insert(careEventsTable)
+        .values({
+          patientUserId: userId,
+          actorUserId: null,
+          source: "viva",
+          type: "recommendation_shown",
+          metadata: {
+            intervention_id: row.id,
+            trigger_type: row.triggerType,
+            recommendation_category: row.recommendationCategory,
+            generated_by: row.generatedBy,
+            source,
+            risk_level: row.riskLevel,
+          },
+        })
+        .catch((err) => {
+          logger.warn(
+            { err, interventionId: row.id },
+            "intervention_care_event_insert_failed",
+          );
+        });
+    }
 
-    fireAnalytics(userId, generated.analyticsEvents, {
+    // Analytics: always fire AI-payload / fallback / phi-guardrail
+    // events (they describe what the engine did), but suppress the
+    // "intervention_generated" + "intervention_shown" funnel events
+    // for live updates so the analytics taxonomy still means "a new
+    // card was created" when those events fire.
+    const eventsToFire = liveUpdated
+      ? generated.analyticsEvents.filter(
+          (e) =>
+            e !== "intervention_generated" && e !== "intervention_shown",
+        )
+      : generated.analyticsEvents;
+    fireAnalytics(userId, eventsToFire, {
       intervention_id: row.id,
       trigger_type: row.triggerType,
       generated_by: row.generatedBy,
       source,
+      live_updated: liveUpdated,
     });
 
-    res.status(201).json({ intervention: row });
+    res.status(liveUpdated ? 200 : 201).json({ intervention: row });
   } catch (err) {
     logger.error({ err, userId }, "intervention_generate_failed");
     res.status(500).json({ error: "generate_failed" });

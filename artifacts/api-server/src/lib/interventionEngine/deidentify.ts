@@ -40,6 +40,16 @@ export interface DeidentifiedOpenAIInterventionPayload {
     severityBucket: "mild" | "moderate" | "severe" | "unknown";
     riskLevel: PatientInterventionRiskLevel;
   };
+  // Full set of concurrent triggers for the multi-symptom synthesis
+  // path. The first entry duplicates `trigger` (the primary). When
+  // length > 1, the model is expected to combine all symptoms into a
+  // single intervention with one section per trigger. When length 1,
+  // behaves identically to the original single-trigger prompt.
+  triggers: ReadonlyArray<{
+    type: PatientInterventionTriggerType;
+    severityBucket: "mild" | "moderate" | "severe" | "unknown";
+    riskLevel: PatientInterventionRiskLevel;
+  }>;
   recentPattern: {
     symptomPattern: string; // e.g. "reported 2 days in a row"
     hydrationTrend: "low" | "below_usual" | "near_baseline" | "unknown";
@@ -137,8 +147,16 @@ export function buildDeidentifiedOpenAIInterventionPayload(args: {
   triggerType: PatientInterventionTriggerType;
   riskLevel: PatientInterventionRiskLevel;
   context: PatientInterventionContext;
+  // Optional full list of concurrent triggers for multi-symptom
+  // synthesis. When omitted or empty, behaves as the original
+  // single-trigger payload (and `triggers` mirrors `trigger`).
+  additionalTriggers?: ReadonlyArray<{
+    type: PatientInterventionTriggerType;
+    riskLevel: PatientInterventionRiskLevel;
+    severity: number | null;
+  }>;
 }): DeidentifiedOpenAIInterventionPayload {
-  const { triggerType, riskLevel, context } = args;
+  const { triggerType, riskLevel, context, additionalTriggers } = args;
   const today = context.today;
   const last7 = context.last7Days;
 
@@ -171,12 +189,29 @@ export function buildDeidentifiedOpenAIInterventionPayload(args: {
         : "outside_post_dose_window";
   }
 
+  const primary = {
+    type: triggerType,
+    severityBucket: severityBucket(today.severity),
+    riskLevel,
+  };
+  // De-dupe by type and ensure the primary is first. Use the
+  // per-trigger severity (not today.severity) for non-primary entries
+  // so each section's bucket reflects its own symptom intensity.
+  const seenTypes = new Set<PatientInterventionTriggerType>([primary.type]);
+  const extras: DeidentifiedOpenAIInterventionPayload["triggers"][number][] =
+    [];
+  for (const t of additionalTriggers ?? []) {
+    if (seenTypes.has(t.type)) continue;
+    seenTypes.add(t.type);
+    extras.push({
+      type: t.type,
+      severityBucket: severityBucket(t.severity),
+      riskLevel: t.riskLevel,
+    });
+  }
   return {
-    trigger: {
-      type: triggerType,
-      severityBucket: severityBucket(today.severity),
-      riskLevel,
-    },
+    trigger: primary,
+    triggers: [primary, ...extras],
     recentPattern: {
       symptomPattern: symptomPatternLabel(triggerType, context),
       hydrationTrend,
