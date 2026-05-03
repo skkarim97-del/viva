@@ -1,0 +1,51 @@
+Please update the “Recent patterns” section so it clearly reflects both recent check-ins and Apple Health / wearable data when available.
+
+Current issue:
+The section currently says “Patterns from your recent check-ins,” but Viva’s thesis is based on behavioral signals from both:
+1. patient-reported check-ins
+2. biometric/passive data from Apple Health or wearables
+
+Update section subtitle logic:
+
+If Apple Health is connected and usable:
+Subtitle:
+Patterns from your check-ins and Apple Health
+
+If Apple Health is not connected:
+Subtitle:
+Patterns from your recent check-ins
+
+If connected but no meaningful Apple Health pattern exists yet:
+Subtitle:
+Patterns from your check-ins and Apple Health
+
+Then show an empty/learning state if needed:
+“Keep checking in so Viva can learn your patterns.”
+
+Pattern examples when Apple Health is available:
+- Your activity tends to dip on higher-symptom days
+- Sleep was lighter before lower-energy check-ins
+- Steps were lower on days nausea was heavier
+- Your appetite tends to dip around 2 days after your dose
+- Energy tends to rebound after lighter recovery days
+
+Pattern examples from check-ins only:
+- Nausea has shown up more than once this week
+- Your appetite tends to dip around 2 days after your dose
+- Digestion symptoms tend to show up when appetite is lower
+- Energy tends to be lower after dose day
+
+Rules:
+- Do not say Apple Health was used if Apple Health is not connected
+- Do not invent wearable trends if there is no available data
+- Keep patterns short, readable and patient-friendly
+- Avoid technical language
+- Do not overclaim causation. Use “tends to,” “often,” “appears,” or “has shown up”
+- Preserve HIPAA/OpenAI guardrails
+- Do not send PHI to OpenAI
+
+Acceptance:
+- Recent patterns subtitle references Apple Health only when available
+- Pattern bullets can include Apple Health trends when available
+- If Apple Health is not connected, it remains check-in based
+- The section supports the broader thesis: check-ins + wearable data → personalized support

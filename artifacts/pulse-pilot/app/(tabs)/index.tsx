@@ -1222,15 +1222,41 @@ export default function DashboardScreen() {
           );
         })()}
 
-        {adaptiveInsights.length > 0 && (
+        {(adaptiveInsights.length > 0 || hasHealthData) && (
           <View style={[styles.insightsCard, { backgroundColor: c.card }]}>
             <View style={styles.insightsHeader}>
               <Feather name="bar-chart-2" size={14} color={c.accent} />
               <Text style={[styles.insightsTitle, { color: c.foreground }]}>Recent patterns</Text>
             </View>
+            {/* Subtitle reflects the actual signal mix. We only mention
+                Apple Health when the patient has it connected, so the
+                section never overclaims its data sources. The thesis
+                stays clear: check-ins + wearable data → personalized
+                support. */}
             <Text style={[styles.sectionSubtitle, { color: c.mutedForeground }]}>
-              Patterns from your recent check-ins
+              {hasHealthData
+                ? "Patterns from your check-ins and Apple Health"
+                : "Patterns from your recent check-ins"}
             </Text>
+            {/* Learning-state copy. Shown when Apple Health is
+                connected but the engine has not yet found a stable
+                pattern -- without this, the section would simply
+                disappear and feel broken to a newly-connected user.
+                Check-in-only patients keep the original behavior of
+                hiding the section entirely until insights exist. */}
+            {adaptiveInsights.length === 0 && hasHealthData && (
+              <View style={styles.insightRow}>
+                <Feather
+                  name="clock"
+                  size={12}
+                  color={c.mutedForeground}
+                  style={{ marginTop: 2 }}
+                />
+                <Text style={[styles.insightText, { color: c.mutedForeground }]}>
+                  Keep checking in so Viva can learn your patterns.
+                </Text>
+              </View>
+            )}
             {adaptiveInsights.slice(0, 3).map((insight) => (
               <View key={insight.id} style={styles.insightRow}>
                 <Feather
