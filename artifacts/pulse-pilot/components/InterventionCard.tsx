@@ -1,7 +1,7 @@
 // Today-tab card that surfaces an AI-personalized micro-intervention.
 //
 // Patient-facing UX (clinical micro-protocol rework):
-//   Title:    "Today's next steps"
+//   Title:    "Symptom support"
 //   Subtitle: "Based on your check-in, here's what may help today."
 //   Section:  "What we noticed"
 //             Plain-language sentence built from the symptom
@@ -1507,12 +1507,10 @@ export function InterventionCard({
             </View>
           </View>
           <Text style={[styles.title, { color: navy }]}>
-            Today&apos;s next steps
+            Symptom support
           </Text>
           <Text style={[styles.subtitle, { color: mutedForeground }]}>
-            {hasHealthData
-              ? "Based on your check-in, recent symptoms and Apple Health trends"
-              : "Based on your check-in and recent symptoms"}
+            Personalized support based on today&apos;s check-in
           </Text>
           {/* Dev-only matrix probe. Lets us confirm at a glance that
               the displayed plan is recalculating from the chip

@@ -963,14 +963,14 @@ export default function DashboardScreen() {
             that used to live here has been removed. The intervention
             card below now owns escalation -- when symptoms are
             severe it surfaces a single "Ask my care team to review"
-            button right inside "Today's next steps", which keeps
+            button right inside "Symptom support", which keeps
             the page focused with one clear escalation action
             instead of two competing orange prompts. The supporting
             state (showTodayEscalationCta, requestTodayReview) is
             kept in the component so we can re-surface this CTA
             elsewhere later without rewiring. */}
 
-        {/* AI-personalized micro-interventions ("Today's next steps").
+        {/* AI-personalized micro-interventions ("Symptom support").
             Positioned directly under the top status card so the
             patient sees what to DO immediately after seeing what
             Viva NOTICED. This is the headline value of the Today
@@ -1057,7 +1057,7 @@ export default function DashboardScreen() {
               <View style={styles.treatmentHeader}>
                 <View style={styles.treatmentTitleRow}>
                   <Feather name="shield" size={14} color={c.accent} />
-                  <Text style={[styles.treatmentTitle, { color: c.foreground }]}>Your Treatment</Text>
+                  <Text style={[styles.treatmentTitle, { color: c.foreground }]}>Your treatment</Text>
                 </View>
                 {mp.recentTitration && (
                   <View style={[styles.titrationBadge, { backgroundColor: "#FF950018" }]}>
@@ -1204,9 +1204,12 @@ export default function DashboardScreen() {
         {adaptiveInsights.length > 0 && (
           <View style={[styles.insightsCard, { backgroundColor: c.card }]}>
             <View style={styles.insightsHeader}>
-              <Feather name="trending-up" size={14} color={c.accent} />
-              <Text style={[styles.insightsTitle, { color: c.foreground }]}>{hasHealthData ? "Based on Your Data" : "Based on Your Check-ins"}</Text>
+              <Feather name="bar-chart-2" size={14} color={c.accent} />
+              <Text style={[styles.insightsTitle, { color: c.foreground }]}>Recent patterns</Text>
             </View>
+            <Text style={[styles.sectionSubtitle, { color: c.mutedForeground }]}>
+              Patterns from your recent check-ins
+            </Text>
             {adaptiveInsights.slice(0, 3).map((insight) => (
               <View key={insight.id} style={styles.insightRow}>
                 <Feather
@@ -1319,8 +1322,11 @@ export default function DashboardScreen() {
         <View style={[styles.inputContainer, { backgroundColor: c.card }]}>
           <View style={styles.inputHeader}>
             <Feather name="edit-3" size={14} color={c.accent} />
-            <Text style={[styles.inputTitle, { color: c.foreground }]}>How are things today?</Text>
+            <Text style={[styles.inputTitle, { color: c.foreground }]}>Today&apos;s check-in</Text>
           </View>
+          <Text style={[styles.sectionSubtitle, { color: c.mutedForeground }]}>
+            Log today&apos;s symptoms to personalize support
+          </Text>
           {inputSummary ? (
             <Text style={[styles.inputSummaryText, { color: c.mutedForeground }]}>{inputSummary}</Text>
           ) : null}
@@ -1396,11 +1402,17 @@ export default function DashboardScreen() {
 
         <View style={[styles.dayCard, { backgroundColor: c.card }]}>
           <View style={styles.dayHeader}>
-            <Text style={[styles.dayTitle, { color: c.foreground }]}>Your Plan</Text>
+            <View style={styles.dayTitleRow}>
+              <Feather name="check-square" size={14} color={c.accent} />
+              <Text style={[styles.dayTitle, { color: c.foreground }]}>Your plan</Text>
+            </View>
             <Text style={[styles.dayProgress, { color: c.mutedForeground }]}>
               {completedCount}/{totalActions}
             </Text>
           </View>
+          <Text style={[styles.sectionSubtitle, { color: c.mutedForeground }]}>
+            Small actions that support progress
+          </Text>
           {planActions.map((action) => {
             const meta = ACTION_META[action.category];
 
@@ -1681,7 +1693,7 @@ export default function DashboardScreen() {
             </View>
             <Text style={[styles.emptyHealthTitle, { color: c.foreground }]}>Connect Apple Health</Text>
             <Text style={[styles.emptyHealthDesc, { color: c.mutedForeground }]}>
-              Unlock passive insights like sleep, steps, and heart rate. Your recommendations will become more personalized over time.
+              Unlock more personalized support with sleep, steps and heart rate.
             </Text>
             <Pressable
               onPress={() => { haptic(); router.push("/(tabs)/settings"); }}
@@ -2322,12 +2334,33 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 12,
+    marginBottom: 4,
+  },
+  // Title + matching section icon row, used inside dayHeader so the
+  // plan section reads with the same icon-prefixed treatment as the
+  // other Today-tab section headers (treatment, recent patterns,
+  // today's check-in).
+  dayTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   dayTitle: {
     fontSize: 16,
     fontFamily: "Montserrat_600SemiBold",
     letterSpacing: -0.1,
+  },
+  // Shared subtitle for section headers across the Today tab. Sits
+  // directly under the icon + title row and gives every section a
+  // one-liner that explains its role -- "Patterns from your recent
+  // check-ins", "Log today's symptoms to personalize support",
+  // "Small actions that support progress" -- so the page reads as a
+  // hierarchy of clearly-different surfaces.
+  sectionSubtitle: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: "Montserrat_500Medium",
+    marginBottom: 10,
   },
   dayProgress: {
     fontSize: 13,
