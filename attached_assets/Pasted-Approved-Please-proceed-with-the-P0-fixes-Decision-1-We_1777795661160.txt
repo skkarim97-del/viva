@@ -1,0 +1,106 @@
+Approved. Please proceed with the P0 fixes.
+
+Decision 1: Weekly plan persistence
+Yes, add a new patient_plan_items table.
+
+Required:
+- Persist Week tab and Today “Your plan” items to AWS DB
+- Store automated suggestion vs patient-selected override
+- Store completion state and completed_at timestamp
+- Store category: MOVE / FUEL / HYDRATE / RECOVER
+- Store optionId / title / subtitle or enough info to reconstruct the copy
+- Store weekStart and dayIndex/date
+- Emit analytics events for:
+  - plan_item_suggested
+  - plan_item_overridden
+  - plan_item_completed
+  - plan_item_uncompleted if supported
+  - week_plan_viewed if not already tracked
+
+Add endpoints:
+- GET /api/me/plan-items
+- POST /api/me/plan-items
+- PATCH /api/me/plan-items/:id
+or equivalent REST shape that fits the current API structure
+
+Important:
+- Keep local storage only as cache/offline support
+- Server is source of truth
+- On app load, hydrate Week/Today plan from server
+- On offline actions, queue and replay safely
+- Do not break current UI/logic
+
+Decision 2: Apple Health / wearable integration state
+Use option B: create a new patient_integrations table.
+
+Reason:
+We should not hardcode this around only Apple Health. Viva’s thesis includes wearables broadly, so use a future-proof table.
+
+Table should support:
+- patient_user_id
+- provider type: apple_health initially
+- status: connected / disconnected / declined / unavailable / unknown
+- connected_at
+- disconnected_at
+- last_sync_at
+- permissions / available data types if useful
+- created_at
+- updated_at
+
+Required:
+- Persist Apple Health connection state to AWS DB
+- Continue using actual health samples as proof of available data
+- Do not claim Apple Health trends unless data exists
+- But do distinguish:
+  - patient never connected
+  - patient declined
+  - connected but no data yet
+  - connected and syncing
+
+Decision 3: Fold in P1
+Yes, include the PATCH /me/checkins/escalate care_events fix in the same batch.
+
+Required:
+- Any escalation/sticky-flag path should create a care_event
+- Include useful context:
+  - symptoms
+  - severity
+  - latest intervention shown if available
+  - feedback if available
+  - dose timing if available
+  - Apple Health context if available
+- Avoid duplicate escalation events from repeated taps
+
+Decision 4: Demo seed
+Yes, after P0 lands, re-seed AWS demo data so demo patients have realistic:
+- plan items
+- plan completions
+- overrides
+- Apple Health integration states
+- wearable sample data where appropriate
+- intervention history
+- escalation examples
+
+Keep demo data clearly isolated to demo doctor/patients.
+
+After implementation:
+Run the full smoke scenarios A-H from the QA spec:
+A. New patient onboarding
+B. Stable daily check-in
+C. Severe symptoms + escalation
+D. Worse → better same day
+E. Plan override + completion
+F. Dose log
+G. Apple Health disconnected
+H. Apple Health connected / test data
+
+Final deliverable:
+Give me a concise launch readiness report with:
+1. What changed
+2. What passed
+3. What remains local-only, if anything
+4. Whether all critical patient/provider data persists to AWS DB
+5. Whether Viva Care → Viva Clinic → Viva Analytics data flow works
+6. Whether intervention closed loop works
+7. Whether HIPAA/OpenAI guardrails remain intact
+8. Final pilot readiness rating out of 10

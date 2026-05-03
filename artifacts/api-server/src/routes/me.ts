@@ -1,5 +1,5 @@
 import { Router, type Response } from "express";
-import { desc, eq, and, sql } from "drizzle-orm";
+import { desc, eq, and, sql, gte, inArray } from "drizzle-orm";
 import { z } from "zod";
 import {
   db,
@@ -8,7 +8,15 @@ import {
   patientHealthDailySummariesTable,
   patientTreatmentLogsTable,
   patientProfilesTable,
+  patientPlanItemsTable,
+  patientIntegrationsTable,
+  patientInterventionsTable,
+  careEventsTable,
   analyticsEventsTable,
+  PLAN_ITEM_CATEGORIES,
+  PLAN_ITEM_SOURCES,
+  INTEGRATION_PROVIDERS,
+  INTEGRATION_STATUSES,
 } from "@workspace/db";
 import { requirePatient, type AuthedRequest } from "../middlewares/auth";
 import { computeRisk } from "../lib/risk";
@@ -415,12 +423,741 @@ router.patch("/checkins/escalate", async (req, res: Response) => {
     res.status(404).json({ error: "no_checkin_today" });
     return;
   }
+  // Sticky-flag idempotency: the patient_checkins.clinicianRequested
+  // jsonb already records "patient asked for clinician on this date
+  // for this symptom" as a sticky boolean. We use that as the
+  // dedupe key for the care_event so repeated taps (and the offline
+  // replay queue) cannot multiply the doctor's worklist row.
+  const wasAlreadyRequested =
+    (existing.clinicianRequested as Record<string, boolean> | null)?.[symptom] ===
+    true;
   const merged = { ...(existing.clinicianRequested ?? {}), [symptom]: true };
   await db
     .update(patientCheckinsTable)
     .set({ clinicianRequested: merged })
     .where(eq(patientCheckinsTable.id, existing.id));
-  res.json({ ok: true, clinicianRequested: merged });
+
+  // -- care_event emission with rich-but-PHI-free context ----------
+  //
+  // The other escalation path (POST /me/interventions/:id/escalate)
+  // already inserts a care_event row. The sticky-flag path
+  // historically did not, so the funnel undercounted patient-led
+  // escalations. We close that gap here. All metadata fields are
+  // ENUMS or NUMBERS or BOOLEANS -- never free patient text -- so
+  // care_events.metadata stays PHI-clean by construction.
+  if (!wasAlreadyRequested) {
+    try {
+      // Latest live intervention for this patient (any status, last
+      // 7 days). symptomType / triggerType / status are closed
+      // taxonomies; recommendation copy is intentionally NOT
+      // included.
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const [latestIntervention] = await db
+        .select({
+          id: patientInterventionsTable.id,
+          symptomType: patientInterventionsTable.symptomType,
+          triggerType: patientInterventionsTable.triggerType,
+          status: patientInterventionsTable.status,
+          createdAt: patientInterventionsTable.createdAt,
+        })
+        .from(patientInterventionsTable)
+        .where(
+          and(
+            eq(patientInterventionsTable.patientUserId, userId),
+            gte(patientInterventionsTable.createdAt, sevenDaysAgo),
+          ),
+        )
+        .orderBy(desc(patientInterventionsTable.createdAt))
+        .limit(1);
+
+      // Latest patient feedback on any intervention. Bounded enum
+      // ("better"|"same"|"worse") -- no free text.
+      const [latestFeedbackEvt] = await db
+        .select({
+          metadata: careEventsTable.metadata,
+          occurredAt: careEventsTable.occurredAt,
+        })
+        .from(careEventsTable)
+        .where(
+          and(
+            eq(careEventsTable.patientUserId, userId),
+            eq(careEventsTable.type, "intervention_feedback"),
+          ),
+        )
+        .orderBy(desc(careEventsTable.occurredAt))
+        .limit(1);
+      const fbMeta =
+        (latestFeedbackEvt?.metadata as Record<string, unknown> | null) ?? null;
+      const latestFeedback = fbMeta
+        ? {
+            response: typeof fbMeta.response === "string" ? fbMeta.response : null,
+            intervention:
+              typeof fbMeta.intervention === "string" ? fbMeta.intervention : null,
+            at: latestFeedbackEvt!.occurredAt,
+          }
+        : null;
+
+      // Most recent patient_health_daily_summary (last 14 days only;
+      // older signals aren't useful clinical context). Numbers only.
+      const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .split("T")[0]!;
+      const [latestHealth] = await db
+        .select()
+        .from(patientHealthDailySummariesTable)
+        .where(
+          and(
+            eq(patientHealthDailySummariesTable.patientUserId, userId),
+            gte(patientHealthDailySummariesTable.summaryDate, fourteenDaysAgo),
+          ),
+        )
+        .orderBy(desc(patientHealthDailySummariesTable.summaryDate))
+        .limit(1);
+
+      // Apple Health connection state (intent recorded by patient,
+      // separate from "did data arrive").
+      const [ahIntegration] = await db
+        .select({
+          status: patientIntegrationsTable.status,
+          connectedAt: patientIntegrationsTable.connectedAt,
+          lastSyncAt: patientIntegrationsTable.lastSyncAt,
+        })
+        .from(patientIntegrationsTable)
+        .where(
+          and(
+            eq(patientIntegrationsTable.patientUserId, userId),
+            eq(patientIntegrationsTable.provider, "apple_health"),
+          ),
+        )
+        .limit(1);
+
+      const careEventMetadata = {
+        symptom, // "nausea" | "constipation" | "low_appetite"
+        date,
+        channel: "checkin_sticky_flag",
+        reason: "patient_requested_clinician_review",
+        // Severity from today's check-in. All bounded enums.
+        severity: {
+          energy: existing.energy ?? null,
+          nausea: existing.nausea ?? null,
+          appetite: existing.appetite ?? null,
+          digestion: existing.digestion ?? null,
+          hydration: existing.hydration ?? null,
+          bowelMovement: existing.bowelMovement ?? null,
+        },
+        // Same-day dose context -- did the patient take their GLP-1
+        // today? Booleans only.
+        dose: {
+          takenToday: existing.doseTakenToday ?? null,
+        },
+        // Latest live intervention (PHI-free identifiers only).
+        latestIntervention: latestIntervention
+          ? {
+              id: latestIntervention.id,
+              symptomType: latestIntervention.symptomType,
+              triggerType: latestIntervention.triggerType,
+              status: latestIntervention.status,
+              createdAt: latestIntervention.createdAt,
+            }
+          : null,
+        latestFeedback,
+        // Apple Health context. Distinguish "no data because
+        // disconnected" from "no data because day was zero".
+        appleHealth: {
+          status: ahIntegration?.status ?? "unknown",
+          lastSyncAt: ahIntegration?.lastSyncAt ?? null,
+          latestSummary: latestHealth
+            ? {
+                date: latestHealth.summaryDate,
+                steps: latestHealth.steps,
+                sleepMinutes: latestHealth.sleepMinutes,
+                hrv: latestHealth.hrv,
+                restingHeartRate: latestHealth.restingHeartRate,
+              }
+            : null,
+        },
+        // Other symptoms the patient has flagged as clinician-
+        // requested in the same check-in row. Useful so the doctor
+        // sees "patient flagged BOTH nausea AND constipation today".
+        coFlaggedSymptoms: Object.entries(
+          (merged as Record<string, boolean>) ?? {},
+        )
+          .filter(([k, v]) => v === true && k !== symptom)
+          .map(([k]) => k),
+      };
+
+      await db.insert(careEventsTable).values({
+        patientUserId: userId,
+        actorUserId: userId,
+        source: "patient",
+        type: "escalation_requested",
+        triggerEventId: latestIntervention?.id ?? null,
+        metadata: careEventMetadata,
+      });
+    } catch (err) {
+      // Care-event emission MUST NOT block the patient's UI flow.
+      // The sticky flag itself is already persisted above; a missing
+      // analytics row is a degraded-but-acceptable outcome.
+      req.log.warn(
+        { err, userId, date, symptom },
+        "escalate_care_event_insert_failed",
+      );
+    }
+  }
+
+  res.json({
+    ok: true,
+    clinicianRequested: merged,
+    careEventEmitted: !wasAlreadyRequested,
+  });
+});
+
+// =====================================================================
+// Plan items (weekly plan + completion). Server is source of truth;
+// the mobile client uses AsyncStorage as a cache and replays
+// mutations best-effort.
+// =====================================================================
+
+const planItemUpsertSchema = z.object({
+  weekStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  dayIndex: z.number().int().min(0).max(6),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  category: z.enum(PLAN_ITEM_CATEGORIES),
+  recommended: z.string().max(400).nullish(),
+  chosen: z.string().max(400).nullish(),
+  source: z.enum(PLAN_ITEM_SOURCES).nullish(),
+  completed: z.boolean().nullish(),
+  title: z.string().max(200).nullish(),
+  subtitle: z.string().max(400).nullish(),
+  // metadata is closed-key on the server side (allowlist below) so
+  // a future contributor can't widen it into a PHI-leaking grab bag.
+  metadata: z.record(z.unknown()).nullish(),
+});
+
+// Closed allowlist for plan-item metadata keys. Anything outside
+// this set is dropped before insert.
+const ALLOWED_PLAN_ITEM_METADATA_KEYS = new Set([
+  "optionId",
+  "focusArea",
+  "templateId",
+  "generator",
+  "rationale",
+]);
+
+// Closed allowlist for analytics_events.payload on plan_item_*
+// events. Categories / weekStart / dayIndex / source / optionId are
+// all enums or stable identifiers -- never free patient text.
+const ALLOWED_PLAN_EVENT_KEYS = new Set([
+  "category",
+  "weekStart",
+  "dayIndex",
+  "date",
+  "source",
+  "optionId",
+  "previousChosenSameAsRecommended",
+  "newChosenSameAsRecommended",
+  "completed",
+  "previousCompleted",
+  "daysCount",
+  "completedCount",
+  "overrideCount",
+]);
+
+function sanitizePlanMetadata(
+  raw: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null {
+  if (!raw) return null;
+  const out: Record<string, unknown> = {};
+  for (const k of Object.keys(raw)) {
+    if (ALLOWED_PLAN_ITEM_METADATA_KEYS.has(k)) out[k] = raw[k];
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+function sanitizePlanEventPayload(
+  raw: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const k of Object.keys(raw)) {
+    if (ALLOWED_PLAN_EVENT_KEYS.has(k)) out[k] = raw[k];
+  }
+  return out;
+}
+
+async function emitPlanAnalytics(
+  userId: number,
+  eventName: string,
+  date: string,
+  payload: Record<string, unknown>,
+  log: AuthedRequest["log"],
+): Promise<void> {
+  try {
+    await db.insert(analyticsEventsTable).values({
+      userType: "patient",
+      userId,
+      eventName,
+      eventDate: date,
+      payload: sanitizePlanEventPayload(payload),
+    });
+  } catch (err) {
+    log.warn({ err, userId, eventName }, "plan_item_analytics_insert_failed");
+  }
+}
+
+router.get("/plan-items", async (req, res: Response) => {
+  const userId = (req as AuthedRequest).auth.userId;
+  const weekStart = typeof req.query.weekStart === "string" ? req.query.weekStart : null;
+  if (weekStart && !/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) {
+    res.status(400).json({ error: "invalid_week_start" });
+    return;
+  }
+  // weekStart query → only that week. Otherwise return the last
+  // 4 weeks (28 days) so the mobile cache hydrates the carousel
+  // without a follow-up call.
+  const fromDate = weekStart
+    ? weekStart
+    : new Date(Date.now() - 28 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .split("T")[0]!;
+  const rows = await db
+    .select()
+    .from(patientPlanItemsTable)
+    .where(
+      and(
+        eq(patientPlanItemsTable.patientUserId, userId),
+        weekStart
+          ? eq(patientPlanItemsTable.weekStart, weekStart)
+          : gte(patientPlanItemsTable.date, fromDate),
+      ),
+    )
+    .orderBy(
+      patientPlanItemsTable.weekStart,
+      patientPlanItemsTable.dayIndex,
+      patientPlanItemsTable.category,
+    );
+  // Optional analytics: when a weekStart is supplied this is the
+  // mobile Week tab hydrating, so emit a week_plan_viewed event.
+  if (weekStart) {
+    const completedCount = rows.filter((r) => r.completedAt != null).length;
+    const overrideCount = rows.filter((r) => r.source === "patient_override").length;
+    await emitPlanAnalytics(
+      userId,
+      "week_plan_viewed",
+      weekStart,
+      {
+        weekStart,
+        daysCount: new Set(rows.map((r) => r.dayIndex)).size,
+        completedCount,
+        overrideCount,
+      },
+      (req as AuthedRequest).log,
+    );
+  }
+  res.json(rows);
+});
+
+router.post("/plan-items", async (req, res: Response) => {
+  const userId = (req as AuthedRequest).auth.userId;
+  const parsed = planItemUpsertSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_input" });
+    return;
+  }
+  // Explicit type assertion: drizzle-zod / zod version drift in this
+  // workspace currently degrades the inferred type of parsed.data to
+  // `unknown` whenever the schema includes a z.record(z.unknown())
+  // field. The runtime guarantee from Zod is unchanged -- this cast
+  // only restores the type information for the rest of the handler.
+  const v = parsed.data as {
+    weekStart: string;
+    dayIndex: number;
+    date: string;
+    category: (typeof PLAN_ITEM_CATEGORIES)[number];
+    recommended?: string | null;
+    chosen?: string | null;
+    source?: (typeof PLAN_ITEM_SOURCES)[number] | null;
+    completed?: boolean | null;
+    title?: string | null;
+    subtitle?: string | null;
+    metadata?: Record<string, unknown> | null;
+  };
+  const recommended = v.recommended ?? null;
+  const chosen = v.chosen ?? recommended;
+  const declaredSource = v.source ?? "auto";
+  // If chosen differs from recommended, the row is by definition a
+  // patient override -- regardless of what the client claimed.
+  const source: typeof declaredSource =
+    recommended != null && chosen != null && chosen !== recommended
+      ? "patient_override"
+      : declaredSource;
+  const completedAt = v.completed === true ? new Date() : null;
+  const metadata = sanitizePlanMetadata(v.metadata);
+
+  // Snapshot prior row so we can diff for analytics.
+  const [previousRow] = await db
+    .select()
+    .from(patientPlanItemsTable)
+    .where(
+      and(
+        eq(patientPlanItemsTable.patientUserId, userId),
+        eq(patientPlanItemsTable.weekStart, v.weekStart),
+        eq(patientPlanItemsTable.dayIndex, v.dayIndex),
+        eq(patientPlanItemsTable.category, v.category),
+      ),
+    )
+    .limit(1);
+
+  const [row] = await db
+    .insert(patientPlanItemsTable)
+    .values({
+      patientUserId: userId,
+      weekStart: v.weekStart,
+      dayIndex: v.dayIndex,
+      date: v.date,
+      category: v.category,
+      recommended,
+      chosen,
+      source,
+      completedAt,
+      title: v.title ?? null,
+      subtitle: v.subtitle ?? null,
+      metadata,
+    })
+    .onConflictDoUpdate({
+      target: [
+        patientPlanItemsTable.patientUserId,
+        patientPlanItemsTable.weekStart,
+        patientPlanItemsTable.dayIndex,
+        patientPlanItemsTable.category,
+      ],
+      set: {
+        // Coalesce recommended/title/subtitle so a partial mutation
+        // (e.g. toggle complete) doesn't blank the existing copy.
+        recommended: sql`coalesce(excluded.recommended, ${patientPlanItemsTable.recommended})`,
+        chosen: sql`coalesce(excluded.chosen, ${patientPlanItemsTable.chosen})`,
+        source: source,
+        completedAt:
+          v.completed === undefined
+            ? sql`${patientPlanItemsTable.completedAt}` // unchanged
+            : completedAt,
+        title: sql`coalesce(excluded.title, ${patientPlanItemsTable.title})`,
+        subtitle: sql`coalesce(excluded.subtitle, ${patientPlanItemsTable.subtitle})`,
+        metadata: metadata
+          ? metadata
+          : sql`${patientPlanItemsTable.metadata}`,
+        updatedAt: new Date(),
+      },
+    })
+    .returning();
+
+  // Analytics emissions (best-effort).
+  const optionId =
+    typeof metadata?.optionId === "string" ? metadata.optionId : null;
+  const eventLog = (req as AuthedRequest).log;
+  if (!previousRow) {
+    await emitPlanAnalytics(
+      userId,
+      source === "auto" ? "plan_item_suggested" : "plan_item_overridden",
+      v.date,
+      {
+        category: v.category,
+        weekStart: v.weekStart,
+        dayIndex: v.dayIndex,
+        source,
+        optionId,
+      },
+      eventLog,
+    );
+  } else {
+    const prevChosen = previousRow.chosen ?? previousRow.recommended;
+    if (chosen !== prevChosen) {
+      await emitPlanAnalytics(
+        userId,
+        "plan_item_overridden",
+        v.date,
+        {
+          category: v.category,
+          weekStart: v.weekStart,
+          dayIndex: v.dayIndex,
+          source,
+          optionId,
+          previousChosenSameAsRecommended:
+            (previousRow.chosen ?? null) === (previousRow.recommended ?? null),
+          newChosenSameAsRecommended: chosen === recommended,
+        },
+        eventLog,
+      );
+    }
+  }
+  if (
+    v.completed !== undefined &&
+    (previousRow?.completedAt != null) !== (row!.completedAt != null)
+  ) {
+    await emitPlanAnalytics(
+      userId,
+      row!.completedAt != null ? "plan_item_completed" : "plan_item_uncompleted",
+      v.date,
+      {
+        category: v.category,
+        weekStart: v.weekStart,
+        dayIndex: v.dayIndex,
+        source: row!.source,
+        optionId,
+        completed: row!.completedAt != null,
+      },
+      eventLog,
+    );
+  }
+
+  res.status(201).json(row);
+});
+
+router.patch("/plan-items/:id", async (req, res: Response) => {
+  const userId = (req as unknown as AuthedRequest).auth.userId;
+  const id = Number.parseInt(req.params.id ?? "", 10);
+  if (!Number.isFinite(id) || id <= 0) {
+    res.status(400).json({ error: "invalid_id" });
+    return;
+  }
+  const patchSchema = z.object({
+    chosen: z.string().max(400).nullish(),
+    completed: z.boolean().nullish(),
+  });
+  const parsed = patchSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_input" });
+    return;
+  }
+  const [existing] = await db
+    .select()
+    .from(patientPlanItemsTable)
+    .where(
+      and(
+        eq(patientPlanItemsTable.id, id),
+        // Ownership check -- doctors must NEVER reach this row.
+        eq(patientPlanItemsTable.patientUserId, userId),
+      ),
+    )
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  const update: Partial<typeof patientPlanItemsTable.$inferInsert> = {
+    updatedAt: new Date(),
+  };
+  let didOverride = false;
+  if (parsed.data.chosen !== undefined) {
+    update.chosen = parsed.data.chosen ?? null;
+    if ((parsed.data.chosen ?? null) !== (existing.recommended ?? null)) {
+      update.source = "patient_override";
+      didOverride = true;
+    }
+  }
+  let completionTransition: "completed" | "uncompleted" | null = null;
+  if (parsed.data.completed !== undefined) {
+    const wasCompleted = existing.completedAt != null;
+    if (parsed.data.completed && !wasCompleted) {
+      update.completedAt = new Date();
+      completionTransition = "completed";
+    } else if (!parsed.data.completed && wasCompleted) {
+      update.completedAt = null;
+      completionTransition = "uncompleted";
+    }
+  }
+  const [row] = await db
+    .update(patientPlanItemsTable)
+    .set(update)
+    .where(eq(patientPlanItemsTable.id, id))
+    .returning();
+
+  const optionId =
+    typeof (existing.metadata as Record<string, unknown> | null)?.optionId === "string"
+      ? ((existing.metadata as Record<string, unknown>).optionId as string)
+      : null;
+  const eventLog = (req as unknown as AuthedRequest).log;
+  if (didOverride) {
+    await emitPlanAnalytics(
+      userId,
+      "plan_item_overridden",
+      existing.date,
+      {
+        category: existing.category,
+        weekStart: existing.weekStart,
+        dayIndex: existing.dayIndex,
+        source: "patient_override",
+        optionId,
+      },
+      eventLog,
+    );
+  }
+  if (completionTransition) {
+    await emitPlanAnalytics(
+      userId,
+      completionTransition === "completed"
+        ? "plan_item_completed"
+        : "plan_item_uncompleted",
+      existing.date,
+      {
+        category: existing.category,
+        weekStart: existing.weekStart,
+        dayIndex: existing.dayIndex,
+        source: row!.source,
+        optionId,
+        completed: completionTransition === "completed",
+      },
+      eventLog,
+    );
+  }
+
+  res.json(row);
+});
+
+// =====================================================================
+// Patient integrations (Apple Health initially, extensible). Records
+// the patient's CONNECTION INTENT, distinct from "did data arrive"
+// which is answered by patient_health_daily_summaries presence.
+// =====================================================================
+
+const integrationUpsertSchema = z.object({
+  status: z.enum(INTEGRATION_STATUSES),
+  permissions: z.array(z.string().max(60)).max(40).nullish(),
+  // Closed-key allowlist applied below; metadata is for non-PHI
+  // device/OS context.
+  metadata: z.record(z.unknown()).nullish(),
+});
+
+const ALLOWED_INTEGRATION_METADATA_KEYS = new Set([
+  "platform",
+  "osVersion",
+  "deviceModel",
+  "appVersion",
+  "disconnectReason",
+  "errorCode",
+]);
+
+function sanitizeIntegrationMetadata(
+  raw: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null {
+  if (!raw) return null;
+  const out: Record<string, unknown> = {};
+  for (const k of Object.keys(raw)) {
+    if (ALLOWED_INTEGRATION_METADATA_KEYS.has(k)) out[k] = raw[k];
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+router.get("/integrations", async (req, res: Response) => {
+  const userId = (req as AuthedRequest).auth.userId;
+  const rows = await db
+    .select()
+    .from(patientIntegrationsTable)
+    .where(eq(patientIntegrationsTable.patientUserId, userId));
+  res.json(rows);
+});
+
+router.put("/integrations/:provider", async (req, res: Response) => {
+  const userId = (req as unknown as AuthedRequest).auth.userId;
+  const provider = req.params.provider;
+  if (
+    !provider ||
+    !(INTEGRATION_PROVIDERS as readonly string[]).includes(provider)
+  ) {
+    res.status(400).json({ error: "invalid_provider" });
+    return;
+  }
+  const parsed = integrationUpsertSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_input" });
+    return;
+  }
+  // Same Zod-inference cast workaround as /plan-items.
+  const v = parsed.data as {
+    status: (typeof INTEGRATION_STATUSES)[number];
+    permissions?: string[] | null;
+    metadata?: Record<string, unknown> | null;
+  };
+  const now = new Date();
+
+  const [existing] = await db
+    .select()
+    .from(patientIntegrationsTable)
+    .where(
+      and(
+        eq(patientIntegrationsTable.patientUserId, userId),
+        eq(patientIntegrationsTable.provider, provider as "apple_health"),
+      ),
+    )
+    .limit(1);
+
+  // First-time-connected timestamp is sticky across reconnects so
+  // analytics can answer "ever connected?" without scanning history.
+  const connectedAt =
+    v.status === "connected"
+      ? existing?.connectedAt ?? now
+      : existing?.connectedAt ?? null;
+  // Disconnect timestamp updates whenever the new status is a
+  // non-connected terminal state (disconnected/declined). We do not
+  // overwrite for 'unknown' (which is the initial install state).
+  const disconnectedAt =
+    v.status === "disconnected" || v.status === "declined"
+      ? now
+      : existing?.disconnectedAt ?? null;
+
+  const metadata = sanitizeIntegrationMetadata(v.metadata);
+  const permissions = v.permissions ?? null;
+
+  const [row] = await db
+    .insert(patientIntegrationsTable)
+    .values({
+      patientUserId: userId,
+      provider: provider as "apple_health",
+      status: v.status,
+      connectedAt,
+      disconnectedAt,
+      lastSyncAt: existing?.lastSyncAt ?? null,
+      permissions,
+      metadata,
+    })
+    .onConflictDoUpdate({
+      target: [
+        patientIntegrationsTable.patientUserId,
+        patientIntegrationsTable.provider,
+      ],
+      set: {
+        status: v.status,
+        connectedAt,
+        disconnectedAt,
+        permissions: permissions ?? sql`${patientIntegrationsTable.permissions}`,
+        metadata: metadata ?? sql`${patientIntegrationsTable.metadata}`,
+        updatedAt: now,
+      },
+    })
+    .returning();
+
+  // Analytics: emit a transition event when status actually changed.
+  if (!existing || existing.status !== v.status) {
+    try {
+      await db.insert(analyticsEventsTable).values({
+        userType: "patient",
+        userId,
+        eventName: "integration_status_changed",
+        eventDate: now.toISOString().split("T")[0]!,
+        payload: {
+          provider,
+          status: v.status,
+          previousStatus: existing?.status ?? null,
+        },
+      });
+    } catch (err) {
+      (req as unknown as AuthedRequest).log.warn(
+        { err, userId, provider },
+        "integration_status_event_insert_failed",
+      );
+    }
+  }
+
+  res.status(201).json(row);
 });
 
 // -- Weekly weight log -------------------------------------------------

@@ -15,6 +15,8 @@ import {
   patientCheckinsTable,
   doctorNotesTable,
   careEventsTable,
+  patientPlanItemsTable,
+  patientIntegrationsTable,
   type InsertPatientCheckin,
 } from "@workspace/db";
 
@@ -394,7 +396,12 @@ async function main(): Promise<void> {
     const ids = existing.map((r) => r.id);
     // care_events first: it has FKs onto users(actor_user_id /
     // patient_user_id) and we want a clean wipe before we delete the
-    // owning users below.
+    // owning users below. Plan items + integrations are wiped
+    // explicitly here for visibility -- both have ON DELETE CASCADE
+    // on patient_user_id but explicit deletion makes the seed log
+    // honest and survives any future change to the cascade rule.
+    await db.delete(patientPlanItemsTable).where(inArray(patientPlanItemsTable.patientUserId, ids));
+    await db.delete(patientIntegrationsTable).where(inArray(patientIntegrationsTable.patientUserId, ids));
     await db.delete(careEventsTable).where(inArray(careEventsTable.patientUserId, ids));
     await db.delete(doctorNotesTable).where(inArray(doctorNotesTable.patientUserId, ids));
     await db.delete(patientCheckinsTable).where(inArray(patientCheckinsTable.patientUserId, ids));
@@ -588,6 +595,120 @@ async function main(): Promise<void> {
       `(${hits} with <24h follow-up). With the 3 open Review Now escalations ` +
       `the initial followUpRate24h = ${Math.round((hits / (HISTORY.length + 3)) * 100)}%.`,
   );
+
+  // ---- Demo plan items + integrations (P0 fix) ---------------------
+  // Hydrates patient_plan_items + patient_integrations for every demo
+  // patient so the Care app cold-launches into a fully populated week
+  // and the Clinic dashboard / Analytics surfaces have non-empty
+  // adherence + integration-status data without requiring a real
+  // patient to log in and toggle anything first.
+  if (demoPatientIds.length > 0) {
+    // Compute Monday of the current week.
+    const now = new Date();
+    const dow = now.getDay();
+    const monOffset = dow === 0 ? 6 : dow - 1;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - monOffset);
+    monday.setHours(0, 0, 0, 0);
+    const weekStart = monday.toISOString().split("T")[0]!;
+    const todayStr = now.toISOString().split("T")[0]!;
+
+    const PLAN_TEMPLATES: Array<{
+      category: "move" | "fuel" | "hydrate" | "recover" | "consistent";
+      recommended: string;
+    }> = [
+      { category: "move", recommended: "20-min easy walk after lunch" },
+      { category: "fuel", recommended: "Protein-forward breakfast" },
+      { category: "hydrate", recommended: "Add 24oz water before noon" },
+      { category: "recover", recommended: "10-min wind-down before bed" },
+      { category: "consistent", recommended: "Hold today's medication time" },
+    ];
+
+    // Bucket-aware completion probability so the demo dashboard's
+    // adherence column reads believably for each persona:
+    //   review_now -> patients are struggling, low completion (~30%)
+    //   review_today -> mid completion (~60%)
+    //   stable -> high completion (~85%)
+    const planRows: Array<typeof patientPlanItemsTable.$inferInsert> = [];
+    for (let pIdx = 0; pIdx < DEMO_PATIENTS.length; pIdx++) {
+      const p = DEMO_PATIENTS[pIdx]!;
+      const userId = demoPatientIds[pIdx];
+      if (!userId) continue;
+      const completionRate =
+        p.bucket === "review_now"
+          ? 0.3
+          : p.bucket === "review_today"
+            ? 0.6
+            : 0.85;
+      for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + dayIdx);
+        const dateStr = d.toISOString().split("T")[0]!;
+        const isPastOrToday = dateStr <= todayStr;
+        for (let cIdx = 0; cIdx < PLAN_TEMPLATES.length; cIdx++) {
+          const tpl = PLAN_TEMPLATES[cIdx]!;
+          // Deterministic completion using a simple hash of pIdx/day/cat
+          // so re-runs of the seed produce the same dashboard state.
+          const hash = (pIdx * 53 + dayIdx * 7 + cIdx) % 100;
+          const completed = isPastOrToday && hash / 100 < completionRate;
+          planRows.push({
+            patientUserId: userId,
+            weekStart,
+            dayIndex: dayIdx,
+            date: dateStr,
+            category: tpl.category,
+            recommended: tpl.recommended,
+            chosen: tpl.recommended,
+            source: "auto",
+            completedAt: completed ? d : null,
+            title: tpl.recommended,
+            metadata: { seed: true },
+          });
+        }
+      }
+    }
+    if (planRows.length > 0) {
+      await db.insert(patientPlanItemsTable).values(planRows);
+    }
+
+    // Apple Health integration status per bucket. ~75% of demo
+    // patients are connected; the rest are split between declined and
+    // unavailable so the analytics integration funnel has data on
+    // every status value, not just the success path.
+    const integrationRows: Array<typeof patientIntegrationsTable.$inferInsert> = [];
+    for (let pIdx = 0; pIdx < DEMO_PATIENTS.length; pIdx++) {
+      const userId = demoPatientIds[pIdx];
+      if (!userId) continue;
+      const slot = pIdx % 4;
+      const status: "connected" | "declined" | "unavailable" =
+        slot === 0
+          ? "declined"
+          : slot === 1
+            ? "unavailable"
+            : "connected";
+      const connectedAt = status === "connected" ? new Date() : null;
+      integrationRows.push({
+        patientUserId: userId,
+        provider: "apple_health",
+        status,
+        connectedAt,
+        lastSyncAt: connectedAt,
+        permissions: status === "connected"
+          ? ["steps", "hrv", "rhr", "sleep", "weight"]
+          : [],
+        metadata: { seed: true },
+      });
+    }
+    if (integrationRows.length > 0) {
+      await db.insert(patientIntegrationsTable).values(integrationRows);
+    }
+
+    console.log(
+      `[seed] demo doctor: seeded ${planRows.length} plan items + ` +
+        `${integrationRows.length} integration rows across ` +
+        `${demoPatientIds.length} demo patients.`,
+    );
+  }
 
   console.log(
     `\n[seed] done. Primary password: ${SEED_PASSWORD}  /  ` +

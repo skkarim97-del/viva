@@ -46,7 +46,7 @@ export class HttpError extends Error {
 const DEFAULT_TIMEOUT_MS = 15_000;
 
 async function request<T>(
-  method: "GET" | "POST" | "PATCH" | "DELETE",
+  method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",
   path: string,
   body?: unknown,
   opts?: { timeoutMs?: number },
@@ -322,4 +322,91 @@ export const sessionApi = {
     glp1Reason?: string | null;
     glp1Duration?: string | null;
   }) => request<unknown>("POST", "/me/profile", payload),
+
+  // -------------------------------------------------------------------
+  // Plan items. Server is source of truth; AsyncStorage is cache.
+  // All mutations are idempotent upserts -- safe to retry / replay.
+  // -------------------------------------------------------------------
+
+  getPlanItems: (weekStart?: string) =>
+    request<
+      Array<{
+        id: number;
+        weekStart: string;
+        dayIndex: number;
+        date: string;
+        category: "move" | "fuel" | "hydrate" | "recover" | "consistent";
+        recommended: string | null;
+        chosen: string | null;
+        source: "auto" | "patient_override";
+        completedAt: string | null;
+        title: string | null;
+        subtitle: string | null;
+        metadata: Record<string, unknown> | null;
+        createdAt: string;
+        updatedAt: string;
+      }>
+    >("GET", weekStart ? `/me/plan-items?weekStart=${weekStart}` : "/me/plan-items"),
+
+  upsertPlanItem: (payload: {
+    weekStart: string;
+    dayIndex: number;
+    date: string;
+    category: "move" | "fuel" | "hydrate" | "recover" | "consistent";
+    recommended?: string | null;
+    chosen?: string | null;
+    source?: "auto" | "patient_override" | null;
+    completed?: boolean | null;
+    title?: string | null;
+    subtitle?: string | null;
+    metadata?: Record<string, unknown> | null;
+  }) => request<{ id: number }>("POST", "/me/plan-items", payload),
+
+  patchPlanItem: (
+    id: number,
+    payload: { chosen?: string | null; completed?: boolean | null },
+  ) => request<{ id: number }>("PATCH", `/me/plan-items/${id}`, payload),
+
+  // -------------------------------------------------------------------
+  // Patient integrations (Apple Health, future wearables). Records
+  // CONNECTION INTENT -- the actual data presence is still proven
+  // by patient_health_daily_summaries rows.
+  // -------------------------------------------------------------------
+
+  getIntegrations: () =>
+    request<
+      Array<{
+        id: number;
+        provider: "apple_health";
+        status:
+          | "unknown"
+          | "connected"
+          | "disconnected"
+          | "declined"
+          | "unavailable";
+        connectedAt: string | null;
+        disconnectedAt: string | null;
+        lastSyncAt: string | null;
+        permissions: string[] | null;
+      }>
+    >("GET", "/me/integrations"),
+
+  upsertIntegration: (
+    provider: "apple_health",
+    payload: {
+      status:
+        | "unknown"
+        | "connected"
+        | "disconnected"
+        | "declined"
+        | "unavailable";
+      permissions?: string[] | null;
+      metadata?: Record<string, unknown> | null;
+    },
+  ) =>
+    request<{ id: number }>(
+      "PUT",
+      `/me/integrations/${provider}`,
+      payload,
+    ),
 };

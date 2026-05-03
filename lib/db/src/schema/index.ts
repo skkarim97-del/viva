@@ -17,3 +17,5 @@ export * from "./pilotSnapshots";
 export * from "./phiAccessLogs";
 export * from "./sessions";
 export * from "./patientInterventions";
+export * from "./patientPlanItems";
+export * from "./patientIntegrations";

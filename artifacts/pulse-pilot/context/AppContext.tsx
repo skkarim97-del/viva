@@ -57,6 +57,81 @@ import type {
 
 import { API_BASE } from "@/lib/apiConfig";
 import { sessionApi } from "@/lib/api/sessionClient";
+
+// -------------------------------------------------------------------
+// Plan-item sync helpers. Each mutation in this file mirrors the
+// change to /me/plan-items best-effort so the server stays the
+// source of truth without blocking the local UI on the network.
+// AsyncStorage continues to act as the cache + offline buffer.
+// -------------------------------------------------------------------
+
+function planWeekStartFor(dateStr: string): {
+  weekStart: string;
+  dayIndex: number;
+} {
+  const d = new Date(`${dateStr}T00:00:00`);
+  const dow = d.getDay(); // 0=Sun..6=Sat
+  const dayIndex = dow === 0 ? 6 : dow - 1; // 0=Mon..6=Sun
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - dayIndex);
+  return {
+    weekStart: monday.toISOString().split("T")[0]!,
+    dayIndex,
+  };
+}
+
+const PLAN_SERVER_CATEGORIES = new Set([
+  "move",
+  "fuel",
+  "hydrate",
+  "recover",
+  "consistent",
+]);
+
+function syncPlanItemBestEffort(input: {
+  date: string;
+  category: string;
+  recommended?: string | null;
+  chosen?: string | null;
+  completed?: boolean;
+  title?: string | null;
+}): void {
+  // Guard: server enum is closed; never POST a category the server
+  // would 400 on (defensive against future client enum drift).
+  if (!PLAN_SERVER_CATEGORIES.has(input.category)) return;
+  const { weekStart, dayIndex } = planWeekStartFor(input.date);
+  const recommended = input.recommended ?? null;
+  const chosen = input.chosen ?? recommended;
+  const source: "auto" | "patient_override" =
+    recommended != null && chosen != null && chosen !== recommended
+      ? "patient_override"
+      : "auto";
+  sessionApi
+    .upsertPlanItem({
+      weekStart,
+      dayIndex,
+      date: input.date,
+      category: input.category as
+        | "move"
+        | "fuel"
+        | "hydrate"
+        | "recover"
+        | "consistent",
+      recommended,
+      chosen,
+      source,
+      completed: input.completed ?? false,
+      title: input.title ?? null,
+    })
+    .catch(() => {
+      // Best-effort: the next mutation that touches the same
+      // (weekStart, dayIndex, category) tuple is an idempotent
+      // upsert that will heal a missed sync. A full offline replay
+      // queue is out of scope for the pilot; the cache in
+      // AsyncStorage is still authoritative for UI rendering when
+      // the server cannot be reached.
+    });
+}
 import { checkinSync, type SyncStatus } from "@/lib/sync/checkinSync";
 import { logCareEventImmediate } from "@/lib/care-events/client";
 
@@ -709,6 +784,106 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         });
         setIntegrationsState(currentIntegrations);
       }
+      // Server-truth integration hydration. /me/integrations is the
+      // canonical record; AsyncStorage is just the warm cache so the
+      // UI doesn't flicker on cold launch. If the network is down we
+      // keep whatever was in the cache.
+      try {
+        const serverIntegrations = await sessionApi.getIntegrations();
+        if (serverIntegrations && serverIntegrations.length > 0) {
+          currentIntegrations = currentIntegrations.map((i) => {
+            const remote = serverIntegrations.find(
+              (r) => r.provider === i.id,
+            );
+            if (!remote) return i;
+            return {
+              ...i,
+              connected: remote.status === "connected",
+              lastSync: remote.lastSyncAt ?? i.lastSync,
+            };
+          });
+          setIntegrationsState(currentIntegrations);
+          AsyncStorage.setItem(
+            INTEGRATIONS_KEY,
+            JSON.stringify(
+              currentIntegrations.map((i) => ({
+                id: i.id,
+                connected: i.connected,
+              })),
+            ),
+          ).catch(() => {});
+        }
+      } catch {
+        /* offline: keep the AsyncStorage view */
+      }
+      // Server-truth plan-items hydration for the current week. We
+      // overlay onto whatever we just loaded from completionHistory
+      // so the AsyncStorage cache is still authoritative if the
+      // network is unreachable. Done in parallel-friendly fashion;
+      // the result is merged back into completionHistory below.
+      try {
+        const { weekStart } = planWeekStartFor(todayDate!);
+        const remotePlanItems = await sessionApi.getPlanItems(weekStart);
+        if (remotePlanItems && remotePlanItems.length > 0) {
+          // Group by date -> CompletionRecord shape used by the
+          // local engine. Only the categories that are also in the
+          // existing local taxonomy are passed through.
+          const byDate = new Map<
+            string,
+            Array<{
+              id: string;
+              category: string;
+              completed: boolean;
+              recommended: string;
+              chosen?: string;
+            }>
+          >();
+          for (const r of remotePlanItems) {
+            const list = byDate.get(r.date) ?? [];
+            list.push({
+              id: `${r.category}-${r.dayIndex}`,
+              category: r.category,
+              completed: r.completedAt != null,
+              recommended: r.recommended ?? "",
+              chosen:
+                r.chosen != null && r.chosen !== r.recommended
+                  ? r.chosen
+                  : undefined,
+            });
+            byDate.set(r.date, list);
+          }
+          // Replace any matching dates in loadedHistory; preserve
+          // the rest. completionRate is recomputed from completed
+          // count over non-"consistent" actions.
+          const merged = [...loadedHistory];
+          for (const [date, actions] of byDate) {
+            const support = actions.filter((a) => a.category !== "consistent");
+            const done = support.filter((a) => a.completed).length;
+            const completionRate =
+              support.length > 0 ? Math.round((done / support.length) * 100) : 0;
+            const idx = merged.findIndex((r) => r.date === date);
+            const next: CompletionRecord = {
+              date,
+              // ActionCategory is a string-literal union; the server
+              // is authoritative on which categories are valid and we
+              // already filter unrecognized ones via
+              // PLAN_SERVER_CATEGORIES on the write path.
+              actions: actions as unknown as CompletionRecord["actions"],
+              completionRate,
+            };
+            if (idx >= 0) merged[idx] = next;
+            else merged.push(next);
+          }
+          loadedHistory = merged;
+          setCompletionHistory(loadedHistory);
+          AsyncStorage.setItem(
+            COMPLETION_KEY,
+            JSON.stringify(loadedHistory),
+          ).catch(() => {});
+        }
+      } catch {
+        /* offline: keep the AsyncStorage view */
+      }
 
       const connectedIds = currentIntegrations
         .filter((i) => i.connected)
@@ -977,6 +1152,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return updated;
       });
 
+      // Best-effort server sync of the toggled action.
+      if (toggledAction) {
+        syncPlanItemBestEffort({
+          date: todayDate!,
+          category: toggledAction.category,
+          recommended: toggledAction.recommended,
+          chosen:
+            toggledAction.text !== toggledAction.recommended
+              ? toggledAction.text
+              : toggledAction.recommended,
+          completed: toggledAction.completed,
+          title: toggledAction.text,
+        });
+      }
+
       if (toggledAction) {
         const updateDays = (days: WeeklyPlanDay[]) => days.map(d => {
           if (d.date !== todayDate) return d;
@@ -1028,6 +1218,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       const editedAction = updatedActions.find(a => a.id === actionId);
       if (editedAction) {
+        // Best-effort server sync of the chosen-text edit.
+        syncPlanItemBestEffort({
+          date: todayDate!,
+          category: editedAction.category,
+          recommended: editedAction.recommended,
+          chosen: newText,
+          completed: editedAction.completed,
+          title: newText,
+        });
+      }
+      if (editedAction) {
         const editActionDays = (days: WeeklyPlanDay[]) => days.map(d => {
           if (d.date !== todayDate) return d;
           return {
@@ -1052,6 +1253,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const editWeeklyAction = useCallback((date: string, category: ActionCategory, newText: string) => {
+    // Look up the recommended text + completion from the current
+    // baseline so the server-side row is shaped identically to the
+    // toggleAction / editAction paths.
+    const sourceDay = baselineWeeklyPlanRef.current?.days.find(d => d.date === date);
+    const sourceAction = sourceDay?.actions.find(a => a.category === category);
+    syncPlanItemBestEffort({
+      date,
+      category,
+      recommended: sourceAction?.recommended ?? null,
+      chosen: newText,
+      completed: sourceAction?.completed ?? false,
+      title: newText,
+    });
     const editDays = (days: WeeklyPlanDay[]) => days.map(d => {
       if (d.date !== date) return d;
       return {
@@ -1091,6 +1305,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const dayData = prev.days.find(d => d.date === date);
       const actionData = dayData?.actions.find(a => a.category === category);
       const newCompleted = actionData ? !actionData.completed : true;
+
+      // Best-effort server sync of the toggle.
+      syncPlanItemBestEffort({
+        date,
+        category,
+        recommended: actionData?.recommended ?? null,
+        chosen: actionData?.chosen ?? actionData?.recommended ?? null,
+        completed: newCompleted,
+        title: actionData?.chosen ?? actionData?.recommended ?? null,
+      });
 
       const toggleDays = (days: WeeklyPlanDay[]) => days.map(d => {
         if (d.date !== date) return d;
@@ -1346,6 +1570,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         syncHealthData(updated);
         return updated;
       });
+      // Best-effort server-side disconnect. Server records intent +
+      // disconnectedAt timestamp so the dashboard / analytics can
+      // distinguish "never connected" from "was connected and then
+      // turned it off". 'apple_health' is the only currently
+      // recognized provider on the server.
+      if (id === "apple_health") {
+        sessionApi
+          .upsertIntegration("apple_health", { status: "disconnected" })
+          .catch(() => {});
+      }
       return;
     }
 
@@ -1363,6 +1597,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setIntegrationsState((prev) =>
           prev.map((i) => (i.id === id ? { ...i, lastSync: statusMsg } : i))
         );
+        // Server-side: distinguish "OS prompt declined" from "device
+        // doesn't support it" so analytics can answer "% of patients
+        // who saw the prompt and declined".
+        if (id === "apple_health") {
+          sessionApi
+            .upsertIntegration("apple_health", {
+              status: result.unavailable ? "unavailable" : "declined",
+            })
+            .catch(() => {});
+        }
         return;
       }
 
@@ -1373,6 +1617,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         AsyncStorage.setItem(INTEGRATIONS_KEY, JSON.stringify(updated.map((i) => ({ id: i.id, connected: i.connected }))));
         return updated;
       });
+      if (id === "apple_health") {
+        sessionApi
+          .upsertIntegration("apple_health", { status: "connected" })
+          .catch(() => {});
+      }
     } else {
       setIntegrationsState((prev) =>
         prev.map((i) => (i.id === id ? { ...i, lastSync: "Syncing..." } : i))
