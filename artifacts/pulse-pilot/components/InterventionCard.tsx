@@ -1412,10 +1412,21 @@ export function InterventionCard({
   // know about. Escalated state always wins. We deliberately do NOT
   // repeat the high-level severity wording ("Heavier today") here:
   // that lives in the top status banner so the page only says it
-  // once. This card stays connected to the same severity through
-  // its amber accent (useWarningTone) and the care-team CTA below.
+  // once. The badge instead characterizes the *response* level, so
+  // it stays complementary to the banner: banner says "what we
+  // noticed", badge says "how we're supporting you". This card
+  // stays visually linked to the banner through its amber accent
+  // (useWarningTone) and the care-team CTA below.
   const badgeLabel =
-    status === "escalated" ? "Care team notified" : "For you today";
+    status === "escalated"
+      ? "Review may help"
+      : liveSeverity === "severe"
+        ? "Extra support today"
+        : liveSeverity === "moderate"
+          ? "Support today"
+          : liveSeverity === "mild"
+            ? "Stay ahead"
+            : "Steady today";
   const useWarningTone =
     status === "escalated" || liveSeverity === "severe";
 
@@ -1510,27 +1521,14 @@ export function InterventionCard({
           <Text style={[styles.subtitle, { color: mutedForeground }]}>
             Personalized support based on today&apos;s check-in
           </Text>
-          {/* Dev-only matrix probe. Lets us confirm at a glance that
-              the displayed plan is recalculating from the chip
-              selectors (concern shifts, severity flips, support set
-              changes). __DEV__ is false in production builds so it
-              never ships to patients. */}
-          {__DEV__ && livePlan && (
-            <Text
-              style={{
-                marginTop: 6,
-                fontSize: 10,
-                lineHeight: 14,
-                color: mutedForeground,
-                fontFamily: "Montserrat_600SemiBold",
-                opacity: 0.7,
-              }}
-            >
-              [debug] concern={livePlan.primaryConcern} sev=
-              {livePlan.severity} supports=
-              {livePlan.rows.map((r) => r.reason).join(",")} | {livePlan.signature}
-            </Text>
-          )}
+          {/* The dev-only "[debug] concern=... sev=... supports=..."
+              probe that used to live here was rendering visibly in
+              the patient UI on certain builds. Removed entirely;
+              if we need a similar diagnostic again, log it via
+              console in dev rather than rendering it on the card.
+              `livePlan` is still consumed below for the actual
+              displayed plan, so removing this render is a no-op
+              for the rest of the component. */}
         </View>
       </View>
 

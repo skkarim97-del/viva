@@ -1,0 +1,67 @@
+Fix the Today tab color and debug issues from the last change.
+
+Issues to fix:
+
+1. Runtime error: TINT_PURPLE is not defined
+The preview is showing “TINT_PURPLE is not defined.”
+Do not leave broken constants or references.
+Either:
+- restore TINT_PURPLE as a valid constant, or
+- replace every TINT_PURPLE reference safely
+
+Do not break the app.
+
+2. Remove visible debug text
+The Symptom support card is showing:
+"[debug] concern=nausea-moderate sev=severe supports=..."
+This must not appear in the patient UI.
+
+Remove all visible debug text from the card.
+Console logs are okay in dev if useful, but no debug strings should render in the app.
+
+3. Make top status and Symptom support colors match
+The top status banner still uses red/pink for “Stabilization,” while Symptom support uses amber/orange.
+For normal GLP-1 symptoms like nausea, appetite changes, constipation and tiredness, do NOT use red.
+
+Use amber/orange for heavier symptoms or review-worthy states.
+Use red only for true urgent/red-flag states.
+
+So:
+- Top status “Stabilization / Nausea is heavier today” should use amber/orange, not red/pink
+- Symptom support should use the same amber/orange accent
+- The two sections should feel visually connected
+
+4. Improve the small badge copy
+The badge currently says “For you today,” which is too generic.
+
+Make the badge characterize the symptom state.
+
+Suggested badge logic:
+- Stable/good: “Steady today”
+- Mild symptoms: “Stay ahead”
+- Moderate symptoms: “Symptom support”
+- Heavier symptoms: “Extra support today”
+- Review-worthy: “Review may help”
+
+Do not duplicate “Heavier today” if the top status banner already says it.
+Use one clear high-level label up top, then a complementary badge in Symptom support.
+
+Example:
+Top banner: “Nausea is heavier today”
+Symptom support badge: “Extra support today”
+
+5. Keep a cohesive color system
+Use:
+- Blue = primary action / neutral support
+- Green = steady/good
+- Amber/orange = heavier symptoms / attention / review recommended
+- Red = true urgent/red-flag only
+- Purple can remain only if it is part of the broader brand system and does not conflict, but do not let it break runtime
+
+Acceptance:
+- No “TINT_PURPLE is not defined” error
+- No visible debug text in the UI
+- Top status and Symptom support use matching severity accents
+- Normal symptom worsening uses amber/orange, not red
+- “For you today” is replaced with a more meaningful badge
+- The app still updates live when symptoms change

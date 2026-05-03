@@ -19,11 +19,20 @@ export interface StatusChip {
   tone: "success" | "accent" | "warning" | "destructive" | "muted";
 }
 
+// Tone -> color in the consumer:
+//   success     = green  (steady / good)
+//   accent      = blue   (neutral / primary support)
+//   warning     = amber  (heavier / attention / review)
+//   destructive = red    (reserved for true clinical red-flags)
+//   muted       = gray   (insufficient data)
+// Recover is intentionally amber, not red. Worsening but normal
+// GLP-1 symptoms (nausea, low appetite, tiredness) should read as
+// "we're paying attention" -- not as a clinical alarm.
 const TONE_FOR_STATE: Record<DailyState, StatusChip["tone"]> = {
   push: "success",
   build: "accent",
   maintain: "warning",
-  recover: "destructive",
+  recover: "warning",
 };
 
 export function selectStatusChip(state: DailyTreatmentState): StatusChip {
@@ -38,7 +47,11 @@ export function selectStatusChip(state: DailyTreatmentState): StatusChip {
   // legacy 4-state. Otherwise fall through to plan.statusLabel +
   // plan.dailyState tone, preserving today's behavior.
   if (state.treatmentDailyState === "escalate") {
-    return { label: "Symptom check needed", tone: "destructive" };
+    // Amber, not red: "Symptom check needed" is a soft prompt to
+    // loop in the care team for normal-but-heavier symptoms; true
+    // clinical red-flag states are handled by separate flagging
+    // logic and can use the destructive tone there.
+    return { label: "Symptom check needed", tone: "warning" };
   }
   if (state.treatmentDailyState === "support") {
     // Continuity-support / hydration-support / fueling-support all
