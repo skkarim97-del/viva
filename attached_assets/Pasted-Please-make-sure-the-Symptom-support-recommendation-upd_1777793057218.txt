@@ -1,0 +1,117 @@
+Please make sure the Symptom support recommendation updates when a patient changes symptoms to a better/stable state.
+
+Current issue:
+If a patient first has symptoms that trigger a recommendation, then updates the check-in to better symptoms, the card can still show the older/heavier recommendation.
+
+Expected behavior:
+The Symptom support card should always reflect the latest check-in state.
+
+Scenarios to support:
+
+1. Symptoms worsen
+- Recommendation should become more supportive/intensive
+- Severity styling should increase appropriately
+- Care-team review CTA should appear when warranted
+
+2. Symptoms improve
+- Recommendation should downgrade to a lighter/preventive state
+- Care-team review CTA should disappear if no longer warranted
+- Heavy symptom copy should be removed
+- Severity styling should return to green/blue or normal state
+- “More support” categories should update
+- Recommendation title/body should reflect the improved state
+
+3. Symptoms fully normalize
+Example:
+Energy = Great or Good
+Appetite = Strong or Normal
+Nausea = None
+Digestion = Fine
+Bowel movement = Yes
+
+Then Symptom support should either:
+- show a light preventive card, like “Stay ahead of symptoms,” or
+- minimize/hide if the product logic says no support is needed
+
+It should not keep showing nausea, appetite, constipation, hydration, review or heavier symptom support.
+
+4. Live update timing
+After symptom changes, update the card within ~1-2 seconds.
+Do not require app refresh.
+Do not create duplicate intervention cards.
+Do not leave stale recommendations visible.
+
+5. Backend / frontend behavior
+Please audit the full flow:
+- Today check-in input changes
+- auto-save check-in
+- /generate or equivalent intervention refresh
+- /active reload
+- card rendering
+- local live overrides
+- accepted / pending feedback / escalated states
+
+If an intervention is still in “shown” state, it should be safe to replace/update it when symptoms improve.
+
+If the intervention is already accepted, pending feedback, or escalated:
+- Do not incorrectly overwrite important feedback/escalation history
+- But the visible Today recommendation should still not mislead the patient with stale severe advice after their current check-in improves
+- If needed, create a fresh current-state card or show a “current check-in looks better” state while preserving the prior intervention history
+
+6. Clear stale review state
+If symptoms improve enough that review is no longer warranted:
+- remove the prominent care-team review CTA from the current card
+- remove severe/review styling
+- do not show “Review requested” unless the patient actually requested review
+- if review was already requested, keep the history, but make the current support state clear
+
+7. Acceptance tests
+
+Test A: Severe → Stable
+Start with:
+Energy = Depleted
+Appetite = Very Low
+Nausea = Severe
+Digestion = Diarrhea or Constipated
+Bowel = No
+
+Confirm heavy/review-worthy support appears.
+
+Then change to:
+Energy = Good
+Appetite = Normal
+Nausea = None
+Digestion = Fine
+Bowel = Yes
+
+Expected:
+The card updates to stable/preventive support or hides/minimizes.
+No stale nausea/severe/review recommendation remains.
+
+Test B: Moderate → Mild
+Start with moderate nausea + low appetite.
+Then change to mild nausea + normal appetite.
+Expected:
+Recommendation becomes lighter/preventive.
+More support categories update.
+
+Test C: Nausea → Digestion
+Start with nausea as primary concern.
+Then change nausea to None and digestion to Constipated.
+Expected:
+Primary recommendation changes from nausea support to digestion support.
+
+Test D: Review requested → Symptoms improved
+Request review on a heavier state.
+Then improve symptoms.
+Expected:
+Do not erase the review history, but the current card should clearly reflect improved symptoms and should not keep telling the patient severe support is needed.
+
+Acceptance criteria:
+- Symptom support always reflects the latest check-in
+- Improved symptoms downgrade the recommendation
+- Stale severe recommendations do not remain after symptoms improve
+- No duplicate cards are created
+- Feedback/escalation history is preserved
+- The UI updates without refresh
+- The experience feels clinically safe, current and trustworthy

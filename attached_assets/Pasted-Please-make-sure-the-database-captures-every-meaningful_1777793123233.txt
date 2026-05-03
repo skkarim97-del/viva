@@ -1,0 +1,95 @@
+Please make sure the database captures every meaningful patient symptom input change, not just the latest check-in state.
+
+Goal:
+For pilot analytics, Viva needs both:
+1. the current/latest check-in state for app logic
+2. a historical event log of symptom input changes over time
+
+Important:
+If a patient first reports feeling worse, then updates symptoms to better, both states should be captured.
+
+Example:
+10:00 AM patient selects:
+Energy = Depleted
+Appetite = Very Low
+Nausea = Severe
+Digestion = Constipated
+Bowel = No
+
+10:08 AM patient changes to:
+Energy = Good
+Appetite = Normal
+Nausea = None
+Digestion = Fine
+Bowel = Yes
+
+Expected:
+- latest/current check-in reflects the improved state
+- historical analytics still captures the earlier worse state
+- intervention engine uses the latest state
+- pilot analytics can see the full state-change timeline
+
+Please audit current persistence:
+- patient_checkins
+- analytics_events
+- care_events
+- patient_interventions
+- any Today check-in save/update endpoint
+- any auto-save logic from symptom selector changes
+
+If current behavior only upserts/overwrites patient_checkins for the day, keep that for current state, but also add or confirm event logging for each meaningful input change.
+
+Implementation guidance:
+- Do not break the current daily check-in row used by the app
+- Keep latest/current state available for recommendations
+- Add/confirm an append-only event record whenever symptoms are saved or changed
+- Include previous state and new state when available
+- Include changed fields when available
+- Include timestamp
+- Include patient id / user id internally
+- Include source, e.g. today_checkin_autosave, manual_save, onboarding, demo_seed
+- Include whether the change triggered intervention regeneration, if easy to capture
+
+Recommended event name:
+patient_checkin_updated
+or
+symptom_input_changed
+
+Event payload example:
+{
+  "source": "today_checkin_autosave",
+  "previous": {
+    "energy": "depleted",
+    "appetite": "very_low",
+    "nausea": "severe",
+    "digestion": "constipated",
+    "bowelMovement": false
+  },
+  "current": {
+    "energy": "good",
+    "appetite": "normal",
+    "nausea": "none",
+    "digestion": "fine",
+    "bowelMovement": true
+  },
+  "changedFields": ["energy", "appetite", "nausea", "digestion", "bowelMovement"],
+  "triggeredInterventionRefresh": true
+}
+
+Analytics use cases this should support:
+- how often patients update symptoms after an intervention
+- whether symptoms improve after micro-interventions
+- time from symptom worsening to support shown
+- time from support shown to improvement
+- which symptoms most often trigger escalation
+- which interventions lead to Better / Same / Worse feedback
+- whether automation resolves issues before provider escalation
+
+Acceptance criteria:
+- Latest check-in state is still stored and used for recommendations
+- Every meaningful symptom input change is appended to analytics/event history
+- A worse-to-better change is not lost
+- No duplicate spam events for identical unchanged inputs
+- Timestamped history can reconstruct symptom trajectory during the day
+- Intervention and escalation logic still use the latest state
+- No PHI is sent to OpenAI

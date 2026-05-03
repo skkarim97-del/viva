@@ -1369,11 +1369,35 @@ export function InterventionCard({
     return null;
   }
 
-  // Steady-mode swap: when the live check-in reads as all-good, hide
-  // the symptom-rescue intervention and show a calm maintenance card
-  // instead. Skipped while the card is escalated so we don't appear
-  // to "downgrade" an active care-team flag the patient just sent.
-  if (liveSeverity === "steady" && status !== "escalated") {
+  // Steady-mode swap: when the live check-in reads as all-good,
+  // collapse the symptom-rescue UI to a calm maintenance card
+  // instead of leaving stale heavier rows on screen. We render this
+  // even when status === "escalated" -- the prior wording ("don't
+  // appear to downgrade an active care-team flag") was leaving
+  // outdated severe-state recommendations visible after the patient
+  // improved, which is the opposite of clinically safe. Instead, in
+  // the escalated branch we (a) keep the warning-toned "Review
+  // requested" badge so the request history stays visible, (b)
+  // explicitly tell the patient their latest check-in looks better,
+  // and (c) reassure them that the care team can still see today's
+  // symptoms and support history. The on-server escalation row is
+  // never erased -- the visible card just stops misleading them.
+  if (liveSeverity === "steady") {
+    const isEscalated = status === "escalated";
+    const accentColor = isEscalated ? warning : SUCCESS_FG;
+    const badgeLabel = isEscalated ? "Review requested" : "Going well today";
+    const badgeIcon: keyof typeof Feather.glyphMap = isEscalated
+      ? "check-circle"
+      : "check";
+    const cardTitle = isEscalated
+      ? "Latest check-in looks better"
+      : "Stay steady today";
+    const cardSubtitle = isEscalated
+      ? "Your symptoms have eased since the review request."
+      : "Your inputs look steady today";
+    const cardBody = isEscalated
+      ? "Your care team can still see today's symptoms and support history. Keep checking in -- we'll let them know if anything changes."
+      : "Keep following your plan and check in again if anything changes.";
     return (
       <Animated.View
         style={[
@@ -1388,37 +1412,36 @@ export function InterventionCard({
       >
         <View style={styles.headerRow}>
           <View
-            style={[styles.iconWrap, { backgroundColor: SUCCESS_FG + "1F" }]}
+            style={[styles.iconWrap, { backgroundColor: accentColor + "1F" }]}
           >
-            <Feather name="check-circle" size={18} color={SUCCESS_FG} />
+            <Feather name="check-circle" size={18} color={accentColor} />
           </View>
           <View style={{ flex: 1 }}>
             <View style={styles.badgeRow}>
               <View
                 style={[
                   styles.badge,
-                  { backgroundColor: SUCCESS_FG + "1A" },
+                  { backgroundColor: accentColor + "1A" },
                 ]}
               >
-                <Feather name="check" size={10} color={SUCCESS_FG} />
-                <Text style={[styles.badgeText, { color: SUCCESS_FG }]}>
-                  Going well today
+                <Feather name={badgeIcon} size={10} color={accentColor} />
+                <Text style={[styles.badgeText, { color: accentColor }]}>
+                  {badgeLabel}
                 </Text>
               </View>
             </View>
-            <Text style={[styles.title, { color: navy }]}>
-              Stay steady today
-            </Text>
+            <Text style={[styles.title, { color: navy }]}>{cardTitle}</Text>
             <Text style={[styles.subtitle, { color: mutedForeground }]}>
-              Your inputs look steady today
+              {cardSubtitle}
             </Text>
           </View>
         </View>
 
-        <Text style={[styles.steadyBody, { color: navy }]}>
-          Keep following your plan and check in again if anything changes.
-        </Text>
+        <Text style={[styles.steadyBody, { color: navy }]}>{cardBody}</Text>
 
+        {/* Maintenance chips are check-in-focused, not symptom-focused,
+            so they read correctly in both the plain steady and the
+            "improved after escalation" branches. */}
         <View style={styles.signalChipsRow}>
           {["Hydration", "Protein", "Routine"].map((label) => (
             <View
@@ -1426,13 +1449,13 @@ export function InterventionCard({
               style={[
                 styles.supportChip,
                 {
-                  backgroundColor: SUCCESS_FG + "14",
-                  borderColor: SUCCESS_FG + "33",
+                  backgroundColor: accentColor + "14",
+                  borderColor: accentColor + "33",
                 },
               ]}
             >
               <Text
-                style={[styles.supportChipText, { color: SUCCESS_FG }]}
+                style={[styles.supportChipText, { color: accentColor }]}
               >
                 {label}
               </Text>
