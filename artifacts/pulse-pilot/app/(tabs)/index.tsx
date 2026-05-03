@@ -1311,6 +1311,45 @@ export default function DashboardScreen() {
           </View>
         </Modal>
 
+        {/* AI-personalized micro-interventions. The personalized
+            "Today's next step" card is the headline value of the
+            Today tab, so once the patient has completed the minimum
+            check-in (energy + nausea, see hasMinSymptomData) and an
+            active intervention exists, we hoist the card ABOVE the
+            "How are things?" check-in section. This keeps the
+            recommendation from being buried beneath the daily
+            input UI on return visits.
+
+            When no min check-in exists yet (first-of-the-day visit),
+            the card renders BELOW the check-in instead so the
+            patient lands on "How are things?" first; once they
+            answer enough rows to trigger /generate, the next render
+            pass naturally promotes the card to the top.
+
+            When no active intervention exists, nothing is rendered
+            here at all -- the legacy empty-state prompt below still
+            handles that case. */}
+        {activeInterventions.length > 0 && hasMinSymptomData && (
+          <View style={{ marginTop: 4, marginBottom: 16, gap: 14 }}>
+            {activeInterventions.map((iv) => (
+              <InterventionCard
+                key={iv.id}
+                intervention={iv}
+                navy={c.foreground}
+                accent={c.accent}
+                cardBg={c.card}
+                background={c.background}
+                mutedForeground={c.mutedForeground}
+                warning={c.warning}
+                onAccept={onInterventionAccept}
+                onDismiss={onInterventionDismiss}
+                onFeedback={onInterventionFeedback}
+                onEscalate={onInterventionEscalate}
+              />
+            ))}
+          </View>
+        )}
+
         <View style={[styles.inputContainer, { backgroundColor: c.card }]}>
           <View style={styles.inputHeader}>
             <Feather name="edit-3" size={14} color={c.accent} />
@@ -1328,12 +1367,12 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* AI-personalized micro-interventions. Rendered ABOVE the
-            static SymptomTipCard layer so the personalized
-            recommendation always lands first; the symptom-tip
-            fallback below covers cases where the engine returned
-            nothing or the network was unavailable. */}
-        {activeInterventions.length > 0 && (
+        {/* Fallback intervention slot. Only used when an intervention
+            has been generated WITHOUT the patient having met the min
+            check-in threshold (an unusual but possible state, e.g. a
+            persisted/legacy active row from a prior session). In the
+            normal flow the card above this comment renders instead. */}
+        {activeInterventions.length > 0 && !hasMinSymptomData && (
           <View style={{ marginTop: 8, marginBottom: 20, gap: 14 }}>
             {activeInterventions.map((iv) => (
               <InterventionCard
