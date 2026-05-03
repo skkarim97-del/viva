@@ -1,0 +1,470 @@
+IMPORTANT AUTONOMY + TIMEBOX INSTRUCTIONS
+
+I’m going to sleep, so do not stop to ask me questions unless there is a true destructive/risky action that could cause data loss or break production.
+
+Timebox this to under 2 hours.
+
+Default decision rule:
+- If there is a safe, additive, reversible option, proceed
+- If there is ambiguity, choose the safest non-destructive path and document it
+- If EC2 cannot be safely completed tonight, do not force it; verify/report the blocker and continue QA against the corrected DB target if possible
+- If AWS RDS credentials are missing, do not invent or migrate; document the blocker and continue QA against the actual configured DB
+- If a schema change is needed, only do additive nullable changes or new tables
+- Never drop tables, delete data, change primary keys, change users.id, or run destructive migrations
+- Do not migrate real data unless there is already a clear approved path and it is non-destructive
+- Keep Replit/helium data intact as backup
+- Do not touch PHI/OpenAI guardrails except to verify them
+- Keep demo/dev data clearly isolated
+
+Priority order:
+1. Verify/fix DB target if AWS RDS is safely available
+2. Verify EC2 only if existing deploy path is clear and safe
+3. Continue QA regardless, using the actual source of truth
+4. Fix low-risk bugs only
+5. Produce a final evidence-based report
+
+Hard stop:
+Do not spend more than 2 hours. If time runs out, stop, write the report, and list remaining blockers.
+
+==================================================
+CONTEXT
+==================================================
+
+Current critical finding from the first QA pass:
+The app appears to be wired to Replit runtime + Replit/helium Postgres, not EC2 + AWS RDS.
+
+That may be a real pilot blocker if real PHI will be involved.
+
+Goal:
+1. Verify and fix the infrastructure/data target mismatch safely
+2. Then continue the focused pre-pilot QA pass against the corrected environment or the actual configured environment if AWS cannot be safely completed tonight
+
+Do not guess.
+Do not pretend something is AWS if it is not.
+Do not claim EC2 is live unless verified by actual health checks and writes.
+Do not claim AWS RDS is live unless verified by connection strings and direct writes.
+Do not send PHI to OpenAI.
+Do not change users.id from serial.
+Do not change primary key types.
+
+==================================================
+PART 1 — INFRA / AWS DISCOVERY
+==================================================
+
+First, audit whether AWS/EC2/RDS configs already exist.
+
+Check:
+- Replit Secrets
+- .env files
+- deployment configs
+- DATABASE_URL
+- AWS_DATABASE_URL
+- RDS hostname
+- EC2 public DNS/IP
+- SSH/deploy scripts
+- GitHub Actions if present
+- any previous AWS migration scripts
+- drizzle config
+- API server startup config
+- production API URL config in Viva Care
+- production API URL config in Viva Clinic
+- production API URL config in Viva Analytics
+
+Report:
+1. Is an AWS RDS connection available?
+2. Is an EC2 instance available?
+3. Is there an existing EC2 deploy path?
+4. What currently points at Replit?
+5. What exactly needs to change?
+6. Are there stale AWS comments or env names that do not match runtime reality?
+
+If AWS credentials/hostnames are missing:
+- do not stop the entire QA
+- document the blocker
+- continue QA against the actual configured DB/runtime
+- make it very clear in final report that real PHI pilot readiness depends on resolving this
+
+==================================================
+PART 2 — WIRE DATABASE TO AWS RDS SAFELY IF AVAILABLE
+==================================================
+
+If AWS RDS connection exists and can be safely used:
+
+1. Do not delete helium/Replit DB
+2. Configure the backend runtime to use AWS RDS as the active database
+3. Prefer DATABASE_URL = AWS_DATABASE_URL at runtime if AWS_DATABASE_URL exists
+4. Confirm DB host is AWS/RDS, not helium
+5. Confirm SSL settings are appropriate
+6. Apply schema to AWS RDS safely
+
+Schema rules:
+- additive only unless explicitly approved
+- no primary key changes
+- do not change users.id
+- no dropping columns
+- no destructive migrations
+- if drizzle-kit tries unrelated changes, stop and use explicit CREATE TABLE / ALTER TABLE for only the needed changes
+
+Required tables/columns on AWS:
+- users
+- patient_profiles
+- patient_checkins
+- patient_interventions
+- care_events
+- analytics_events with payload jsonb and event_date text
+- patient_treatment_logs
+- patient_health_daily_summaries
+- patient_weights
+- patient_plan_items
+- patient_integrations
+- any existing Clinic/Analytics required tables
+
+After wiring:
+- Insert or update a test/demo patient
+- Save a check-in
+- Save a plan item
+- Save an intervention if supported by the test route
+- Save an escalation
+- Save analytics payload
+- Query AWS RDS directly and prove those rows exist there
+
+Report the actual DB host after write verification.
+
+If AWS RDS cannot be safely wired within the timebox:
+- keep Replit/helium intact
+- continue QA against the current actual DB
+- mark AWS DB migration as a blocker for real PHI pilot
+
+==================================================
+PART 3 — EC2 RUNTIME CHECK / DEPLOYMENT IF SAFE
+==================================================
+
+If EC2 exists and an existing deploy path is clear:
+
+1. Build the API server
+2. Deploy to EC2 using the existing deployment method only
+3. Start/restart API service on EC2
+4. Confirm EC2 API health endpoint works
+5. Confirm EC2 API writes to AWS RDS
+6. Confirm no pilot traffic is relying on Replit runtime
+
+If EC2 does not have a clear deploy path:
+- do not invent a risky deployment
+- do not spend the whole timebox on EC2
+- report what is missing
+- keep Replit runtime for dev/demo only if possible
+- mark EC2 migration as remaining blocker for real PHI pilot
+
+==================================================
+PART 4 — POINT APPS TO AWS/EC2 API ONLY IF VERIFIED
+==================================================
+
+Only after EC2 API is verified:
+
+Update API targets:
+
+Viva Care:
+- pilot/prod API target should be EC2/AWS API URL, not Replit preview URL
+- dev preview can still point to Replit if needed for demo
+- clearly separate dev/demo vs pilot/prod
+
+Viva Clinic:
+- pilot/prod should use EC2/AWS API URL
+
+Viva Analytics:
+- pilot/prod should use EC2/AWS API URL
+
+Add a clear environment truth table:
+- Dev preview API
+- Pilot API
+- Production API
+- Database host for each
+
+If EC2 is not verified:
+- do not point apps at an unverified API
+- keep current dev/demo targets working
+- document what is needed next
+
+==================================================
+PART 5 — AWS-BACKED SMOKE TEST IF AWS IS WIRED
+==================================================
+
+If AWS RDS and/or EC2 are successfully wired, run this AWS-backed smoke test:
+
+1. Demo/patient login or seeded patient
+2. Complete onboarding or verify seeded profile
+3. Save Today check-in
+4. Verify check-in row in AWS RDS
+5. Symptom support generates
+6. Accept recommendation
+7. Submit Better/Same/Worse
+8. Request care team review
+9. Verify care_event in AWS RDS
+10. Verify Viva Clinic can see escalation
+11. Verify Viva Analytics can see analytics_events.payload
+12. Save Week plan override
+13. Mark plan item completed
+14. Verify patient_plan_items in AWS RDS
+15. Save Apple Health integration status
+16. Verify patient_integrations in AWS RDS
+
+If AWS is not wired:
+- run the same smoke test against the actual configured DB
+- clearly label it “current configured environment,” not AWS
+
+==================================================
+PART 6 — KEEP DEMO SAFE
+==================================================
+
+Demo reset can remain dev-only.
+
+Make sure:
+- demo data is isolated
+- demo routes are disabled in production
+- demo data does not mix with real pilot data
+- no real PHI is used in demo flows
+- demo reset only touches seeded demo patients
+- repeated demo reset does not create duplicate active intervention cards
+
+==================================================
+PART 7 — CONTINUE PRE-PILOT QA AFTER INFRA CHECK
+==================================================
+
+After the infra/database target is verified or clearly reported, continue the focused pre-pilot QA pass.
+
+Use the corrected environment as source of truth if AWS is wired.
+Otherwise use the actual configured environment and clearly label it.
+
+QA priority:
+1. Critical data flow bugs
+2. Broken buttons / broken endpoints
+3. Demo reset reliability
+4. Provider escalation context
+5. Analytics data quality
+6. Visible UI/copy bugs
+
+Do NOT:
+- add new features
+- redesign patient UI
+- make risky schema changes
+- refactor major systems
+- change core intervention logic unless fixing a confirmed bug
+- touch auth unless a bug blocks QA
+- send PHI to OpenAI
+
+==================================================
+PART 8 — PATIENT APP QA
+==================================================
+
+Use demo reset if available.
+
+Test these flows:
+
+A. Stable scenario
+- Reset demo to Stable
+- Confirm Today tab loads
+- Confirm symptom management copy says stable symptoms, not generic wellness
+- Confirm no severe support or care-team CTA appears
+- Confirm Week tab loads
+- Confirm Trends loads
+- Confirm no debug text or clipped text
+
+B. Moderate scenario
+- Reset demo to Moderate
+- Confirm Symptom support appears
+- Confirm recommendation matches symptoms
+- Tap “I’ll try this”
+- Tap “Another option”
+- Submit Better / Same / Worse if available
+- Confirm feedback persists after reload
+- Confirm no duplicate cards
+
+C. Severe scenario
+- Reset demo to Severe
+- Confirm stronger Symptom support appears
+- Confirm Ask care team CTA appears
+- Tap Ask care team
+- Confirm success state appears
+- Confirm duplicate taps do not create duplicate escalations
+
+D. Worse → better
+- Start severe
+- Change symptoms to stable
+- Confirm recommendation downgrades
+- Confirm stale severe recommendation disappears
+- Confirm prior severe input remains in analytics/event history
+
+Patient app checklist:
+- Login as demo patient works
+- Reset demo patient to Stable / Moderate / Severe works
+- Today tab updates immediately after reset
+- Symptom management/support card matches symptom state
+- Stable copy uses symptom language, not generic wellness copy
+- Symptom changes update recommendations live
+- “I’ll try this” works
+- “Another option” works
+- Better / Same / Worse feedback works
+- Ask care team works
+- Review requested success state appears
+- No duplicate cards
+- No stale severe recommendation after symptoms improve
+- No visible debug text
+- No clipped top status text
+- No old “Plan” tab labels, should be “Week”
+- No “Your Coach” section on Today
+- Apple Health is only referenced when connected or as a connect prompt
+- Week tab plan items show consistent titles/subtitles
+- Plan choices and completions persist after reload
+- Trends uses honest language and no fake Apple Health claims
+
+Acceptance:
+Patient app should feel reliable enough for a real pilot demo.
+
+==================================================
+PART 9 — DATABASE PERSISTENCE QA
+==================================================
+
+Verify these persist to the active configured DB:
+- latest patient_checkins
+- symptom input change events in analytics_events
+- patient_interventions state
+- feedback Better/Same/Worse
+- care_events for escalation
+- patient_plan_items suggestions, overrides and completions
+- patient_treatment_logs dose logs
+- patient_integrations Apple Health state
+- provider review/action state if supported
+
+Do not just visually inspect. Query DB or API responses where possible.
+
+No critical pilot data should be local-only.
+
+If something is local-only:
+- report it as a gap
+- fix it only if low-risk and already supported by existing endpoints/schema
+- otherwise document it as a blocker or post-pilot item
+
+==================================================
+PART 10 — VIVA CLINIC QA
+==================================================
+
+Check provider dashboard, especially escalation context.
+
+For an escalated demo patient, confirm Clinic shows:
+- patient
+- reason for escalation
+- current symptoms
+- recent trend if available
+- Viva recommendation shown
+- patient action / feedback
+- timestamp
+- review status
+- provider action if supported
+
+Also confirm:
+- provider sees assigned patients only
+- no generic “patient requested review” without useful context
+- provider cannot access unassigned patients
+- doctor tokens cannot call patient-only routes
+
+Acceptance:
+Provider should understand why the patient surfaced in under 10 seconds.
+
+==================================================
+PART 11 — VIVA ANALYTICS QA
+==================================================
+
+Check existing internal Pilot Metrics page. Do not create a new page.
+
+Confirm it shows or can support:
+- activation / engagement
+- check-in completion
+- symptom signals
+- intervention generated / accepted
+- Better/Same/Worse split
+- auto-resolved vs escalated
+- provider review/action
+- plan adherence
+- Apple Health connection rate
+
+Since this page is internal:
+- keep useful data caveats
+- make caveats clean, not sloppy
+- clearly distinguish live/demo/snapshot data
+- do not fake production metrics
+
+Also confirm analytics_events.payload and event_date are persisted and queryable.
+
+Acceptance:
+Pilot Metrics should be useful as an internal operating dashboard and raw material for a later polished client report.
+
+==================================================
+PART 12 — QUICK UI / COPY QA
+==================================================
+
+Scan for:
+- visible debug text
+- clipped titles
+- stale “Plan” label instead of “Week”
+- stale “Today’s next steps”
+- old Coach section
+- inconsistent colors
+- red used outside true severe/urgent states
+- buttons that look clickable but do nothing
+- ugly empty states
+- Apple Health claims when disconnected
+- duplicate escalation labels
+- black/blank Viva Care thumbnail if easy to fix through assets only
+
+Fix only obvious low-risk issues.
+
+Do not spend time on thumbnail polish if it risks app functionality.
+
+==================================================
+PART 13 — HIPAA / OPENAI GUARDRAIL QA
+==================================================
+
+Verify:
+- OpenAI payload is de-identified
+- no names, emails, DOBs, clinic names, provider names, raw notes, invite tokens, user ids or direct identifiers are sent to OpenAI
+- raw prompts with patient context are not logged
+- fallback templates work if OpenAI fails
+- care_events metadata stays in DB only
+- analytics_events payload does not contain raw notes or unnecessary PHI
+- demo/dev routes are disabled in production
+
+Acceptance:
+No PHI/OpenAI regression.
+
+==================================================
+PART 14 — FINAL REPORT
+==================================================
+
+At the end, provide a concise evidence-based report:
+
+1. Current runtime before fix
+2. Current runtime after fix
+3. Current DB before fix
+4. Current DB after fix
+5. Whether AWS RDS is verified by actual writes
+6. Whether EC2 is verified by health endpoint and writes
+7. Which apps point to which API
+8. Any missing AWS secrets/configs
+9. Any unresolved blockers for real PHI pilot
+10. Whether Replit is now dev/demo only or still part of pilot runtime
+11. What passed in QA
+12. What was fixed
+13. What still needs attention
+14. Whether Care → Clinic → Analytics flow works
+15. Whether intervention closed loop works
+16. Whether HIPAA/OpenAI guardrails remain intact
+17. Final pilot readiness rating out of 10
+
+Important:
+If you cannot complete EC2 tonight, at minimum fix DB routing to AWS RDS if credentials exist, verify actual writes, and report EC2 as remaining blocker.
+
+If time runs out:
+- stop
+- write the report
+- list remaining blockers
+- do not leave the app in a broken half-migrated state
