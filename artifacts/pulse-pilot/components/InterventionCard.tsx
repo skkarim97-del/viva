@@ -583,6 +583,318 @@ export function deriveLiveSeverity(
   return null;
 }
 
+// =====================================================================
+// LIVE DECISION MATRIX
+// =====================================================================
+// `deriveLiveSeverity` adapts the card CHROME (badge tone, signal
+// chips, escalation CTA). The matrix below adapts the card CONTENT --
+// the recommendation title, body, and the mix of support categories
+// shown -- so changing a chip in the check-in row above visibly
+// changes WHAT the card recommends, not just how it is decorated.
+//
+// This is intentionally a pure client-side derivation. The server's
+// PatientIntervention still owns the id, status, accept / feedback
+// wiring and persistence. We just swap the displayed copy when the
+// live check-in disagrees with the server's snapshot, so the patient
+// doesn't have to wait for a /generate round-trip to feel the card
+// react to their selectors.
+//
+// Priority order for the PRIMARY concern (highest first):
+//   1. severe nausea           -> "Settle nausea first" (amber/heavier)
+//   2. moderate nausea         -> "Settle nausea without skipping nutrition"
+//   3. constipation OR no BM   -> "Help things move gently"
+//      (only when nausea is absent, otherwise nausea wins)
+//   4. mild nausea             -> "Stay ahead of nausea" (light)
+//   5. very_low appetite       -> bland-vs-protein appetite copy
+//   6. low appetite            -> bland-vs-protein appetite copy
+//   7. depleted energy         -> "Reset with fluids and a short break"
+//   8. diarrhea                -> "Steady fluids and bland foods"
+//   9. bloating                -> "Ease bloating gently" (NO fiber copy)
+//  10. tired energy            -> "Take a lighter day"
+//
+// Bloating is intentionally NOT treated like constipation -- if the
+// patient picked bloated (not constipated and BM=yes) we do not
+// recommend fiber, we recommend gentle movement / smaller meals.
+//
+// Bloating + diarrhea map to RecCategory "other" because the existing
+// enum doesn't carry them; the override copy carries the real title.
+
+interface LivePlanRow {
+  category: RecCategory;
+  copy: RecContent;
+  // Human-readable tag used by the dev-only debug line so we can
+  // verify the matrix is recalculating from the chip selectors.
+  reason: string;
+}
+
+interface LivePlan {
+  severity: LiveSeverity;
+  primaryConcern: string;
+  rows: LivePlanRow[];
+  // Compact symptom signature for the dev-only debug line.
+  signature: string;
+}
+
+function nauseaCopy(
+  level: "severe" | "moderate" | "mild",
+  withLowAppetite: boolean,
+): RecContent {
+  if (level === "severe") {
+    return {
+      title: "Settle nausea first",
+      body:
+        "Start with small sips of water and a few bites of bland food (toast, crackers, yogurt or tofu) if you can tolerate it. Pause if nausea increases.",
+      helper:
+        "If nausea feels hard to manage, is getting worse, or you can't keep fluids down, ask your care team to review.",
+    };
+  }
+  if (level === "moderate") {
+    return {
+      title: "Settle nausea without skipping nutrition",
+      body: withLowAppetite
+        ? "Try a few bites of a bland, protein-forward snack -- yogurt, tofu, soup or a smoothie -- and sip water slowly for 20 to 30 minutes."
+        : "Try a small bland snack like yogurt, tofu, soup or a smoothie, and sip water slowly for 20 to 30 minutes.",
+      helper:
+        "Small bland portions are usually easier to tolerate while keeping protein and fluids in.",
+    };
+  }
+  return {
+    title: "Stay ahead of nausea",
+    body: "Keep meals smaller today and sip water steadily.",
+    helper: "Light, preventive support so it does not build later in the day.",
+  };
+}
+
+function appetiteCopy(hasNausea: boolean): RecContent {
+  if (hasNausea) {
+    return {
+      title: "Eat small and bland",
+      body:
+        "Try a few bites of toast, crackers, rice or oatmeal with a small protein on the side. Skip greasy or strongly flavored foods today.",
+      helper:
+        "Bland, low-friction foods are easier when nausea is also present.",
+    };
+  }
+  return {
+    title: "Protect your protein intake",
+    body:
+      "Aim for a small protein serving every few hours -- Greek yogurt, tofu, soup or a smoothie all count. Consistency matters more than volume.",
+    helper:
+      "This can help prevent low intake from turning into low energy or missed nutrition.",
+  };
+}
+
+function constipationCopy(): RecContent {
+  return {
+    title: "Help things move gently",
+    body:
+      "Sip warm fluids over the next few hours and add fiber gradually with foods like berries, chia, beans or vegetables. A short walk if you feel up for it can help too.",
+    helper: "Fiber works best paired with steady fluids and gentle movement.",
+  };
+}
+
+function bloatingCopy(): RecContent {
+  return {
+    title: "Ease bloating gently",
+    body:
+      "Try a short walk, smaller portions and avoid overeating. Skip carbonated drinks and heavily seasoned foods today.",
+    helper:
+      "Gentle movement and smaller meals usually help more than added fiber when bloating is the main signal.",
+  };
+}
+
+function diarrheaCopy(): RecContent {
+  return {
+    title: "Steady fluids and bland foods",
+    body:
+      "Sip water or an electrolyte drink slowly and stick to bland foods like rice, toast or bananas. Skip greasy or high-fiber foods today.",
+    helper: "Steady hydration and gentle foods support recovery.",
+  };
+}
+
+function energyCopy(level: "tired" | "depleted"): RecContent {
+  if (level === "depleted") {
+    return {
+      title: "Reset with fluids and a short break",
+      body:
+        "Take small sips of water, sit or lie down for 10 minutes, then try a small protein-plus-carb snack if you feel ready.",
+      helper: "Low intake and dehydration can deepen fatigue.",
+    };
+  }
+  return {
+    title: "Take a lighter day",
+    body:
+      "Plan rest blocks today and pair your next meal with a protein source. Save bigger tasks for tomorrow.",
+    helper: "Pacing keeps your energy steadier across the day.",
+  };
+}
+
+function hydrationCopy(): RecContent {
+  return {
+    title: "Sip steadily over the next hour",
+    body:
+      "Take a few small sips every 5 to 10 minutes. If plain water feels hard, try an electrolyte drink or warm tea.",
+    helper: "Steady fluids absorb better than drinking a lot at once.",
+  };
+}
+
+export function deriveLivePlan(
+  c: LiveCheckin | null | undefined,
+  severity: LiveSeverity | null,
+): LivePlan | null {
+  // No live data -> let the server-derived rows render unchanged.
+  // Steady -> the InterventionCard short-circuits to the maintenance
+  // card before reading the plan, so we can early-return null too.
+  if (!c || !severity || severity === "steady") return null;
+
+  const hasNausea =
+    c.nausea === "mild" || c.nausea === "moderate" || c.nausea === "severe";
+  const hasLowAppetite = c.appetite === "low" || c.appetite === "very_low";
+  const hasConstipation =
+    c.digestion === "constipated" || c.bowel === "no";
+  const hasBloating = c.digestion === "bloated";
+  const hasDiarrhea = c.digestion === "diarrhea";
+  const energyTier: "depleted" | "tired" | null =
+    c.energy === "depleted"
+      ? "depleted"
+      : c.energy === "tired"
+        ? "tired"
+        : null;
+
+  // -- Pick PRIMARY concern by clinical priority ---------------------
+  // `kind` is the matrix-level concern (used for de-duping secondaries
+  // and for the debug tag). `category` is the RecCategory we expose
+  // to the renderer; bloating + diarrhea map to "other" because the
+  // RecCategory enum doesn't carry them, and the override copy carries
+  // the real title/body.
+  let kind: string | null = null;
+  let primaryCategory: RecCategory | null = null;
+  let primaryCopy: RecContent | null = null;
+
+  if (c.nausea === "severe") {
+    kind = "nausea-severe";
+    primaryCategory = "nausea";
+    primaryCopy = nauseaCopy("severe", hasLowAppetite);
+  } else if (c.nausea === "moderate") {
+    kind = "nausea-moderate";
+    primaryCategory = "nausea";
+    primaryCopy = nauseaCopy("moderate", hasLowAppetite);
+  } else if (hasConstipation) {
+    // Constipation outranks mild nausea / low appetite when nausea is
+    // not at least moderate -- it's a concrete, actionable signal.
+    kind = "constipation";
+    primaryCategory = "constipation";
+    primaryCopy = constipationCopy();
+  } else if (c.nausea === "mild") {
+    kind = "nausea-mild";
+    primaryCategory = "nausea";
+    primaryCopy = nauseaCopy("mild", hasLowAppetite);
+  } else if (hasLowAppetite) {
+    kind = c.appetite === "very_low" ? "appetite-very-low" : "appetite-low";
+    primaryCategory = "appetite";
+    primaryCopy = appetiteCopy(hasNausea);
+  } else if (energyTier === "depleted") {
+    kind = "energy-depleted";
+    primaryCategory = "energy";
+    primaryCopy = energyCopy("depleted");
+  } else if (hasDiarrhea) {
+    kind = "diarrhea";
+    primaryCategory = "other";
+    primaryCopy = diarrheaCopy();
+  } else if (hasBloating) {
+    kind = "bloating";
+    primaryCategory = "other";
+    primaryCopy = bloatingCopy();
+  } else if (energyTier === "tired") {
+    kind = "energy-tired";
+    primaryCategory = "energy";
+    primaryCopy = energyCopy("tired");
+  } else {
+    return null;
+  }
+
+  const rows: LivePlanRow[] = [
+    { category: primaryCategory, copy: primaryCopy, reason: kind },
+  ];
+  // Track which concern KINDS are already represented so secondaries
+  // don't double up. Keyed by symptom kind, not RecCategory, so
+  // bloating + diarrhea (both "other") don't shadow each other.
+  const used = new Set<string>([kind]);
+  const usedCats = new Set<RecCategory>([primaryCategory]);
+
+  // Appetite secondary
+  if (
+    !usedCats.has("appetite") &&
+    hasLowAppetite
+  ) {
+    rows.push({
+      category: "appetite",
+      copy: appetiteCopy(hasNausea),
+      reason: c.appetite === "very_low" ? "appetite-very-low" : "appetite-low",
+    });
+    usedCats.add("appetite");
+  }
+
+  // Constipation secondary -- only adds when nausea (not constipation)
+  // was the primary, so digestion guidance still surfaces.
+  if (!usedCats.has("constipation") && hasConstipation) {
+    rows.push({
+      category: "constipation",
+      copy: constipationCopy(),
+      reason: "constipation",
+    });
+    usedCats.add("constipation");
+  }
+
+  // Bloating secondary -- ONLY when constipation isn't also selected.
+  // Constipation already covers fiber+walk; bloating uses opposite
+  // copy (gentler, no fiber) and would conflict.
+  if (!used.has("bloating") && hasBloating && !hasConstipation) {
+    rows.push({
+      category: "other",
+      copy: bloatingCopy(),
+      reason: "bloating",
+    });
+    used.add("bloating");
+  }
+
+  // Hydration secondary -- when nausea is moderate+/severe, appetite
+  // is very_low, or digestion is diarrhea.
+  if (
+    !usedCats.has("hydration") &&
+    (c.nausea === "moderate" ||
+      c.nausea === "severe" ||
+      c.appetite === "very_low" ||
+      hasDiarrhea)
+  ) {
+    rows.push({
+      category: "hydration",
+      copy: hydrationCopy(),
+      reason: "hydration",
+    });
+    usedCats.add("hydration");
+  }
+
+  // Energy secondary
+  if (!usedCats.has("energy") && energyTier) {
+    rows.push({
+      category: "energy",
+      copy: energyCopy(energyTier),
+      reason: `energy-${energyTier}`,
+    });
+    usedCats.add("energy");
+  }
+
+  const signature = `n=${c.nausea ?? "-"}|a=${c.appetite ?? "-"}|e=${c.energy ?? "-"}|d=${c.digestion ?? "-"}|b=${c.bowel ?? "-"}`;
+
+  return {
+    severity,
+    primaryConcern: kind,
+    rows,
+    signature,
+  };
+}
+
 interface InterventionCardProps {
   intervention: PatientIntervention;
   navy: string;
@@ -663,6 +975,14 @@ export function InterventionCard({
   // need for useMemo -- the cost is trivial and React's diff handles
   // the rerender efficiently.
   const liveSeverity = deriveLiveSeverity(liveCheckin);
+  // Pure derivation off the live check-in. Recomputes within React's
+  // normal render cycle whenever a chip in the check-in row changes,
+  // so the displayed title / body / supports adapt within the spec's
+  // 1-2s budget without any /generate round-trip.
+  const livePlan = useMemo(
+    () => deriveLivePlan(liveCheckin, liveSeverity),
+    [liveCheckin, liveSeverity],
+  );
   const navy = FEATURED_TEXT;
   const mutedForeground = FEATURED_MUTED;
   const background = FEATURED_BORDER;
@@ -708,6 +1028,37 @@ export function InterventionCard({
     intervention.recommendationCategory,
     intervention.severity,
   ]);
+
+  // When the patient's live check-in produces a derivable plan, swap
+  // the server-built rows for a client-derived set whose title, body
+  // and category mix react to the chip selectors. The server-built
+  // rows still drive intervention id, status, accept / feedback wiring
+  // and persistence -- only the displayed copy + ordering change.
+  // Synthesized keys are namespaced ("live:<id>:<cat>:<i>") so they
+  // never collide with the server section keys; AsyncStorage will
+  // simply hold a parallel set of entries for any user-touched rows.
+  const displayRows = useMemo(() => {
+    if (!livePlan) return orderedRows;
+    return livePlan.rows.map((r, i) => ({
+      section: { label: r.category, body: r.copy.body },
+      index: i,
+      key: `live:${intervention.id}:${r.category}:${i}`,
+      category: r.category,
+      rank: i,
+    }));
+  }, [livePlan, orderedRows, intervention.id]);
+
+  // Lookup table from synthesized row key -> override RecContent.
+  // Passed through PrimaryActionCard / SecondaryActionRow so they can
+  // bypass pickVariants and render the matrix-derived title/body/helper.
+  const liveOverrides = useMemo<Record<string, RecContent>>(() => {
+    if (!livePlan) return {};
+    const m: Record<string, RecContent> = {};
+    livePlan.rows.forEach((r, i) => {
+      m[`live:${intervention.id}:${r.category}:${i}`] = r.copy;
+    });
+    return m;
+  }, [livePlan, intervention.id]);
 
   // -- Per-row local state ------------------------------------------
   const [sectionStatus, setSectionStatus] = useState<
@@ -1054,8 +1405,8 @@ export function InterventionCard({
   }
 
   // -- Derived view-model -------------------------------------------
-  const primary = orderedRows[0];
-  const secondaries = orderedRows.slice(1);
+  const primary = displayRows[0];
+  const secondaries = displayRows.slice(1);
 
   // Badge label/tone reflects the most urgent signal we currently
   // know about. Escalated state always wins; otherwise severe live
@@ -1077,7 +1428,7 @@ export function InterventionCard({
   const allCategoryNouns: string[] = [];
   {
     const seen = new Set<RecCategory>();
-    for (const r of orderedRows) {
+    for (const r of displayRows) {
       if (seen.has(r.category)) continue;
       seen.add(r.category);
       allCategoryNouns.push(CATEGORY_NOUN[r.category]);
@@ -1163,6 +1514,27 @@ export function InterventionCard({
               ? "Based on your check-in, recent symptoms and Apple Health trends"
               : "Based on your check-in and recent symptoms"}
           </Text>
+          {/* Dev-only matrix probe. Lets us confirm at a glance that
+              the displayed plan is recalculating from the chip
+              selectors (concern shifts, severity flips, support set
+              changes). __DEV__ is false in production builds so it
+              never ships to patients. */}
+          {__DEV__ && livePlan && (
+            <Text
+              style={{
+                marginTop: 6,
+                fontSize: 10,
+                lineHeight: 14,
+                color: mutedForeground,
+                fontFamily: "Montserrat_600SemiBold",
+                opacity: 0.7,
+              }}
+            >
+              [debug] concern={livePlan.primaryConcern} sev=
+              {livePlan.severity} supports=
+              {livePlan.rows.map((r) => r.reason).join(",")} | {livePlan.signature}
+            </Text>
+          )}
         </View>
       </View>
 
@@ -1276,6 +1648,7 @@ export function InterventionCard({
           category={primary.category}
           interventionId={intervention.id}
           originalBody={primary.section.body}
+          liveOverride={liveOverrides[primary.key] ?? null}
           showingAlternate={!!sectionAlt[primary.key]}
           status={sectionStatus[primary.key] ?? null}
           noChangeDismissed={!!noChangeAck[primary.key]}
@@ -1411,6 +1784,7 @@ export function InterventionCard({
                   category={r.category}
                   interventionId={intervention.id}
                   originalBody={r.section.body}
+                  liveOverride={liveOverrides[r.key] ?? null}
                   showingAlternate={!!sectionAlt[r.key]}
                   status={sectionStatus[r.key] ?? null}
                   noChangeDismissed={!!noChangeAck[r.key]}
@@ -1485,6 +1859,11 @@ interface ActionRowProps {
   // Legacy: see noChangeDismissed above.
   onDismissNoChange: () => void;
   onAskCareTeam: () => void;
+  // When the parent has derived a live plan from the patient's check-in
+  // selectors, it passes the override here. Present -> bypass
+  // pickVariants / showingAlternate and render this copy directly.
+  // Absent -> fall back to the server-driven RECOMMENDATIONS variant.
+  liveOverride?: RecContent | null;
 }
 
 function tap(): void {
@@ -1513,19 +1892,28 @@ function PrimaryActionCard({
   onReset,
   onDismissNoChange: _onDismissNoChange,
   onAskCareTeam,
+  liveOverride,
 }: ActionRowProps) {
   const picked = useMemo(
     () => pickVariants(category, interventionId),
     [category, interventionId],
   );
-  const variant = showingAlternate ? picked.alternate : picked.primary;
+  // When the parent derived a live plan from the check-in selectors,
+  // its copy wins -- the deterministic per-intervention variant from
+  // pickVariants is replaced by symptom-tuned title/body/helper, and
+  // showingAlternate becomes a no-op (one canonical override per
+  // signal). Otherwise we fall back to the canned clinical variant.
+  const variant: RecContent =
+    liveOverride ?? (showingAlternate ? picked.alternate : picked.primary);
   const title = variant.title;
   const helper = variant.helper;
   // For "other" we don't have category-specific clinical copy, so fall
   // back to the server's body when not showing the alternate. Known
-  // categories always use the canned clinical micro-protocol.
-  const body =
-    category === "other" && !showingAlternate
+  // categories always use the canned clinical micro-protocol. The
+  // liveOverride path bypasses both branches.
+  const body = liveOverride
+    ? liveOverride.body
+    : category === "other" && !showingAlternate
       ? originalBody || variant.body
       : variant.body;
   const titleA11y = title.toLowerCase();
@@ -1776,15 +2164,19 @@ function SecondaryActionRow({
   onReset,
   onDismissNoChange: _onDismissNoChange,
   onAskCareTeam,
+  liveOverride,
 }: ActionRowProps) {
   const picked = useMemo(
     () => pickVariants(category, interventionId),
     [category, interventionId],
   );
-  const variant = showingAlternate ? picked.alternate : picked.primary;
+  // See PrimaryActionCard for the liveOverride contract.
+  const variant: RecContent =
+    liveOverride ?? (showingAlternate ? picked.alternate : picked.primary);
   const title = variant.title;
-  const body =
-    category === "other" && !showingAlternate
+  const body = liveOverride
+    ? liveOverride.body
+    : category === "other" && !showingAlternate
       ? originalBody || variant.body
       : variant.body;
   const titleA11y = title.toLowerCase();

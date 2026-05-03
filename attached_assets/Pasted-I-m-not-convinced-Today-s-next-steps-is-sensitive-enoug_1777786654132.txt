@@ -1,0 +1,128 @@
+I’m not convinced Today’s next steps is sensitive enough to changes in the symptom tracking section.
+
+Please make the intervention logic and visible copy more clearly responsive to live symptom changes.
+
+Current concern:
+When I change Energy, Appetite, Nausea, Digestion and Bowel Movement, the card updates somewhat, but it does not feel meaningfully different enough across symptom combinations and severities.
+
+Required behavior:
+The Today’s next steps card should visibly change based on:
+1. Symptom type
+2. Severity
+3. Symptom combination
+4. Recent trend/history if available
+5. Apple Health / activity/sleep data if available
+
+Please implement or strengthen a clear decision matrix.
+
+Examples:
+
+A) All good / stable
+Energy=Great or Good
+Appetite=Strong or Normal
+Nausea=None
+Digestion=Fine
+Bowel Movement=Yes
+
+Expected:
+Either hide the intervention card or show a light maintenance card:
+Title: Stay steady today
+Copy: Your check-in looks steady. Keep following your plan and check in again if anything changes.
+No orange warning styling.
+No care-team escalation.
+
+B) Mild nausea only
+Nausea=Mild
+Appetite normal/strong
+Digestion fine
+Energy good/great
+
+Expected:
+Title: Stay ahead of nausea
+Copy: Keep meals smaller today and sip water steadily.
+Tone should be light and preventive.
+
+C) Moderate nausea + low appetite
+Nausea=Moderate
+Appetite=Low
+Energy not depleted
+
+Expected:
+Title: Settle nausea without skipping nutrition
+Copy should mention small bland protein-forward snack + slow hydration.
+No aggressive escalation unless repeated/worsening.
+
+D) Severe nausea
+Nausea=Severe
+
+Expected:
+Title: Settle nausea first
+Copy should be stronger and more careful:
+Start with small sips of water and a few bites of bland food if tolerated.
+Care-team review should be more visible if symptoms feel hard to manage, worsening or persistent.
+Use amber/heavier styling.
+
+E) Constipation / no bowel movement
+Digestion=Constipated OR Bowel Movement=No
+
+Expected:
+Card should include digestion/constipation support in More Support:
+short walk if able, steady fluids, fiber-rich food.
+If nausea is also present, mention that hydration/nutrition/digestion support are connected.
+
+F) Low energy
+Energy=Tired or Depleted
+
+Expected:
+Card should include energy support:
+lighter day, protein with next meal, rest/recovery.
+If Apple Health shows low sleep/activity, mention that.
+
+G) Bloating
+Digestion=Bloated
+
+Expected:
+Do not treat it like constipation.
+Use lighter digestion support:
+gentle movement, smaller meals, avoid overeating.
+Do not say fiber/constipation unless constipation or no bowel movement is selected.
+
+H) Appetite changes
+Appetite=Low or Very Low
+
+Expected:
+Add appetite support.
+If nausea is present, recommend small, bland, easy-to-tolerate foods.
+If nausea is absent, recommend small protein-rich meal/snack.
+
+Live update requirement:
+When symptoms change, the SAME card should update within 1-2 seconds:
+- title
+- what was noticed
+- signal chips
+- primary action
+- more support categories
+- escalation styling
+- care-team prominence
+
+Do not create duplicate cards.
+
+Debug requirement:
+For dev only, temporarily add a small internal debug line or console log showing:
+- current symptom signature
+- selected primary concern
+- severity level
+- included support categories
+This can be removed later, but I need confidence that the card is actually recalculating based on the symptom controls.
+
+Acceptance:
+In Replit preview, changing from:
+1. Mild nausea only
+to
+2. Severe nausea + low appetite
+to
+3. Constipation + no bowel movement
+to
+4. All good/stable
+
+should visibly produce different card titles, copy, support categories, styling and care-team prominence.
