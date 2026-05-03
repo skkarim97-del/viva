@@ -724,6 +724,46 @@ export function PatientDetailPage({ id }: { id: number }) {
         // recent checkin. We only show fields with attention-worthy
         // values so the line stays scannable; a healthy checkin
         // collapses to "No symptoms flagged today".
+        // Recent trend chip derived from the active symptom flags already
+        // fetched for the page (risk.data.symptomFlags). We pick the
+        // worst flag (suggestFollowup first, then worsening, then
+        // persistent) so the chip reflects the most clinically relevant
+        // trajectory. Falls back to null when no flag is active.
+        const trendChip = (() => {
+          const flags = risk.data?.symptomFlags ?? [];
+          if (flags.length === 0) return null;
+          // Strict lexicographic ranking so triage selection is
+          // deterministic in tied cases:
+          //   1) suggestFollowup (server already says this needs review)
+          //   2) persistence rank (worsening > persistent > transient)
+          //   3) trendResponse === "worse" (patient self-reported worsening)
+          //   4) daysObserved (longer-running takes precedence)
+          const persistenceRank = (p: string) =>
+            p === "worsening" ? 2 : p === "persistent" ? 1 : 0;
+          const rank = (
+            f: typeof flags[number],
+          ): [number, number, number, number] => [
+            f.suggestFollowup ? 1 : 0,
+            persistenceRank(f.persistence),
+            f.trendResponse === "worse" ? 1 : 0,
+            f.daysObserved,
+          ];
+          const sorted = [...flags].sort((a, b) => {
+            const ra = rank(a);
+            const rb = rank(b);
+            for (let i = 0; i < ra.length; i++) {
+              if (rb[i] !== ra[i]) return rb[i] - ra[i];
+            }
+            return 0;
+          });
+          const top = sorted[0];
+          const sym = top.symptom.replace(/_/g, " ");
+          if (top.persistence === "worsening") return `${sym} worsening · ${top.daysObserved}d`;
+          if (top.persistence === "persistent") return `${sym} persistent · ${top.daysObserved}d`;
+          if (top.trendResponse === "worse") return `${sym} reported worse`;
+          return null;
+        })();
+
         const symptomChips: string[] = [];
         if (latestCheckin) {
           if (latestCheckin.nausea === "severe") symptomChips.push("Severe nausea");
@@ -807,6 +847,16 @@ export function PatientDetailPage({ id }: { id: number }) {
                       ? "No symptoms flagged on today's check-in."
                       : "No recent check-in on file."}
                 </div>
+                {trendChip ? (
+                  <div className="mt-1.5">
+                    <span
+                      className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                      style={{ backgroundColor: "rgba(139,79,0,0.16)", color: "#8B4F00" }}
+                    >
+                      Trend · {trendChip}
+                    </span>
+                  </div>
+                ) : null}
               </div>
               <div className="rounded-xl px-3 py-2" style={{ backgroundColor: "rgba(255,255,255,0.55)" }}>
                 <div className="text-[10px] font-semibold uppercase tracking-wide opacity-70">

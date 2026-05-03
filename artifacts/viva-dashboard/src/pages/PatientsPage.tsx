@@ -1056,6 +1056,25 @@ function InterventionBucketSection({
                     <span className="text-xs text-muted-foreground font-medium">
                       {humanTrigger(iv.triggerType)}
                     </span>
+                    {severityChip(iv) && (
+                      <span
+                        className="text-[10px] font-semibold rounded-full px-2 py-0.5"
+                        style={{ backgroundColor: "rgba(20,34,64,0.08)", color: "#142240" }}
+                      >
+                        {severityChip(iv)}
+                      </span>
+                    )}
+                    {feedbackChip(iv) && (
+                      <span
+                        className="text-[10px] font-semibold rounded-full px-2 py-0.5"
+                        style={{
+                          backgroundColor: feedbackChip(iv)!.bg,
+                          color: feedbackChip(iv)!.fg,
+                        }}
+                      >
+                        {feedbackChip(iv)!.label}
+                      </span>
+                    )}
                     {iv.generatedBy === "rules_fallback" && (
                       <span className="text-[10px] font-semibold text-muted-foreground rounded-full px-2 py-0.5 bg-background">
                         Fallback
@@ -1092,4 +1111,58 @@ const TRIGGER_LABEL_W: Record<string, string> = {
 };
 function humanTrigger(t: string): string {
   return TRIGGER_LABEL_W[t] ?? t.replace(/_/g, " ");
+}
+
+const SYMPTOM_LABEL_W: Record<string, string> = {
+  nausea: "nausea",
+  appetite: "appetite",
+  energy: "energy",
+  hydration: "hydration",
+  constipation: "constipation",
+  digestion: "digestion",
+  bloating: "bloating",
+  diarrhea: "diarrhea",
+  weight: "weight",
+};
+// Server severity is the 1..5 scale defined in
+// lib/db/src/schema/patientInterventions.ts and populated by
+// interventionEngine/triggers.ts (mild=1, moderate=3, severe=5).
+// We bucket defensively so values in between (e.g. 2, 4) don't get
+// over-labeled.
+function severityChip(iv: ClinicWorklistIntervention): string | null {
+  if (!iv.symptomType) return null;
+  const sym = SYMPTOM_LABEL_W[iv.symptomType] ?? iv.symptomType.replace(/_/g, " ");
+  if (typeof iv.severity === "number") {
+    if (iv.severity >= 5) return `Severe ${sym}`;
+    if (iv.severity >= 3) return `Moderate ${sym}`;
+    if (iv.severity >= 1) return `Mild ${sym}`;
+  }
+  return sym.charAt(0).toUpperCase() + sym.slice(1);
+}
+function feedbackChip(
+  iv: ClinicWorklistIntervention,
+): { label: string; bg: string; fg: string } | null {
+  switch (iv.feedbackResult) {
+    case "worse":
+      return { label: "Reported worse", bg: "rgba(255,69,58,0.14)", fg: "#7a1a14" };
+    case "better":
+      return { label: "Reported better", bg: "rgba(52,199,89,0.16)", fg: "#1f5a36" };
+    case "same":
+      return { label: "No change", bg: "rgba(20,34,64,0.08)", fg: "#142240" };
+    case "didnt_try":
+      return { label: "Didn't try", bg: "rgba(20,34,64,0.08)", fg: "#142240" };
+    default:
+      // Worklist payload includes statuses shown / accepted /
+      // pending_feedback / escalated (see WORKLIST_STATUSES in
+      // routes/clinicInterventions.ts). Any of those without a
+      // feedbackResult are awaiting patient feedback.
+      if (
+        iv.status === "shown" ||
+        iv.status === "accepted" ||
+        iv.status === "pending_feedback"
+      ) {
+        return { label: "Awaiting feedback", bg: "rgba(20,34,64,0.06)", fg: "#142240" };
+      }
+      return null;
+  }
 }
