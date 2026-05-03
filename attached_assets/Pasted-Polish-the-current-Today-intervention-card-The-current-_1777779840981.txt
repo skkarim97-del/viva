@@ -1,0 +1,100 @@
+Polish the current Today intervention card. The current structure is the best version so far, but it needs final UX cleanup and font consistency.
+
+Keep the current overall structure:
+- Today’s next steps
+- What we noticed
+- one primary “Start here” intervention
+- collapsed “More support for today”
+- expanded secondary support rows
+- no default Ask my care team
+- feedback and escalation logic unchanged
+
+Make the following refinements:
+
+1. Enforce Montserrat font consistently
+The intervention card currently looks like it may be using a different font from the rest of the page.
+
+Apply Montserrat consistently to:
+- card title
+- subtitle
+- section labels
+- body copy
+- helper copy
+- badges
+- buttons
+- expanded support rows
+- footer disclaimer
+
+Use the existing app font setup if available. Do not introduce a new font package unless necessary.
+
+2. Tighten the primary intervention copy
+
+Current title can stay:
+“Settle nausea without skipping nutrition”
+
+Update body to:
+“Try 3 to 5 bites of Greek yogurt, tofu, soup or a smoothie. Then take small sips of water over 20 to 30 minutes. Avoid greasy, spicy or large meals for now.”
+
+Update helper line to:
+“This may help nausea while keeping protein and fluids in your system.”
+
+3. Shorten secondary button copy
+
+Change:
+“Show me another option”
+
+To:
+“Another option”
+
+Reason:
+The current label wraps and feels less polished.
+
+4. Simplify the More Support subtitle
+
+Change:
+“Other steps that may help with appetite, energy or digestion.”
+
+To:
+“3 more steps for appetite, energy and digestion”
+
+If the count is dynamic, use:
+“{count} more steps for appetite, energy and digestion”
+
+If categories vary, make the subtitle dynamic but keep it short.
+
+5. Make the footer disclaimer more subtle
+
+Keep the copy:
+“Viva supports between-visit care. If symptoms feel severe or urgent, contact your care team or seek medical help.”
+
+But make it:
+- smaller
+- lighter color
+- less visually dominant
+- spaced slightly away from the main action content
+
+6. Preserve all behavior
+
+Do not change:
+- recommendation prioritization
+- “I’ll try this” flow
+- “Another option” alternate flow
+- More Support expand/collapse
+- secondary row behavior
+- feedback states
+- escalation only after Worse
+- onAccept / onFeedback / persistence behavior
+
+7. Verify
+
+Run:
+- typecheck
+- lint if available
+- mobile/web preview
+
+Acceptance criteria:
+- Font visually matches the rest of the app
+- Button labels do not wrap awkwardly
+- Primary intervention is easier to read
+- More Support section feels cleaner
+- Footer disclaimer is present but not distracting

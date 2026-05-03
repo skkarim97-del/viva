@@ -197,9 +197,9 @@ const RECOMMENDATIONS: Record<
   nausea: {
     primary: {
       title: "Settle nausea without skipping nutrition",
-      body: "Try 3 to 5 bites of a bland protein option like Greek yogurt, tofu, soup or a smoothie. Then take small sips of water over 20 to 30 minutes. Avoid greasy, spicy or large meals for now.",
+      body: "Try 3 to 5 bites of Greek yogurt, tofu, soup or a smoothie. Then take small sips of water over 20 to 30 minutes. Avoid greasy, spicy or large meals for now.",
       helper:
-        "This helps reduce nausea while keeping some protein and fluids in your system.",
+        "This may help nausea while keeping protein and fluids in your system.",
     },
     alternate: {
       title: "Try something even gentler",
@@ -883,7 +883,9 @@ export function InterventionCard({
               <Text
                 style={[styles.moreSupportSubtitle, { color: mutedForeground }]}
               >
-                Other steps that may help with appetite, energy or digestion.
+                {`${secondaries.length} more ${
+                  secondaries.length === 1 ? "step" : "steps"
+                } for appetite, energy and digestion`}
               </Text>
             </View>
             <View style={styles.moreSupportMeta}>
@@ -1063,7 +1065,7 @@ function PrimaryActionCard({
             ]}
           >
             <Feather name="check" size={13} color="#FFFFFF" />
-            <Text style={[styles.btnText, { color: "#FFFFFF", fontWeight: "700" }]}>
+            <Text style={[styles.btnText, { color: "#FFFFFF", fontFamily: "Montserrat_700Bold", fontWeight: "700" }]}>
               I&apos;ll try this
             </Text>
           </Pressable>
@@ -1083,8 +1085,8 @@ function PrimaryActionCard({
               { borderColor: border, opacity: pressed ? 0.75 : 1 },
             ]}
           >
-            <Text style={[styles.btnText, { color: mutedForeground, fontWeight: "600" }]}>
-              {showingAlternate ? "Back" : "Show me another option"}
+            <Text style={[styles.btnText, { color: mutedForeground, fontFamily: "Montserrat_600SemiBold", fontWeight: "600" }]}>
+              {showingAlternate ? "Back" : "Another option"}
             </Text>
           </Pressable>
         </View>
@@ -1172,8 +1174,8 @@ function PrimaryActionCard({
               ]}
             >
               <Feather name="refresh-cw" size={13} color="#FFFFFF" />
-              <Text style={[styles.btnText, { color: "#FFFFFF", fontWeight: "700" }]}>
-                Show me another option
+              <Text style={[styles.btnText, { color: "#FFFFFF", fontFamily: "Montserrat_700Bold", fontWeight: "700" }]}>
+                Another option
               </Text>
             </Pressable>
             <Pressable
@@ -1188,7 +1190,7 @@ function PrimaryActionCard({
                 { borderColor: border, opacity: pressed ? 0.75 : 1 },
               ]}
             >
-              <Text style={[styles.btnText, { color: mutedForeground, fontWeight: "600" }]}>
+              <Text style={[styles.btnText, { color: mutedForeground, fontFamily: "Montserrat_600SemiBold", fontWeight: "600" }]}>
                 Check again later
               </Text>
             </Pressable>
@@ -1227,8 +1229,8 @@ function PrimaryActionCard({
               ]}
             >
               <Feather name="refresh-cw" size={12} color={mutedForeground} />
-              <Text style={[styles.btnText, { color: mutedForeground, fontWeight: "600" }]}>
-                Try another option
+              <Text style={[styles.btnText, { color: mutedForeground, fontFamily: "Montserrat_600SemiBold", fontWeight: "600" }]}>
+                Another option
               </Text>
             </Pressable>
             <Pressable
@@ -1248,7 +1250,7 @@ function PrimaryActionCard({
               ]}
             >
               <Feather name="message-circle" size={13} color="#FFFFFF" />
-              <Text style={[styles.btnText, { color: "#FFFFFF", fontWeight: "700" }]}>
+              <Text style={[styles.btnText, { color: "#FFFFFF", fontFamily: "Montserrat_700Bold", fontWeight: "700" }]}>
                 Ask my care team
               </Text>
             </Pressable>
@@ -1408,8 +1410,8 @@ function SecondaryActionRow({
               ]}
             >
               <Feather name="refresh-cw" size={13} color="#FFFFFF" />
-              <Text style={[styles.btnText, { color: "#FFFFFF", fontWeight: "700" }]}>
-                Show me another option
+              <Text style={[styles.btnText, { color: "#FFFFFF", fontFamily: "Montserrat_700Bold", fontWeight: "700" }]}>
+                Another option
               </Text>
             </Pressable>
             <Pressable
@@ -1424,7 +1426,7 @@ function SecondaryActionRow({
                 { borderColor: border, opacity: pressed ? 0.75 : 1 },
               ]}
             >
-              <Text style={[styles.btnText, { color: mutedForeground, fontWeight: "600" }]}>
+              <Text style={[styles.btnText, { color: mutedForeground, fontFamily: "Montserrat_600SemiBold", fontWeight: "600" }]}>
                 Check again later
               </Text>
             </Pressable>
@@ -1462,8 +1464,8 @@ function SecondaryActionRow({
               ]}
             >
               <Feather name="refresh-cw" size={12} color={mutedForeground} />
-              <Text style={[styles.btnText, { color: mutedForeground, fontWeight: "600" }]}>
-                Try another option
+              <Text style={[styles.btnText, { color: mutedForeground, fontFamily: "Montserrat_600SemiBold", fontWeight: "600" }]}>
+                Another option
               </Text>
             </Pressable>
             <Pressable
@@ -1483,7 +1485,7 @@ function SecondaryActionRow({
               ]}
             >
               <Feather name="message-circle" size={13} color="#FFFFFF" />
-              <Text style={[styles.btnText, { color: "#FFFFFF", fontWeight: "700" }]}>
+              <Text style={[styles.btnText, { color: "#FFFFFF", fontFamily: "Montserrat_700Bold", fontWeight: "700" }]}>
                 Ask my care team
               </Text>
             </Pressable>
@@ -1622,17 +1624,20 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: 10,
+    fontFamily: "Montserrat_700Bold",
     fontWeight: "700",
     letterSpacing: 0.5,
     textTransform: "uppercase",
   },
   title: {
     fontSize: 18,
+    fontFamily: "Montserrat_700Bold",
     fontWeight: "700",
     lineHeight: 22,
   },
   subtitle: {
     fontSize: 13,
+    fontFamily: "Montserrat_500Medium",
     fontWeight: "500",
     marginTop: 3,
     lineHeight: 17,
@@ -1643,11 +1648,13 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontSize: 11,
+    fontFamily: "Montserrat_700Bold",
     fontWeight: "700",
     letterSpacing: 0.5,
     textTransform: "uppercase",
   },
   sectionBody: {
+    fontFamily: "Montserrat_400Regular",
     fontSize: 14,
     lineHeight: 20,
   },
@@ -1664,10 +1671,12 @@ const styles = StyleSheet.create({
   },
   moreSupportTitle: {
     fontSize: 13,
+    fontFamily: "Montserrat_700Bold",
     fontWeight: "700",
   },
   moreSupportSubtitle: {
     fontSize: 12,
+    fontFamily: "Montserrat_500Medium",
     fontWeight: "500",
     marginTop: 2,
     lineHeight: 16,
@@ -1679,6 +1688,7 @@ const styles = StyleSheet.create({
   },
   moreSupportCount: {
     fontSize: 12,
+    fontFamily: "Montserrat_700Bold",
     fontWeight: "700",
     fontVariant: ["tabular-nums"],
   },
@@ -1715,21 +1725,25 @@ const styles = StyleSheet.create({
   },
   startHerePillText: {
     fontSize: 10,
+    fontFamily: "Montserrat_700Bold",
     fontWeight: "800",
     letterSpacing: 0.6,
     textTransform: "uppercase",
   },
   primaryTitle: {
     fontSize: 17,
+    fontFamily: "Montserrat_700Bold",
     fontWeight: "800",
     lineHeight: 22,
   },
   primaryBody: {
     fontSize: 14,
     lineHeight: 20,
+    fontFamily: "Montserrat_500Medium",
     fontWeight: "500",
   },
   helperLine: {
+    fontFamily: "Montserrat_400Regular",
     fontSize: 12,
     lineHeight: 16,
     fontStyle: "italic",
@@ -1747,10 +1761,12 @@ const styles = StyleSheet.create({
   },
   secondaryTitle: {
     fontSize: 14,
+    fontFamily: "Montserrat_700Bold",
     fontWeight: "700",
     lineHeight: 18,
   },
   secondaryBody: {
+    fontFamily: "Montserrat_400Regular",
     fontSize: 12,
     lineHeight: 17,
   },
@@ -1766,6 +1782,7 @@ const styles = StyleSheet.create({
   },
   smallBtnText: {
     fontSize: 12,
+    fontFamily: "Montserrat_700Bold",
     fontWeight: "700",
   },
   // -- Buttons (shared) --------------------------------------------
@@ -1798,6 +1815,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   btnText: {
+    fontFamily: "Montserrat_600SemiBold",
     fontSize: 13,
   },
   // -- Outcome ------------------------------------------------------
@@ -1807,10 +1825,12 @@ const styles = StyleSheet.create({
   },
   outcomePrompt: {
     fontSize: 13,
+    fontFamily: "Montserrat_600SemiBold",
     fontWeight: "600",
   },
   outcomePromptSmall: {
     fontSize: 12,
+    fontFamily: "Montserrat_600SemiBold",
     fontWeight: "600",
   },
   outcomeRow: {
@@ -1831,6 +1851,7 @@ const styles = StyleSheet.create({
   },
   outcomeBtnText: {
     fontSize: 12,
+    fontFamily: "Montserrat_600SemiBold",
     fontWeight: "600",
   },
   // -- Acknowledgement (better / no_change) -------------------------
@@ -1849,6 +1870,7 @@ const styles = StyleSheet.create({
   },
   ackText: {
     fontSize: 12,
+    fontFamily: "Montserrat_600SemiBold",
     fontWeight: "600",
   },
   changeLink: {
@@ -1856,6 +1878,7 @@ const styles = StyleSheet.create({
   },
   changeLinkText: {
     fontSize: 11,
+    fontFamily: "Montserrat_500Medium",
     fontWeight: "500",
     textDecorationLine: "underline",
   },
@@ -1865,6 +1888,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   escalateCopy: {
+    fontFamily: "Montserrat_500Medium",
     fontSize: 13,
     lineHeight: 18,
   },
@@ -1877,13 +1901,21 @@ const styles = StyleSheet.create({
   },
   escalatedText: {
     fontSize: 13,
+    fontFamily: "Montserrat_600SemiBold",
     fontWeight: "600",
   },
   // -- Clinical guardrail footer ------------------------------------
+  // Intentionally subtle: present but not visually competing with the
+  // primary action. Smaller text + Regular weight + extra top margin
+  // pushes it away from the action area, and a reduced opacity gives
+  // it a lighter visual presence than the muted-foreground color
+  // alone would.
   guardrail: {
-    fontSize: 10,
-    lineHeight: 14,
-    marginTop: 2,
+    fontFamily: "Montserrat_400Regular",
+    fontSize: 9,
+    lineHeight: 13,
+    marginTop: 14,
     fontStyle: "italic",
+    opacity: 0.65,
   },
 });
