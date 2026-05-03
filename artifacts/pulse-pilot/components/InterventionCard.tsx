@@ -1557,12 +1557,15 @@ export function InterventionCard({
           <Text style={[styles.title, { color: navy }]}>
             Symptom support
           </Text>
-          {/* Subtitle is intentionally action-framed ("here's what to
-              try"), not another wellness restatement. The top status
-              banner already summarizes how the day is going; this
-              card's job is to guide the next step. */}
+          {/* Subtitle names the actual inputs feeding the support so
+              the patient understands this is personalized -- not a
+              generic tip. We only mention Apple Health when it is
+              connected; otherwise we stay strictly on the check-in
+              so we never imply biometric data we do not have. */}
           <Text style={[styles.subtitle, { color: mutedForeground }]}>
-            A few small steps to try today, based on your check-in.
+            {hasHealthData
+              ? "Personalized support based on today's check-in and Apple Health trends"
+              : "Personalized support based on today's check-in"}
           </Text>
           {/* The dev-only "[debug] concern=... sev=... supports=..."
               probe that used to live here was rendering visibly in
@@ -1694,7 +1697,7 @@ export function InterventionCard({
             ]}
             numberOfLines={2}
           >
-            Connect Apple Health to make support more personalized with sleep, steps, and activity.
+            Connect Apple Health to personalize support with sleep, steps and activity trends.
           </Text>
         )}
 
@@ -1865,11 +1868,20 @@ export function InterventionCard({
         </View>
       )}
 
+      {/* Patient-facing success state for the escalation flow.
+          Renders whenever the intervention has transitioned to
+          "escalated" -- whether the patient got there via the
+          severe-state top CTA, the worse-panel "Ask my care team"
+          button, or the auto-escalate-on-worse path. The copy
+          confirms what the provider can see (today's symptoms +
+          support history) so the patient knows the request landed
+          with useful context, not into a void. */}
       {status === "escalated" && (
         <View style={styles.escalatedRow}>
-          <Feather name="alert-circle" size={14} color={warning} />
+          <Feather name="check-circle" size={14} color={warning} />
           <Text style={[styles.escalatedText, { color: warning }]}>
-            Your care team will follow up.
+            Review requested. Your care team can see today&apos;s
+            symptoms and support history.
           </Text>
         </View>
       )}

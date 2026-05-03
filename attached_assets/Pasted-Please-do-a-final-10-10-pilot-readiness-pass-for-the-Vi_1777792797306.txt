@@ -1,0 +1,429 @@
+Please do a final 10/10 pilot readiness pass for the Viva Care mobile app, focused on making the core thesis unmistakable:
+
+Behavioral signals + Apple Health/wearables + dose context → personalized symptom support → adaptive plan → patient feedback → provider escalation.
+
+Do not add random features.
+Do not bring back the standalone AI coach.
+Do not redesign the whole app.
+Tighten the existing Today, Week and Trends flows so they feel premium, cohesive and pilot-ready.
+
+The goal is to make the app clearly support the Viva deck thesis:
+- real-time visibility between visits
+- personalized micro-interventions
+- provider escalation with context
+- better engagement and retention signal capture
+
+==================================================
+1. TODAY TAB: MAKE SYMPTOM SUPPORT THE HERO
+==================================================
+
+The Symptom support card is the core feature. It should feel like the product’s intelligence layer, not a generic tip card.
+
+Make sure the card clearly communicates:
+
+1. What Viva noticed
+2. Why it matters
+3. What the patient should do now
+4. How the patient can give feedback
+5. When care-team review is appropriate
+
+Add a compact signal/context line or chip row showing what informed the support.
+
+Examples:
+- Today’s check-in
+- Recent symptoms
+- Around dose timing
+- Apple Health trends
+- Activity lower than usual
+- Sleep lower than usual
+- Prior feedback
+
+Rules:
+- Only show Apple Health if connected and real data exists
+- Only show dose timing if real dose context exists
+- Do not show raw debug text
+- Do not overexplain
+- Keep chips short and readable
+
+Suggested card hierarchy:
+
+Badge:
+Support today / Extra support / Preventive support / Review may help
+
+Title:
+Symptom support
+
+Subtitle:
+Personalized support based on today’s check-in
+
+If recent patterns are used:
+Personalized support based on today’s check-in and recent patterns
+
+If Apple Health is used:
+Personalized support based on today’s check-in and Apple Health trends
+
+Primary recommendation:
+Short action title
+1-2 sentence body max
+“Why this helps” in one short sentence
+
+Buttons:
+I’ll try this
+Another option
+
+Feedback after patient tries:
+Better
+Same
+Worse
+
+Care-team CTA:
+Ask my care team to review
+
+==================================================
+2. MAKE ALL CARD STATES DISTINCT
+==================================================
+
+Stable day:
+- green/blue calm accents
+- no care-team CTA
+- preventive support
+- copy should feel like staying ahead, not another status card
+
+Mild symptoms:
+- “Stay ahead” tone
+- light support
+- no alarming language
+
+Moderate symptoms:
+- “Support today”
+- practical symptom management
+- recommendation should be specific and actionable
+
+Heavier symptoms:
+- amber/orange accents
+- stronger recommendation
+- care-team review visible if appropriate
+
+Urgent/red flag:
+- red only for true urgent or severe safety states
+- do not use red for normal GLP-1 side effects unless highest severity or red-flag
+
+Acceptance:
+A patient should immediately understand whether today is stable, mild, moderate, heavier, or review-worthy.
+
+==================================================
+3. BUTTON FUNCTIONALITY QA
+==================================================
+
+Please verify and fix all Symptom support interactions.
+
+I’ll try this:
+- marks recommendation accepted
+- persists after reload
+- reveals feedback flow if intended
+- does not create duplicate cards
+
+Another option:
+- changes the recommendation copy
+- does not repeat the same recommendation
+- works across nausea, appetite, digestion, energy and hydration states
+- hides or disables gracefully if no alternative exists
+- does not create duplicate cards
+
+Better / Same / Worse:
+- persists feedback
+- updates UI confirmation
+- “Worse” should increase prominence of care-team review
+- no broken repeated submissions
+
+Ask my care team to review:
+- works even if patient has not tapped “I’ll try this”
+- pre-accepts the intervention if required
+- avoids duplicate escalations from repeated taps
+- shows patient-facing success state
+- creates useful provider-side context
+
+Success copy:
+Review requested. Your care team can see today’s symptoms and support history.
+
+Error copy:
+Couldn’t request review. Please try again.
+
+No visible debug text should appear in the patient UI.
+
+==================================================
+4. PROVIDER ESCALATION CONTEXT
+==================================================
+
+When a patient requests review or reports Worse, the provider dashboard should receive a structured escalation summary.
+
+Include:
+- current symptom selections
+- severity level
+- recent pattern if available
+- dose timing context if available
+- Apple Health context if available
+- intervention shown
+- whether patient tapped “I’ll try this”
+- feedback result if available
+- timestamp
+- suggested review reason
+
+Example provider summary:
+Patient reported moderate nausea, low appetite and constipation. Symptoms appear around dose timing. Viva recommended slow hydration and bland foods. Patient requested review.
+
+Do not include PHI in any OpenAI payload.
+Do not send names, DOBs, emails, clinic names, provider names or identifiers to OpenAI.
+Do not make medication dose-change recommendations.
+
+==================================================
+5. TODAY “YOUR PLAN” COPY CONSISTENCY
+==================================================
+
+Keep current layout and logic.
+Clean copy so every row feels premium and consistent.
+
+Each row:
+CATEGORY
+Title
+Short subtitle
+
+Examples:
+
+MOVE
+Strength training
+20-30 min of light strength work
+
+MOVE
+Cardio
+20-30 min of easy cardio
+
+MOVE
+Light movement
+10-15 min walk or gentle stretching
+
+MOVE
+Full rest day
+Take pressure off today. Light movement is enough.
+
+FUEL
+Protein-forward meals
+Prioritize protein across 2-3 meals
+
+FUEL
+Gentle fueling
+Keep meals small, simple and protein-forward
+
+FUEL
+Small meals
+Choose 2-3 smaller meals instead of full portions
+
+HYDRATE
+Steady hydration
+Sip fluids consistently through the day
+
+HYDRATE
+Slow hydration
+Sip slowly over the next hour
+
+HYDRATE
+Hydration support
+Add electrolytes if helpful
+
+RECOVER
+Earlier wind-down
+Begin winding down 30-60 minutes earlier tonight
+
+RECOVER
+Sleep support
+Aim for 7-8 hours of sleep, if your schedule allows
+
+RECOVER
+Consistent rest
+Protect a steady bedtime
+
+Avoid:
+- “Your data shows...”
+- “Under-eating slows your metabolism”
+- awkward plus signs
+- long paragraphs
+- overly clinical wording
+- generic wellness fluff
+
+==================================================
+6. WEEK TAB CONSISTENCY
+==================================================
+
+The Week tab should use the same shared plan copy system as Today.
+
+Every Week plan item should show:
+CATEGORY
+Title
+Short subtitle
+
+Use the same titles and subtitles as Today where possible.
+
+The Week tab should feel like:
+- a weekly plan
+- adaptive
+- consistent with Today
+- not a static generic checklist
+
+If there is a weekly summary card, make it concise:
+
+Example:
+This week balances movement, recovery and steady nutrition based on your recent check-ins.
+
+If Apple Health is connected:
+This week balances movement, recovery and nutrition using your check-ins and health trends.
+
+Do not mention Apple Health unless connected.
+
+==================================================
+7. TRENDS TAB SHOULD PROVE INTELLIGENCE
+==================================================
+
+Trends should clearly show the intelligence layer.
+
+It should surface:
+- check-in patterns
+- dose timing patterns
+- intervention response patterns
+- Apple Health/wearable trends when available
+- consistency/engagement patterns
+
+Examples:
+- Appetite tends to dip 2 days after dose day
+- Nausea improved after slow hydration support
+- Energy was lower after lighter sleep
+- Activity tends to dip on higher-symptom days
+- Digestion symptoms tend to appear when appetite is lower
+
+Rules:
+- Do not overclaim causation
+- Use “tends to,” “often,” “appears,” or “has shown up”
+- Do not say Apple Health was used unless connected
+- Keep each trend short and patient-friendly
+
+Update subtitle logic:
+If Apple Health connected:
+Patterns from your check-ins and Apple Health
+
+If not connected:
+Patterns from your recent check-ins
+
+==================================================
+8. APPLE HEALTH VISIBILITY
+==================================================
+
+Apple Health should be visible as an upgrade to personalization, but not overbearing.
+
+If not connected:
+Show a calm prompt:
+Connect Apple Health to personalize support with sleep, steps and activity trends.
+
+If connected:
+Use actual available data in chips, trends or plan logic.
+
+Never pretend Apple Health data exists when disconnected.
+
+==================================================
+9. PILOT ANALYTICS EVENTS
+==================================================
+
+Make sure the app captures the key pilot events needed to validate the thesis:
+
+Patient engagement:
+- daily check-in completed
+- symptom selections
+- Apple Health connected
+- Week tab viewed
+- Trends tab viewed
+
+Intervention performance:
+- intervention shown
+- recommendation accepted
+- another option tapped
+- feedback submitted: Better / Same / Worse
+- care-team review requested
+- intervention resolved vs escalated
+
+Provider leverage:
+- escalation created
+- escalation reviewed
+- provider action taken
+- time-to-provider action
+
+These events should support pilot reporting:
+- interventions delivered per patient
+- % engaged with interventions
+- % resolved through automation vs escalated
+- escalations reviewed
+- response time
+- top risk/symptom categories
+
+==================================================
+10. FINAL QA SCENARIOS
+==================================================
+
+Please manually test these flows in Replit preview:
+
+A) Stable day
+- top status is calm
+- Symptom support is preventive
+- no care-team CTA
+- Week and Today plan copy are consistent
+
+B) Moderate nausea + low appetite
+- Symptom support appears
+- signal chips are correct
+- Another option changes recommendation
+- I’ll try this works
+- Better/Same/Worse work
+
+C) Severe nausea or diarrhea
+- heavier state appears
+- care-team CTA works before “I’ll try this”
+- escalation success state appears
+- provider context is created
+
+D) Constipation / no bowel movement
+- digestion support appears
+- recommendation is specific
+- another option works if available
+
+E) Apple Health disconnected
+- no fake Apple Health claims
+- prompt appears appropriately
+
+F) Apple Health connected
+- Recent patterns subtitle references Apple Health
+- actual health trend appears only if data exists
+
+G) Dose timing relevant
+- dose timing chip or copy appears only when real
+- no medication advice or dose-change suggestion appears
+
+H) Symptom changes live
+- Symptom support updates within 1-2 seconds
+- no duplicate cards
+- buttons still work after update
+
+==================================================
+ACCEPTANCE CRITERIA
+==================================================
+
+This is complete when:
+
+- Today clearly shows signal → support → plan → escalation
+- Symptom support feels intelligent and personalized
+- Stable/mild/moderate/heavier/review-worthy states are distinct
+- Another option works reliably
+- Ask care team works reliably
+- Provider escalation includes useful context
+- Week tab matches Today’s plan copy system
+- Trends shows check-in, dose and Apple Health patterns when available
+- No visible debug text appears
+- No fake Apple Health or dose claims appear
+- HIPAA/OpenAI de-identification guardrails remain intact
+- The experience feels premium, calm and pilot-ready
