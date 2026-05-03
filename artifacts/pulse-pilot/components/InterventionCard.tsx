@@ -27,9 +27,12 @@
 // All network calls are best-effort: errors are swallowed and the
 // card stays in its current state. The parent owns refetch cadence.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -42,6 +45,24 @@ import {
   type FeedbackResult,
   type PatientIntervention,
 } from "@/lib/api/interventionsClient";
+
+// Soft tint applied behind the card so it reads as the hero output of
+// the symptom check-in instead of just another feed card. The card has
+// always been the primary action surface for the personalized loop, so
+// we lean into a quietly-distinct blue palette that reads as "this is
+// for you" without screaming. Stays neutral enough for dark mode by
+// keeping the tint very pale and using a saturated foreground only on
+// the small badge.
+const FEATURED_TINT = "#E8F1FB"; // very light blue
+const FEATURED_BORDER = "#BFD7F0"; // soft blue border, ~2 shades darker
+const FEATURED_BADGE_BG = "#DCE9F7";
+const FEATURED_BADGE_FG = "#1F4F8A";
+// The featured surface is always light, so text colors must also be
+// fixed (dark) -- using the theme `navy`/`mutedForeground` would
+// produce light-on-light text in dark mode. These pair with
+// FEATURED_TINT regardless of system theme.
+const FEATURED_TEXT = "#142240"; // dark navy body
+const FEATURED_MUTED = "#5A6A82"; // muted slate for labels/subtitle
 
 interface InterventionCardProps {
   intervention: PatientIntervention;
@@ -97,17 +118,28 @@ const DEFAULT_FOLLOWUP =
 
 export function InterventionCard({
   intervention,
-  navy,
+  // Theme `navy` / `mutedForeground` / `background` are intentionally
+  // shadowed below because the featured card uses a fixed light blue
+  // surface in BOTH light and dark mode -- pulling those tokens
+  // straight from the theme would produce light-on-light text in dark
+  // mode. We keep the prop signature stable for callers and just
+  // remap to fixed colors for everything that paints on the card
+  // surface. `accent` and `warning` stay theme-aware because they
+  // drive icon + escalation states that look correct either way.
+  navy: _themeNavy,
   accent,
-  cardBg,
-  background,
-  mutedForeground,
+  cardBg: _cardBg,
+  background: _themeBackground,
+  mutedForeground: _themeMuted,
   warning,
   onAccept,
   onDismiss,
   onFeedback,
   onEscalate,
 }: InterventionCardProps) {
+  const navy = FEATURED_TEXT;
+  const mutedForeground = FEATURED_MUTED;
+  const background = FEATURED_BORDER;
   const [busy, setBusy] = useState<
     null | "accept" | "dismiss" | "feedback" | "escalate"
   >(null);
@@ -117,6 +149,35 @@ export function InterventionCard({
     () => categoryIcon(intervention.recommendationCategory),
     [intervention.recommendationCategory],
   );
+
+  // Subtle entrance: fade + slide-up on first mount so the card
+  // visibly arrives instead of popping in. Native driver where
+  // available; web falls back to the JS driver automatically.
+  // IMPORTANT: declared BEFORE any conditional early return so the
+  // hook count stays stable if `status` later transitions into a
+  // terminal value (resolved/expired/dismissed). Otherwise React
+  // would throw "rendered fewer hooks than expected".
+  const enter = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(enter, {
+      toValue: 1,
+      duration: 320,
+      delay: 60,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: Platform.OS !== "web",
+    }).start();
+  }, [enter]);
+  const animatedStyle = {
+    opacity: enter,
+    transform: [
+      {
+        translateY: enter.interpolate({
+          inputRange: [0, 1],
+          outputRange: [12, 0],
+        }),
+      },
+    ],
+  };
 
   const haptic = () => {
     try { Haptics.selectionAsync(); } catch { /* best-effort */ }
@@ -169,26 +230,57 @@ export function InterventionCard({
     ? intervention.followUpQuestion
     : DEFAULT_FOLLOWUP;
 
+  // Badge swaps copy when the card has escalated to the care team so
+  // the "FOR YOU TODAY" pill doesn't lie about the current state.
+  const badgeLabel = status === "escalated" ? "Care team notified" : "For you today";
+
   return (
-    <View
+    <Animated.View
       style={[
         styles.card,
+        styles.cardFeatured,
         {
-          backgroundColor: cardBg,
-          borderColor: status === "escalated" ? warning : background,
+          backgroundColor: FEATURED_TINT,
+          borderColor: status === "escalated" ? warning : FEATURED_BORDER,
         },
+        animatedStyle,
       ]}
     >
       <View style={styles.headerRow}>
-        <View style={[styles.iconWrap, { backgroundColor: accent + "18" }]}>
-          <Feather name={icon} size={16} color={accent} />
+        <View style={[styles.iconWrap, { backgroundColor: accent + "22" }]}>
+          <Feather name={icon} size={18} color={accent} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.eyebrow, { color: mutedForeground }]}>
-            {status === "escalated" ? "CARE TEAM NOTIFIED" : "FOR YOU TODAY"}
-          </Text>
+          <View style={styles.badgeRow}>
+            <View
+              style={[
+                styles.badge,
+                {
+                  backgroundColor:
+                    status === "escalated" ? warning + "22" : FEATURED_BADGE_BG,
+                },
+              ]}
+            >
+              <Feather
+                name={status === "escalated" ? "alert-circle" : "star"}
+                size={10}
+                color={status === "escalated" ? warning : FEATURED_BADGE_FG}
+              />
+              <Text
+                style={[
+                  styles.badgeText,
+                  { color: status === "escalated" ? warning : FEATURED_BADGE_FG },
+                ]}
+              >
+                {badgeLabel}
+              </Text>
+            </View>
+          </View>
           <Text style={[styles.title, { color: navy }]}>
             Personalized check-in
+          </Text>
+          <Text style={[styles.subtitle, { color: mutedForeground }]}>
+            Based on today's symptoms
           </Text>
         </View>
       </View>
@@ -391,7 +483,7 @@ export function InterventionCard({
           </Text>
         </View>
       )}
-    </View>
+    </Animated.View>
   );
 }
 
@@ -436,32 +528,69 @@ function FeedbackButton({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 18,
-    padding: 18,
-    gap: 12,
+    borderRadius: 20,
+    padding: 22,
+    gap: 14,
     borderWidth: 1,
+  },
+  // Featured variant -- thicker border, soft shadow on native, soft
+  // box-shadow on web. Lifts the card off the page so it reads as
+  // distinct from the surrounding plain cards.
+  cardFeatured: {
+    borderWidth: 1.5,
+    ...Platform.select({
+      web: {
+        // RN-Web honors boxShadow via style prop on web only.
+        boxShadow: "0 6px 18px rgba(31, 79, 138, 0.10)",
+      },
+      default: {
+        shadowColor: "#1F4F8A",
+        shadowOpacity: 0.12,
+        shadowRadius: 14,
+        shadowOffset: { width: 0, height: 6 },
+        elevation: 3,
+      },
+    }),
   },
   headerRow: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
+    alignItems: "flex-start",
+    gap: 12,
   },
   iconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
   },
-  eyebrow: {
+  badgeRow: {
+    flexDirection: "row",
+    marginBottom: 6,
+  },
+  badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  badgeText: {
     fontSize: 10,
     fontWeight: "700",
-    letterSpacing: 0.7,
-    marginBottom: 2,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
   },
   title: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "700",
+    lineHeight: 22,
+  },
+  subtitle: {
+    fontSize: 12,
+    fontWeight: "500",
+    marginTop: 2,
   },
   section: {
     gap: 4,

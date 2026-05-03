@@ -1334,7 +1334,7 @@ export default function DashboardScreen() {
             fallback below covers cases where the engine returned
             nothing or the network was unavailable. */}
         {activeInterventions.length > 0 && (
-          <View style={{ marginBottom: 12, gap: 12 }}>
+          <View style={{ marginTop: 8, marginBottom: 20, gap: 14 }}>
             {activeInterventions.map((iv) => (
               <InterventionCard
                 key={iv.id}
