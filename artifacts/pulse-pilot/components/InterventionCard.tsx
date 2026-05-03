@@ -1297,13 +1297,25 @@ export function InterventionCard({
       try {
         // /feedback's status guard requires accepted/pending_feedback.
         // If the card is still "shown", pre-accept first so the
-        // /feedback below doesn't 409.
-        if (intervention.status === "shown") {
+        // /feedback below doesn't 409. Gate on acceptFiredRef so a
+        // race with an in-flight handleRowCommit doesn't double-fire
+        // /accept (the server is idempotent on repeat-accept of a
+        // pending_feedback row, but we'd rather not depend on that).
+        if (
+          intervention.status === "shown" &&
+          !acceptFiredRef.current
+        ) {
           acceptFiredRef.current = true;
           try {
             await onAccept(intervention.id);
           } catch {
-            /* /feedback below will surface the real error */
+            // Pre-accept failed and prop status is still "shown",
+            // meaning a later commit (or another escalate retry)
+            // should be allowed to call /accept again. Clear the
+            // guard so we don't permanently strand the card.
+            if (intervention.status === "shown") {
+              acceptFiredRef.current = false;
+            }
           }
         }
         await onFeedback(intervention.id, "worse");
@@ -1721,11 +1733,14 @@ export function InterventionCard({
         <Pressable
           onPress={async () => {
             tap();
-            try {
-              await onFeedback(intervention.id, "worse");
-            } catch {
-              /* parent surfaces errors; swallow here so the UI doesn't crash */
-            }
+            // Route through handleRowAskCareTeam so we get the
+            // shared pre-accept (server /feedback requires status
+            // accepted|pending_feedback -- without this, a card
+            // still in "shown" state would 409 silently) and the
+            // escalateFiredRef duplicate-tap guard. The key isn't
+            // read inside the handler so a card-level sentinel is
+            // fine; we use one that can't collide with any row key.
+            await handleRowAskCareTeam("__card_severe_cta__");
           }}
           accessibilityRole="button"
           accessibilityLabel="Ask my care team to review"
@@ -1943,23 +1958,29 @@ function PrimaryActionCard({
     [category, interventionId],
   );
   // When the parent derived a live plan from the check-in selectors,
-  // its copy wins -- the deterministic per-intervention variant from
-  // pickVariants is replaced by symptom-tuned title/body/helper, and
-  // showingAlternate becomes a no-op (one canonical override per
-  // signal). Otherwise we fall back to the canned clinical variant.
-  const variant: RecContent =
-    liveOverride ?? (showingAlternate ? picked.alternate : picked.primary);
+  // its copy is the DEFAULT we render -- symptom-tuned title/body/
+  // helper for this category. But if the patient taps "Another
+  // option", they're explicitly asking to see a different safe
+  // recommendation, so we honor that by falling back to the canned
+  // pickVariants alternate from the same category. Without this
+  // override, "Another option" was a no-op whenever a livePlan was
+  // active (i.e. nearly always for a real symptom check-in) -- the
+  // sectionAlt flag flipped, the button label said "Back", but the
+  // visible copy never changed.
+  const variant: RecContent = showingAlternate
+    ? picked.alternate
+    : (liveOverride ?? picked.primary);
   const title = variant.title;
   const helper = variant.helper;
   // For "other" we don't have category-specific clinical copy, so fall
   // back to the server's body when not showing the alternate. Known
-  // categories always use the canned clinical micro-protocol. The
-  // liveOverride path bypasses both branches.
-  const body = liveOverride
-    ? liveOverride.body
-    : category === "other" && !showingAlternate
-      ? originalBody || variant.body
-      : variant.body;
+  // categories always use the canned clinical micro-protocol.
+  const body =
+    !showingAlternate && liveOverride
+      ? liveOverride.body
+      : category === "other" && !showingAlternate
+        ? originalBody || variant.body
+        : variant.body;
   const titleA11y = title.toLowerCase();
   const offerEscalation = shouldOfferEscalation(category, status);
 
@@ -2214,15 +2235,20 @@ function SecondaryActionRow({
     () => pickVariants(category, interventionId),
     [category, interventionId],
   );
-  // See PrimaryActionCard for the liveOverride contract.
-  const variant: RecContent =
-    liveOverride ?? (showingAlternate ? picked.alternate : picked.primary);
+  // See PrimaryActionCard for the liveOverride contract. The
+  // showingAlternate flag must be honored even when liveOverride is
+  // present, otherwise "Another option" would silently no-op on
+  // every secondary row whose category has a live tuned copy.
+  const variant: RecContent = showingAlternate
+    ? picked.alternate
+    : (liveOverride ?? picked.primary);
   const title = variant.title;
-  const body = liveOverride
-    ? liveOverride.body
-    : category === "other" && !showingAlternate
-      ? originalBody || variant.body
-      : variant.body;
+  const body =
+    !showingAlternate && liveOverride
+      ? liveOverride.body
+      : category === "other" && !showingAlternate
+        ? originalBody || variant.body
+        : variant.body;
   const titleA11y = title.toLowerCase();
   const offerEscalation = shouldOfferEscalation(category, status);
 

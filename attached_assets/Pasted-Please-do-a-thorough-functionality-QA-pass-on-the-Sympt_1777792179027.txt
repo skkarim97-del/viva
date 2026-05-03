@@ -1,0 +1,169 @@
+Please do a thorough functionality QA pass on the Symptom support card.
+
+Current issues:
+1. “Ask my care team to review” button does not work
+2. “Another option” does not work for certain recommendations
+3. We need to verify all card states and buttons work consistently across stable, mild, moderate, heavier and review-worthy symptom states
+
+Goal:
+Make sure the Symptom support card is not just visually polished, but fully functional and reliable for pilot use.
+
+Do not redesign the UI.
+Do not change the core logic unless needed to fix functionality.
+Focus on button behavior, state transitions, API calls, fallbacks and error handling.
+
+Required checks and fixes:
+
+1. Fix “Ask my care team to review”
+When tapped, this should:
+- create the correct escalation / care event
+- include relevant context for the provider side
+- update patient-facing UI to confirm review was requested
+- avoid duplicate escalations from repeated taps
+- show a clear success state
+- show a clear error state if the request fails
+
+Expected patient-facing success copy:
+“Your care team has been notified.”
+
+or:
+“Review requested. Your care team can see today’s symptoms and support history.”
+
+Provider-side escalation context should include:
+- current symptom selections
+- symptom severity
+- recent pattern if available
+- dose timing context if available
+- Apple Health context if available
+- recommendation shown
+- whether patient tapped “I’ll try this”
+- feedback result if available
+- timestamp
+
+Do not send PHI to OpenAI.
+
+2. Fix “Another option”
+When tapped, this should:
+- rotate to a different safe recommendation for the same primary concern when possible
+- update the visible primary recommendation title/body/why-this-helps
+- not create duplicate cards
+- not break the current active intervention state
+- not repeat the exact same recommendation unless no alternative exists
+- preserve the same support context and chips
+- work across all relevant states:
+  - stable/preventive
+  - mild symptoms
+  - moderate symptoms
+  - heavier symptoms
+  - nausea-led
+  - appetite-led
+  - digestion-led
+  - energy-led
+  - hydration-led
+
+If no alternative exists, show a graceful fallback:
+“This is the best fit for now.”
+
+or hide/disable the button for that state.
+
+3. Verify “I’ll try this”
+When tapped, it should:
+- mark the intervention as accepted / tried
+- update UI state
+- reveal feedback flow if that is the intended behavior
+- persist correctly after reload
+- avoid duplicate state transitions
+
+4. Verify feedback buttons
+Better / Same / Worse should:
+- persist the feedback
+- update UI copy
+- trigger escalation prominence if Worse
+- not allow broken repeated submissions
+- show clear success/error states
+
+5. Verify live symptom changes
+Changing symptoms in Today’s check-in should:
+- update the same Symptom support card within ~1-2 seconds
+- not create duplicate cards
+- update:
+  - badge
+  - signal chips
+  - primary recommendation
+  - More support categories
+  - care-team CTA prominence
+  - severity styling
+- preserve correct behavior for all buttons after the update
+
+6. Verify More support
+The More support expandable section should:
+- open/close reliably
+- show relevant support categories
+- not show irrelevant categories
+- not break when only one support exists
+- not overflow or clip text
+
+7. Add temporary dev diagnostics if needed
+If useful, add console logs only, not visible UI debug text, for:
+- button pressed
+- API endpoint called
+- response status
+- active intervention id
+- current recommendation variant
+- escalation created
+- feedback saved
+
+No visible debug strings should render in the patient UI.
+
+8. API / endpoint audit
+Please audit the relevant frontend calls and backend routes for:
+- escalation request endpoint
+- recommendation variant / another option behavior
+- intervention accept endpoint
+- feedback endpoint
+- active intervention reload
+- error handling
+
+Make sure frontend and backend expectations match.
+
+9. Manual acceptance scenarios
+Test the following in Replit preview:
+
+A) Moderate nausea + low appetite
+- Symptom support appears
+- Another option changes recommendation
+- I’ll try this works
+- Better/Same/Worse work
+- Ask care team works
+
+B) Severe nausea
+- Care-team CTA appears or is emphasized
+- Ask care team works
+- Provider escalation context is created
+
+C) All good/stable
+- Symptom support is preventive or minimized
+- No unnecessary care-team CTA
+- Another option either works or is hidden gracefully
+
+D) Constipation / no bowel movement
+- Digestion support appears
+- Another option works if alternatives exist
+
+E) Apple Health disconnected
+- No fake health data claims
+- Connect Apple Health hint appears if appropriate
+
+F) Dose timing relevant
+- Dose timing chip/context appears only when real
+- No medication dosing advice is given
+
+Acceptance criteria:
+- “Ask my care team to review” works every time it appears
+- “Another option” works or is hidden/disabled when no alternative exists
+- No duplicate cards are created
+- No visible debug text appears
+- All buttons have success/error states
+- Symptom changes do not break button functionality
+- Provider escalation receives useful context
+- Existing HIPAA/OpenAI guardrails remain intact
