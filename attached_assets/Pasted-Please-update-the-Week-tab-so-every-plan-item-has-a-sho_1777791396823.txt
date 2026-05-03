@@ -1,0 +1,166 @@
+Please update the Week tab so every plan item has a short subtitle under its title, matching the same copy system used in the Today tab “Your plan” section.
+
+Goal:
+The Week tab should feel as polished, explanatory, and premium as the Today tab. Right now the Week tab rows are mostly title-only, which makes them feel less useful and less finished.
+
+Important:
+Do not change the underlying plan logic.
+Do not redesign the Week tab.
+Do not change the recommendation engine.
+This is a copy/rendering consistency pass.
+
+What to update:
+1. Week tab plan rows
+2. Any shared plan row component used by Week
+3. Any shared plan option/copy object used by both Today and Week
+4. Any plan item titles/descriptions reused across the app
+
+Required row structure:
+Each Week tab plan item should show:
+
+CATEGORY
+Title
+Short subtitle
+
+Example:
+MOVE
+Strength training
+20-30 min of light strength work
+
+FUEL
+Protein-forward meals
+Prioritize protein across 2-3 meals
+
+HYDRATE
+Steady hydration
+Sip fluids consistently through the day
+
+RECOVER
+Consistent rest
+Aim for a steady night of recovery
+
+Consistency requirement:
+The subtitles in the Week tab should conform to the same copy style as the Today tab “Your plan” section.
+
+Best implementation:
+Use one shared source of truth for plan copy, likely the existing CATEGORY_OPTIONS or equivalent shared object.
+
+Each plan option should have:
+- category: MOVE / FUEL / HYDRATE / RECOVER
+- title
+- shortSubtitle
+- detailCopy, if needed for expanded or selected states
+
+Today and Week should both render from this same copy source.
+
+Do not hardcode separate Week-only copy if a shared copy system already exists.
+
+Copy style:
+- premium
+- concise
+- supportive
+- specific
+- Apple-like
+- easy to scan
+- easy for average GLP-1 patients to understand
+
+Avoid:
+- long paragraphs
+- “Your data shows...”
+- robotic phrasing
+- clinical jargon
+- overly casual language
+- awkward titles with plus signs
+- inconsistent wording between Today and Week
+
+Use this copy system as the target:
+
+MOVE
+
+Strength training
+20-30 min of light strength work
+
+Cardio
+20-30 min of easy cardio
+
+Light movement
+10-15 min walk or gentle stretching
+
+Gentle movement
+Move lightly if it feels good
+
+Full rest day
+Take pressure off today. Light movement is enough
+
+FUEL
+
+Protein-forward meals
+Prioritize protein across 2-3 meals
+
+Gentle fueling
+Keep meals small, simple, and protein-forward
+
+Small meals
+Choose 2-3 smaller meals instead of full portions
+
+Simple nutrition
+A few bites or sips still count
+
+Protein support
+Add protein with your next meal
+
+HYDRATE
+
+Steady hydration
+Sip fluids consistently through the day
+
+Hydration support
+Keep fluids steady. Add electrolytes if helpful
+
+Slow hydration
+Sip slowly over the next hour
+
+Fluids first
+Start with small sips and build gradually
+
+Light hydration
+Keep water nearby and sip steadily
+
+RECOVER
+
+Earlier wind-down
+Begin winding down 30-60 minutes earlier tonight
+
+Sleep support
+Aim for 7-8 hours of sleep, if your schedule allows
+
+Consistent rest
+Protect a steady bedtime
+
+Recovery focus
+Keep today simple. Rest, fluids, and easy food are enough
+
+Keep your rhythm
+Stay close to your usual routine
+
+Display requirements:
+- Subtitle should appear directly under each plan item title
+- Subtitle should be muted/secondary text
+- Subtitle should usually fit on one line
+- If it wraps, it should wrap cleanly without crowding
+- Row height can increase slightly if needed, but keep the Week tab clean and scannable
+- Keep spacing consistent across MOVE / FUEL / HYDRATE / RECOVER rows
+- Preserve the existing icons, category labels, check circles, and day card structure
+
+Today tab requirement:
+Make sure this does not break the Today tab “Your plan” section.
+If Today already uses the shared copy source, keep it intact.
+If Today and Week currently use different copy sources, consolidate them so both use the same polished copy.
+
+Acceptance criteria:
+- Every Week tab plan item shows a subtitle under the title
+- The subtitles match the Today tab “Your plan” copy style
+- Today and Week use the same source of truth for plan item copy where possible
+- No old clunky Week-only copy remains
+- The Week tab still feels clean, premium, and easy to scan
+- Existing plan logic and interactions remain unchanged

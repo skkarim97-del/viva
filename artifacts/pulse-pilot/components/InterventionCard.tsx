@@ -1518,8 +1518,12 @@ export function InterventionCard({
           <Text style={[styles.title, { color: navy }]}>
             Symptom support
           </Text>
+          {/* Subtitle is intentionally action-framed ("here's what to
+              try"), not another wellness restatement. The top status
+              banner already summarizes how the day is going; this
+              card's job is to guide the next step. */}
           <Text style={[styles.subtitle, { color: mutedForeground }]}>
-            Personalized support based on today&apos;s check-in
+            A few small steps to try today, based on your check-in.
           </Text>
           {/* The dev-only "[debug] concern=... sev=... supports=..."
               probe that used to live here was rendering visibly in
@@ -1601,26 +1605,10 @@ export function InterventionCard({
               Repeating it inside Symptom support made the page feel
               alarming and over-labeled. The amber-toned badge above
               and the care-team CTA below carry the same signal
-              visually without saying it twice. */}
-          {liveSeverity === "mild" && (
-            <View
-              style={[
-                styles.signalChip,
-                {
-                  backgroundColor: SUCCESS_FG + "14",
-                  borderColor: SUCCESS_FG + "33",
-                },
-              ]}
-            >
-              <Feather name="sun" size={11} color={SUCCESS_FG} />
-              <Text
-                style={[styles.signalChipText, { color: SUCCESS_FG }]}
-                numberOfLines={1}
-              >
-                Stay ahead today
-              </Text>
-            </View>
-          )}
+              visually without saying it twice.
+              The mild-severity "Stay ahead today" chip was also
+              removed -- it duplicated the "Stay ahead" badge a few
+              pixels above it. */}
         </View>
 
       {/* -- Primary action ---------------------------------------- */}

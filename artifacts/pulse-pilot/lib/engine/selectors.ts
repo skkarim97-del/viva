@@ -49,11 +49,10 @@ export function selectStatusChip(state: DailyTreatmentState): StatusChip {
   if (state.treatmentDailyState === "escalate") {
     // The escalate tier sits one step above `recover` -- it's the
     // "review may help" state that signals the care team should
-    // take a look. To match the new chip severity scale (where the
-    // worst option in a row reads red), the top banner uses the
-    // destructive tone here. `recover` stays amber so a tough day
-    // doesn't read as a clinical alarm.
-    return { label: "Symptom check needed", tone: "destructive" };
+    // take a look. The chip is the *state* label ("Heavier today");
+    // the action prompt ("Review may help") lives on the Symptom
+    // support card so the page never says the same thing twice.
+    return { label: "Heavier today", tone: "destructive" };
   }
   if (state.treatmentDailyState === "support") {
     // Continuity-support / hydration-support / fueling-support all
@@ -66,11 +65,20 @@ export function selectStatusChip(state: DailyTreatmentState): StatusChip {
   };
 }
 
+// Status chip labels are intentionally *state* phrases ("what kind of
+// day is this"), not action phrases. The action lives on the Symptom
+// support card badge (Stay ahead / Support today / Review may help)
+// and inside the Your-plan items. Keeping these surfaces lexically
+// distinct prevents the page from labeling the same thing twice.
+//
+// Notably we do NOT use "Symptom support" here -- that's the title
+// of the card below, and using it as the chip too made the page
+// repeat itself.
 function pickSupportChipLabel(state: DailyTreatmentState): string {
   switch (state.primaryFocus) {
-    case "symptom_relief": return "Symptom support";
-    case "hydration": return "Hydration focus";
-    case "fueling": return "Fueling focus";
+    case "symptom_relief": return "Heavier today";
+    case "hydration": return "Low on fluids";
+    case "fueling": return "Low appetite today";
     case "continuity_support":
       return state.recentTitration ? "Adjustment week" :
              state.treatmentStage === "first_30d" ? "Early treatment" :
@@ -87,6 +95,13 @@ export interface HeroBlock {
 }
 
 export function selectHero(state: DailyTreatmentState): HeroBlock {
+  // Hero copy follows a strict split:
+  //   headline = state-of-the-day in one short sentence
+  //   drivers  = the *why* (one short reason), NOT the action
+  // The action lives on the Symptom support card and on the
+  // Your plan items below, so the banner never tells the patient
+  // what to do. This keeps the two surfaces complementary instead
+  // of redundant.
   if (state.dataSufficiency.insufficientForPlan) {
     return {
       headline: "Tell us how today is going",
@@ -96,7 +111,7 @@ export function selectHero(state: DailyTreatmentState): HeroBlock {
   if (state.treatmentDailyState === "escalate") {
     return {
       headline: "Let's slow down and stabilize",
-      drivers: ["Symptoms are stacking. Hydration and rest first."],
+      drivers: ["A few symptoms are stacking up today."],
     };
   }
   // Continuity-support headlines are stage-aware so early-treatment
@@ -105,32 +120,32 @@ export function selectHero(state: DailyTreatmentState): HeroBlock {
     if (state.treatmentStage === "first_30d") {
       return {
         headline: "Early weeks: steady wins",
-        drivers: ["Many patients feel this in the first month. Small, consistent steps today."],
+        drivers: ["Many patients feel this in the first month."],
       };
     }
     if (state.recentTitration) {
       return {
         headline: "Your body is adjusting to the new dose",
-        drivers: ["Hydration, gentle movement, and lighter meals today."],
+        drivers: ["The first days after a dose change can feel heavier."],
       };
     }
     if (state.doseDayPosition === "day_1_post" || state.doseDayPosition === "day_2_post") {
       return {
         headline: "Post-dose support day",
-        drivers: ["Symptoms are common 1-2 days after dose. Hydration first."],
+        drivers: ["Symptoms are common 1-2 days after a dose."],
       };
     }
   }
   if (state.treatmentDailyState === "support" && state.primaryFocus === "hydration") {
     return {
       headline: "Hydration is the priority",
-      drivers: ["Sip steadily through the day. Add electrolytes if you can."],
+      drivers: ["Fluids have been running lower than usual."],
     };
   }
   if (state.treatmentDailyState === "support" && state.primaryFocus === "fueling") {
     return {
       headline: "Small, steady fuel today",
-      drivers: ["Aim for protein in 2-3 small portions."],
+      drivers: ["Appetite has been lower than usual."],
     };
   }
   // Fall through to planEngine's existing headline + drivers, which
@@ -339,8 +354,10 @@ export function selectWeeklyDayView(
       focusText = "Awaiting today's check-in";
     } else if (state.treatmentDailyState === "escalate") {
       // Escalation deserves a firmer label than the generic
-      // symptom_relief mapping; keep it in lockstep with the Today
-      // chip ("Symptom check needed") tone.
+      // symptom_relief mapping. The Today banner chip uses the
+      // *state* phrase ("Heavier today"); the Week tile uses the
+      // *focus* phrase so the same day reads differently on each
+      // surface without contradicting itself.
       focusText = "Symptom stabilization";
     } else {
       focusText = FOCUS_LABEL_FOR_PRIMARY[state.primaryFocus];
