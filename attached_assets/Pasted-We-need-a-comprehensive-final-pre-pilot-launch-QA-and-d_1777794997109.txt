@@ -1,0 +1,742 @@
+We need a comprehensive final pre-pilot launch QA and data-flow cleanup for Viva.
+
+This is very important. The goal is to verify that the MVP is truly pilot-ready across:
+- Viva Care patient app
+- Viva Clinic provider dashboard
+- Viva Analytics
+- API/backend
+- AWS database
+- deployment/runtime environment
+- data persistence
+- intervention intelligence
+- escalation workflow
+- analytics/event tracking
+
+Do not make assumptions. Audit first, then fix only what is broken or incomplete.
+
+Important:
+- Do NOT change users.id from serial
+- Do NOT make risky DB changes
+- Do NOT break login, invite flow, onboarding, Today tab, Week tab, Trends tab, Viva Clinic, or Viva Analytics
+- Do NOT send PHI to OpenAI
+- Preserve HIPAA / PHI guardrails
+- No fake production behavior except explicit dev/demo seeding
+- Demo/seeded data should be clearly dev-only
+- Production/pilot patient and provider data must persist to AWS database
+- Nothing important should remain only in local storage, except temporary UI cache or demo/dev-only state
+
+==================================================
+PRIMARY GOAL
+==================================================
+
+Perform a full pre-pilot QA pass to ensure:
+
+1. All patient data is saved to the AWS Postgres database
+2. All provider data is saved to the AWS Postgres database
+3. All meaningful app events are logged for analytics
+4. All onboarding data is saved and used by the intelligence layer
+5. All patient symptom inputs are saved as current state and event history
+6. All Apple Health / wearable data is saved and used when available
+7. Medication dose logs are saved every time patients report taking a dose
+8. Symptom support recommendations are intelligent, adaptive and closed-loop
+9. Patient feedback on recommendations is saved
+10. Provider escalation works and includes context
+11. Today / Week / Plan choices are saved, including automated suggestion vs patient-chosen override
+12. Completion status of plan items is saved
+13. Data flows correctly from Viva Care → backend → AWS DB → Viva Clinic → Viva Analytics
+14. No important pilot data is only stored locally
+15. Runtime/deployment environment is clear and production-safe
+
+==================================================
+0. DEPLOYMENT / INFRASTRUCTURE AUDIT
+==================================================
+
+First, audit where the system is actually running.
+
+Please verify and report:
+
+1. What backend URL the patient app uses in preview and production
+2. What backend URL Viva Clinic uses
+3. What backend URL Viva Analytics uses
+4. Whether the API server is actually running on EC2 or Replit
+5. Whether the production database is AWS RDS / AWS Postgres
+6. Whether any app is still writing to local Postgres, SQLite, in-memory storage, mock storage, or Replit DB
+7. Which environment variables control:
+   - DATABASE_URL
+   - AWS_DATABASE_URL
+   - PRODUCTION_API_URL
+   - EXPO_PUBLIC_API_URL
+   - any EC2 host URL
+   - any Replit host URL
+
+Important:
+If the API is NOT actually running on EC2, do not pretend it is.
+Report clearly:
+- Current runtime
+- Current database
+- What is production today
+- What needs to move before a HIPAA-sensitive pilot if applicable
+
+Acceptance:
+Provide a clear deployment truth table:
+- Viva Care API target
+- Viva Clinic API target
+- Viva Analytics API target
+- Backend runtime host
+- Database host
+- Whether each is pilot-safe or needs migration
+
+==================================================
+1. DATABASE PERSISTENCE AUDIT
+==================================================
+
+Audit all major data tables and confirm what is persisted.
+
+Please check:
+- users
+- patient_profiles
+- patient_checkins
+- analytics_events
+- care_events
+- patient_interventions or intervention plans
+- patient_weights
+- patient_treatment_logs
+- Apple Health / wearable tables
+- plan / weekly plan tables
+- provider / doctor tables
+- invites / onboarding tables
+- any local-only storage in the mobile app
+
+For each data category, report:
+
+1. Where it is captured
+2. Which API endpoint saves it
+3. Which DB table stores it
+4. Whether it is also logged to analytics_events or care_events
+5. Whether it is used by the intelligence/recommendation engine
+6. Whether it appears in Viva Clinic
+7. Whether it appears in Viva Analytics
+8. Any gaps or local-only persistence
+
+Data categories to verify:
+- patient account creation / invite activation
+- onboarding profile
+- medication name
+- medication dose
+- dose schedule
+- dose increase / titration state
+- first dose date / treatment start date
+- medication adherence / dose taken
+- symptom check-in inputs
+- symptom input changes during the day
+- energy
+- appetite
+- nausea
+- digestion
+- bowel movement
+- hydration
+- mood / mental state if used
+- weight
+- goal weight if collected
+- Apple Health connected status
+- steps
+- active calories
+- sleep
+- heart rate
+- HRV if available
+- resting heart rate if available
+- wearable sync timestamps
+- intervention generated
+- recommendation accepted
+- another option tapped
+- feedback Better / Same / Worse
+- care team review requested
+- plan item suggested
+- plan item overridden by patient
+- plan item completed
+- Week tab viewed
+- Trends tab viewed
+- provider viewed patient
+- provider reviewed escalation
+- provider action taken
+
+Acceptance:
+Create a persistence map that shows:
+Data captured → endpoint → table → used by intelligence? → shown in Clinic? → shown in Analytics?
+
+==================================================
+2. ONBOARDING DATA QA
+==================================================
+
+Audit the patient onboarding flow end-to-end.
+
+Verify that every onboarding input is:
+1. saved to AWS DB
+2. recoverable after logout/reload
+3. available to the recommendation engine if relevant
+4. visible to the provider if clinically/relevant operationally appropriate
+5. available to Viva Analytics if useful for segmentation
+
+Check onboarding fields such as:
+- patient name
+- email / invite token association
+- provider / clinic assignment
+- treatment medication
+- current dose
+- treatment start date
+- dose schedule
+- starting weight
+- current weight
+- goal weight if collected
+- symptoms baseline if collected
+- Apple Health permissions / connected state
+- notification preferences if collected
+- any consent/privacy acknowledgement if present
+
+Fix any fields that are:
+- only local
+- not saved
+- saved but not used
+- saved but not scoped to provider
+- saved but not recoverable after reload
+
+Acceptance:
+A newly onboarded patient can complete onboarding, reload the app, and all onboarding data persists correctly from AWS DB.
+
+==================================================
+3. TODAY CHECK-IN / SYMPTOM INPUT QA
+==================================================
+
+Audit Today’s check-in flow.
+
+Required behavior:
+- latest daily check-in state is saved to patient_checkins
+- every meaningful change is logged as an append-only analytics event
+- unchanged duplicate saves do not spam events
+- recommendation engine uses the latest check-in state
+- Viva Clinic can see latest patient state
+- Viva Analytics can analyze check-in frequency and symptom changes
+
+Verify:
+1. Selecting symptoms autosaves correctly
+2. Auto-save writes to AWS DB
+3. Prior state and new state are logged in analytics_events
+4. changedFields are accurate
+5. timestamp is accurate
+6. source is correct:
+   - today_checkin_autosave
+   - manual_save
+   - onboarding
+   - demo_seed
+7. symptom improvement is captured
+8. symptom worsening is captured
+9. same-state updates are not spam logged
+10. recommendations update within 1-2 seconds after symptom changes
+11. no duplicate intervention cards are created
+12. severe → stable updates the current support state
+13. stable → severe updates the current support state
+
+Test cases:
+A) stable → severe
+B) severe → stable
+C) nausea → constipation
+D) low appetite → normal appetite
+E) no bowel movement → bowel movement yes
+F) no Apple Health connected
+G) Apple Health connected if test data exists
+
+Acceptance:
+The database can reconstruct the patient’s symptom trajectory during the day.
+
+==================================================
+4. MEDICATION DOSE / TREATMENT LOG QA
+==================================================
+
+Audit all medication dose-related flows.
+
+Required:
+Every time a patient logs that they took medication, it must be saved in DB.
+
+Verify:
+- dose taken today
+- timestamp of dose log
+- medication name
+- dose amount
+- dose schedule
+- dose increase / titration flag
+- days since last dose
+- dose day position
+- missed dose if supported
+- medication adherence event
+- whether dose log appears in Viva Clinic
+- whether dose log appears in Viva Analytics
+- whether dose timing is used by intelligence layer
+
+Important:
+Dose context can influence symptom support, plan intensity, recent patterns and escalation context.
+But do NOT provide medication dosing advice or dose-change recommendations.
+
+Acceptance:
+The system can answer:
+- when patient last took dose
+- whether patient took dose this week
+- whether symptoms appear around dose timing
+- whether dose context influenced recommendation
+- whether provider can see dose context
+
+==================================================
+5. APPLE HEALTH / WEARABLE DATA QA
+==================================================
+
+Audit Apple Health / wearable integration and persistence.
+
+Verify:
+1. Apple Health connected state saves to DB
+2. Apple Health data syncs to backend
+3. Sync timestamps are saved
+4. Steps/activity are saved
+5. Sleep data is saved if available
+6. Active calories are saved if available
+7. Heart rate / RHR / HRV are saved only if supported
+8. Weight from HealthKit is handled correctly if supported
+9. Missing data does not break app
+10. Data is used only when available
+11. App never says Apple Health was used when disconnected
+12. Recent patterns subtitle correctly references Apple Health only when connected
+13. Symptom support subtitle references health trends only when connected
+14. Provider dashboard can see useful wearable context if relevant
+15. Viva Analytics can query wearable engagement and trends
+
+Acceptance:
+If Apple Health is disconnected:
+- no fake biometric claims
+- prompt encourages connection
+
+If Apple Health is connected:
+- data saves to DB
+- intelligence layer can use it
+- relevant chips/patterns appear only when supported by real data
+
+==================================================
+6. SYMPTOM SUPPORT / MICRO-INTERVENTION QA
+==================================================
+
+Audit Symptom support end-to-end.
+
+This is the core product feature.
+
+Verify:
+1. generated from latest check-in
+2. uses recent symptom history
+3. uses dose context when available
+4. uses Apple Health data when available
+5. does not fake unavailable data
+6. updates live when symptoms change
+7. stable/mild/moderate/heavier/review-worthy states are distinct
+8. one card only, no duplicates
+9. another option works
+10. I’ll try this works
+11. Better / Same / Worse works
+12. Ask care team works
+13. escalation success state appears
+14. feedback is saved
+15. recommendation variant is saved
+16. prior feedback can influence future recommendations
+17. OpenAI payload is de-identified
+18. fallback templates work if OpenAI fails
+19. no PHI in OpenAI logs
+20. no visible debug text
+
+Verify saved data:
+- intervention shown
+- trigger symptoms
+- severity
+- recommendation text
+- recommendation category
+- primary concern
+- signal chips / context used
+- generated_by
+- patient accepted
+- another option tapped
+- variant shown
+- feedback result
+- escalation requested
+- timestamps
+
+Acceptance:
+The closed loop works:
+symptom input → recommendation → patient action → feedback → adaptation or escalation
+
+==================================================
+7. PROVIDER ESCALATION QA
+==================================================
+
+Audit escalation end-to-end.
+
+When a patient taps “Ask my care team to review” or reports Worse where escalation is warranted:
+
+Patient side:
+- success state appears
+- duplicate taps do not create duplicate escalations
+- UI does not silently fail
+- errors show clear fallback
+
+Backend:
+- care_event or escalation record is created
+- analytics event is created
+- context is captured
+
+Provider side:
+Viva Clinic should show:
+- patient name / relevant identifier
+- reason for escalation
+- current symptoms
+- severity
+- trend/history
+- dose timing if relevant
+- Apple Health context if available
+- recommendation shown
+- whether patient tried it
+- feedback result
+- timestamp
+- suggested priority
+
+Provider action:
+- provider can mark reviewed / action taken if supported
+- review timestamp is saved
+- provider action appears in analytics
+
+Acceptance:
+Provider does not receive a generic “patient requested review.”
+Provider receives useful context to act quickly.
+
+==================================================
+8. YOUR PLAN / WEEK PLAN QA
+==================================================
+
+Audit Today “Your plan” and Week tab.
+
+Required:
+All plan suggestions, patient choices and completions should be saved in DB.
+
+Verify:
+1. automated recommendation generated
+2. patient-selected override saved
+3. whether item was auto-suggested vs patient-chosen saved
+4. completion state saved
+5. timestamp of completion saved
+6. category saved:
+   - MOVE
+   - FUEL
+   - HYDRATE
+   - RECOVER
+7. title/subtitle saved or reconstructable from option id
+8. day/date saved
+9. Week tab reflects the same plan state
+10. Today tab reflects current day plan
+11. choices persist after refresh/logout
+12. provider can see useful plan adherence if appropriate
+13. analytics can measure plan completion
+
+Plan categories:
+MOVE:
+- strength training
+- cardio
+- light movement
+- full rest day
+
+FUEL:
+- protein-forward meals
+- gentle fueling
+- small meals
+- protein support
+
+HYDRATE:
+- steady hydration
+- slow hydration
+- hydration support
+- fluids first
+
+RECOVER:
+- earlier wind-down
+- sleep support
+- consistent rest
+- recovery focus
+
+Acceptance:
+The system can answer:
+- what plan Viva suggested
+- what patient selected instead
+- what patient completed
+- when they completed it
+- whether plan adherence correlates with symptoms/interventions
+
+==================================================
+9. WEEK TAB QA
+==================================================
+
+Audit Week tab.
+
+Verify:
+- tab name is “Week,” not “Plan”
+- plan copy matches Today’s copy system
+- subtitles under each item appear
+- scheduled plan data persists
+- completed items persist
+- patient overrides persist
+- current week loads from DB
+- no stale local-only data
+- changing Today plan affects Week where intended
+- Week can support pilot analytics
+
+Acceptance:
+Week tab feels like a persisted adaptive weekly routine, not a static local checklist.
+
+==================================================
+10. RECENT PATTERNS / TRENDS QA
+==================================================
+
+Audit Recent patterns and Trends.
+
+Recent patterns should use:
+- check-ins
+- dose timing
+- Apple Health if connected
+- intervention feedback
+- plan adherence if available
+
+Verify:
+- no fake Apple Health claims
+- no overclaiming causation
+- uses “tends to,” “often,” “appears,” “has shown up”
+- empty state is clean
+- patterns update as data accumulates
+- trends are saved/queryable for analytics if needed
+
+Examples:
+- nausea has shown up more than once this week
+- appetite tends to dip around dose day
+- activity tends to dip on higher-symptom days
+- slow hydration helped last time
+- symptoms improved after intervention
+- patient requested review after worsening symptoms
+
+Acceptance:
+Trends/Recent patterns support the treatment intelligence thesis, not just generic charts.
+
+==================================================
+11. VIVA CLINIC DATA FLOW QA
+==================================================
+
+Audit Viva Clinic provider dashboard.
+
+Verify data flows from patient app to provider dashboard:
+- active patients
+- patient onboarding profile
+- treatment details
+- dose logs
+- latest check-in
+- symptom history
+- Apple Health / wearable context if available
+- risk/severity state
+- intervention history
+- feedback
+- escalation request
+- plan adherence if appropriate
+- review status
+- provider action status
+
+Verify provider scoping:
+- doctors only see assigned patients
+- no cross-provider leakage
+- demo patients are not mixed with real production patients unless dev-only
+
+Acceptance:
+A provider can open a patient and understand:
+- what changed
+- why Viva surfaced them
+- what intervention happened
+- what the patient did
+- whether review is needed
+
+==================================================
+12. VIVA ANALYTICS QA
+==================================================
+
+Audit Viva Analytics.
+
+Verify it can report pilot KPIs:
+- invited patients
+- activated patients
+- active patients
+- check-in completion rate
+- Apple Health connection rate
+- average check-ins per patient
+- symptoms by category
+- worsening/improving symptom events
+- interventions generated
+- interventions accepted
+- another option taps
+- Better/Same/Worse feedback
+- resolved through automation
+- escalated to provider
+- provider review rate
+- time to provider action
+- plan completion rate
+- dose adherence logging
+- retention-adjacent engagement cohorts
+
+Acceptance:
+Viva Analytics can support a 30-day pilot readout without manual spreadsheet reconstruction.
+
+==================================================
+13. AUTH / SECURITY / SCOPING QA
+==================================================
+
+Verify:
+- patient auth works
+- provider auth works
+- demo login is dev-only
+- patients can only access their own data
+- providers can only access assigned patients
+- analytics only exposes scoped/customer-safe data
+- invite tokens are safe
+- no PHI in logs
+- no PHI to OpenAI
+- no raw patient notes sent to OpenAI
+- no local dev/demo routes enabled in production
+
+Acceptance:
+No obvious privacy/scoping gaps before pilot.
+
+==================================================
+14. LOCAL STORAGE AUDIT
+==================================================
+
+Audit mobile app local storage.
+
+Important:
+Local storage may be used for:
+- auth token
+- UI cache
+- offline queue
+- temporary preferences
+- demo-only state
+
+But important pilot data should not exist only locally.
+
+Find any local-only storage for:
+- onboarding
+- symptoms
+- dose logs
+- treatment details
+- plan choices
+- plan completions
+- intervention feedback
+- escalation
+- Apple Health samples
+
+If any important field is local-only, add backend persistence or sync.
+
+Acceptance:
+Reload/logout/reinstall should not lose important pilot data already sent to server.
+
+==================================================
+15. ERROR HANDLING / RESILIENCE QA
+==================================================
+
+Verify:
+- API failures do not silently fail
+- check-in autosave has error handling
+- intervention generation failure falls back safely
+- feedback submission errors are visible or recoverable
+- escalation failure shows retry
+- Apple Health sync failure does not break app
+- offline queue replays safely
+- no duplicate events from retries
+- no duplicate interventions from repeated saves
+
+Acceptance:
+The app feels reliable enough for real patients.
+
+==================================================
+16. FINAL SMOKE TESTS
+==================================================
+
+Run these end-to-end scenarios and report results.
+
+Scenario A: New patient onboarding
+- activate invite
+- complete onboarding
+- treatment data saved
+- appears in Clinic
+- appears in Analytics
+
+Scenario B: Stable daily check-in
+- select good/normal symptoms
+- check-in saved
+- event logged
+- stable symptom support shown or minimized
+- plan generated
+- data visible in Clinic/Analytics
+
+Scenario C: Severe symptoms + escalation
+- select severe nausea / low appetite / low energy
+- symptom support updates
+- ask care team works
+- escalation visible in Clinic
+- analytics event logged
+
+Scenario D: Worse → better within same day
+- select severe symptoms
+- recommendation appears
+- change to improved symptoms
+- latest state improves
+- previous severe state remains in event history
+- recommendation downgrades
+- no duplicate cards
+
+Scenario E: Plan override and completion
+- view automated plan
+- change one plan item
+- save override
+- mark completed
+- confirm DB stores auto vs patient-chosen and completion
+- Week tab reflects it
+- Analytics can query it
+
+Scenario F: Dose log
+- patient logs medication dose taken
+- timestamp saved
+- treatment state updates
+- Recent patterns can use dose timing
+- provider can see if relevant
+
+Scenario G: Apple Health disconnected
+- no fake health claims
+- connect prompt appears
+- recommendations still work
+
+Scenario H: Apple Health connected / test data
+- biometric data saves
+- trends use it only if available
+- Clinic/Analytics can see supported signals
+
+==================================================
+FINAL DELIVERABLE
+==================================================
+
+At the end, provide a concise launch-readiness report:
+
+1. What passed
+2. What was fixed
+3. What still needs attention
+4. Whether all critical patient/provider data persists to AWS DB
+5. Whether runtime is EC2 or not
+6. Whether any important pilot data remains local-only
+7. Whether Viva Care → Viva Clinic → Viva Analytics data flow is working
+8. Whether the intervention closed loop is fully functional
+9. Whether HIPAA/OpenAI guardrails remain intact
+10. Final pilot readiness rating out of 10
+
+Do not mark complete until the report is specific and evidence-based.
