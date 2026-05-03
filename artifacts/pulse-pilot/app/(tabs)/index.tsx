@@ -29,8 +29,7 @@ import {
   type FeedbackResult,
 } from "@/lib/api/interventionsClient";
 import WeightLogModal from "@/components/WeightLogModal";
-import { sessionApi, type AuthedUser } from "@/lib/api/sessionClient";
-import { API_BASE } from "@/lib/apiConfig";
+import { sessionApi } from "@/lib/api/sessionClient";
 import { logIntervention, type InterventionType } from "@/lib/intervention/logger";
 import { logCareEventDeduped, logCareEventImmediate } from "@/lib/care-events/client";
 import { useApp } from "@/context/AppContext";
@@ -181,83 +180,54 @@ export default function DashboardScreen() {
   // the rest of the Today screen from rendering.
   const [activeInterventions, setActiveInterventions] = useState<PatientIntervention[]>([]);
 
-  // ----- DEV-ONLY debug instrumentation (live preview diagnostics) -----
-  // Visible debug strip + console.logs to diagnose why the personalized
-  // intervention card may not appear in the Replit live preview. Tracks
-  // auth, last response status of /active, /generate, /me/checkins.
-  type CallTrace = {
-    ok: boolean | null;
-    status: number | null;
-    at: string | null;
-    note?: string;
-  };
-  const [dbgUser, setDbgUser] = useState<AuthedUser | null>(null);
-  const [dbgUserLoaded, setDbgUserLoaded] = useState(false);
-  const [dbgHasToken, setDbgHasToken] = useState<boolean | null>(null);
-  const [dbgActive, setDbgActive] = useState<CallTrace & { count?: number }>({
-    ok: null, status: null, at: null,
-  });
-  const [dbgGenerate, setDbgGenerate] = useState<CallTrace & { hasIntervention?: boolean }>({
-    ok: null, status: null, at: null,
-  });
-  const [dbgCheckin, setDbgCheckin] = useState<CallTrace>({
-    ok: null, status: null, at: null,
-  });
-  const nowHHMMSS = () => {
-    const d = new Date();
-    return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}:${String(d.getSeconds()).padStart(2,"0")}`;
-  };
-  // Direct, status-aware fetch wrapper used by the traced calls below.
-  const tracedFetch = React.useCallback(
-    async (method: "GET" | "POST", path: string, body?: unknown) => {
-      const token = await sessionApi.getStoredToken().catch(() => null);
-      const headers: Record<string, string> = {};
-      if (body) headers["Content-Type"] = "application/json";
-      if (token) headers["Authorization"] = `Bearer ${token}`;
-      let res: Response;
-      try {
-        res = await fetch(`${API_BASE}${path}`, {
-          method,
-          headers,
-          body: body ? JSON.stringify(body) : undefined,
-        });
-      } catch (e) {
-        return { ok: false, status: 0, json: null as unknown, error: (e as Error)?.message ?? "network" };
-      }
-      let json: unknown = null;
-      try {
-        const text = await res.text();
-        json = text ? JSON.parse(text) : null;
-      } catch { /* ignore */ }
-      return { ok: res.ok, status: res.status, json, error: null };
-    },
-    [],
-  );
-  // Refresh user / token info on mount and after every active reload.
+  // Cold-start symptom hydration: when this tab mounts and the local
+  // sliders are still null (fresh browser session, e.g. the Replit
+  // dev preview right after auto-login), pull today's saved check-in
+  // row from the server so the UI reflects what the patient already
+  // submitted earlier. We only hydrate keys that are currently null,
+  // so an in-progress edit is never overwritten. Best-effort: any
+  // failure is silent and leaves the sliders empty.
+  const hydratedFromServerRef = useRef(false);
   useEffect(() => {
+    if (hydratedFromServerRef.current) return;
+    const allEmpty =
+      glp1Energy === null &&
+      nausea === null &&
+      appetite === null &&
+      digestion === null &&
+      bowelMovementToday === null;
+    if (!allEmpty) {
+      hydratedFromServerRef.current = true;
+      return;
+    }
     let cancelled = false;
     (async () => {
-      const t = await sessionApi.getStoredToken().catch(() => null);
-      if (cancelled) return;
-      setDbgHasToken(!!t);
-      try {
-        const u = await sessionApi.me();
-        if (!cancelled) {
-          setDbgUser(u);
-          setDbgUserLoaded(true);
-          // eslint-disable-next-line no-console
-          console.log("[Today.debug] /auth/me ->", u ? `${u.role}#${u.id} ${u.email}` : "null");
-        }
-      } catch (e) {
-        if (!cancelled) {
-          setDbgUserLoaded(true);
-          // eslint-disable-next-line no-console
-          console.log("[Today.debug] /auth/me FAILED", (e as Error)?.message);
-        }
+      const row = await sessionApi.getTodayCheckin().catch(() => null);
+      if (cancelled || !row) return;
+      hydratedFromServerRef.current = true;
+      if (glp1Energy === null && row.energy) setGlp1Energy(row.energy);
+      if (nausea === null && row.nausea) setNausea(row.nausea);
+      if (appetite === null && row.appetite) setAppetite(row.appetite);
+      if (digestion === null && row.digestion) setDigestion(row.digestion);
+      if (bowelMovementToday === null && row.bowelMovement !== null) {
+        setBowelMovementToday(row.bowelMovement);
       }
     })();
-    return () => { cancelled = true; };
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    glp1Energy,
+    nausea,
+    appetite,
+    digestion,
+    bowelMovementToday,
+    setGlp1Energy,
+    setNausea,
+    setAppetite,
+    setDigestion,
+    setBowelMovementToday,
+  ]);
   // We must NOT fire /generate before the first /active fetch lands --
   // otherwise on a slow network the mount effect would always race
   // ahead of the active-load and pointlessly ask the engine to
@@ -266,21 +236,15 @@ export default function DashboardScreen() {
   // failure), and gates both auto-generate effects below.
   const [activeLoaded, setActiveLoaded] = useState(false);
   const reloadActiveInterventions = React.useCallback(async () => {
-    // eslint-disable-next-line no-console
-    console.log("[Today.debug] active reload START");
-    const r = await tracedFetch("GET", "/patient/interventions/active");
-    const items = (r.ok && r.json && typeof r.json === "object" && "interventions" in (r.json as object))
-      ? (((r.json as { interventions?: PatientIntervention[] }).interventions) ?? [])
-      : [];
-    setActiveInterventions(items);
-    setDbgActive({
-      ok: r.ok, status: r.status, at: nowHHMMSS(), count: items.length,
-      note: r.ok ? `${items.length} item(s)` : (r.error ?? "http error"),
-    });
-    // eslint-disable-next-line no-console
-    console.log(`[Today.debug] active reload ${r.ok ? "OK" : "FAIL"} status=${r.status} count=${items.length}`);
-    setActiveLoaded(true);
-  }, [tracedFetch]);
+    try {
+      const items = await interventionsApi.active();
+      setActiveInterventions(items);
+    } catch {
+      // Best-effort: leave whatever's currently rendered alone.
+    } finally {
+      setActiveLoaded(true);
+    }
+  }, []);
   useEffect(() => {
     void reloadActiveInterventions();
   }, [reloadActiveInterventions]);
@@ -317,28 +281,19 @@ export default function DashboardScreen() {
       queuedFollowUpRef.current = false;
       generateInFlightRef.current = true;
       try {
-        // eslint-disable-next-line no-console
-        console.log("[Today.debug] generate START");
-        const r = await tracedFetch("POST", "/patient/interventions/generate", { source: "checkin" });
-        const created = (r.ok && r.json && typeof r.json === "object" && "intervention" in (r.json as object))
-          ? ((r.json as { intervention?: PatientIntervention | null }).intervention ?? null)
-          : null;
-        setDbgGenerate({
-          ok: r.ok, status: r.status, at: nowHHMMSS(),
-          hasIntervention: !!created,
-          note: r.ok
-            ? (created ? `created id=${created.id} trigger=${created.triggerType}` : "no-op (engine declined)")
-            : (r.error ?? "http error"),
-        });
-        // eslint-disable-next-line no-console
-        console.log(`[Today.debug] generate ${r.ok ? "OK" : "FAIL"} status=${r.status} created=${!!created}`);
+        let created: PatientIntervention | null = null;
+        try {
+          created = await interventionsApi.generate({ source: "checkin" });
+        } catch {
+          /* swallow -- best effort */
+        }
         if (created) await reloadActiveInterventions();
       } finally {
         generateInFlightRef.current = false;
       }
     } while (queuedFollowUpRef.current);
     return "started";
-  }, [reloadActiveInterventions, tracedFetch]);
+  }, [reloadActiveInterventions]);
 
   // Track whether we've already issued a /generate for the CURRENT
   // empty-active state. Resets to false whenever activeInterventions
@@ -397,35 +352,27 @@ export default function DashboardScreen() {
     // (moderate -> severe) silently no-op'd. The server engine de-dupes
     // on its own (allowing supersede when severity escalates), so the
     // frontend just needs to fire the chain on every signature change.
-    if (!hasMinSymptomData) {
-      // eslint-disable-next-line no-console
-      console.log(`[Today.debug] symptom change sig=${symptomSignature} hasMin=false (need energy + nausea)`);
-      return;
-    }
+    if (!hasMinSymptomData) return;
     if (lastSavedSignatureRef.current === symptomSignature) return;
-    // eslint-disable-next-line no-console
-    console.log(`[Today.debug] symptom change sig=${symptomSignature} -- scheduling autosave in 1.2s`);
     const handle = setTimeout(async () => {
       const snapshot = symptomSignature;
       const todayYmd = new Date().toISOString().split("T")[0]!;
-      // eslint-disable-next-line no-console
-      console.log("[Today.debug] autosave START (POST /me/checkins)");
-      const r = await tracedFetch("POST", "/me/checkins", {
-        date: todayYmd,
-        energy: glp1Energy!,
-        nausea: nausea!,
-        mood: 3,
-        appetite: appetite ?? null,
-        digestion: digestion ?? null,
-        bowelMovement: bowelMovementToday,
-      });
-      setDbgCheckin({
-        ok: r.ok, status: r.status, at: nowHHMMSS(),
-        note: r.ok ? "saved" : (r.error ?? "http error"),
-      });
-      // eslint-disable-next-line no-console
-      console.log(`[Today.debug] autosave ${r.ok ? "OK" : "FAIL"} status=${r.status}`);
-      if (!r.ok) return;
+      let savedOk = false;
+      try {
+        await sessionApi.submitCheckin({
+          date: todayYmd,
+          energy: glp1Energy!,
+          nausea: nausea!,
+          mood: 3,
+          appetite: appetite ?? null,
+          digestion: digestion ?? null,
+          bowelMovement: bowelMovementToday,
+        });
+        savedOk = true;
+      } catch {
+        /* best effort */
+      }
+      if (!savedOk) return;
       const outcome = await tryGenerate();
       if (outcome === "started") {
         lastSavedSignatureRef.current = snapshot;
@@ -1433,49 +1380,6 @@ export default function DashboardScreen() {
             </Text>
           </View>
         )}
-
-        {/* DEV-ONLY debug strip. Renders directly above "Your Plan" so a
-            developer viewing the live Replit preview can see at a glance
-            why the personalized intervention card may not be rendering
-            (auth status, role, /active count, last response codes). */}
-        {(() => {
-          const willRenderCard = activeInterventions.length > 0;
-          // eslint-disable-next-line no-console
-          console.log(`[Today.debug] InterventionCard render-condition = ${willRenderCard} (activeInterventions.length=${activeInterventions.length}, activeLoaded=${activeLoaded})`);
-          const fmtTrace = (t: CallTrace & { count?: number; hasIntervention?: boolean }) => {
-            if (t.at === null) return "(not called yet)";
-            const status = t.status === 0 ? "network" : String(t.status);
-            const extra = typeof t.count === "number" ? ` count=${t.count}`
-              : typeof t.hasIntervention === "boolean" ? ` created=${t.hasIntervention}`
-              : "";
-            return `${t.at}  ${t.ok ? "OK" : "FAIL"} ${status}${extra}${t.note ? `  ${t.note}` : ""}`;
-          };
-          return (
-            <View style={{
-              backgroundColor: "#FFF6E5",
-              borderColor: "#E5A100",
-              borderWidth: 1,
-              borderRadius: 8,
-              padding: 10,
-              marginBottom: 12,
-            }}>
-              <Text style={{ fontWeight: "700", color: "#7A4F00", marginBottom: 4 }}>
-                DEBUG (dev only) - personalized card pipeline
-              </Text>
-              <Text style={{ fontSize: 11, color: "#3a2a00", lineHeight: 16 }}>
-                auth: {dbgUserLoaded ? (dbgUser ? `${dbgUser.role}#${dbgUser.id} ${dbgUser.email}` : "UNAUTHENTICATED") : "loading..."}{"\n"}
-                token in storage: {dbgHasToken === null ? "?" : (dbgHasToken ? "yes" : "no")}{"\n"}
-                activeInterventions.length: {activeInterventions.length}  /  activeLoaded: {String(activeLoaded)}{"\n"}
-                latest intervention status: {activeInterventions[0]?.status ?? "(none)"}{"\n"}
-                will render card: {String(willRenderCard)}{"\n"}
-                symptom sig: {symptomSignature}  /  hasMinSymptomData: {String(hasMinSymptomData)}{"\n"}
-                last /active: {fmtTrace(dbgActive)}{"\n"}
-                last /generate: {fmtTrace(dbgGenerate)}{"\n"}
-                last /me/checkins: {fmtTrace(dbgCheckin)}
-              </Text>
-            </View>
-          );
-        })()}
 
         <View style={[styles.dayCard, { backgroundColor: c.card }]}>
           <View style={styles.dayHeader}>

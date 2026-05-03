@@ -41,6 +41,35 @@ router.get("/checkins", async (req, res: Response) => {
   res.json(cks);
 });
 
+// GET /me/checkins/today -- returns the patient's own check-in row for
+// the current local YMD date if one exists, or 204 No Content if not.
+// Used by the Today screen to hydrate the symptom sliders on cold start
+// (e.g. after auto-login on the dev preview, where AsyncStorage is
+// empty but the server already has today's seeded check-in row).
+router.get("/checkins/today", async (req, res: Response) => {
+  const userId = (req as AuthedRequest).auth.userId;
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const today = `${y}-${m}-${day}`;
+  const [row] = await db
+    .select()
+    .from(patientCheckinsTable)
+    .where(
+      and(
+        eq(patientCheckinsTable.patientUserId, userId),
+        eq(patientCheckinsTable.date, today),
+      ),
+    )
+    .limit(1);
+  if (!row) {
+    res.status(204).end();
+    return;
+  }
+  res.json(row);
+});
+
 // All symptom-management fields (appetite, digestion, hydration,
 // bowelMovement, doseTakenToday) are OPTIONAL. Older mobile builds
 // continue to submit just energy/nausea/mood and must keep working.

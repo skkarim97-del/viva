@@ -210,11 +210,28 @@ function useAnalyticsTracker() {
 }
 
 function RootLayoutNav() {
-  const { profile } = useApp();
+  const { profile, updateProfile } = useApp();
   const { user } = useAuth();
   useInviteDeepLink();
   useReminderScheduler();
   useAnalyticsTracker();
+  // Replit-preview auto-login bypass: when AuthProvider auto-logged the
+  // operator in as the demo patient (web + __DEV__), the local profile
+  // may still report onboardingComplete=false on a fresh device, which
+  // would route us into the multi-step onboarding wizard. Mark it
+  // complete the first time we observe an authenticated demo session
+  // so the gate falls through to (tabs). No-op on real installs that
+  // already have onboardingComplete=true.
+  const completedDemoOnboardingRef = useRef(false);
+  useEffect(() => {
+    if (!__DEV__) return;
+    if (!user) return;
+    if (profile.onboardingComplete) return;
+    if (completedDemoOnboardingRef.current) return;
+    completedDemoOnboardingRef.current = true;
+    updateProfile({ onboardingComplete: true });
+    router.replace("/(tabs)");
+  }, [user, profile.onboardingComplete, updateProfile]);
   // Auth gate decided ONCE at first render, same pattern as before:
   //   no session         -> /connect (paste invite or sign in)
   //   session, no profile-> /onboarding (local profile wizard)

@@ -279,10 +279,10 @@ async function selectDemoPatient(): Promise<{
 const DEMO_FALLBACK_INTERVENTION = {
   triggerType: "nausea" as const,
   symptomType: "nausea",
-  severity: 3,
-  riskLevel: "moderate" as const,
+  severity: 4,
+  riskLevel: "elevated" as const,
   whatWeNoticed:
-    "You reported moderate nausea, low appetite and constipation today.",
+    "You reported severe nausea, low appetite and constipation today.",
   recommendation:
     "Start with small sips of water and a light protein-forward snack, then take a short walk if your stomach feels okay.",
   followUpQuestion:
@@ -312,7 +312,7 @@ async function seedDemoTodaysCheckinAndIntervention(
       patientUserId,
       date: today,
       energy: "tired",
-      nausea: "moderate",
+      nausea: "severe",
       mood: 3,
       appetite: "low",
       digestion: "constipated",
@@ -322,7 +322,7 @@ async function seedDemoTodaysCheckinAndIntervention(
       target: [patientCheckinsTable.patientUserId, patientCheckinsTable.date],
       set: {
         energy: "tired",
-        nausea: "moderate",
+        nausea: "severe",
         mood: 3,
         appetite: "low",
         digestion: "constipated",
@@ -362,7 +362,7 @@ async function seedDemoTodaysCheckinAndIntervention(
       patientUserId,
       forcedTriggerType: "nausea",
       forcedSymptomType: "nausea",
-      forcedSeverity: 3,
+      forcedSeverity: 4,
     });
     if (generated) {
       const [inserted] = await db

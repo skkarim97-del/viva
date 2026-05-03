@@ -204,6 +204,28 @@ export const sessionApi = {
   submitCheckin: (payload: CheckinPayload) =>
     request<{ id: number }>("POST", "/me/checkins", payload),
 
+  // GET /me/checkins/today -- returns today's saved check-in row or
+  // null when the patient hasn't submitted one yet (server returns
+  // 204 in that case). Lets the Today screen hydrate symptom sliders
+  // on cold start without forcing the patient to re-enter values.
+  getTodayCheckin: async (): Promise<{
+    energy: "depleted" | "tired" | "good" | "great";
+    nausea: "none" | "mild" | "moderate" | "severe";
+    appetite: "strong" | "normal" | "low" | "very_low" | null;
+    digestion: "fine" | "bloated" | "constipated" | "diarrhea" | null;
+    bowelMovement: boolean | null;
+    mood: number;
+  } | null> => {
+    try {
+      const r = await request<unknown>("GET", "/me/checkins/today");
+      // 204 -> request<T>() returns undefined cast as T; treat as null.
+      if (!r || typeof r !== "object") return null;
+      return r as Awaited<ReturnType<typeof sessionApi.getTodayCheckin>>;
+    } catch {
+      return null;
+    }
+  },
+
   // Mark a single symptom's in-app guidance as acknowledged on today's
   // check-in row. 404 means the patient hasn't submitted a check-in
   // today yet -- caller should ignore (we'll re-attempt after the

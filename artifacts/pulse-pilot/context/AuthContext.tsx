@@ -6,8 +6,21 @@ import React, {
   useMemo,
   useState,
 } from "react";
+import { Platform } from "react-native";
 import { sessionApi, type AuthedUser } from "@/lib/api/sessionClient";
 import { clearAllReminders } from "@/lib/reminders";
+
+// Auto-login the operator as the seeded demo patient on the Replit web
+// preview so reviewers can land directly in the Today tab without
+// hand-clicking through /connect. Strictly gated on:
+//   - __DEV__ (Expo's dev-mode flag; FALSE in production bundles)
+//   - Platform.OS === "web" (only the iframe preview, not Expo Go on
+//     a real device which has its own dev flow)
+// The /api/dev/login-demo-patient endpoint is itself dev-only mounted
+// on the server, so even if a production web bundle accidentally
+// retained this code path the network call would 404 and we'd fall
+// back to the normal /connect gate.
+const SHOULD_AUTO_DEMO_LOGIN = __DEV__ && Platform.OS === "web";
 
 interface AuthState {
   loading: boolean; // initial bootstrap from AsyncStorage
@@ -38,7 +51,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const token = await sessionApi.getStoredToken();
+      let token = await sessionApi.getStoredToken();
+      // Replit-preview auto-login: when no token is stored AND we're in
+      // the dev web build, transparently log in as the seeded demo
+      // patient so the operator lands in the Today tab on first paint.
+      // We do this inside the bootstrap effect (before setLoading(false))
+      // so the splash gate stays up until auth resolves -- no flash of
+      // the /connect screen.
+      if (!token && SHOULD_AUTO_DEMO_LOGIN) {
+        try {
+          const u = await sessionApi.devDemoLogin();
+          if (!cancelled) {
+            setUser(u);
+            setLoading(false);
+            return;
+          }
+        } catch {
+          // Server not ready or endpoint missing in this bundle --
+          // fall through to the normal unauthenticated path.
+        }
+        token = await sessionApi.getStoredToken();
+      }
       if (!token) {
         if (!cancelled) setLoading(false);
         return;
