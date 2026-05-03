@@ -1487,6 +1487,28 @@ export default function DashboardScreen() {
           })}
         </View>
 
+        {dailyPlan?.whyThisPlan?.length > 0 && (
+          <Pressable
+            onPress={() => { haptic(); setShowWhyPlan(!showWhyPlan); }}
+            style={[styles.whyPlanCard, { backgroundColor: c.card }]}
+          >
+            <View style={styles.whyPlanHeader}>
+              <View style={styles.whyPlanTitleRow}>
+                <Feather name="info" size={14} color={c.accent} />
+                <Text style={[styles.whyPlanTitle, { color: c.foreground }]}>Why this plan</Text>
+              </View>
+              <Feather name={showWhyPlan ? "chevron-up" : "chevron-down"} size={16} color={c.mutedForeground} />
+            </View>
+            {showWhyPlan && (
+              <View style={styles.whyPlanContent}>
+                {dailyPlan.whyThisPlan.map((reason, i) => (
+                  <Text key={i} style={[styles.whyPlanText, { color: c.mutedForeground }]}>{reason}</Text>
+                ))}
+              </View>
+            )}
+          </Pressable>
+        )}
+
         <View style={[styles.askCard, { backgroundColor: c.card }]}>
           {/* Always-on section header so the chat bar below never floats
               without context. Order: header → short dynamic coach summary
@@ -1584,28 +1606,6 @@ export default function DashboardScreen() {
             </View>
           )}
         </View>
-
-        {dailyPlan?.whyThisPlan?.length > 0 && (
-          <Pressable
-            onPress={() => { haptic(); setShowWhyPlan(!showWhyPlan); }}
-            style={[styles.whyPlanCard, { backgroundColor: c.card }]}
-          >
-            <View style={styles.whyPlanHeader}>
-              <View style={styles.whyPlanTitleRow}>
-                <Feather name="info" size={14} color={c.accent} />
-                <Text style={[styles.whyPlanTitle, { color: c.foreground }]}>Why this plan</Text>
-              </View>
-              <Feather name={showWhyPlan ? "chevron-up" : "chevron-down"} size={16} color={c.mutedForeground} />
-            </View>
-            {showWhyPlan && (
-              <View style={styles.whyPlanContent}>
-                {dailyPlan.whyThisPlan.map((reason, i) => (
-                  <Text key={i} style={[styles.whyPlanText, { color: c.mutedForeground }]}>{reason}</Text>
-                ))}
-              </View>
-            )}
-          </Pressable>
-        )}
 
         {!todayCheckIn && completedCount >= 3 && (
           <Pressable
