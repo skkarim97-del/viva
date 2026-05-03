@@ -1400,17 +1400,6 @@ function PrimaryActionCard({
               }}
               accessibilityLabel={`Worse after ${titleA11y}`}
             />
-            <OutcomeButton
-              label="Skipped"
-              icon="minus-circle"
-              tint={mutedForeground}
-              border={border}
-              onPress={() => {
-                tap();
-                onOutcome("didnt_try");
-              }}
-              accessibilityLabel={`Skipped ${titleA11y}`}
-            />
           </View>
         </View>
       )}
@@ -1623,17 +1612,6 @@ function SecondaryActionRow({
                 onOutcome("worse");
               }}
               accessibilityLabel={`Worse after ${titleA11y}`}
-            />
-            <OutcomeButton
-              label="Skipped"
-              icon="minus-circle"
-              tint={mutedForeground}
-              border={border}
-              onPress={() => {
-                tap();
-                onOutcome("didnt_try");
-              }}
-              accessibilityLabel={`Skipped ${titleA11y}`}
             />
           </View>
         </View>
@@ -2138,17 +2116,17 @@ const styles = StyleSheet.create({
   },
   outcomeRow: {
     flexDirection: "row",
-    gap: 5,
+    gap: 8,
   },
   outcomeBtn: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 3,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    borderRadius: 10,
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 12,
     borderWidth: 1,
     backgroundColor: "#FFFFFF",
   },
