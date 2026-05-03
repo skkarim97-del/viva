@@ -80,52 +80,56 @@ function todayLocalDateString(): string {
 // than once per JS runtime even if the Today screen remounts.
 let weeklyWeightPromptCheckedThisLaunch = false;
 
-// Today-tab severity palette. Maps symptom-input options to a calm
-// 4-step scale: positive (green) -> normal/neutral (blue) ->
-// moderate concern (soft amber) -> heavier concern (amber). Red is
-// intentionally absent from the normal patient flow -- it is
-// reserved for true clinical red-flag states elsewhere -- so a
-// patient logging "Severe nausea" or "Diarrhea" sees attention
-// (amber), not alarm. TINT_AMBER_SOFT is the lighter step used for
-// the third option in 4-button rows so moderate and heavier still
-// read as distinct without flooding the page with orange.
+// Today-tab severity palette. Maps symptom-input options to a
+// stepped 4-color scale so adjacent severities read as distinct:
+//   positive       -> green   (Great / Strong / None / Fine / Yes)
+//   normal/neutral -> blue    (Good / Normal / Mild / Bloated)
+//   moderate       -> amber   (soft for 3rd step, full for 3rd of 3)
+//   most severe    -> red     (only the worst option in a row)
+// Red is reserved for the most severe option ONLY -- "Tired" stays
+// soft amber, "Depleted" goes red so the two no longer look the
+// same severity. The red is a polished Apple-system red, not an
+// alert red, so the page still feels supportive.
 const TINT_GREEN = "#34C759";
 const TINT_BLUE = "#38B6FF";
 const TINT_AMBER_SOFT = "#FFB340";
 const TINT_AMBER = "#FF9500";
+const TINT_RED = "#FF453A";
 const TINT_MUTED = "#8E8E93";
 
 const ENERGY_OPTIONS: { key: NonNullable<EnergyDaily>; label: string; tint: string }[] = [
   { key: "great", label: "Great", tint: TINT_GREEN },
   { key: "good", label: "Good", tint: TINT_BLUE },
   { key: "tired", label: "Tired", tint: TINT_AMBER_SOFT },
-  { key: "depleted", label: "Depleted", tint: TINT_AMBER },
+  { key: "depleted", label: "Depleted", tint: TINT_RED },
 ];
 
 const APPETITE_OPTIONS: { key: NonNullable<AppetiteLevel>; label: string; tint: string }[] = [
   { key: "strong", label: "Strong", tint: TINT_GREEN },
   { key: "normal", label: "Normal", tint: TINT_BLUE },
   { key: "low", label: "Low", tint: TINT_AMBER_SOFT },
-  { key: "very_low", label: "Very Low", tint: TINT_AMBER },
+  { key: "very_low", label: "Very Low", tint: TINT_RED },
 ];
 
 const NAUSEA_OPTIONS: { key: NonNullable<NauseaLevel>; label: string; tint: string }[] = [
   { key: "none", label: "None", tint: TINT_GREEN },
   { key: "mild", label: "Mild", tint: TINT_BLUE },
-  { key: "moderate", label: "Moderate", tint: TINT_AMBER_SOFT },
-  { key: "severe", label: "Severe", tint: TINT_AMBER },
+  { key: "moderate", label: "Moderate", tint: TINT_AMBER },
+  { key: "severe", label: "Severe", tint: TINT_RED },
 ];
 
 const BOWEL_OPTIONS: { key: "yes" | "no"; label: string; tint: string }[] = [
   { key: "yes", label: "Yes", tint: TINT_GREEN },
+  // Per design spec: "No" stays amber, not red -- a missed bowel
+  // movement is worth flagging but doesn't warrant an alert tone.
   { key: "no", label: "No", tint: TINT_AMBER },
 ];
 
 const DIGESTION_OPTIONS: { key: NonNullable<DigestionStatus>; label: string; tint: string }[] = [
   { key: "fine", label: "Fine", tint: TINT_GREEN },
   { key: "bloated", label: "Bloated", tint: TINT_BLUE },
-  { key: "constipated", label: "Constip.", tint: TINT_AMBER_SOFT },
-  { key: "diarrhea", label: "Diarrhea", tint: TINT_AMBER },
+  { key: "constipated", label: "Constip.", tint: TINT_AMBER },
+  { key: "diarrhea", label: "Diarrhea", tint: TINT_RED },
 ];
 
 // Status chip color derives from the selector's semantic tone, not
@@ -1837,7 +1841,7 @@ export default function DashboardScreen() {
                   { key: "focused" as const, label: "Focused", tint: TINT_GREEN },
                   { key: "good" as const, label: "Good", tint: TINT_BLUE },
                   { key: "low" as const, label: "Low", tint: TINT_AMBER_SOFT },
-                  { key: "burnt_out" as const, label: "Burnt out", tint: TINT_AMBER },
+                  { key: "burnt_out" as const, label: "Burnt out", tint: TINT_RED },
                 ]}
                 selected={checkInMental}
                 onSelect={(v) => setCheckInMental(checkInMental === v ? null : v)}

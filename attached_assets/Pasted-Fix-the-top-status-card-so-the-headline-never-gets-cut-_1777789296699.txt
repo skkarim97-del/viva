@@ -1,0 +1,71 @@
+Fix the top status card so the headline never gets cut off.
+
+Problem:
+The top summary/status text is clipping in the preview. That looks bad and makes the UI feel unfinished.
+I need the top card to handle every possible status message cleanly.
+
+What to do:
+
+1. Audit all possible top-card title/headline variants
+Check every state the top status banner can render, including:
+- steady / good day
+- mild symptom state
+- moderate symptom state
+- heavier symptom state
+- any escalation / review-worthy state
+
+2. Make the top card robust for all copy lengths
+Update the status card so every possible title and subtitle fits inside the card on mobile.
+No clipping, no overflow, no awkward cutoff.
+
+3. Prefer cleaner copy over long copy
+If some headline variants are too long, shorten the source copy.
+Do not rely only on shrinking the font.
+The copy should feel premium, concise and readable.
+
+4. Title layout requirements
+- Title should fit cleanly within the card width
+- Prefer max 2 lines for the main title
+- Never let the text get cut off
+- Keep strong visual hierarchy
+- Maintain a polished Apple-like health-tech feel
+
+5. Subtitle / secondary text requirements
+- Subtitle should also fit cleanly
+- Keep it brief and supportive
+- No clipping or collision with the badge, title or card edges
+
+6. Badge / pill text also needs to fit
+The small badge at the top of the status card must also fit cleanly for every state.
+If needed, shorten badge labels too.
+
+7. Keep the card visually balanced
+If needed, adjust:
+- card height
+- top/bottom padding
+- title font size slightly
+- line height
+- spacing between badge, title and subtitle
+
+But do not make it look cramped or overly tall.
+
+8. Preserve cohesive design
+Keep the existing color logic from the latest pass.
+The top card should still visually match the Symptom support section.
+
+9. Test worst-case examples
+Explicitly verify that longer status variants fit cleanly in preview.
+Examples like:
+- “Digestion is off and your body is strained. Keep today very light.”
+- “Nausea is heavier today. Keep things light.”
+- “A good day for steady progress.”
+- “Symptoms are manageable today. Stay ahead early.”
+
+If any still feel too long, rewrite them shorter.
+
+Acceptance criteria:
+- No top-card text is cut off
+- No overflow or clipping in any state
+- Every headline looks intentional and polished
+- Card still feels sleek, premium and easy to scan
+- Preview is verified across good, mild, moderate and heavier symptom states

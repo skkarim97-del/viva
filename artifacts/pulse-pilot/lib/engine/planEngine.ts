@@ -672,8 +672,8 @@ export function generateDailyPlan(
     // with firmer guardrails than moderate nausea.
     dailyState = "recover";
     headline = isTitrated
-      ? "Severe nausea after the dose change. Pull back hard today."
-      : "Severe nausea today. Rest, fluids, and the smallest meals you can tolerate.";
+      ? "Severe nausea after the dose change. Pull back today."
+      : "Severe nausea today. Keep things very light.";
     summary = isHighDose
       ? "At higher doses severe nausea can escalate quickly. Focus on sipping fluids, electrolytes, and tiny protein-forward bites. No workout today."
       : "Severe nausea is a stop-signal from your body. Prioritize fluids, electrolytes, and very small meals. No workout today.";
@@ -687,7 +687,7 @@ export function generateDailyPlan(
   } else if (digestionSevere && (symptomsModerate || glp1Inputs?.energy === "depleted")) {
     // Diarrhea stacked on other strain also warrants recover framing.
     dailyState = "recover";
-    headline = "Digestion is off and your body is strained. Keep today very light.";
+    headline = "Digestion is off. Keep today very light.";
     summary = "Diarrhea plus other symptoms can drain fluids and electrolytes fast. Focus on rehydration and easy foods before anything else.";
     dailyFocus = "Rehydrate and rest";
     whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, wearableAvailable, trigger: "symptoms_severe" });
@@ -713,7 +713,7 @@ export function generateDailyPlan(
     optional = "Ginger tea or small sips of electrolyte water can help with nausea.";
   } else if (appetiteLow && digestiveDistress) {
     dailyState = "maintain";
-    headline = "Appetite is suppressed and digestion is off. Fueling takes priority today.";
+    headline = "Appetite and digestion are off. Fuel gently today.";
     summary = isHighDose
       ? "At higher doses, appetite suppression is stronger. Protein-first small meals prevent muscle loss and keep energy steadier."
       : "Appetite is low and digestion is unsettled. Nutrient-dense small meals make the biggest difference today.";
@@ -738,8 +738,8 @@ export function generateDailyPlan(
   } else if (consecutivePoorRecovery || hrvDeclining5) {
     dailyState = "recover";
     headline = isTitrated
-      ? "Recovery has been lower since the dose change. Give your body time."
-      : "Recovery has been strained. A lighter day will help reset.";
+      ? "Recovery is lower since the dose change. Go easy today."
+      : "Recovery is strained. A lighter day will help reset.";
     summary = `Recovery signals have been below your baseline for ${consecutivePoorRecovery ? "3+ days" : "the past week"}. A lighter day and solid sleep tonight will help you reset.`;
     dailyFocus = "Recovery protocol";
     whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, wearableAvailable, trigger: "recovery_declining" });
@@ -784,7 +784,7 @@ export function generateDailyPlan(
       : !wearableAvailable
         ? "A steady day. Stay consistent with the basics."
         : sleepLow && subjectiveGood
-          ? "You're running on light sleep but feeling steady. Match effort to how you feel."
+          ? "Light sleep, but you feel steady. Match effort to how you feel."
           : "Your body could use a lighter day.";
     summary = sleepLow && !subjectiveGood
       ? `Sleep was ${metrics.sleepDuration.toFixed(1)} hrs. A lighter day with protein-rich meals and extra water will help you recover.`
@@ -817,7 +817,7 @@ export function generateDailyPlan(
       // Downgrade to maintain: the only thing low is the readiness math, but the user is
       // telling us they feel fine and no other signal converges.
       dailyState = "maintain";
-      headline = "You're feeling steady today. Keep it simple but do not pull back.";
+      headline = "You feel steady today. Keep it simple, don't pull back.";
       summary = "Your check-ins look good even though one or two numbers are softer. Stay with the basics and adjust if anything shifts.";
       dailyFocus = "Steady and flexible";
       whyThisPlan = buildWhyThisPlan({ dailyState, medicationProfile, medCtx, glp1Inputs, metrics, readinessScore, wearableAvailable, trigger: "maintain_day" });
@@ -829,7 +829,7 @@ export function generateDailyPlan(
     } else {
       dailyState = "recover";
       headline = isTitrated
-        ? "Your body is working hard to adjust. Rest is the right call today."
+        ? "Your body is adjusting hard. Rest is the right call."
         : "Your body needs a break today.";
       summary = "Your body needs a break. Focus on rest, hydration, and nourishing food. Movement can wait.";
       dailyFocus = "Rest and restore";

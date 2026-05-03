@@ -47,11 +47,13 @@ export function selectStatusChip(state: DailyTreatmentState): StatusChip {
   // legacy 4-state. Otherwise fall through to plan.statusLabel +
   // plan.dailyState tone, preserving today's behavior.
   if (state.treatmentDailyState === "escalate") {
-    // Amber, not red: "Symptom check needed" is a soft prompt to
-    // loop in the care team for normal-but-heavier symptoms; true
-    // clinical red-flag states are handled by separate flagging
-    // logic and can use the destructive tone there.
-    return { label: "Symptom check needed", tone: "warning" };
+    // The escalate tier sits one step above `recover` -- it's the
+    // "review may help" state that signals the care team should
+    // take a look. To match the new chip severity scale (where the
+    // worst option in a row reads red), the top banner uses the
+    // destructive tone here. `recover` stays amber so a tough day
+    // doesn't read as a clinical alarm.
+    return { label: "Symptom check needed", tone: "destructive" };
   }
   if (state.treatmentDailyState === "support") {
     // Continuity-support / hydration-support / fueling-support all

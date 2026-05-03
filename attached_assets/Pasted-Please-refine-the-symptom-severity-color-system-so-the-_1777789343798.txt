@@ -1,0 +1,89 @@
+Please refine the symptom severity color system so the highest-severity symptom states can use red, while lower negative states stay differentiated and not all collapse into orange.
+
+Goal:
+Make the symptom chips and related status UI feel more clinically intuitive and easier to scan.
+Right now “Tired” and “Depleted” both read too similarly. I want clearer progression.
+
+What to change:
+
+1. Update the symptom chip color hierarchy
+Use a more stepped severity scale:
+
+- Positive / best state = green
+- Neutral / normal state = blue or neutral blue-gray
+- Mild-to-moderate concern = soft amber
+- High concern = amber / orange
+- Most severe state = red
+
+2. Apply that logic consistently to the symptom selectors
+Desired mapping:
+
+ENERGY
+- Great = green
+- Good = blue
+- Tired = soft amber
+- Depleted = red
+
+APPETITE
+- Strong = green
+- Normal = blue
+- Low = soft amber
+- Very Low = red
+
+NAUSEA
+- None = green
+- Mild = blue
+- Moderate = amber
+- Severe = red
+
+DIGESTION
+- Fine = green
+- Bloated = blue
+- Constipated = amber
+- Diarrhea = red
+
+BOWEL MOVEMENT TODAY
+- Yes = green
+- No = amber or red depending on how it currently fits the severity system, but if red feels too alarming here, amber is okay
+
+3. Keep red reserved only for the worst state
+Do NOT overuse red.
+Only use red for the highest-severity option in a symptom row or true review-worthy clinical concern.
+The UI should still feel supportive, not scary.
+
+4. Make the top status / summary card follow the same severity family
+The top banner should visually harmonize with the symptom support section.
+If the patient is in a higher severity state, the top banner can shift into the same severity family, but use softer/more premium tints than the raw selector chips.
+
+Example:
+- steady / good day = calm blue-green / green
+- moderate concern = amber
+- highest concern = red-tinted or red-accented state
+
+5. Keep the app cohesive
+The chip colors in Today’s check-in, the top status card, and Symptom support should feel like one unified design system.
+No mismatched severity language.
+
+6. Clean up any leftover color constant issues
+There was a recent runtime issue with old tint constants.
+Please make sure:
+- no stale TINT_PURPLE references remain
+- no undefined color constants remain
+- preview runs cleanly with no runtime errors
+
+7. Preserve readability and premium feel
+Do not make the UI look harsh or alarmist.
+Use polished, Apple-like tints:
+- soft green
+- soft blue
+- soft amber
+- warm orange
+- restrained red for the most severe states only
+
+Acceptance criteria:
+- “Tired” and “Depleted” no longer look like the same severity
+- the highest-severity symptom states clearly stand out
+- red appears only for the most severe states
+- top status and Symptom support visually match the same severity system
+- no runtime errors or broken color references
+- the whole page still feels sleek, cohesive, and calming
