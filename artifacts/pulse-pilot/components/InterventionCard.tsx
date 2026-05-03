@@ -345,14 +345,14 @@ const RECOMMENDATIONS: Record<RecCategory, { variants: RecContent[] }> = {
   other: {
     variants: [
       {
-        title: "Try a small step that feels manageable",
-        body: "Choose one small action you can take right now -- a few sips of water, a few bites of a familiar food, or a brief rest in a quiet spot.",
-        helper: "Small, low-effort steps add up across the day.",
+        title: "Pick one small action in the next 15 minutes",
+        body: "Choose one of: a few sips of water, a few bites of a familiar food, or a 5-minute rest in a quiet spot.",
+        helper: "One small, finishable action is more useful right now than trying to fix everything at once.",
       },
       {
-        title: "Try a different small step",
-        body: "Pick something even simpler -- a few sips of fluid, slow breathing for a minute, or sitting somewhere comfortable.",
-        helper: "Lowering the barrier can make it easier to follow through.",
+        title: "Lower the bar even further",
+        body: "Try the smallest version: a single sip of fluid, one minute of slow breathing, or sitting somewhere comfortable for 5 minutes.",
+        helper: "When everything feels like too much, the smallest possible step is the one most likely to actually happen.",
       },
     ],
   },
