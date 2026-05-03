@@ -1,0 +1,90 @@
+Update the personalized recommendation UX so the first layer of intervention is automated, visible and not escalation-first.
+
+Goal:
+The recommendation section should show all individual recommendations immediately. Do not hide them behind “I’ll do it” or any parent CTA. Each recommendation should be visible upfront as a compact interactive row/card.
+
+Specific changes:
+
+1. Remove “Ask my care team” from the default recommendation rows
+- Do not show “Ask my care team” as a standard option next to each recommendation
+- Escalation should only appear after negative feedback, repeated symptoms or clinically concerning patterns
+- For now, only show escalation after the user indicates the recommendation was not helpful or symptoms got worse, depending on the existing feedback flow
+
+2. Replace “Did this” / “Didn’t do this”
+Current buttons feel too compliance-based.
+Change the default row buttons to:
+- Primary: “I’ll try this”
+- Secondary: “Not for me”
+
+3. Show all recommendation rows immediately
+- The user should not need to tap a parent “I’ll do it” button to reveal the individual recommendations
+- The section should render all generated recommendations directly under “Try this today”
+- Keep each recommendation scannable and compact
+
+4. Add a second-step feedback state after the user taps “I’ll try this”
+After the user taps “I’ll try this” on a recommendation, update that row to ask:
+“Did this help?”
+
+Then show three buttons:
+- “Better”
+- “No change”
+- “Worse”
+
+5. Escalation behavior
+Only after the user taps “Worse”, show a contextual escalation option inside that same row:
+Text:
+“Got it. Since this got worse, Viva can suggest another step or flag this for your care team.”
+
+Buttons:
+- “Try another suggestion”
+- “Ask my care team”
+
+Important:
+- Do not show “Ask my care team” before the “Worse” state
+- The default first layer must feel like automated intervention, not messaging the provider
+
+6. UI layout
+Make the recommendation rows/cards more compact:
+- Title
+- One concise recommendation sentence
+- Two buttons: “I’ll try this” and “Not for me”
+- Reduce excessive vertical padding so 3 to 4 recommendations are visible more easily above the bottom nav
+- Keep the current Viva visual style: rounded cards, light borders, clean blue/white palette
+
+7. State handling
+Each recommendation row should manage its own interaction state independently.
+Example states:
+- default
+- committed / asking outcome feedback
+- not_for_me
+- better
+- no_change
+- worse / escalation shown
+
+Use stable row keys so duplicate recommendation labels do not collide.
+
+8. Accessibility
+Add accessible labels for each row button, including the recommendation title.
+Examples:
+- “I’ll try this for nausea support”
+- “Not for me for appetite support”
+- “Symptoms worse after nausea support”
+
+9. Do not change the overall card logic
+Keep:
+- “For you today”
+- “Personalized check-in”
+- “What Viva noticed”
+- “Try this today”
+- Existing recommendation generation logic
+
+Only change the rendering and interaction model for recommendations.
+
+10. Verify
+Run:
+- Typecheck
+- Lint if available
+- Basic manual test on mobile/web preview
+
+Expected UX:
+User opens Today tab and immediately sees all personalized recommendation rows. Each row has “I’ll try this” and “Not for me.” If they tap “I’ll try this,” that row asks whether it helped. Only if they tap “Worse” does “Ask my care team” appear.
