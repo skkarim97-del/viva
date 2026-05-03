@@ -1,5 +1,20 @@
 // Today-tab card that surfaces an AI-personalized micro-intervention.
 //
+// Treatment-intelligence inputs the card consumes (no medical advice
+// is ever generated; these only shape provenance + tone):
+//   - liveCheckin: today's symptom selections (drives severity and
+//     adapts the title/body/supports).
+//   - hasHealthData: whether Apple Health is connected. When true,
+//     a small "Apple Health" provenance chip is rendered; when false,
+//     a one-line "Connect Apple Health" invitation appears so we
+//     never imply biometric signals we don't actually have.
+//   - doseContext: { position, recentTitration } from
+//     DailyTreatmentState. When the day sits in a post-dose window
+//     AND severity is moderate/severe we surface a small "Around
+//     dose timing" signal chip. The chip is provenance only -- the
+//     engine already biases toward gentler hydration/fueling on
+//     these days; the chip just makes that intelligence visible.
+//
 // Patient-facing UX (clinical micro-protocol rework):
 //   Title:    "Symptom support"
 //   Subtitle: "Based on your check-in, here's what may help today."
@@ -85,6 +100,7 @@ import {
   type FeedbackResult,
   type PatientIntervention,
 } from "@/lib/api/interventionsClient";
+import type { DoseDayPosition } from "@/lib/engine/dailyState";
 import { logEvent } from "@/lib/analytics/client";
 
 // =====================================================================
@@ -908,6 +924,16 @@ interface InterventionCardProps {
   // "Apple Health trends" so the subtitle reflects the actual signal
   // mix; when false we omit it.
   hasHealthData?: boolean;
+  // Optional dose-context hint sourced from DailyTreatmentState. The
+  // card uses this only to surface a small "Around dose timing"
+  // signal chip when the day sits in a post-dose window AND symptoms
+  // are running moderate/severe. No medical advice is implied or
+  // rendered -- the chip is provenance, not prescription. When the
+  // data is absent the card behaves exactly as before.
+  doseContext?: {
+    position: DoseDayPosition | null | undefined;
+    recentTitration?: boolean;
+  } | null;
   // Live snapshot of the patient's current check-in selections.
   // When provided, the card derives a severity tier and adapts:
   // severe states surface a care-team CTA; mild states soften copy;
@@ -965,6 +991,7 @@ export function InterventionCard({
   mutedForeground: _themeMuted,
   warning,
   hasHealthData = false,
+  doseContext = null,
   liveCheckin = null,
   onAccept,
   onDismiss,
@@ -1600,6 +1627,36 @@ export function InterventionCard({
               </Text>
             </View>
           )}
+          {/* Dose-timing provenance chip. Only renders when the day
+              sits in a post-dose window AND symptoms are at least
+              moderate, so it appears precisely when dose timing is
+              the most likely contributor. This is *provenance*, not
+              advice -- the engine already biases the recommendation
+              toward gentler hydration/fueling on these days; the
+              chip just makes that intelligence visible. */}
+          {doseContext &&
+            (doseContext.position === "dose_day" ||
+              doseContext.position === "day_1_post" ||
+              doseContext.position === "day_2_post") &&
+            (liveSeverity === "moderate" || liveSeverity === "severe") && (
+              <View
+                style={[
+                  styles.signalChip,
+                  {
+                    backgroundColor: warning + "14",
+                    borderColor: warning + "33",
+                  },
+                ]}
+              >
+                <Feather name="clock" size={11} color={warning} />
+                <Text
+                  style={[styles.signalChipText, { color: warning }]}
+                  numberOfLines={1}
+                >
+                  Around dose timing
+                </Text>
+              </View>
+            )}
           {/* The "Heavier today" severity chip used to live here, but
               the top status banner already announces that state.
               Repeating it inside Symptom support made the page feel
@@ -1610,6 +1667,24 @@ export function InterventionCard({
               removed -- it duplicated the "Stay ahead" badge a few
               pixels above it. */}
         </View>
+
+        {/* Connect-Apple-Health invitation. Only renders when the
+            patient has not connected Apple Health, so we never
+            pretend biometric signals are in the mix when they are
+            not. The line stays small and informational -- this is
+            an invitation to deepen personalization, not an error
+            state or a CTA button. */}
+        {!hasHealthData && (
+          <Text
+            style={[
+              styles.healthHint,
+              { color: mutedForeground },
+            ]}
+            numberOfLines={2}
+          >
+            Connect Apple Health to make support more personalized with sleep, steps, and activity.
+          </Text>
+        )}
 
       {/* -- Primary action ---------------------------------------- */}
       {primary && (
@@ -2430,6 +2505,16 @@ const styles = StyleSheet.create({
     fontFamily: "Montserrat_600SemiBold",
     fontWeight: "600",
     letterSpacing: 0.1,
+  },
+  // Subtle one-line invitation that surfaces only when Apple Health
+  // is not connected. Intentionally not a button -- the card's own
+  // CTAs are reserved for symptom support; this is provenance copy.
+  healthHint: {
+    fontSize: 12,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 16,
+    marginTop: 8,
+    opacity: 0.8,
   },
   // -- More support: mini category chips ---------------------------
   supportChipsRow: {

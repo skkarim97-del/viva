@@ -196,6 +196,17 @@ export function selectInsightSummary(state: DailyTreatmentState): InsightSummary
   else if (state.hydrationRisk === "moderate") parts.push("hydration could be higher");
   if (state.fuelingRisk === "high") parts.push("fueling is the bigger concern");
   else if (state.fuelingRisk === "moderate") parts.push("appetite is reduced");
+  // Dose-context provenance: when the day sits in a post-dose
+  // window AND symptoms are at least moderate, surface the timing
+  // so the patient sees *why* support is firmer today. This is
+  // pattern-naming, never dosing advice.
+  const inPostDoseWindow =
+    state.doseDayPosition === "dose_day" ||
+    state.doseDayPosition === "day_1_post" ||
+    state.doseDayPosition === "day_2_post";
+  if (inPostDoseWindow && (state.symptomBurden === "high" || state.symptomBurden === "moderate")) {
+    parts.push("symptoms often run heavier around dose timing");
+  }
   if (parts.length === 0) {
     return { text: "Your inputs look steady today. Your plan is set for a good day.", tone: "low" };
   }

@@ -1005,6 +1005,14 @@ export default function DashboardScreen() {
                 mutedForeground={c.mutedForeground}
                 warning={c.warning}
                 hasHealthData={hasHealthData}
+                doseContext={
+                  dailyState
+                    ? {
+                        position: dailyState.doseDayPosition,
+                        recentTitration: dailyState.recentTitration,
+                      }
+                    : null
+                }
                 liveCheckin={{
                   nausea,
                   appetite,
@@ -1370,6 +1378,14 @@ export default function DashboardScreen() {
                 mutedForeground={c.mutedForeground}
                 warning={c.warning}
                 hasHealthData={hasHealthData}
+                doseContext={
+                  dailyState
+                    ? {
+                        position: dailyState.doseDayPosition,
+                        recentTitration: dailyState.recentTitration,
+                      }
+                    : null
+                }
                 liveCheckin={{
                   nausea,
                   appetite,
