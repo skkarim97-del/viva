@@ -1342,6 +1342,13 @@ export default function DashboardScreen() {
                 mutedForeground={c.mutedForeground}
                 warning={c.warning}
                 hasHealthData={hasHealthData}
+                liveCheckin={{
+                  nausea,
+                  appetite,
+                  energy: glp1Energy,
+                  digestion,
+                  bowel: bowelSelectedKey,
+                }}
                 onAccept={onInterventionAccept}
                 onDismiss={onInterventionDismiss}
                 onFeedback={onInterventionFeedback}
@@ -1386,6 +1393,13 @@ export default function DashboardScreen() {
                 mutedForeground={c.mutedForeground}
                 warning={c.warning}
                 hasHealthData={hasHealthData}
+                liveCheckin={{
+                  nausea,
+                  appetite,
+                  energy: glp1Energy,
+                  digestion,
+                  bowel: bowelSelectedKey,
+                }}
                 onAccept={onInterventionAccept}
                 onDismiss={onInterventionDismiss}
                 onFeedback={onInterventionFeedback}

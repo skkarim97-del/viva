@@ -1,0 +1,78 @@
+The intervention card needs to be severity-aware and update live when symptoms improve or worsen.
+
+Current issue:
+If I change symptoms from negative to good/normal, the card still shows the same intervention-style recommendation. That is not right.
+
+Required behavior:
+The card should adapt based on symptom severity.
+
+If symptoms are severe or worsening:
+- Prioritize the most urgent symptom
+- Give a stronger next-best action
+- Make “Ask my care team” more visible if appropriate
+- Mention if symptoms are heavier today
+
+If symptoms are moderate:
+- Give practical support and check back later
+- Keep care team option available but not dominant
+
+If symptoms are mild:
+- Give lighter support
+- Focus on preventing symptoms from getting worse
+- Use softer copy like “stay ahead of it today”
+
+If symptoms are good/normal:
+- Do not show a heavy intervention
+- Show a positive maintenance card or no card
+- Suggested copy:
+  “Your inputs look steady today. Keep following your plan and check in again if anything changes.”
+- The plan can focus on consistency, hydration, protein or routine, not symptom rescue
+
+Examples:
+
+1. Severe nausea + low appetite:
+Title:
+Settle nausea first
+
+Copy:
+Start with small sips of water and a few bites of a bland protein-forward food. If nausea feels hard to manage or gets worse, ask your care team to review.
+
+2. Moderate nausea + low appetite:
+Title:
+Settle nausea without skipping nutrition
+
+Copy:
+Try a small bland snack and sip water slowly for 20 to 30 minutes.
+
+3. Mild nausea:
+Title:
+Stay ahead of nausea
+
+Copy:
+Keep meals smaller today and sip water steadily.
+
+4. Great energy + strong appetite + no nausea + fine digestion + bowel movement yes:
+Title:
+Stay steady today
+
+Copy:
+Your check-in looks steady. Keep following your plan and check in again if anything changes.
+
+Important:
+- Live symptom changes should update the same card within 1-2 seconds
+- Better symptoms should reduce the intensity of the recommendation
+- Worse symptoms should increase urgency and care-team prominence
+- Do not show the same recommendation regardless of severity
+- Do not create duplicate cards
+- Use the existing HIPAA/OpenAI guardrails
+- If no meaningful symptoms are present, either show a light maintenance card or hide the intervention card, whichever fits the current product flow better
+
+Acceptance test:
+In Replit preview:
+1. Select negative symptoms like nausea=Severe, appetite=Low, energy=Tired
+   - Card should show stronger support
+2. Change nausea to Mild
+   - Card should soften
+3. Change energy=Great, appetite=Strong, nausea=None, digestion=Fine, bowel movement=Yes
+   - Card should switch to steady/maintenance mode or disappear
+4. No duplicate cards should appear

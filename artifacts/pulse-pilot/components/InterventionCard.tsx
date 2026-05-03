@@ -488,6 +488,8 @@ function joinList(items: string[]): string {
 // =====================================================================
 const FEATURED_TINT = "#E8F1FB";
 const FEATURED_BORDER = "#BFD7F0";
+const STEADY_TINT = "#EAF6EE";
+const STEADY_BORDER = "#BFE0CB";
 const FEATURED_BADGE_BG = "#DCE9F7";
 const FEATURED_BADGE_FG = "#1F4F8A";
 const FEATURED_TEXT = "#142240";
@@ -503,6 +505,84 @@ const START_HERE_BG = "#1F4F8A";
 const START_HERE_FG = "#FFFFFF";
 const SUCCESS_FG = "#1F8A3F";
 
+// Live check-in snapshot used to drive severity-aware adaptations.
+// All fields are nullable so the card can render before the patient
+// has finished filling things in. The values mirror the option keys
+// declared in app/(tabs)/index.tsx so we don't introduce a second
+// vocabulary.
+export interface LiveCheckin {
+  nausea?: "none" | "mild" | "moderate" | "severe" | null;
+  appetite?: "strong" | "normal" | "low" | "very_low" | null;
+  energy?: "great" | "good" | "tired" | "depleted" | null;
+  digestion?: "fine" | "bloated" | "constipated" | "diarrhea" | null;
+  bowel?: "yes" | "no" | null;
+}
+
+export type LiveSeverity = "steady" | "mild" | "moderate" | "severe";
+
+// Pure client-side severity derivation. This is what makes the card
+// feel live: the moment the patient changes a chip in the check-in
+// row above, this re-runs and the card adapts within React's normal
+// render cycle (well under the 1-2s budget the spec asks for) --
+// no /generate round-trip required.
+//
+// Tiering (per-field max + "lots of moderate" guard):
+//   severe   -> any field reads "severe"-equivalent OR three+ fields
+//               are at moderate level
+//   moderate -> any field reads "moderate"-equivalent
+//   mild     -> any field reads "mild"-equivalent
+//   steady   -> nausea is "none" AND energy is at least "good"
+//               AND no other field is negative
+//
+// We require BOTH nausea=none AND energy>=good before flipping to
+// "steady" so a partially-filled check-in doesn't prematurely
+// downgrade an intervention the server generated for real symptoms.
+export function deriveLiveSeverity(
+  c: LiveCheckin | null | undefined,
+): LiveSeverity | null {
+  if (!c) return null;
+  const nauseaScore =
+    c.nausea === "severe"
+      ? 3
+      : c.nausea === "moderate"
+        ? 2
+        : c.nausea === "mild"
+          ? 1
+          : 0;
+  const appetiteScore =
+    c.appetite === "very_low" ? 3 : c.appetite === "low" ? 2 : 0;
+  const energyScore =
+    c.energy === "depleted" ? 3 : c.energy === "tired" ? 2 : 0;
+  const digestionScore =
+    c.digestion === "diarrhea"
+      ? 3
+      : c.digestion === "constipated"
+        ? 2
+        : c.digestion === "bloated"
+          ? 1
+          : 0;
+  const bowelScore = c.bowel === "no" ? 1 : 0;
+  const all = [
+    nauseaScore,
+    appetiteScore,
+    energyScore,
+    digestionScore,
+    bowelScore,
+  ];
+  const max = Math.max(...all);
+  const heavyCount = all.filter((s) => s >= 2).length;
+  const noNegatives = max === 0;
+  const allGood =
+    noNegatives &&
+    c.nausea === "none" &&
+    (c.energy === "good" || c.energy === "great");
+  if (allGood) return "steady";
+  if (max >= 3 || heavyCount >= 3) return "severe";
+  if (max >= 2) return "moderate";
+  if (max >= 1) return "mild";
+  return null;
+}
+
 interface InterventionCardProps {
   intervention: PatientIntervention;
   navy: string;
@@ -516,6 +596,11 @@ interface InterventionCardProps {
   // "Apple Health trends" so the subtitle reflects the actual signal
   // mix; when false we omit it.
   hasHealthData?: boolean;
+  // Live snapshot of the patient's current check-in selections.
+  // When provided, the card derives a severity tier and adapts:
+  // severe states surface a care-team CTA; mild states soften copy;
+  // an all-good state swaps to a maintenance layout entirely.
+  liveCheckin?: LiveCheckin | null;
 
   onAccept: (id: number) => Promise<void>;
   onDismiss: (id: number) => Promise<void>;
@@ -568,11 +653,16 @@ export function InterventionCard({
   mutedForeground: _themeMuted,
   warning,
   hasHealthData = false,
+  liveCheckin = null,
   onAccept,
   onDismiss,
   onFeedback,
   onEscalate,
 }: InterventionCardProps) {
+  // Severity is recomputed every render off the (cheap) prop. No
+  // need for useMemo -- the cost is trivial and React's diff handles
+  // the rerender efficiently.
+  const liveSeverity = deriveLiveSeverity(liveCheckin);
   const navy = FEATURED_TEXT;
   const mutedForeground = FEATURED_MUTED;
   const background = FEATURED_BORDER;
@@ -889,11 +979,96 @@ export function InterventionCard({
     return null;
   }
 
+  // Steady-mode swap: when the live check-in reads as all-good, hide
+  // the symptom-rescue intervention and show a calm maintenance card
+  // instead. Skipped while the card is escalated so we don't appear
+  // to "downgrade" an active care-team flag the patient just sent.
+  if (liveSeverity === "steady" && status !== "escalated") {
+    return (
+      <Animated.View
+        style={[
+          styles.card,
+          styles.cardFeatured,
+          {
+            backgroundColor: STEADY_TINT,
+            borderColor: STEADY_BORDER,
+          },
+          animatedStyle,
+        ]}
+      >
+        <View style={styles.headerRow}>
+          <View
+            style={[styles.iconWrap, { backgroundColor: SUCCESS_FG + "1F" }]}
+          >
+            <Feather name="check-circle" size={18} color={SUCCESS_FG} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <View style={styles.badgeRow}>
+              <View
+                style={[
+                  styles.badge,
+                  { backgroundColor: SUCCESS_FG + "1A" },
+                ]}
+              >
+                <Feather name="check" size={10} color={SUCCESS_FG} />
+                <Text style={[styles.badgeText, { color: SUCCESS_FG }]}>
+                  Going well today
+                </Text>
+              </View>
+            </View>
+            <Text style={[styles.title, { color: navy }]}>
+              Stay steady today
+            </Text>
+            <Text style={[styles.subtitle, { color: mutedForeground }]}>
+              Your inputs look steady today
+            </Text>
+          </View>
+        </View>
+
+        <Text style={[styles.steadyBody, { color: navy }]}>
+          Keep following your plan and check in again if anything changes.
+        </Text>
+
+        <View style={styles.signalChipsRow}>
+          {["Hydration", "Protein", "Routine"].map((label) => (
+            <View
+              key={label}
+              style={[
+                styles.supportChip,
+                {
+                  backgroundColor: SUCCESS_FG + "14",
+                  borderColor: SUCCESS_FG + "33",
+                },
+              ]}
+            >
+              <Text
+                style={[styles.supportChipText, { color: SUCCESS_FG }]}
+              >
+                {label}
+              </Text>
+            </View>
+          ))}
+        </View>
+      </Animated.View>
+    );
+  }
+
   // -- Derived view-model -------------------------------------------
   const primary = orderedRows[0];
   const secondaries = orderedRows.slice(1);
 
-  const badgeLabel = status === "escalated" ? "Care team notified" : "For you today";
+  // Badge label/tone reflects the most urgent signal we currently
+  // know about. Escalated state always wins; otherwise severe live
+  // symptoms surface as "Heavier today" so the patient understands
+  // we noticed without us auto-escalating.
+  const badgeLabel =
+    status === "escalated"
+      ? "Care team notified"
+      : liveSeverity === "severe"
+        ? "Heavier today"
+        : "For you today";
+  const useWarningTone =
+    status === "escalated" || liveSeverity === "severe";
 
   // Patient-friendly nouns for the symptoms we're targeting today.
   // Used by both the top "Today:" signal chip and the "More support"
@@ -937,7 +1112,7 @@ export function InterventionCard({
         styles.cardFeatured,
         {
           backgroundColor: FEATURED_TINT,
-          borderColor: status === "escalated" ? warning : FEATURED_BORDER,
+          borderColor: useWarningTone ? warning : FEATURED_BORDER,
         },
         animatedStyle,
       ]}
@@ -953,20 +1128,21 @@ export function InterventionCard({
               style={[
                 styles.badge,
                 {
-                  backgroundColor:
-                    status === "escalated" ? warning + "22" : FEATURED_BADGE_BG,
+                  backgroundColor: useWarningTone
+                    ? warning + "22"
+                    : FEATURED_BADGE_BG,
                 },
               ]}
             >
               <Feather
-                name={status === "escalated" ? "alert-circle" : "star"}
+                name={useWarningTone ? "alert-circle" : "star"}
                 size={10}
-                color={status === "escalated" ? warning : FEATURED_BADGE_FG}
+                color={useWarningTone ? warning : FEATURED_BADGE_FG}
               />
               <Text
                 style={[
                   styles.badgeText,
-                  { color: status === "escalated" ? warning : FEATURED_BADGE_FG },
+                  { color: useWarningTone ? warning : FEATURED_BADGE_FG },
                 ]}
               >
                 {badgeLabel}
@@ -1048,6 +1224,44 @@ export function InterventionCard({
               </Text>
             </View>
           )}
+          {liveSeverity === "severe" && (
+            <View
+              style={[
+                styles.signalChip,
+                {
+                  backgroundColor: warning + "1A",
+                  borderColor: warning + "44",
+                },
+              ]}
+            >
+              <Feather name="alert-triangle" size={11} color={warning} />
+              <Text
+                style={[styles.signalChipText, { color: warning }]}
+                numberOfLines={1}
+              >
+                Heavier today
+              </Text>
+            </View>
+          )}
+          {liveSeverity === "mild" && (
+            <View
+              style={[
+                styles.signalChip,
+                {
+                  backgroundColor: SUCCESS_FG + "14",
+                  borderColor: SUCCESS_FG + "33",
+                },
+              ]}
+            >
+              <Feather name="sun" size={11} color={SUCCESS_FG} />
+              <Text
+                style={[styles.signalChipText, { color: SUCCESS_FG }]}
+                numberOfLines={1}
+              >
+                Stay ahead today
+              </Text>
+            </View>
+          )}
         </View>
 
       {/* -- Primary action ---------------------------------------- */}
@@ -1071,6 +1285,40 @@ export function InterventionCard({
           onDismissNoChange={() => handleRowDismissNoChange(primary.key)}
           onAskCareTeam={() => handleRowAskCareTeam(primary.key)}
         />
+      )}
+
+      {/* -- Severe-mode escalation shortcut ----------------------- */}
+      {/* Patient self-reported severe symptoms. We surface a       */}
+      {/* prominent care-team CTA so the option isn't buried in     */}
+      {/* the worse-feedback panel. Still requires an explicit tap  */}
+      {/* -- no auto-escalation -- which preserves the worse-only   */}
+      {/* guardrail (multiple buttons may fire onFeedback("worse"), */}
+      {/* what matters is the patient initiates it).                */}
+      {liveSeverity === "severe" && status !== "escalated" && (
+        <Pressable
+          onPress={async () => {
+            tap();
+            try {
+              await onFeedback(intervention.id, "worse");
+            } catch {
+              /* parent surfaces errors; swallow here so the UI doesn't crash */
+            }
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Ask my care team to review"
+          style={({ pressed }) => [
+            styles.severeCta,
+            {
+              backgroundColor: warning,
+              opacity: pressed ? 0.85 : 1,
+            },
+          ]}
+        >
+          <Feather name="message-circle" size={14} color="#FFFFFF" />
+          <Text style={styles.severeCtaText}>
+            Ask my care team to review
+          </Text>
+        </Pressable>
       )}
 
       {/* -- More support for today (collapsed by default) -------- */}
@@ -1821,6 +2069,27 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 5,
+  },
+  steadyBody: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontFamily: "Montserrat_500Medium",
+    fontWeight: "500",
+  },
+  severeCta: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+  },
+  severeCtaText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontFamily: "Montserrat_600SemiBold",
+    fontWeight: "600",
   },
   supportChip: {
     paddingHorizontal: 8,
