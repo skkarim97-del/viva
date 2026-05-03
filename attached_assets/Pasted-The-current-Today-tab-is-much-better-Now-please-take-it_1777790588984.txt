@@ -1,0 +1,124 @@
+The current Today tab is much better. Now please take it from good MVP to a 10/10 pilot experience.
+
+Goal:
+The Today tab should clearly validate Viva’s thesis:
+behavioral signals + Apple Health trends → personalized symptom support → adaptive plan → care-team escalation when needed.
+
+Do not bring back the standalone AI coach.
+Do not redesign everything.
+Refine the current structure and make it feel more intelligent, premium, responsive and easy to understand.
+
+Key improvements:
+
+1. Make Symptom support visibly intelligent
+Inside the Symptom support card, add a concise signal/context line or chip row showing what informed the recommendation.
+
+Examples:
+- Today’s check-in
+- Recent symptoms
+- Apple Health, if connected
+- Prior feedback, if available
+
+Use the actual available data.
+If Apple Health is not connected, do not pretend it is. Instead show “Recent symptoms” or “Today’s check-in.”
+
+The patient should immediately understand:
+“Viva is using my symptoms and patterns, not giving generic tips.”
+
+2. Make the card more state-sensitive
+Ensure stable, mild, moderate, heavier and review-worthy days look and read differently.
+
+Stable day:
+- calm green/blue accents
+- copy like “Stay steady today”
+- no care-team CTA unless needed
+
+Mild symptoms:
+- preventive tone
+- “Stay ahead”
+
+Moderate symptoms:
+- practical support
+- “Support today”
+
+Heavier symptoms:
+- amber accents
+- stronger support
+- care-team review visible if appropriate
+
+Urgent/red-flag:
+- red only for true urgent states
+
+3. Clean up “Your plan” copy
+Keep the existing logic and layout, but make every row concise, specific and premium.
+
+Use this style:
+
+MOVE
+Full rest day
+Take pressure off today. Light movement is enough.
+
+MOVE
+Light movement
+10-15 minutes of gentle walking or stretching.
+
+MOVE
+Strength training
+20-30 minutes of light-to-moderate strength work, if energy feels steady.
+
+FUEL
+Gentle fueling
+Choose 2 to 3 small meals with protein.
+
+FUEL
+Protein support
+Add protein to your next meal, like yogurt, tofu, soup or a smoothie.
+
+HYDRATE
+Slow hydration
+Sip steadily over the next hour.
+
+HYDRATE
+Steady hydration
+Aim for 6-8 cups across the day, adjusting for thirst and activity.
+
+RECOVER
+Earlier wind-down
+Begin winding down 30-60 minutes earlier tonight.
+
+RECOVER
+Sleep support
+Aim for 7-8 hours of sleep, if your schedule allows.
+
+Avoid:
+- “Your data shows...”
+- harsh claims like “Under-eating slows your metabolism”
+- awkward titles with plus signs
+- long explanations
+- robotic repetition
+
+4. Make escalation context stronger
+When the patient taps “Ask my care team to review,” ensure the backend/provider event includes:
+- symptoms selected
+- severity
+- recent trend if available
+- intervention shown
+- whether patient tried it
+- feedback result if available
+- reason for escalation
+
+Provider summary should be readable and useful, not just “patient requested review.”
+
+5. Keep the page calm and scannable
+Do not add more clutter.
+Use concise labels, short sentences and consistent spacing.
+The page should feel premium, Apple-like and easy for an average GLP-1 patient to understand in 5 seconds.
+
+Acceptance:
+- Today tab clearly shows signal → support → plan → escalation
+- Symptom support feels personalized, not generic
+- Stable vs mild vs moderate vs heavier symptom days visibly and verbally differ
+- Your plan copy is concise and premium
+- Escalation creates useful provider context
+- No standalone AI coach appears on Today
+- Apple Health is referenced only when available
