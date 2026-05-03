@@ -330,46 +330,55 @@ export interface CategoryOption {
   intensity?: "low" | "moderate" | "high";
 }
 
+// Single source of truth for plan-item titles, subtitles, and tips.
+// Consumed by the Today tab "Your plan" section and the Week tab
+// option bottom-sheet, so editing copy here updates both surfaces.
+//
+// Copy guidelines (from the design refresh):
+//  - specific enough to act on (real targets, real durations)
+//  - concise enough to scan quickly
+//  - premium and supportive, never harsh or scary
+//  - avoid clunky titles like "Early wind-down + 8+ hours" and
+//    avoid lines like "Under-eating slows your metabolism"
 export const CATEGORY_OPTIONS: Record<ActionCategory, CategoryOption[]> = {
   move: [
-    { id: "move_strength", title: "Strength (if up for it)", subtitle: "~20–30 min light strength", category: "move", stateTag: "great", planTier: "high", durationMinutes: 25, intensity: "moderate", supportText: ["Preserve muscle without overdoing it", "Focus on compound movements like squats and presses"] },
-    { id: "move_walk", title: "Walk", subtitle: "~20–30 min easy walk", category: "move", stateTag: "good", planTier: "moderate", durationMinutes: 25, intensity: "low", supportText: ["Support energy and digestion", "Post-meal walks can help with nausea"] },
-    { id: "move_light", title: "Light movement", subtitle: "~10–15 min gentle movement", category: "move", stateTag: "tired", planTier: "low", durationMinutes: 12, intensity: "low", supportText: ["Keep things moving without strain", "No pressure on pace or distance"] },
-    { id: "move_rest", title: "Full rest day", subtitle: "Let your body recover", category: "move", stateTag: "stressed", planTier: "minimal", durationMinutes: 0, intensity: "low", supportText: ["Rest is part of the plan", "Your body needs time to adjust"] },
+    { id: "move_strength", title: "Strength training", subtitle: "20-30 minutes of light-to-moderate strength work, if energy feels steady.", category: "move", stateTag: "great", planTier: "high", durationMinutes: 25, intensity: "moderate", supportText: ["Compound moves like squats and presses give you the most for your time", "Strength work helps preserve muscle while you lose weight"] },
+    { id: "move_walk", title: "Cardio", subtitle: "20-30 minutes of easy cardio. Keep the pace conversational.", category: "move", stateTag: "good", planTier: "moderate", durationMinutes: 25, intensity: "low", supportText: ["A post-meal walk can help with digestion and nausea", "Conversational pace means you can still talk in full sentences"] },
+    { id: "move_light", title: "Light movement", subtitle: "10-15 minutes of gentle movement, like walking or stretching.", category: "move", stateTag: "tired", planTier: "low", durationMinutes: 12, intensity: "low", supportText: ["Keep things moving without strain", "No pressure on pace or distance"] },
+    { id: "move_rest", title: "Full rest day", subtitle: "Take pressure off today. Light movement is enough.", category: "move", stateTag: "stressed", planTier: "minimal", durationMinutes: 0, intensity: "low", supportText: ["Rest is part of the plan", "Your body needs time to adjust"] },
   ],
   fuel: [
-    { id: "fuel_full", title: "3 protein-focused meals", subtitle: "Hit your protein targets today", category: "fuel", stateTag: "great", planTier: "high", supportText: ["Aim for 25-30g protein per meal", "Protein preserves muscle during weight loss"] },
-    { id: "fuel_balanced", title: "2-3 meals + protein snack", subtitle: "Steady fueling throughout the day", category: "fuel", stateTag: "good", planTier: "moderate", supportText: ["Smaller meals may feel easier", "Include protein at every meal"] },
-    { id: "fuel_light", title: "Small frequent meals + protein", subtitle: "Eat even if appetite is low", category: "fuel", stateTag: "tired", planTier: "low", supportText: ["Low appetite is common on GLP-1s", "Try nutrient-dense small portions"] },
-    { id: "fuel_minimal", title: "Light meals + easy digestion", subtitle: "Your body still needs fuel", category: "fuel", stateTag: "stressed", planTier: "minimal", supportText: ["Under-eating slows your metabolism", "Protein shakes can help when appetite is low"] },
+    { id: "fuel_full", title: "Protein-forward meals", subtitle: "Aim for ~25-30g of protein at each meal.", category: "fuel", stateTag: "great", planTier: "high", supportText: ["Protein at every meal helps preserve muscle while losing weight", "Eggs, yogurt, fish, tofu, and lean meats are easy options"] },
+    { id: "fuel_balanced", title: "Steady fueling", subtitle: "2-3 balanced meals, with protein at each one.", category: "fuel", stateTag: "good", planTier: "moderate", supportText: ["Smaller meals can feel easier on GLP-1 medication", "A protein-rich snack can fill the gap if a meal feels like too much"] },
+    { id: "fuel_light", title: "Small meals", subtitle: "Choose 2-3 smaller meals instead of forcing full portions.", category: "fuel", stateTag: "tired", planTier: "low", supportText: ["Low appetite is common on GLP-1 medication", "Nutrient-dense bites are more useful than big plates right now"] },
+    { id: "fuel_minimal", title: "Gentle fueling", subtitle: "Keep meals small, simple, and protein-forward.", category: "fuel", stateTag: "stressed", planTier: "minimal", supportText: ["A few bites or sips still count", "Smoothies, soups, and yogurt are easy when appetite is low"] },
   ],
   hydrate: [
     // Order is most → least intensive to mirror the rest of the plan
     // ladders. Default selection is driven by stateTag mapping:
-    //   tired   -> Boost hydration    (tired days often signal symptoms,
+    //   tired   -> Hydration support  (tired days often signal symptoms,
     //                                  electrolytes help GLP-1 side effects)
-    //   great   -> Standard hydration (typical good day, also options[1]
-    //                                  fallback for "good" readiness)
-    //   good    -> Standard hydration (falls through to options[1])
-    //   stressed-> Steady sipping     (overwhelmed: just stay consistent)
+    //   great   -> Steady hydration   (typical good day)
+    //   good    -> Light hydration    (lighter day, lighter target)
+    //   stressed-> Fluids first       (overwhelmed: just keep sipping)
     // Symptom-driven overrides (hydrate_side_effects in patternEngine)
-    // can still promote Boost when the rule fires.
-    { id: "hydrate_high", title: "Boost hydration", subtitle: "~6–8 cups + electrolytes for symptoms or activity", category: "hydrate", stateTag: "tired", planTier: "high", supportText: ["Electrolytes help with GLP-1 side effects", "Add electrolytes if feeling dizzy"] },
-    { id: "hydrate_standard", title: "Standard hydration", subtitle: "~6–8 cups for a typical day", category: "hydrate", stateTag: "great", planTier: "moderate", supportText: ["Sip throughout the day", "One glass with each meal helps you stay on pace"] },
-    { id: "hydrate_light", title: "Light hydration", subtitle: "~5–6 cups on a lower activity day", category: "hydrate", stateTag: "good", planTier: "low", supportText: ["Front-load fluids before noon", "One glass with each meal"] },
-    { id: "hydrate_steady", title: "Steady sipping", subtitle: "Stay consistent today", category: "hydrate", stateTag: "stressed", planTier: "minimal", supportText: ["Dehydration makes everything harder", "Set reminders if needed"] },
+    // can still promote Hydration support when the rule fires.
+    { id: "hydrate_high", title: "Hydration support", subtitle: "Keep fluids steady. Add electrolytes if they usually help you.", category: "hydrate", stateTag: "tired", planTier: "high", supportText: ["Electrolytes can help on heavier-symptom days", "Sip slowly if nausea makes a full glass feel like too much"] },
+    { id: "hydrate_standard", title: "Steady hydration", subtitle: "Aim for 6-8 cups across the day, adjusting for thirst and activity.", category: "hydrate", stateTag: "great", planTier: "moderate", supportText: ["Sip throughout the day rather than all at once", "One glass with each meal keeps you on pace"] },
+    { id: "hydrate_light", title: "Light hydration", subtitle: "5-6 cups across the day. One glass with each meal.", category: "hydrate", stateTag: "good", planTier: "low", supportText: ["Front-load fluids before the afternoon", "Herbal tea and broths count too"] },
+    { id: "hydrate_steady", title: "Fluids first", subtitle: "Start with small sips and build gradually.", category: "hydrate", stateTag: "stressed", planTier: "minimal", supportText: ["Small amounts are easier when nausea shows up", "Set a soft reminder if you tend to forget"] },
   ],
   recover: [
-    { id: "recover_rest", title: "Early wind-down + 8+ hours", subtitle: "Full reset mode", category: "recover", stateTag: "stressed", planTier: "high", supportText: ["Your body needs extra recovery", "Prioritize sleep above everything"] },
-    { id: "recover_extended", title: "8+ hours sleep", subtitle: "Your body needs extra rest", category: "recover", stateTag: "tired", planTier: "moderate", supportText: ["Start winding down early", "Prioritize sleep above all else tonight"] },
-    { id: "recover_solid", title: "7-8 hours sleep", subtitle: "Solid recovery target", category: "recover", stateTag: "good", planTier: "low", supportText: ["Screen-free 30 min before bed", "Keep the room cool and dark"] },
-    { id: "recover_maintain", title: "At least 7 hours of sleep", subtitle: "Maintain your sleep quality", category: "recover", stateTag: "great", planTier: "minimal", supportText: ["Consistent sleep supports treatment", "Keep a consistent wake time"] },
+    { id: "recover_rest", title: "Earlier wind-down", subtitle: "Begin winding down 30-60 minutes earlier tonight.", category: "recover", stateTag: "stressed", planTier: "high", supportText: ["Lower the lights and put screens away earlier than usual", "An extra hour of rest tonight makes tomorrow easier"] },
+    { id: "recover_extended", title: "Sleep support", subtitle: "Aim for 7-8 hours of sleep, if your schedule allows.", category: "recover", stateTag: "tired", planTier: "moderate", supportText: ["Start winding down a little earlier than usual", "Protect tonight's sleep above other to-dos"] },
+    { id: "recover_solid", title: "Solid sleep", subtitle: "7-8 hours overnight. Keep the room cool and dark.", category: "recover", stateTag: "good", planTier: "low", supportText: ["Screen-free for the 30 minutes before bed", "Consistent timing matters more than perfect duration"] },
+    { id: "recover_maintain", title: "Consistent rest", subtitle: "Protect a steady bedtime so your body keeps recovering.", category: "recover", stateTag: "great", planTier: "minimal", supportText: ["A consistent wake time supports treatment over the long run", "You're building a routine that compounds"] },
   ],
   consistent: [
-    { id: "consistent_great", title: "Complete your daily check-in", subtitle: "Keep the momentum going", category: "consistent", stateTag: "great", planTier: "high", supportText: ["Consistency compounds over time", "You're building a strong habit"] },
-    { id: "consistent_good", title: "Log your meals and water", subtitle: "Small actions build habits", category: "consistent", stateTag: "good", planTier: "moderate", supportText: ["Tracking helps you stay aware", "Even rough days count"] },
-    { id: "consistent_tired", title: "Just check in today", subtitle: "Showing up is enough", category: "consistent", stateTag: "tired", planTier: "low", supportText: ["A simple check-in keeps your streak", "Low days are part of the journey"] },
-    { id: "consistent_stressed", title: "Keep routines simple today", subtitle: "Do the basics and rest", category: "consistent", stateTag: "stressed", planTier: "minimal", supportText: ["Simplify to essentials today", "Tomorrow is a fresh start"] },
+    { id: "consistent_great", title: "Daily check-in", subtitle: "A quick check-in keeps your plan tuned to how you feel.", category: "consistent", stateTag: "great", planTier: "high", supportText: ["Consistency compounds over time", "You're building a strong habit"] },
+    { id: "consistent_good", title: "Log meals and water", subtitle: "Small actions build the habit.", category: "consistent", stateTag: "good", planTier: "moderate", supportText: ["Tracking helps you spot what's working", "Rough days count too"] },
+    { id: "consistent_tired", title: "Quick check-in", subtitle: "Showing up is enough today.", category: "consistent", stateTag: "tired", planTier: "low", supportText: ["A simple check-in keeps your streak", "Low days are part of the journey"] },
+    { id: "consistent_stressed", title: "Keep it simple", subtitle: "Do the basics and rest. Tomorrow is a fresh start.", category: "consistent", stateTag: "stressed", planTier: "minimal", supportText: ["Simplify to essentials today", "Small wins still count"] },
   ],
 };
 

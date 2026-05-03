@@ -1211,7 +1211,7 @@ export function generateWeeklyPlan(): WeeklyPlan {
 
   return {
     weekStartDate: monday.toISOString().split("T")[0],
-    weekSummary: "This week balances two strength sessions with lighter recovery days. Prioritize 25-30g protein at every meal, 6-8 cups of water daily, and consistent sleep. Strength sessions protect lean mass while you lose weight on treatment.",
+    weekSummary: "This week balances two strength training days with lighter recovery days. Aim for ~25-30g of protein at each meal, 6-8 cups of water across the day, and a steady bedtime. Strength work protects lean muscle while you lose weight on treatment.",
     days: planDays,
     adjustmentNote: "If side effects are heavier after a dose change, swap any strength day for a gentle walk and prioritize rest and hydration instead.",
   };
