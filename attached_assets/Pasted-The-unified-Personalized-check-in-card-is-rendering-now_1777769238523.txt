@@ -1,0 +1,57 @@
+The unified Personalized check-in card is rendering now, but the content is not comprehensive enough.
+
+Current selected symptoms:
+- Energy: Tired
+- Appetite: Low
+- Nausea: Moderate
+- Digestion: Constipated
+- Bowel Movement: No
+
+Current card only says:
+"You reported nausea today, and your food intake has been lower than usual."
+And only gives nausea/food support.
+
+That is still too narrow.
+
+Required behavior:
+The single card should synthesize all meaningful symptoms from the current check-in, not just the primary symptom.
+
+For this exact check-in, the card should mention:
+- nausea
+- low appetite
+- constipation / no bowel movement
+- tired energy if relevant
+
+The card should still be concise, but comprehensive.
+
+Update the generator/fallback logic so the card copy looks more like:
+
+WHAT VIVA NOTICED
+"You reported nausea, low appetite and constipation today, with no bowel movement. These can overlap and make it harder to stay hydrated, eat enough and feel steady."
+
+TRY THIS TODAY
+"Nausea support: Take small sips of water and try a bland, protein-forward snack.
+Appetite support: Keep it light and aim for a small, easy-to-tolerate meal.
+Constipation support: If you feel up for it, take a short walk and keep fluids steady."
+
+CHECK BACK LATER
+"Tell us what helped, what didn’t and if nausea, appetite or constipation feels worse."
+
+Important:
+- One card only
+- Do not stack separate cards
+- Keep the card concise
+- But include all relevant active symptoms
+- Live symptom changes should update the same card within ~1-2 seconds
+- If appetite is low, include appetite support
+- If digestion is constipated or bowel movement is no, include constipation support
+- If energy is tired/depleted, include energy support only if it does not make the copy too long
+- Nausea can remain the primary concern, but not the only concern
+
+Acceptance:
+With Energy=Tired, Appetite=Low, Nausea=Moderate, Digestion=Constipated, Bowel Movement=No, the visible card should include:
+- "nausea"
+- "low appetite"
+- "constipation" or "no bowel movement"
+- at least 2-3 clearly labeled supports inside Try This Today
+- no duplicate cards

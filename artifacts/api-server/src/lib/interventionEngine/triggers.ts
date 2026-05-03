@@ -260,25 +260,29 @@ export function detectInterventionTriggers(
   // here. It only fires via the explicit /escalate endpoint or when
   // the route caller passes triggerType: "patient_requested_review".
 
-  // Catch-alls so we always have SOMETHING to surface when a check-in
-  // includes a symptom but none of the more-specific rules fired.
-  if (
-    triggers.length === 0 &&
-    t.digestion === "constipated"
-  ) {
+  // Per-symptom presence triggers. We emit one for EVERY concrete
+  // symptom the patient reported today, regardless of whether a more
+  // specific co-signal rule above already fired for that same type.
+  // pickRelevantTriggers() dedupes by type and keeps the higher-risk
+  // entry, so emitting both a "moderate nausea+food" trigger and a
+  // "low nausea presence" trigger collapses to a single nausea entry
+  // -- but emitting a constipation presence trigger here while a
+  // nausea trigger already fired is what lets the synthesized card
+  // include BOTH symptoms (the prior `triggers.length === 0` guard
+  // suppressed every secondary symptom and is the bug we're fixing).
+  if (t.digestion === "constipated" || t.bowelMovement === false) {
     triggers.push({
       type: "constipation",
       symptomType: "constipation",
-      severity: sevConstipation,
+      severity: sevConstipation ?? 1,
       riskLevel: "low",
-      reason: "constipation reported today",
+      reason:
+        t.digestion === "constipated"
+          ? "constipation reported today"
+          : "no bowel movement reported today",
     });
   }
-  if (
-    triggers.length === 0 &&
-    t.nausea &&
-    t.nausea !== "none"
-  ) {
+  if (t.nausea && t.nausea !== "none") {
     triggers.push({
       type: "nausea",
       symptomType: "nausea",
@@ -287,16 +291,25 @@ export function detectInterventionTriggers(
       reason: "nausea reported today",
     });
   }
-  if (
-    triggers.length === 0 &&
-    (t.energy === "depleted" || t.energy === "tired")
-  ) {
+  if (t.energy === "depleted" || t.energy === "tired") {
     triggers.push({
       type: "low_energy",
       symptomType: "low_energy",
       severity: sevLowEnergy,
       riskLevel: "low",
       reason: "low energy reported today",
+    });
+  }
+  if (t.foodIntake === "low" || t.foodIntake === "very_low") {
+    triggers.push({
+      type: "low_food_intake",
+      symptomType: "low_food_intake",
+      severity: t.foodIntake === "very_low" ? 4 : 3,
+      // Low appetite gets "moderate" so it ranks above low-priority
+      // signals like constipation-presence in the synthesis order
+      // and earns a labeled section in the unified card.
+      riskLevel: "moderate",
+      reason: `appetite reported as ${t.foodIntake}`,
     });
   }
 
@@ -389,9 +402,19 @@ export function pickRelevantTriggers(
   const concrete = all.filter((t) => !META_TYPES.has(t.type));
   const pool = concrete.length > 0 ? concrete : all;
 
-  return [...pool].sort((a, b) => {
+  const sorted = [...pool].sort((a, b) => {
     const dr = RISK_PRIORITY[b.riskLevel] - RISK_PRIORITY[a.riskLevel];
     if (dr !== 0) return dr;
     return (b.severity ?? 0) - (a.severity ?? 0);
   });
+
+  // Cap at 4 sections so the unified card stays "concise but
+  // comprehensive" per spec. With 4 concurrent symptoms (nausea +
+  // low appetite + constipation + low energy) the card has one lead
+  // sentence + 4 short labeled sections + one follow-up question --
+  // about as long as we want a single check-in card to be. Beyond
+  // that, lower-priority signals are dropped to keep the copy
+  // readable. Sort order above already puts the most important
+  // triggers first.
+  return sorted.slice(0, 4);
 }
