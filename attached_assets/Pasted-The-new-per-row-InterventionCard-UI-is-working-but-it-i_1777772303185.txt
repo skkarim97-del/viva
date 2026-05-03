@@ -1,0 +1,121 @@
+The new per-row InterventionCard UI is working, but it is only showing one generic recommendation row titled “Recommended” even when multiple symptoms are reported.
+
+Fix the recommendation generation/rendering so Viva creates and displays one compact recommendation row per relevant symptom signal.
+
+Problem:
+The user reported multiple symptoms:
+- Low appetite
+- Moderate nausea
+- Constipation
+- Lower food intake / nausea context
+
+But the UI only shows one row:
+Title: “Recommended”
+Text: “Try a small, bland protein-forward snack...”
+
+Expected:
+The “Try this today” section should show multiple visible rows immediately, for example:
+- Nausea support
+- Appetite support
+- Constipation support
+- Energy support, only if low energy was reported
+
+Do not collapse all symptoms into one generic “Recommended” row.
+
+Instructions:
+
+1. Find the current recommendation source
+Trace where InterventionCard receives its recommendation data.
+Look for:
+- recommendations
+- intervention.recommendations
+- suggestedActions
+- recommendationRows
+- buildRecommendations
+- getRecommendations
+- personalized check-in generation
+- “Recommended” fallback title
+
+2. Preserve the per-row UI state machine
+Do not undo the recent UX work.
+Keep:
+- default → committed → better/no_change/worse
+- “I’ll try this” / “Not for me”
+- “Did this help?” with Better / No change / Worse
+- worse-only escalation panel
+- no default “Ask my care team”
+
+3. Fix the recommendation array generation
+The recommendation builder should return an array of rows, not one generic recommendation.
+
+Use symptom-specific rules like:
+
+If nausea is mild/moderate/severe:
+Add:
+title: “Nausea support”
+body: “Try a small, bland protein-forward snack like yogurt, soup or a smoothie, and sip water slowly.”
+
+If appetite is low/very low:
+Add:
+title: “Appetite support”
+body: “Add one protein-rich snack today, like Greek yogurt, tofu or a smoothie.”
+
+If digestion is constipation / constipated:
+Add:
+title: “Constipation support”
+body: “Add a fiber-rich food to your next meal and sip water steadily through the afternoon.”
+
+If energy is low/very low:
+Add:
+title: “Energy support”
+body: “Add protein to your next meal and take a short break to rest.”
+
+If hydration/fluid intake is low:
+Add:
+title: “Hydration support”
+body: “Sip water slowly over the next hour instead of trying to drink a lot at once.”
+
+4. Avoid duplicate rows
+If two signals map to the same support category, only show that category once.
+Example:
+nausea + low food intake should not create two nausea rows.
+
+5. Use specific titles
+Do not use the generic fallback title “Recommended” unless there is truly only a generic recommendation with no known symptom category.
+For symptom-based recommendations, always use:
+- Nausea support
+- Appetite support
+- Constipation support
+- Energy support
+- Hydration support
+
+6. Show all rows immediately
+The InterventionCard should map over the full recommendations array and render every row under “Try this today.”
+Do not slice to one item.
+Search for `.slice(0, 1)`, `[0]`, `recommendations[0]`, or any logic that only passes the first recommendation.
+
+7. Stable row keys
+Use stable keys that include category and index or the existing buildRowKeys helper so duplicate labels do not collide.
+
+8. Verify with test/demo state
+Set or use a demo check-in with:
+- appetite: low
+- nausea: moderate
+- digestion: constipation
+- energy: low
+
+Expected UI:
+Under “Try this today,” I should see at least:
+- Nausea support
+- Appetite support
+- Constipation support
+- Energy support
+
+9. Run verification
+Run:
+- Typecheck
+- Lint if available
+- Mobile/web preview
+
+Acceptance criteria:
+When multiple symptoms are reported, the card shows multiple symptom-specific recommendation rows immediately. It should not show only one generic “Recommended” row.

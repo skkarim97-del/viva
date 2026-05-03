@@ -133,7 +133,30 @@ export async function generatePersonalizedIntervention(
           : "low",
       reason: `forced by caller: ${input.forcedTriggerType}`,
     };
-    relevantTriggers = [trigger];
+    // Even when the caller pins a primary trigger (e.g. dev seed
+    // forces "nausea", or the patient app forces a specific symptom
+    // type), we still want the unified card to surface every OTHER
+    // concurrent symptom from today's check-in as its own labeled
+    // support row. Without this, a multi-symptom context with a
+    // forced primary collapses to a single section ("Recommended")
+    // because relevantTriggers has length 1, which bypasses
+    // renderSynthesizedFallback. Detect the rest, then hoist the
+    // forced trigger to the front so it remains primary (drives
+    // recommendationCategory + the row's triggerType column).
+    //
+    // Exception: patient_requested_review is a meta-trigger fired
+    // when the patient explicitly tapped "Ask my care team". The
+    // resulting card MUST be the dedicated review-acknowledgment
+    // copy, NOT a multi-symptom synthesis -- so we keep it solo.
+    if (input.forcedTriggerType === "patient_requested_review") {
+      relevantTriggers = [trigger];
+    } else {
+      const detected = detectInterventionTriggers(context);
+      const others = pickRelevantTriggers(detected).filter(
+        (t) => t.type !== trigger!.type,
+      );
+      relevantTriggers = [trigger, ...others];
+    }
   } else {
     const detected = detectInterventionTriggers(context);
     relevantTriggers = pickRelevantTriggers(detected);
