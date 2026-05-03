@@ -1385,19 +1385,19 @@ export function InterventionCard({
   if (liveSeverity === "steady") {
     const isEscalated = status === "escalated";
     const accentColor = isEscalated ? warning : SUCCESS_FG;
-    const badgeLabel = isEscalated ? "Review requested" : "Going well today";
+    const badgeLabel = isEscalated ? "Review requested" : "Stable today";
     const badgeIcon: keyof typeof Feather.glyphMap = isEscalated
       ? "check-circle"
       : "check";
     const cardTitle = isEscalated
       ? "Latest check-in looks better"
-      : "Stay steady today";
+      : "Your symptoms look steady";
     const cardSubtitle = isEscalated
       ? "Your symptoms have eased since the review request."
-      : "Your inputs look steady today";
+      : "No major symptoms surfaced in today's check-in.";
     const cardBody = isEscalated
       ? "Your care team can still see today's symptoms and support history. Keep checking in -- we'll let them know if anything changes."
-      : "Keep following your plan and check in again if anything changes.";
+      : "Keep hydration, protein and routine consistent. Viva will adjust support if symptoms change.";
     return (
       <Animated.View
         style={[
@@ -1430,6 +1430,16 @@ export function InterventionCard({
                 </Text>
               </View>
             </View>
+            {!isEscalated && (
+              <Text
+                style={[
+                  styles.sectionLabel,
+                  { color: mutedForeground, marginBottom: 2 },
+                ]}
+              >
+                Symptom management
+              </Text>
+            )}
             <Text style={[styles.title, { color: navy }]}>{cardTitle}</Text>
             <Text style={[styles.subtitle, { color: mutedForeground }]}>
               {cardSubtitle}
