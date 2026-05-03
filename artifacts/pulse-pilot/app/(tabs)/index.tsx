@@ -959,49 +959,16 @@ export default function DashboardScreen() {
           )}
         </View>
 
-        {/* Contextual care-team CTA. Renders only when the daily
-            state shows a clinician-grade signal (escalationNeed or
-            high symptom burden) so it doesn't sit on the screen
-            every day. After the patient taps it once this session
-            it auto-hides; backend dedupe still applies cross-session. */}
-        {showTodayEscalationCta && (
-          <View
-            style={{
-              marginHorizontal: 20,
-              marginBottom: 12,
-              padding: 14,
-              borderRadius: 16,
-              backgroundColor: "#FF950018",
-              borderWidth: 1,
-              borderColor: "#FF950033",
-            }}
-          >
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
-              <Feather name="alert-circle" size={14} color="#B8650A" />
-              <Text style={{ color: "#B8650A", fontFamily: "Montserrat_700Bold", fontSize: 12, letterSpacing: 0.4, textTransform: "uppercase" }}>
-                Heads up
-              </Text>
-            </View>
-            <Text style={{ color: c.foreground, fontFamily: "Montserrat_600SemiBold", fontSize: 14, marginBottom: 10 }}>
-              Want us to flag this for your doctor?
-            </Text>
-            <Pressable
-              onPress={requestTodayReview}
-              style={({ pressed }) => ({
-                alignSelf: "flex-start",
-                paddingHorizontal: 14,
-                paddingVertical: 9,
-                borderRadius: 999,
-                backgroundColor: "#B8650A",
-                opacity: pressed ? 0.85 : 1,
-              })}
-            >
-              <Text style={{ color: "#FFFFFF", fontFamily: "Montserrat_700Bold", fontSize: 13 }}>
-                Request review
-              </Text>
-            </Pressable>
-          </View>
-        )}
+        {/* The standalone "Request review" / "Heads up" care-team CTA
+            that used to live here has been removed. The intervention
+            card below now owns escalation -- when symptoms are
+            severe it surfaces a single "Ask my care team to review"
+            button right inside "Today's next steps", which keeps
+            the page focused with one clear escalation action
+            instead of two competing orange prompts. The supporting
+            state (showTodayEscalationCta, requestTodayReview) is
+            kept in the component so we can re-surface this CTA
+            elsewhere later without rewiring. */}
 
         {/* AI-personalized micro-interventions ("Today's next steps").
             Positioned directly under the top status card so the

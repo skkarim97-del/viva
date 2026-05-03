@@ -1112,7 +1112,13 @@ export function InterventionCard({
         styles.cardFeatured,
         {
           backgroundColor: FEATURED_TINT,
-          borderColor: useWarningTone ? warning : FEATURED_BORDER,
+          // Outer border stays the calm featured-blue regardless of
+          // severity. The severe state still reads clearly via the
+          // "Heavier today" badge + signal chip + the explicit
+          // care-team CTA below; flooding the whole card edge with
+          // orange made the page feel alarming and competed with
+          // the in-card escalation button.
+          borderColor: FEATURED_BORDER,
         },
         animatedStyle,
       ]}
