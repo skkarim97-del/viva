@@ -221,74 +221,75 @@ const RECOMMENDATIONS: Record<RecCategory, { variants: RecContent[] }> = {
   nausea: {
     variants: [
       {
-        title: "Settle nausea without skipping nutrition",
-        body: "Try 3 to 5 bites of yogurt, tofu, soup or a smoothie. Then sip water slowly for 20 to 30 minutes.",
+        title: "Settle nausea, then refuel slowly",
+        body: "Take 5 small sips of water now, wait 10 minutes, then try 3 to 5 bites of yogurt, tofu, soup or a smoothie.",
         helper:
-          "This may help nausea while keeping protein and fluids in your system.",
+          "Letting fluids settle first calms the stomach before you reintroduce food, which is gentler than eating into active nausea.",
       },
       {
-        title: "Start with slow hydration",
-        body: "Sip water or an electrolyte drink slowly for 20 to 30 minutes before trying food. Small sips, not gulps.",
+        title: "Hydrate slowly first",
+        body: "Sip water or an electrolyte drink for 20 minutes \u2014 small sips every minute or two \u2014 before trying any solid food.",
         helper:
-          "Steady fluids first can settle the stomach before you reintroduce food.",
+          "Steady fluids first can settle the stomach so the next bite is less likely to trigger more nausea.",
       },
       {
-        title: "Try something even gentler",
-        body: "Try crackers, ginger tea or a few bites of soup. Keep portions small and pause if nausea increases.",
-        helper: "Small amounts are often easier to tolerate than a full meal.",
+        title: "Switch to something gentler",
+        body: "Try crackers, ginger tea or a few spoonfuls of soup. Pause for a few minutes if nausea increases.",
+        helper:
+          "Plain, low-odor foods are usually easier to keep down than a full meal when nausea is active.",
       },
       {
-        title: "Rest briefly before eating",
-        body: "Sit or lie down quietly for 5 to 10 minutes, then try a small bite of bland protein like yogurt or tofu.",
-        helper: "A short rest before food can reduce the urge to skip the meal.",
+        title: "Rest 10 minutes, then a small bite",
+        body: "Sit upright in a quiet spot for 10 minutes, then try one bite of bland protein like yogurt or tofu.",
+        helper: "A short pause before food can reduce the urge to skip the meal entirely.",
       },
     ],
   },
   appetite: {
     variants: [
       {
-        title: "Protect your protein intake",
-        body: "Aim for a small protein serving every few hours today, even if it is only Greek yogurt, tofu, soup or a smoothie.",
+        title: "Small fuel + steady fluids",
+        body: "Try a few bites of protein now (yogurt, tofu, soup or a smoothie), then sip water or electrolytes over the next hour.",
         helper:
-          "This can help prevent low intake from turning into low energy or missed nutrition.",
+          "Small portions are easier when appetite is low, and steady fluids help keep low intake from turning into low energy later.",
       },
       {
-        title: "Keep it light today",
-        body: "Aim for a small, easy-to-tolerate meal instead of forcing a full one. Consistency matters more than volume.",
-        helper: "Smaller, more frequent bites are usually easier when appetite is low.",
+        title: "Half a meal beats a skipped one",
+        body: "Aim for a half-portion of your usual meal in the next 30 minutes. Stop when you feel full \u2014 you can come back to it later.",
+        helper: "A partial meal preserves more nutrition than waiting until appetite returns on its own.",
       },
       {
-        title: "Use liquid nutrition if solid food feels hard",
-        body: "Try a smoothie, protein shake or soup instead of a full meal. Take it slowly over 20 to 30 minutes.",
-        helper: "Liquid options can be easier when appetite is low.",
+        title: "Drink your protein",
+        body: "Try a smoothie or protein shake instead of a full meal. Sip it slowly over 20 to 30 minutes.",
+        helper: "Liquid calories are usually easier to take in when chewing or strong flavors feel like too much.",
       },
       {
-        title: "Pick bland, low-friction foods",
+        title: "Bland and low-friction",
         body: "Try toast, rice, oatmeal or crackers with a small protein on the side. Skip greasy or strongly flavored foods today.",
-        helper: "Bland foods are less likely to worsen nausea or appetite loss.",
+        helper: "Bland foods are less likely to worsen nausea or push appetite even lower.",
       },
     ],
   },
   energy: {
     variants: [
       {
-        title: "Support energy without forcing a meal",
-        body: "Try a small protein plus carb option like yogurt with fruit, soup with tofu or a smoothie, then rest for 10 minutes.",
-        helper: "This gives your body fuel without requiring a large meal.",
+        title: "Refuel with protein in the next 30 minutes",
+        body: "Pair a small protein with a carb \u2014 yogurt with fruit, soup with tofu, or a smoothie \u2014 then rest for 10 minutes.",
+        helper: "Protein plus a carb steadies blood sugar more reliably than carbs alone, which often crash energy again.",
       },
       {
-        title: "Take a lighter day",
-        body: "Plan rest blocks today and add protein with your next meal. Save bigger tasks for tomorrow.",
-        helper: "Pacing yourself helps your energy hold up across the day.",
+        title: "Pace today, push tomorrow",
+        body: "Plan a rest block in the next 2 hours and add protein to your next meal. Save bigger tasks for tomorrow.",
+        helper: "Pacing keeps your energy steadier across the day instead of spiking and crashing.",
       },
       {
-        title: "Reset with fluids and a short break",
-        body: "Take small sips of water, sit or lie down for 10 minutes, then try a small snack if you feel ready.",
-        helper: "Low intake and dehydration can make fatigue worse.",
+        title: "Sip + sit + small snack",
+        body: "Take small sips of water, sit or lie down for 10 minutes, then try a small protein-plus-carb snack if you feel ready.",
+        helper: "Low intake and dehydration deepen fatigue, so fluids first usually helps before food does.",
       },
       {
-        title: "Add protein with your next meal",
-        body: "Pair your next bite with a protein source like Greek yogurt, eggs, beans or a smoothie with protein powder.",
+        title: "Add protein to your next meal",
+        body: "Pair your next bite with a protein source (Greek yogurt, eggs, beans or a smoothie with protein powder).",
         helper: "Protein steadies energy more reliably than carbs alone.",
       },
     ],
@@ -296,48 +297,48 @@ const RECOMMENDATIONS: Record<RecCategory, { variants: RecContent[] }> = {
   constipation: {
     variants: [
       {
-        title: "Reduce constipation risk today",
-        body: "Add fiber gradually with foods like berries, chia, beans or vegetables. Keep sipping fluids and take a short walk if you can tolerate it.",
-        helper: "Fiber works best when paired with fluids and movement.",
+        title: "Walk + water in the next hour",
+        body: "Take a 10-minute walk after your next meal and finish a full glass of water with it.",
+        helper: "Movement and fluids together stimulate digestion better than either one alone.",
       },
       {
-        title: "Keep fluids steady today",
-        body: "Sip water or warm fluids over the next few hours. Warm liquids in the morning can help things move.",
-        helper: "Steady hydration is one of the simplest ways to support digestion.",
+        title: "Steady fluids over the afternoon",
+        body: "Sip warm water, tea or broth every 20 minutes for the next few hours.",
+        helper: "Warm fluids help relax the gut and keep stool softer than cold water alone.",
       },
       {
-        title: "Try a short walk if you feel up for it",
-        body: "Even 5 to 10 minutes of gentle movement can help. Pair it with fluids before and after.",
-        helper: "Light movement can help digestion without taxing your energy.",
+        title: "Add fiber gradually",
+        body: "Add a small fiber boost to your next meal \u2014 berries, chia, beans or vegetables \u2014 and finish a glass of water with it.",
+        helper: "Fiber moves things along when paired with steady fluids; adding too much at once can backfire and cause bloating.",
       },
       {
-        title: "Use a gentler bowel-support step",
-        body: "Try warm fluids, a short walk or a fiber-rich snack. Avoid suddenly adding a large amount of fiber at once.",
-        helper: "Gradual changes are less likely to worsen bloating.",
+        title: "Gentle bowel-support combo",
+        body: "Pair a short walk with warm fluids and a fiber-rich snack. Keep the changes small to avoid bloating.",
+        helper: "Gradual changes are less likely to swap constipation for bloating.",
       },
     ],
   },
   hydration: {
     variants: [
       {
-        title: "Rehydrate without upsetting your stomach",
-        body: "Take a few small sips every 5 to 10 minutes for the next hour. If plain water feels hard, try an electrolyte drink or diluted beverage.",
-        helper: "Small, steady sips are usually easier than drinking a lot at once.",
+        title: "Small sips every 10 minutes for the next hour",
+        body: "Take a few sips of water or an electrolyte drink every 10 minutes for the next hour. Small and steady is easier than a big glass.",
+        helper: "Steady sips absorb better and feel gentler on your stomach than drinking a lot at once.",
       },
       {
-        title: "Sip steadily over the next hour or two",
-        body: "Aim for small sips every 10 minutes instead of drinking a lot at once. Steady is easier than fast.",
-        helper: "Steady fluids tend to absorb better and feel gentler on your stomach.",
-      },
-      {
-        title: "Try fluids that are easier to tolerate",
-        body: "Try ice chips, warm tea, diluted juice or an electrolyte drink. Keep the amount small and steady.",
-        helper: "The goal is steady fluids without triggering nausea.",
+        title: "Switch to something gentler",
+        body: "If plain water feels hard, try an electrolyte drink, diluted juice, warm tea or broth instead.",
+        helper: "A different flavor or temperature can make fluids easier to keep down when water feels off.",
       },
       {
         title: "Pair fluids with a bland snack",
-        body: "A few crackers or a small piece of toast alongside slow sips of water can be gentler than fluids alone.",
+        body: "Sip water alongside a few crackers, a piece of toast or a small piece of fruit over the next 20 minutes.",
         helper: "A small bland snack can settle the stomach while you rehydrate.",
+      },
+      {
+        title: "Cool fluids if warm feels off",
+        body: "Try ice chips, a chilled electrolyte drink or cold tea instead. Small sips, every few minutes.",
+        helper: "The temperature that feels best is the one you\u2019ll actually keep drinking.",
       },
     ],
   },
@@ -657,27 +658,27 @@ function nauseaCopy(
 ): RecContent {
   if (level === "severe") {
     return {
-      title: "Settle nausea first",
+      title: "Settle nausea before food",
       body:
-        "Start with small sips of water and a few bites of bland food (toast, crackers, yogurt or tofu) if you can tolerate it. Pause if nausea increases.",
+        "Start with small sips of water for 10 minutes. Only try a few bites of bland food (toast, crackers, yogurt or tofu) if nausea eases. Pause if it gets worse.",
       helper:
-        "If nausea feels hard to manage, is getting worse, or you can't keep fluids down, ask your care team to review.",
+        "If nausea is hard to manage, getting worse, or you can\u2019t keep fluids down, ask your care team to review.",
     };
   }
   if (level === "moderate") {
     return {
-      title: "Settle nausea without skipping nutrition",
+      title: "Settle nausea without skipping food",
       body: withLowAppetite
-        ? "Try a few bites of a bland, protein-forward snack -- yogurt, tofu, soup or a smoothie -- and sip water slowly for 20 to 30 minutes."
-        : "Try a small bland snack like yogurt, tofu, soup or a smoothie, and sip water slowly for 20 to 30 minutes.",
+        ? "Try a few bites of bland protein (yogurt, tofu, soup or a smoothie), then sip water slowly over the next 20 minutes."
+        : "Try a small bland snack (yogurt, tofu, soup or a smoothie) and sip water slowly over the next 20 minutes.",
       helper:
-        "Small bland portions are usually easier to tolerate while keeping protein and fluids in.",
+        "Small bland portions are easier on the stomach while keeping protein and fluids in.",
     };
   }
   return {
     title: "Stay ahead of nausea",
-    body: "Keep meals smaller today and sip water steadily.",
-    helper: "Light, preventive support so it does not build later in the day.",
+    body: "Keep portions small today and sip water steadily between bites instead of drinking a lot at once.",
+    helper: "Small, preventive steps can keep mild nausea from building later in the day.",
   };
 }
 
@@ -692,65 +693,70 @@ function appetiteCopy(hasNausea: boolean): RecContent {
     };
   }
   return {
-    title: "Protect your protein intake",
+    title: "Small fuel + steady fluids",
     body:
-      "Aim for a small protein serving every few hours -- Greek yogurt, tofu, soup or a smoothie all count. Consistency matters more than volume.",
+      "Try a few bites of protein now (yogurt, tofu, soup or a smoothie), then sip water or electrolytes over the next hour.",
     helper:
-      "This can help prevent low intake from turning into low energy or missed nutrition.",
+      "Small portions are easier when appetite is low, and steady fluids help keep low intake from turning into low energy later.",
   };
 }
 
 function constipationCopy(): RecContent {
   return {
-    title: "Help things move gently",
+    title: "Walk + water + a fiber bite",
     body:
-      "Sip warm fluids over the next few hours and add fiber gradually with foods like berries, chia, beans or vegetables. A short walk if you feel up for it can help too.",
-    helper: "Fiber works best paired with steady fluids and gentle movement.",
+      "Sip warm fluids over the next few hours, add a fiber-rich food (berries, chia, beans or vegetables) to your next meal, and take a short walk if you feel up for it.",
+    helper:
+      "Movement, fluids and fiber together work better for constipation than any one of them alone.",
   };
 }
 
 function bloatingCopy(): RecContent {
   return {
-    title: "Ease bloating gently",
+    title: "Smaller portions + a short walk",
     body:
-      "Try a short walk, smaller portions and avoid overeating. Skip carbonated drinks and heavily seasoned foods today.",
+      "Try smaller portions for the rest of today and a 5- to 10-minute walk after eating. Skip carbonated drinks and heavily seasoned foods.",
     helper:
-      "Gentle movement and smaller meals usually help more than added fiber when bloating is the main signal.",
+      "Gentle movement and smaller meals usually help bloating more than adding fiber does.",
   };
 }
 
 function diarrheaCopy(): RecContent {
   return {
-    title: "Steady fluids and bland foods",
+    title: "Steady fluids + bland foods",
     body:
-      "Sip water or an electrolyte drink slowly and stick to bland foods like rice, toast or bananas. Skip greasy or high-fiber foods today.",
-    helper: "Steady hydration and gentle foods support recovery.",
+      "Sip water or an electrolyte drink slowly over the next hour and stick to bland foods like rice, toast or bananas. Skip greasy or high-fiber foods today.",
+    helper:
+      "Steady fluids replace what\u2019s being lost; bland foods are easier on an irritated gut.",
   };
 }
 
 function energyCopy(level: "tired" | "depleted"): RecContent {
   if (level === "depleted") {
     return {
-      title: "Reset with fluids and a short break",
+      title: "Sip + sit + small snack",
       body:
         "Take small sips of water, sit or lie down for 10 minutes, then try a small protein-plus-carb snack if you feel ready.",
-      helper: "Low intake and dehydration can deepen fatigue.",
+      helper:
+        "Low intake and dehydration deepen fatigue, so fluids and a small refuel together help most.",
     };
   }
   return {
-    title: "Take a lighter day",
+    title: "Pace today, push tomorrow",
     body:
-      "Plan rest blocks today and pair your next meal with a protein source. Save bigger tasks for tomorrow.",
-    helper: "Pacing keeps your energy steadier across the day.",
+      "Plan a rest block in the next few hours and pair your next meal with a protein source. Save bigger tasks for tomorrow.",
+    helper:
+      "Pacing keeps your energy steadier across the day instead of spiking and crashing.",
   };
 }
 
 function hydrationCopy(): RecContent {
   return {
-    title: "Sip steadily over the next hour",
+    title: "Small sips every 10 minutes for the next hour",
     body:
-      "Take a few small sips every 5 to 10 minutes. If plain water feels hard, try an electrolyte drink or warm tea.",
-    helper: "Steady fluids absorb better than drinking a lot at once.",
+      "Take a few sips of water or an electrolyte drink every 10 minutes for the next hour. If plain water feels hard, try warm tea or broth.",
+    helper:
+      "Steady sips absorb better and feel gentler on the stomach than a big glass at once.",
   };
 }
 

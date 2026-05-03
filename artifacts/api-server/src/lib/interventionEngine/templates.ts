@@ -60,35 +60,35 @@ export interface InterventionTemplate {
 export const INTERVENTION_TEMPLATES: ReadonlyArray<InterventionTemplate> = [
   // -- constipation --------------------------------------------------
   {
-    id: "constipation.low_steps.v1",
+    id: "constipation.low_steps.v2",
     triggerType: "constipation",
     cosignals: ["low_steps"],
     riskLevel: "low",
     recommendationCategory: "activity",
     whatWeNoticed:
-      "You\u2019ve reported constipation 2 days in a row, and your activity was lower than usual yesterday.",
+      "You\u2019ve reported constipation 2 days in a row, and your activity has been lower than usual.",
     recommendation:
-      "After your next meal, take a 10-minute walk and drink a full glass of water.",
+      "Walk for 10 minutes after your next meal and finish a full glass of water with it.",
     followUpQuestion:
       "After you try it, tell us if your constipation feels better, the same or worse.",
     escalationRecommended: false,
   },
   {
-    id: "constipation.low_hydration.v1",
+    id: "constipation.low_hydration.v2",
     triggerType: "constipation",
     cosignals: ["low_hydration"],
     riskLevel: "low",
     recommendationCategory: "hydration",
     whatWeNoticed:
-      "You reported constipation today, and your hydration has been below your usual level.",
+      "You reported constipation today and your hydration has been below your usual level.",
     recommendation:
-      "Drink one full glass of water now, then sip another over the next 2 hours.",
+      "Drink one full glass of water now, then keep a bottle nearby and sip steadily over the next 2 hours.",
     followUpQuestion:
       "After you try it, tell us if your stomach feels better, the same or worse.",
     escalationRecommended: false,
   },
   {
-    id: "constipation.catchall.v1",
+    id: "constipation.catchall.v2",
     triggerType: "constipation",
     cosignals: [],
     riskLevel: "low",
@@ -96,7 +96,7 @@ export const INTERVENTION_TEMPLATES: ReadonlyArray<InterventionTemplate> = [
     whatWeNoticed:
       "You reported constipation today.",
     recommendation:
-      "Add a fiber-rich food to your next meal and sip water steadily through the afternoon.",
+      "Add a fiber-rich food (berries, beans, oats or vegetables) to your next meal and sip water steadily through the afternoon.",
     followUpQuestion:
       "After you try it, tell us if your constipation feels better, the same or worse.",
     escalationRecommended: false,
@@ -104,35 +104,35 @@ export const INTERVENTION_TEMPLATES: ReadonlyArray<InterventionTemplate> = [
 
   // -- nausea --------------------------------------------------------
   {
-    id: "nausea.low_food_intake.v1",
+    id: "nausea.low_food_intake.v2",
     triggerType: "nausea",
     cosignals: ["low_food_intake"],
     riskLevel: "moderate",
     recommendationCategory: "small_meal",
     whatWeNoticed:
-      "You reported nausea today, and your food intake has been lower than usual.",
+      "You reported nausea today and your food intake has been lower than usual.",
     recommendation:
-      "Try a small, bland protein-forward snack like yogurt, soup or a smoothie, and sip water slowly.",
+      "Try a few bites of bland protein now (yogurt, tofu, soup or a smoothie), then sip water slowly over the next 20 minutes.",
     followUpQuestion:
       "After eating, tell us if your nausea feels better, the same or worse.",
     escalationRecommended: false,
   },
   {
-    id: "nausea.post_dose.v1",
+    id: "nausea.post_dose.v2",
     triggerType: "nausea",
     cosignals: ["post_dose"],
     riskLevel: "low",
     recommendationCategory: "small_meal",
     whatWeNoticed:
-      "Your nausea showed up within a few days of your recent dose.",
+      "Your nausea showed up within a few days of your most recent dose.",
     recommendation:
-      "Keep meals smaller today and sip fluids slowly instead of drinking a lot at once.",
+      "Keep portions small for the rest of today and sip fluids slowly between bites instead of drinking a lot at once.",
     followUpQuestion:
       "Tell us if the nausea improves, stays the same or gets worse.",
     escalationRecommended: false,
   },
   {
-    id: "nausea.catchall.v1",
+    id: "nausea.catchall.v2",
     triggerType: "nausea",
     cosignals: [],
     riskLevel: "low",
@@ -140,7 +140,7 @@ export const INTERVENTION_TEMPLATES: ReadonlyArray<InterventionTemplate> = [
     whatWeNoticed:
       "You reported nausea today.",
     recommendation:
-      "Try a small, bland snack and sip fluids slowly over the next hour.",
+      "Try a few bites of a bland snack now, then sip water or ginger tea slowly over the next hour.",
     followUpQuestion:
       "After you try it, tell us if your nausea feels better, the same or worse.",
     escalationRecommended: false,
@@ -148,21 +148,21 @@ export const INTERVENTION_TEMPLATES: ReadonlyArray<InterventionTemplate> = [
 
   // -- low_energy ----------------------------------------------------
   {
-    id: "low_energy.poor_sleep.v1",
+    id: "low_energy.poor_sleep.v2",
     triggerType: "low_energy",
     cosignals: ["poor_sleep"],
     riskLevel: "low",
     recommendationCategory: "rest",
     whatWeNoticed:
-      "Your energy has been low, and your sleep was shorter than usual last night.",
+      "Your energy has been low and your sleep was shorter than usual last night.",
     recommendation:
-      "Take a lighter day today and include protein with your next meal.",
+      "Pair your next meal with a protein source (eggs, yogurt, beans or a shake) and plan a 10-minute rest after.",
     followUpQuestion:
       "After your next meal, tell us if your energy feels better, the same or worse.",
     escalationRecommended: false,
   },
   {
-    id: "low_energy.catchall.v1",
+    id: "low_energy.catchall.v2",
     triggerType: "low_energy",
     cosignals: [],
     riskLevel: "low",
@@ -170,7 +170,7 @@ export const INTERVENTION_TEMPLATES: ReadonlyArray<InterventionTemplate> = [
     whatWeNoticed:
       "Your energy has been lower than usual.",
     recommendation:
-      "Add protein to your next meal and take a short break to rest.",
+      "Add a protein source (Greek yogurt, eggs, beans, tofu or a shake) to your next meal and take a 5-minute break before the next task.",
     followUpQuestion:
       "After your next meal, tell us if your energy feels better, the same or worse.",
     escalationRecommended: false,
@@ -178,15 +178,15 @@ export const INTERVENTION_TEMPLATES: ReadonlyArray<InterventionTemplate> = [
 
   // -- low_hydration -------------------------------------------------
   {
-    id: "low_hydration.catchall.v1",
+    id: "low_hydration.catchall.v2",
     triggerType: "low_hydration",
     cosignals: [],
     riskLevel: "low",
     recommendationCategory: "hydration",
     whatWeNoticed:
-      "Your hydration has been low for 2 days.",
+      "Your hydration has been below your usual level for 2 days.",
     recommendation:
-      "Sip one full bottle of water over the next 2 hours.",
+      "Sip water or an electrolyte drink steadily over the next 2 hours \u2014 small sips every 10 minutes is easier than gulping a bottle at once.",
     followUpQuestion:
       "Tell us if your energy or symptoms feel better afterward.",
     escalationRecommended: false,
@@ -194,7 +194,7 @@ export const INTERVENTION_TEMPLATES: ReadonlyArray<InterventionTemplate> = [
 
   // -- low_food_intake -----------------------------------------------
   {
-    id: "low_food_intake.catchall.v1",
+    id: "low_food_intake.catchall.v2",
     triggerType: "low_food_intake",
     cosignals: [],
     riskLevel: "moderate",
@@ -202,7 +202,7 @@ export const INTERVENTION_TEMPLATES: ReadonlyArray<InterventionTemplate> = [
     whatWeNoticed:
       "Your food intake has been lower than usual.",
     recommendation:
-      "Add one protein-rich snack today, like Greek yogurt, tofu or a smoothie.",
+      "Add one protein-rich snack now (Greek yogurt, tofu, soup or a smoothie), then sip water or electrolytes over the next hour.",
     followUpQuestion:
       "After eating, tell us if your appetite feels better, the same or worse.",
     escalationRecommended: false,
@@ -210,7 +210,7 @@ export const INTERVENTION_TEMPLATES: ReadonlyArray<InterventionTemplate> = [
 
   // -- missed_checkin ------------------------------------------------
   {
-    id: "missed_checkin.catchall.v1",
+    id: "missed_checkin.catchall.v2",
     triggerType: "missed_checkin",
     cosignals: [],
     riskLevel: "low",
@@ -218,7 +218,7 @@ export const INTERVENTION_TEMPLATES: ReadonlyArray<InterventionTemplate> = [
     whatWeNoticed:
       "You haven\u2019t checked in recently, so Viva may be missing important updates.",
     recommendation:
-      "Take a quick check-in now so your care team has a clearer picture.",
+      "Take 30 seconds to check in now so your care team has a current picture of how you feel.",
     followUpQuestion:
       "After checking in, tell us if anything needs attention.",
     escalationRecommended: false,
@@ -226,27 +226,27 @@ export const INTERVENTION_TEMPLATES: ReadonlyArray<InterventionTemplate> = [
 
   // -- rapid_weight_change ------------------------------------------
   {
-    id: "rapid_weight_change.elevated.v1",
+    id: "rapid_weight_change.elevated.v2",
     triggerType: "rapid_weight_change",
     cosignals: ["low_appetite"],
     riskLevel: "elevated",
     recommendationCategory: "protein",
     whatWeNoticed:
-      "Your weight is down faster than usual this week, and your appetite has been lower.",
+      "Your weight is dropping faster than usual this week and your appetite has been lower.",
     recommendation:
-      "Add one protein-rich snack today, like Greek yogurt, tofu or a smoothie.",
+      "Add one protein-rich snack today (Greek yogurt, tofu, soup or a smoothie). Your care team can also review this if you\u2019d like.",
     followUpQuestion:
       "Would you like your care team to review this?",
     escalationRecommended: true,
   },
   {
-    id: "rapid_weight_change.catchall.v1",
+    id: "rapid_weight_change.catchall.v2",
     triggerType: "rapid_weight_change",
     cosignals: [],
     riskLevel: "elevated",
     recommendationCategory: "care_team_review",
     whatWeNoticed:
-      "Your weight is changing faster than usual this week.",
+      "Your weight is dropping faster than usual this week.",
     recommendation:
       "Request a care team review so your care team can decide the right next step.",
     followUpQuestion:
@@ -256,13 +256,13 @@ export const INTERVENTION_TEMPLATES: ReadonlyArray<InterventionTemplate> = [
 
   // -- worsening_symptom --------------------------------------------
   {
-    id: "worsening_symptom.catchall.v1",
+    id: "worsening_symptom.catchall.v2",
     triggerType: "worsening_symptom",
     cosignals: [],
     riskLevel: "moderate",
     recommendationCategory: "care_team_review",
     whatWeNoticed:
-      "Your symptoms have not improved and may need care team review.",
+      "Your symptoms have not improved over the last few days.",
     recommendation:
       "Request a care team review so your care team can decide the right next step.",
     followUpQuestion:
@@ -272,7 +272,7 @@ export const INTERVENTION_TEMPLATES: ReadonlyArray<InterventionTemplate> = [
 
   // -- repeated_symptom ---------------------------------------------
   {
-    id: "repeated_symptom.catchall.v1",
+    id: "repeated_symptom.catchall.v2",
     triggerType: "repeated_symptom",
     cosignals: [],
     riskLevel: "moderate",
@@ -280,7 +280,7 @@ export const INTERVENTION_TEMPLATES: ReadonlyArray<InterventionTemplate> = [
     whatWeNoticed:
       "You\u2019ve reported the same symptom several days in a row.",
     recommendation:
-      "Try the same support that worked before, and keep tracking how you feel each day.",
+      "Try the same support that worked before. If it doesn\u2019t help by tomorrow, we\u2019ll suggest the next step.",
     followUpQuestion:
       "Tell us if it feels better, the same or worse over the next day.",
     escalationRecommended: false,
