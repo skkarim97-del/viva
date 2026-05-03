@@ -1,0 +1,96 @@
+Please tighten Symptom support recommendation copy so each recommendation feels like a true microintervention tied to the exact symptom signal.
+
+This is a copy-only / presentation-only refinement.
+
+Do not redesign the card.
+Do not change backend logic.
+Do not add new features.
+
+For each primary recommendation:
+1. Make the title more action-oriented and symptom-specific
+2. Include a clear time window when appropriate
+3. Tie the body to the exact symptom chips shown
+4. Keep examples specific but concise
+5. Make “Why this helps” explain the symptom logic in plain English
+6. Avoid generic wellness wording
+
+Example improvement:
+
+Current:
+Protect your protein intake
+Aim for a small protein serving every few hours -- Greek yogurt, tofu, soup or a smoothie all count. Consistency matters more than volume.
+
+Better:
+Small fuel + steady fluids
+Try a few bites of protein now, then sip water or electrolytes over the next hour. Yogurt, tofu, soup or a smoothie all count.
+
+Why this helps:
+Small portions are easier when appetite is low, and steady fluids help prevent symptoms from compounding.
+
+Apply this style across appetite, hydration, nausea, constipation, diarrhea, fatigue and recovery recommendations.
+
+Important QA guardrail:
+Do NOT:
+- change intervention lifecycle states
+- change persistence
+- change API routes
+- change analytics event names
+- change provider escalation logic
+- change OpenAI / PHI guardrails
+- change symptom detection thresholds
+- change demo reset behavior
+- change the Today / Week / Clinic / Analytics data flows
+
+After copy changes, rerun a focused QA smoke:
+
+1. Stable demo
+- Symptom management shows stable/preventive copy
+- No care-team CTA
+- No debug text
+
+2. Moderate demo
+- Symptom support appears
+- Recommendation is symptom-specific
+- “I’ll try this” works
+- “Another option” works
+- No duplicate cards
+
+3. Severe demo
+- Stronger symptom support appears
+- Ask care team CTA appears
+- Request review works
+- Success state appears
+
+4. Feedback lifecycle
+- Accept recommendation
+- Submit Better
+- Confirm feedback persists
+- Repeat quick check for Same and Worse if time allows
+
+5. Live symptom update
+- Change symptoms from worse to better
+- Recommendation updates
+- Stale heavier recommendation disappears
+
+6. Cross-app flow
+- Escalation appears in Viva Clinic
+- Analytics still captures feedback/escalation distribution
+
+7. Visual QA
+- No clipped card titles
+- No overly long body text
+- No stale labels
+- No “Today’s next steps”
+- No “Coach”
+- No raw debug text
+- Apple Health is only referenced when connected or as a connect prompt
+
+Acceptance:
+- Each recommendation feels like one small action the patient can do now
+- Each recommendation clearly maps to the reported symptom signal
+- Copy remains concise, premium and patient-friendly
+- No recommendation feels like a generic wellness tip
+- Existing QA behavior remains intact
+- No data persistence or analytics regression
+- No provider escalation regression
+- No PHI/OpenAI regression
