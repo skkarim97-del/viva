@@ -1,0 +1,100 @@
+Also make sure Symptom support, Today “Your plan,” and the Week tab plan logic can take into account biometric data from wearables / Apple Health and medication dose context when available.
+
+Goal:
+Viva should feel like a treatment intelligence layer, not just a symptom checklist.
+
+The recommendations should be informed by:
+1. Today’s symptom check-in
+2. Recent symptom history
+3. Apple Health / wearable data if connected
+4. Medication dose context
+5. Prior intervention feedback if available
+
+Important:
+If biometric or dose data is already available in the product logic, confirm it is being used in:
+- Symptom support
+- Today tab “Your plan”
+- Week tab plan
+- Recent patterns
+- escalation logic
+
+If it is not being used yet, add the hooks / logic in a safe MVP way.
+
+Biometric / Apple Health signals to consider when available:
+- steps / activity level vs baseline
+- sleep duration vs baseline
+- activity decline on symptom-heavy days
+- recovery / rest trend if available
+- resting heart rate or HRV only if already safely available and currently supported
+
+Medication dose context to consider:
+- current medication name
+- current dose
+- dose day
+- days since last dose
+- recent dose increase
+- symptoms around dose timing
+- appetite / nausea / energy patterns after dose day
+
+Examples of desired behavior:
+
+1. If nausea is moderate and dose was recent:
+Symptom support should mention dose timing if relevant:
+“Nausea can be more noticeable around dose timing. Start gently with fluids and easy nutrition.”
+
+2. If appetite tends to dip 2 days after dose:
+Recent patterns should say:
+“Your appetite tends to dip around 2 days after your dose.”
+
+3. If sleep was lower and energy is tired/depleted:
+Your plan should lean toward:
+- lighter movement
+- earlier wind-down
+- recovery focus
+
+4. If steps/activity are lower and symptoms are heavier:
+Symptom support should keep the recommendation lighter:
+“Activity is lower than usual, so we’ll keep today’s plan manageable.”
+
+5. If Apple Health is not connected:
+Do not pretend biometric data is being used.
+Instead show:
+“Connect Apple Health to personalize support with sleep, steps, and activity trends.”
+
+6. If dose information is missing:
+Do not invent dose context.
+Use symptom and recent check-in logic only.
+
+Implementation requirements:
+- Do not send PHI to OpenAI
+- Keep all OpenAI payloads de-identified
+- Do not include names, emails, DOBs, clinic names, provider names, raw notes, or identifiers
+- Use fallback template logic if AI is unavailable
+- Do not make medication dosing recommendations
+- Do not suggest dose changes
+- Dose context should only explain timing/patterns and adjust support intensity, not provide medical advice
+
+Copy requirements:
+Make the intelligence visible but concise.
+
+Good examples:
+- “Based on today’s symptoms and recent dose timing”
+- “Your appetite often dips after dose day”
+- “Sleep was lighter than usual, so recovery is the focus”
+- “Activity is lower than baseline, so we’ll keep movement gentle”
+- “Connect Apple Health to make support more personalized”
+
+Avoid:
+- long technical explanations
+- overclaiming
+- saying Apple Health was used when it was not connected
+- giving medication adjustment advice
+
+Acceptance criteria:
+- Symptom support can use symptoms + trends + Apple Health + dose context when available
+- Today “Your plan” can adapt based on symptoms, biometric trends, and dose timing
+- Week tab plan can reflect the same shared logic/copy system
+- Recent patterns can surface dose-related and biometric-related trends
+- The app never pretends biometric or dose data exists when missing
+- No medication dosing advice is given
+- HIPAA/OpenAI guardrails remain intact

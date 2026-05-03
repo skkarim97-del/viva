@@ -231,6 +231,32 @@ export default function PlanScreen() {
                           ]} numberOfLines={1}>
                             {action.chosen}
                           </Text>
+                          {/* Subtitle pulled from CATEGORY_OPTIONS so the
+                              Week tab matches Today's "Your plan" copy
+                              without a parallel string table. Falls back
+                              to nothing if the chosen title isn't in the
+                              ladder (e.g. legacy plan rows from older
+                              sessions), so this is safe to add to every
+                              row. */}
+                          {(() => {
+                            const sub = CATEGORY_OPTIONS[action.category]
+                              ?.find((o) => o.title === action.chosen)?.subtitle;
+                            if (!sub) return null;
+                            return (
+                              <Text
+                                style={[
+                                  styles.actionSubtitle,
+                                  {
+                                    color: c.mutedForeground,
+                                    opacity: action.completed ? 0.5 : 1,
+                                  },
+                                ]}
+                                numberOfLines={2}
+                              >
+                                {sub}
+                              </Text>
+                            );
+                          })()}
                         </View>
                         <Feather name="chevron-right" size={14} color={c.mutedForeground + "40"} />
                       </Pressable>
@@ -497,6 +523,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Montserrat_400Regular",
     lineHeight: 20,
+  },
+  actionSubtitle: {
+    fontSize: 12,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 16,
+    marginTop: 1,
   },
   adjustNote: {
     flexDirection: "row",
