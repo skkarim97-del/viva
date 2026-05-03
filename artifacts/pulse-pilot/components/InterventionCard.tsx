@@ -60,12 +60,23 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   Easing,
+  LayoutAnimation,
   Platform,
   Pressable,
   StyleSheet,
   Text,
+  UIManager,
   View,
 } from "react-native";
+
+// Enable LayoutAnimation on Android. iOS has it on by default; web is a
+// no-op. We only need this once per JS runtime.
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -197,7 +208,7 @@ const RECOMMENDATIONS: Record<
   nausea: {
     primary: {
       title: "Settle nausea without skipping nutrition",
-      body: "Try 3 to 5 bites of Greek yogurt, tofu, soup or a smoothie. Then take small sips of water over 20 to 30 minutes. Avoid greasy, spicy or large meals for now.",
+      body: "Try 3 to 5 bites of yogurt, tofu, soup or a smoothie. Then sip water slowly for 20 to 30 minutes.",
       helper:
         "This may help nausea while keeping protein and fluids in your system.",
     },
@@ -861,6 +872,18 @@ export function InterventionCard({
           <Pressable
             onPress={() => {
               tap();
+              // Subtle expand/collapse animation. easeInEaseOut keeps
+              // the motion calm and Apple-like; we avoid spring so the
+              // section doesn't overshoot. Web is a no-op.
+              if (Platform.OS !== "web") {
+                LayoutAnimation.configureNext(
+                  LayoutAnimation.create(
+                    220,
+                    LayoutAnimation.Types.easeInEaseOut,
+                    LayoutAnimation.Properties.opacity,
+                  ),
+                );
+              }
               setSecondaryExpanded((v) => !v);
               if (!secondaryExpanded) safeLog("intervention_secondary_expanded");
             }}
@@ -1577,23 +1600,23 @@ function OutcomeButton({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 20,
-    padding: 16,
-    gap: 14,
-    borderWidth: 1,
+    borderRadius: 22,
+    padding: 18,
+    gap: 16,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   cardFeatured: {
-    borderWidth: 1.5,
+    borderWidth: StyleSheet.hairlineWidth,
     ...Platform.select({
       web: {
-        boxShadow: "0 6px 18px rgba(31, 79, 138, 0.10)",
+        boxShadow: "0 10px 32px rgba(31, 79, 138, 0.08)",
       },
       default: {
         shadowColor: "#1F4F8A",
-        shadowOpacity: 0.12,
-        shadowRadius: 14,
-        shadowOffset: { width: 0, height: 6 },
-        elevation: 3,
+        shadowOpacity: 0.08,
+        shadowRadius: 20,
+        shadowOffset: { width: 0, height: 8 },
+        elevation: 2,
       },
     }),
   },
@@ -1623,11 +1646,10 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   badgeText: {
-    fontSize: 10,
-    fontFamily: "Montserrat_700Bold",
-    fontWeight: "700",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
+    fontSize: 11,
+    fontFamily: "Montserrat_600SemiBold",
+    fontWeight: "600",
+    letterSpacing: 0.1,
   },
   title: {
     fontSize: 18,
@@ -1647,11 +1669,10 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   sectionLabel: {
-    fontSize: 11,
-    fontFamily: "Montserrat_700Bold",
-    fontWeight: "700",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
+    fontSize: 12,
+    fontFamily: "Montserrat_600SemiBold",
+    fontWeight: "600",
+    letterSpacing: 0.1,
   },
   sectionBody: {
     fontFamily: "Montserrat_400Regular",
@@ -1659,15 +1680,15 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   // -- More support for today (collapsible secondary header) -------
+  // Less boxy: no hard border, slightly tinted surface only.
   moreSupportHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    backgroundColor: "rgba(255, 255, 255, 0.6)",
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: "rgba(255, 255, 255, 0.7)",
   },
   moreSupportTitle: {
     fontSize: 13,
@@ -1693,22 +1714,23 @@ const styles = StyleSheet.create({
     fontVariant: ["tabular-nums"],
   },
   // -- Primary action card ------------------------------------------
+  // Softer, less boxy: hairline border + subtle long-radius shadow.
   primaryCard: {
-    borderRadius: 14,
-    borderWidth: 1.5,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    gap: 8,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    gap: 10,
     ...Platform.select({
       web: {
-        boxShadow: "0 2px 8px rgba(31, 79, 138, 0.08)",
+        boxShadow: "0 4px 16px rgba(31, 79, 138, 0.06)",
       },
       default: {
         shadowColor: "#1F4F8A",
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-        shadowOffset: { width: 0, height: 2 },
-        elevation: 2,
+        shadowOpacity: 0.06,
+        shadowRadius: 14,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 1,
       },
     }),
   },
@@ -1724,11 +1746,10 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   startHerePillText: {
-    fontSize: 10,
-    fontFamily: "Montserrat_700Bold",
-    fontWeight: "800",
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
+    fontSize: 11,
+    fontFamily: "Montserrat_600SemiBold",
+    fontWeight: "600",
+    letterSpacing: 0.1,
   },
   primaryTitle: {
     fontSize: 17,
@@ -1753,10 +1774,10 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   secondaryRow: {
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     gap: 6,
   },
   secondaryTitle: {
@@ -1797,10 +1818,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    paddingVertical: 9,
+    paddingVertical: 10,
     paddingHorizontal: 10,
-    borderRadius: 10,
-    borderWidth: 1,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   btnSecondary: {
     flex: 1,
@@ -1808,10 +1829,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    paddingVertical: 9,
+    paddingVertical: 10,
     paddingHorizontal: 10,
-    borderRadius: 10,
-    borderWidth: 1,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
     backgroundColor: "#FFFFFF",
   },
   btnText: {

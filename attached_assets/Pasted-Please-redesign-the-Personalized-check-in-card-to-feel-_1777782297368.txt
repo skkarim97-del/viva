@@ -1,0 +1,71 @@
+Please redesign the Personalized check-in card to feel more premium, Apple-like and modern.
+
+Goal:
+Make the UX feel sleek, calm, high-tech and easy to scan. It should feel like a polished health-tech product, not a dense content card.
+
+Design goals:
+- cleaner
+- more scannable
+- more action-oriented
+- less text-heavy
+- more premium visual hierarchy
+
+Please update the card with these principles:
+
+1. Show one primary recommendation first
+Instead of showing all recommendations equally, surface one main “next best step” first.
+
+2. Reduce visible text
+Shorten body copy and make each section easier to scan.
+
+3. Use progressive disclosure
+Show one main recommendation and collapse secondary recommendations into a “More support for today” section.
+
+4. Improve hierarchy
+The eye should immediately understand:
+- what this is
+- what the user should do first
+- what other support is available
+
+5. Improve CTA hierarchy
+Use:
+- primary: “I’ll try this”
+- secondary: “Another option”
+- tertiary/text action: “Ask my care team”
+
+6. Make the UI less boxy
+Use softer surfaces, fewer heavy borders, subtle shadows and better spacing.
+
+7. Reduce reliance on all-caps labels
+Use cleaner sentence-case labels where possible.
+
+8. Add subtle motion
+When the intervention appears or expands, use a soft fade/slide animation.
+
+Suggested structure:
+
+Today’s next steps
+Based on your check-in, here’s what may help today.
+
+What we noticed
+You reported nausea and low energy today.
+
+Primary recommendation tile
+Settle nausea without skipping nutrition
+Try 3 to 5 bites of yogurt, tofu, soup or a smoothie. Then sip water slowly for 20 to 30 minutes.
+
+Buttons:
+- I’ll try this
+- Another option
+
+More support for today
+1 more step for appetite, energy and digestion
+
+Expandable secondary recommendations below.
+
+Footer:
+If symptoms feel severe or urgent, contact your care team or seek medical help.
+
+Important:
+Keep it clean, sleek and very easy to read.
+The card should feel like a premium guided action experience.
