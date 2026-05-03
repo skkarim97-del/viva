@@ -30,7 +30,7 @@ args = [ "node", "artifacts/viva-dashboard/server.mjs" ]
 [services.production.run.env]
 PORT = "18616"
 NODE_ENV = "production"
-API_ORIGIN = "https://viva-ai.replit.app"
+API_ORIGIN = "https://api.itsviva.com"
 
 [services.production.health.startup]
 path = "/healthz"

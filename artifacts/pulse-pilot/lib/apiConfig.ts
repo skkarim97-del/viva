@@ -4,7 +4,7 @@ import { Platform } from "react-native";
 // to. This is a compile-time constant baked into the bundle, so nothing that
 // happens at build time (EAS secrets, CI env, stray .env files, editor env
 // injection) can change it on a shipped build.
-const PRODUCTION_API_URL = "https://viva-ai.replit.app/api";
+const PRODUCTION_API_URL = "https://api.itsviva.com/api";
 
 const EXPO_PUBLIC_API_URL = process.env.EXPO_PUBLIC_API_URL || "";
 const EXPO_PUBLIC_DOMAIN = process.env.EXPO_PUBLIC_DOMAIN || "";

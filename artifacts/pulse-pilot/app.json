@@ -18,8 +18,9 @@
       "icon": "./assets/icon.png",
       "supportsTablet": false,
       "bundleIdentifier": "com.sullyk97.vivaai",
-      "buildNumber": "42",
+      "buildNumber": "43",
       "associatedDomains": [
+        "applinks:api.itsviva.com",
         "applinks:viva-ai.replit.app"
       ],
       "config": {
@@ -33,12 +34,17 @@
     },
     "android": {
       "package": "com.sullyk97.vivaai",
-      "versionCode": 2,
+      "versionCode": 3,
       "intentFilters": [
         {
           "action": "VIEW",
           "autoVerify": true,
           "data": [
+            {
+              "scheme": "https",
+              "host": "api.itsviva.com",
+              "pathPrefix": "/invite/"
+            },
             {
               "scheme": "https",
               "host": "viva-ai.replit.app",
