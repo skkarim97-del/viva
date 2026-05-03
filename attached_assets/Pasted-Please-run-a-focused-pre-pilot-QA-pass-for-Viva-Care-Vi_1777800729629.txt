@@ -1,0 +1,195 @@
+Please run a focused pre-pilot QA pass for Viva Care, Viva Clinic and Viva Analytics.
+
+Important timing:
+This should be time-boxed and practical. Free Replit time is limited, so prioritize the highest-risk flows first. Do not start a large refactor or long-running rebuild.
+
+Priority:
+1. Critical data flow bugs
+2. Broken buttons / broken endpoints
+3. Demo reset reliability
+4. Provider escalation context
+5. Analytics data quality
+6. Visible UI/copy bugs
+
+Do NOT:
+- add new features
+- redesign patient UI
+- make risky schema changes
+- refactor major systems
+- change core intervention logic unless fixing a confirmed bug
+- touch auth unless a bug blocks QA
+- send PHI to OpenAI
+- break demo flows
+
+If you hit anything risky or ambiguous, stop and report instead of guessing.
+
+==================================================
+PHASE 1 — QUICK INFRA / DATA TRUTH CHECK
+==================================================
+
+First, confirm the current runtime and data targets.
+
+Report:
+- Backend runtime: Replit or EC2
+- Database: AWS RDS/Postgres or local
+- Viva Care API target
+- Viva Clinic API target
+- Viva Analytics API target
+- Whether demo data is clearly separated from real data
+
+Acceptance:
+No assumptions. Clearly state what is actually true.
+
+==================================================
+PHASE 2 — CORE PATIENT FLOW QA
+==================================================
+
+Use demo reset if available.
+
+Test these flows:
+
+A. Stable scenario
+- Reset demo to Stable
+- Confirm Today tab loads
+- Confirm symptom management copy says stable symptoms, not generic wellness
+- Confirm no severe support or care-team CTA appears
+- Confirm Week tab loads
+- Confirm Trends loads
+- Confirm no debug text or clipped text
+
+B. Moderate scenario
+- Reset demo to Moderate
+- Confirm Symptom support appears
+- Confirm recommendation matches symptoms
+- Tap “I’ll try this”
+- Tap “Another option”
+- Submit Better / Same / Worse if available
+- Confirm feedback persists after reload
+- Confirm no duplicate cards
+
+C. Severe scenario
+- Reset demo to Severe
+- Confirm stronger Symptom support appears
+- Confirm Ask care team CTA appears
+- Tap Ask care team
+- Confirm success state appears
+- Confirm duplicate taps do not create duplicate escalations
+
+D. Worse → better
+- Start severe
+- Change symptoms to stable
+- Confirm recommendation downgrades
+- Confirm stale severe recommendation disappears
+- Confirm prior severe input remains in analytics/event history
+
+Acceptance:
+Patient app should feel reliable enough for a real pilot demo.
+
+==================================================
+PHASE 3 — DATABASE PERSISTENCE CHECK
+==================================================
+
+Verify these are persisted to AWS DB, not just local storage:
+
+- latest patient_checkins
+- symptom input change events in analytics_events
+- patient_interventions state
+- feedback Better/Same/Worse
+- care_events for escalation
+- patient_plan_items suggestions, overrides and completions
+- patient_treatment_logs dose logs
+- patient_integrations Apple Health state
+- provider review/action state if supported
+
+Do not just visually inspect. Query DB or API responses where possible.
+
+Acceptance:
+No critical pilot data should be local-only.
+
+==================================================
+PHASE 4 — VIVA CLINIC QA
+==================================================
+
+Check provider dashboard, especially escalation context.
+
+For an escalated demo patient, confirm Clinic shows:
+- patient
+- reason for escalation
+- current symptoms
+- recent trend if available
+- Viva recommendation shown
+- patient action / feedback
+- timestamp
+- review status
+- provider action if supported
+
+Also confirm:
+- provider sees assigned patients only
+- no generic “patient requested review” without useful context
+
+Acceptance:
+Provider should understand why the patient surfaced in under 10 seconds.
+
+==================================================
+PHASE 5 — VIVA ANALYTICS QA
+==================================================
+
+Check existing internal Pilot Metrics page. Do NOT create a new page.
+
+Confirm it shows or can support:
+- activation / engagement
+- check-in completion
+- symptom signals
+- intervention generated / accepted
+- Better/Same/Worse split
+- auto-resolved vs escalated
+- provider review/action
+- plan adherence
+- Apple Health connection rate
+
+Since this page is internal:
+- keep useful data caveats
+- make caveats clean, not sloppy
+- clearly distinguish live/demo/snapshot data
+- do not fake production metrics
+
+Acceptance:
+Pilot Metrics should be useful as an internal operating dashboard and raw material for a later polished client report.
+
+==================================================
+PHASE 6 — QUICK UI / COPY QA
+==================================================
+
+Do a fast scan for:
+- visible debug text
+- clipped titles
+- stale “Plan” label instead of “Week”
+- stale “Today’s next steps”
+- old Coach section
+- inconsistent colors
+- red used outside true severe/urgent states
+- buttons that look clickable but do nothing
+- ugly empty states
+- Apple Health claims when disconnected
+- duplicate escalation labels
+
+Fix only obvious low-risk issues.
+
+==================================================
+PHASE 7 — REPORT
+==================================================
+
+At the end, provide a concise report:
+
+1. What passed
+2. What was fixed
+3. What still needs attention
+4. Any pilot blockers
+5. Whether data is persisting to AWS DB
+6. Whether backend runtime is Replit or EC2
+7. Whether Care → Clinic → Analytics flow works
+8. Final pilot readiness score out of 10
+
+Time-box:
+Prioritize completing Phases 1-5 over polishing minor UI.
+If time runs short, stop and report the remaining checklist.
