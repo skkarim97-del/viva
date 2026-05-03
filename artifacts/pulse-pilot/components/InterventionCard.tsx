@@ -27,7 +27,7 @@
 // All network calls are best-effort: errors are swallowed and the
 // card stays in its current state. The parent owns refetch cadence.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -40,11 +40,95 @@ import {
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import {
   type FeedbackResult,
   type PatientIntervention,
 } from "@/lib/api/interventionsClient";
+
+// =====================================================================
+// Per-row recommendation parsing + local completion state
+// =====================================================================
+// The backend `recommendation` field is plain text, optionally
+// composed of multiple `\n\n`-separated sections shaped as
+// "<Label>: <body>". When 2+ sections are present we surface each
+// one as an interactive row with its own "Did this / Didn't do this"
+// buttons -- the unified card stays one card but the supports inside
+// are individually scannable + actionable.
+//
+// Completion state per row is persisted to AsyncStorage keyed by
+// (intervention id + section label). Keying on label rather than
+// index keeps the user's "did this" choice stable across live slider
+// updates -- the same card row is updated in place when symptoms
+// change and the order of sections may shift, but a row labeled
+// "Nausea support" stays the same target. We deliberately keep this
+// state local to the device for now (no new API endpoint) since the
+// per-row choice is mainly a self-tracking aid; the existing
+// Better/Same/Worse feedback still rolls up to the server.
+
+interface RecommendationSection {
+  // Section label without the trailing colon ("Nausea support" not
+  // "Nausea support:"). null when the recommendation has no labeled
+  // sections (single-symptom case) -- in that path we skip the row
+  // header and render the body inline.
+  label: string | null;
+  body: string;
+}
+
+function parseRecommendationSections(
+  recommendation: string,
+): RecommendationSection[] {
+  const text = (recommendation ?? "").trim();
+  if (!text) return [];
+  // Split on blank lines (\n\n). Tolerate Windows line endings and
+  // trailing whitespace. Single-symptom output has no \n\n and falls
+  // through as a single section.
+  const blocks = text
+    .split(/\r?\n\s*\r?\n/)
+    .map((b) => b.trim())
+    .filter((b) => b.length > 0);
+  if (blocks.length <= 1) {
+    return [{ label: null, body: text }];
+  }
+  return blocks.map((block) => {
+    // Look for "Label: body" where Label is short (<= 30 chars) and
+    // contains no newlines. The colon split is intentionally first-
+    // colon-only so body text containing colons stays intact.
+    const m = block.match(/^([^\n:]{1,30}):\s*([\s\S]+)$/);
+    if (!m) return { label: null, body: block };
+    return { label: m[1]!.trim(), body: m[2]!.trim() };
+  });
+}
+
+type SectionStatus = "did" | "skipped";
+
+function rowKey(interventionId: number, label: string | null, index: number): string {
+  // Prefer label-based keying for stability across live updates; fall
+  // back to index when a section has no label (single-symptom path,
+  // which only ever has one row anyway).
+  const tag = label ? `label:${label.toLowerCase()}` : `idx:${index}`;
+  return `pulsepilot.intervention.${interventionId}.row.${tag}`;
+}
+
+// Compute the per-row storage key for each section, disambiguating
+// duplicate labels by appending the section index. Without this guard
+// two sections with the same label (rare but possible if templates
+// ever overlap) would collide on a single AsyncStorage key AND on the
+// React `key` prop, producing both shared completion state and React
+// "duplicate key" warnings.
+function buildRowKeys(
+  interventionId: number,
+  sections: RecommendationSection[],
+): string[] {
+  const seen = new Map<string, number>();
+  return sections.map((s, i) => {
+    const base = rowKey(interventionId, s.label, i);
+    const count = seen.get(base) ?? 0;
+    seen.set(base, count + 1);
+    return count === 0 ? base : `${base}#${count}`;
+  });
+}
 
 // Soft tint applied behind the card so it reads as the hero output of
 // the symptom check-in instead of just another feed card. The card has
@@ -149,6 +233,104 @@ export function InterventionCard({
     () => categoryIcon(intervention.recommendationCategory),
     [intervention.recommendationCategory],
   );
+
+  // -- Per-row recommendation sections + completion state -----------
+  const sections = useMemo(
+    () => parseRecommendationSections(intervention.recommendation),
+    [intervention.recommendation],
+  );
+  // Stable AsyncStorage keys per visible row, deduped against label
+  // collisions. Recomputed when the section list changes (e.g. live
+  // update from a slider tweak adding/removing a symptom).
+  const sectionKeys = useMemo(
+    () => buildRowKeys(intervention.id, sections),
+    [intervention.id, sections],
+  );
+
+  // sectionStatus[key] = "did" | "skipped". Hydrated from AsyncStorage
+  // on mount / when sections change so the patient's prior taps stick
+  // across reloads and across live slider-driven card updates.
+  const [sectionStatus, setSectionStatus] = useState<
+    Record<string, SectionStatus>
+  >({});
+  // Tracks user interaction + per-key write versions so we can resolve
+  // two race conditions raised by the architect review:
+  //   (a) Hydration race: multiGet may resolve AFTER a user tap, in
+  //       which case applying the persisted (stale) snapshot would
+  //       overwrite the newer in-memory choice. We solve this by
+  //       MERGING hydration into the existing state -- in-memory
+  //       writes always win over hydrated values.
+  //   (b) Rapid-tap write race: if the user taps Did then Skipped
+  //       within a few ms, the second AsyncStorage.setItem may resolve
+  //       before the first, leaving stale persisted data. We tag every
+  //       write with a monotonically increasing version per key and
+  //       only persist if our version is still the latest.
+  const writeVersionRef = useRef<Record<string, number>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const pairs = await AsyncStorage.multiGet(sectionKeys);
+        if (cancelled) return;
+        setSectionStatus((prev) => {
+          // Merge: only fill in keys the user hasn't already touched
+          // this session. Any in-memory entry (including pending
+          // writes tracked via writeVersionRef) wins.
+          const next = { ...prev };
+          for (const [k, v] of pairs) {
+            if (writeVersionRef.current[k] != null) continue;
+            if (k in next) continue;
+            if (v === "did" || v === "skipped") next[k] = v;
+          }
+          return next;
+        });
+      } catch {
+        // best-effort; an empty map is the right fallback
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [sectionKeys]);
+
+  const setRowStatus = useCallback(
+    async (key: string, value: SectionStatus | null) => {
+      // Bump version and capture; persistence below only applies if we
+      // are still the most-recent write for this key when the await
+      // resolves -- guards against out-of-order setItem/removeItem.
+      const version = (writeVersionRef.current[key] ?? 0) + 1;
+      writeVersionRef.current[key] = version;
+      setSectionStatus((prev) => {
+        const next = { ...prev };
+        if (value == null) delete next[key];
+        else next[key] = value;
+        return next;
+      });
+      try {
+        if (value == null) await AsyncStorage.removeItem(key);
+        else await AsyncStorage.setItem(key, value);
+        // If a newer write started while we awaited, drop ours -- the
+        // newer call will persist its own value.
+        if (writeVersionRef.current[key] !== version) return;
+      } catch {
+        // best-effort persistence
+      }
+    },
+    [],
+  );
+
+  // When the patient marked "Worse" (auto-escalated server-side), we
+  // visually emphasize the "Ask my care team" affordance on the
+  // shown-state card so the next person in the same situation has a
+  // clear next step. Currently the card is in `escalated` status when
+  // that happens, so this also shows an emphasized variant in the
+  // post-feedback state. We ALSO emphasize when the patient skipped
+  // every row -- that's a strong signal nothing landed and they may
+  // benefit from human follow-up.
+  const allSkipped =
+    sections.length >= 2 &&
+    sectionKeys.every((k) => sectionStatus[k] === "skipped");
+  const emphasizeAskCareTeam =
+    intervention.feedbackResult === "worse" || allSkipped;
 
   // Subtle entrance: fade + slide-up on first mount so the card
   // visibly arrives instead of popping in. Native driver where
@@ -298,9 +480,42 @@ export function InterventionCard({
         <Text style={[styles.sectionLabel, { color: mutedForeground }]}>
           Try this today
         </Text>
-        <Text style={[styles.sectionBody, { color: navy, fontWeight: "600" }]}>
-          {intervention.recommendation}
-        </Text>
+        {sections.length <= 1 ? (
+          // Single-symptom case (no \n\n in recommendation): keep the
+          // original inline body so the simpler card stays compact.
+          <Text style={[styles.sectionBody, { color: navy, fontWeight: "600" }]}>
+            {sections[0]?.body ?? intervention.recommendation}
+          </Text>
+        ) : (
+          <View style={styles.rowsWrap}>
+            {sections.map((s, i) => {
+              const key = sectionKeys[i]!;
+              const rowState = sectionStatus[key] ?? null;
+              return (
+                <RecommendationRow
+                  key={key}
+                  label={s.label ?? "Support"}
+                  body={s.body}
+                  status={rowState}
+                  navy={navy}
+                  mutedForeground={mutedForeground}
+                  border={background}
+                  accent={accent}
+                  warning={warning}
+                  onDid={() =>
+                    void setRowStatus(key, rowState === "did" ? null : "did")
+                  }
+                  onSkip={() =>
+                    void setRowStatus(
+                      key,
+                      rowState === "skipped" ? null : "skipped",
+                    )
+                  }
+                />
+              );
+            })}
+          </View>
+        )}
       </View>
 
       <View style={styles.section}>
@@ -353,9 +568,21 @@ export function InterventionCard({
             <Pressable
               onPress={handleEscalate}
               disabled={!!busy}
+              accessibilityRole="button"
+              accessibilityLabel="Ask my care team"
+              accessibilityHint={
+                emphasizeAskCareTeam
+                  ? "Recommended next step based on your feedback"
+                  : undefined
+              }
               style={({ pressed }) => [
                 styles.secondaryButton,
-                { borderColor: background, opacity: pressed || busy ? 0.7 : 1 },
+                {
+                  borderColor: emphasizeAskCareTeam ? warning : background,
+                  borderWidth: emphasizeAskCareTeam ? 1.5 : 1,
+                  backgroundColor: emphasizeAskCareTeam ? warning + "12" : "transparent",
+                  opacity: pressed || busy ? 0.7 : 1,
+                },
               ]}
             >
               {busy === "escalate" ? (
@@ -365,12 +592,15 @@ export function InterventionCard({
                   <Feather
                     name="message-circle"
                     size={13}
-                    color={mutedForeground}
+                    color={emphasizeAskCareTeam ? warning : mutedForeground}
                   />
                   <Text
                     style={[
                       styles.secondaryButtonText,
-                      { color: mutedForeground },
+                      {
+                        color: emphasizeAskCareTeam ? warning : mutedForeground,
+                        fontWeight: emphasizeAskCareTeam ? "700" : "500",
+                      },
                     ]}
                   >
                     Ask my care team
@@ -484,6 +714,152 @@ export function InterventionCard({
         </View>
       )}
     </Animated.View>
+  );
+}
+
+// =====================================================================
+// RecommendationRow -- one labeled support row inside the master card
+// =====================================================================
+// Renders the section's label + body and a compact pair of "Did this"
+// / "Didn't do this" toggle buttons. Tapping the same button again
+// clears the row back to the neutral state so the patient can change
+// their mind without any cost.
+interface RecommendationRowProps {
+  label: string;
+  body: string;
+  status: SectionStatus | null;
+  navy: string;
+  mutedForeground: string;
+  border: string;
+  accent: string;
+  warning: string;
+  onDid: () => void;
+  onSkip: () => void;
+}
+
+function RecommendationRow({
+  label,
+  body,
+  status,
+  navy,
+  mutedForeground,
+  border,
+  accent,
+  warning,
+  onDid,
+  onSkip,
+}: RecommendationRowProps) {
+  const tap = () => {
+    try { Haptics.selectionAsync(); } catch { /* best-effort */ }
+  };
+  const didActive = status === "did";
+  const skipActive = status === "skipped";
+  return (
+    <View
+      style={[
+        styles.recRow,
+        {
+          borderColor: didActive
+            ? accent + "55"
+            : skipActive
+              ? mutedForeground + "33"
+              : border,
+          backgroundColor: didActive
+            ? accent + "0F"
+            : skipActive
+              ? mutedForeground + "0A"
+              : "#FFFFFF",
+        },
+      ]}
+    >
+      <View style={styles.recHeader}>
+        <Text style={[styles.recLabel, { color: navy }]}>{label}</Text>
+        {didActive && (
+          <View style={[styles.recStatusPill, { backgroundColor: accent + "1F" }]}>
+            <Feather name="check" size={10} color={accent} />
+            <Text style={[styles.recStatusText, { color: accent }]}>Done</Text>
+          </View>
+        )}
+        {skipActive && (
+          <View
+            style={[
+              styles.recStatusPill,
+              { backgroundColor: mutedForeground + "1F" },
+            ]}
+          >
+            <Feather name="x" size={10} color={mutedForeground} />
+            <Text style={[styles.recStatusText, { color: mutedForeground }]}>
+              Skipped
+            </Text>
+          </View>
+        )}
+      </View>
+      <Text style={[styles.recBody, { color: navy }]}>{body}</Text>
+      <View style={styles.recButtonRow}>
+        <Pressable
+          onPress={() => { tap(); onDid(); }}
+          accessibilityRole="button"
+          accessibilityLabel={`Did ${label}`}
+          accessibilityState={{ selected: didActive }}
+          style={({ pressed }) => [
+            styles.recButton,
+            {
+              borderColor: didActive ? accent : border,
+              backgroundColor: didActive ? accent : "transparent",
+              opacity: pressed ? 0.75 : 1,
+            },
+          ]}
+        >
+          <Feather
+            name="check"
+            size={12}
+            color={didActive ? "#FFFFFF" : accent}
+          />
+          <Text
+            style={[
+              styles.recButtonText,
+              {
+                color: didActive ? "#FFFFFF" : accent,
+                fontWeight: didActive ? "700" : "600",
+              },
+            ]}
+          >
+            Did this
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => { tap(); onSkip(); }}
+          accessibilityRole="button"
+          accessibilityLabel={`Didn't do ${label}`}
+          accessibilityState={{ selected: skipActive }}
+          style={({ pressed }) => [
+            styles.recButton,
+            {
+              borderColor: skipActive ? mutedForeground : border,
+              backgroundColor: skipActive ? mutedForeground + "18" : "transparent",
+              opacity: pressed ? 0.75 : 1,
+            },
+          ]}
+        >
+          <Feather
+            name="x"
+            size={12}
+            color={skipActive ? warning : mutedForeground}
+          />
+          <Text
+            style={[
+              styles.recButtonText,
+              {
+                color: skipActive ? warning : mutedForeground,
+                fontWeight: skipActive ? "700" : "500",
+              },
+            ]}
+          >
+            Didn't do this
+          </Text>
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
@@ -719,5 +1095,65 @@ const styles = StyleSheet.create({
   escalatedText: {
     fontSize: 13,
     fontWeight: "600",
+  },
+  rowsWrap: {
+    gap: 8,
+    marginTop: 4,
+  },
+  recRow: {
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  recHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  recLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+    flex: 1,
+  },
+  recBody: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  recButtonRow: {
+    flexDirection: "row",
+    gap: 6,
+    marginTop: 2,
+  },
+  recButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    paddingVertical: 7,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  recButtonText: {
+    fontSize: 12,
+  },
+  recStatusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 999,
+  },
+  recStatusText: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+    textTransform: "uppercase",
   },
 });

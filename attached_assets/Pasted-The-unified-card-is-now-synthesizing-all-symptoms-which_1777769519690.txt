@@ -1,0 +1,85 @@
+The unified card is now synthesizing all symptoms, which is good, but the UX is still not right.
+
+Current problem:
+The “Try This Today” section is a huge block of text:
+- Appetite support...
+- Nausea support...
+- Energy support...
+- Constipation support...
+
+This is hard to scan and not interactive per recommendation.
+
+Please change the card into one master card with separate recommendation rows inside it.
+
+Keep:
+- One Personalized check-in card only
+- One “What Viva noticed” summary
+- One “Check back later” section
+- One “Ask my care team” option
+
+Change “Try This Today” into individual interactive rows.
+
+Example structure:
+
+Personalized check-in
+Based on today’s symptoms
+
+WHAT VIVA NOTICED
+Viva noticed low appetite, nausea, low energy and constipation in your check-in today.
+
+TRY THIS TODAY
+
+[Row 1]
+Appetite support
+Add one protein-rich snack today, like Greek yogurt, tofu or a smoothie.
+Buttons:
+Did this | Didn’t do this
+
+[Row 2]
+Nausea support
+Try a small, bland protein-forward snack and sip water slowly.
+Buttons:
+Did this | Didn’t do this
+
+[Row 3]
+Energy support
+Add protein to your next meal and take a short break to rest.
+Buttons:
+Did this | Didn’t do this
+
+[Row 4]
+Constipation support
+Add fiber-rich food and sip water steadily today.
+Buttons:
+Did this | Didn’t do this
+
+CHECK BACK LATER
+How are you feeling after trying these?
+
+Feedback buttons:
+Better | Same | Worse
+
+Bottom:
+Ask my care team
+
+Design requirements:
+- Do NOT show the recommendations as one long paragraph
+- Each support item should be visually separated as its own row/cardlet
+- Each item should have its own completion buttons: Did this / Didn’t do this
+- Keep the copy concise
+- Keep the card easy to scan
+- Avoid making the full card feel massive or overwhelming
+- Use dividers, subtle nested cards or light row backgrounds
+- The primary card can still be blue-tinted, but rows should be clean and readable
+
+Behavior:
+- Tapping “Did this” for a row should mark that specific recommendation complete
+- Tapping “Didn’t do this” should mark that row skipped
+- The patient should be able to complete some recommendations and skip others
+- Overall feedback can remain one simple Better / Same / Worse row for now
+- If “Worse” is selected, show/emphasize “Ask my care team”
+- If symptoms change live, update the same card and its rows within ~1-2 seconds
+- Do not create multiple full cards
+
+Acceptance:
+With low appetite + nausea + tired + constipation selected, the card should show one master Personalized check-in card with 3-4 separate recommendation rows, each with its own Did this / Didn’t do this buttons.
