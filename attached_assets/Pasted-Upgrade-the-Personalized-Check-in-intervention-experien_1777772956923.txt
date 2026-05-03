@@ -1,0 +1,330 @@
+Upgrade the Personalized Check-in intervention experience into an enterprise-grade guided intervention flow.
+
+Current issue:
+The app now shows multiple recommendation rows, but it still feels like a static checklist. For an enterprise-grade clinical product, the UX should feel like an intelligent intervention layer that prioritizes patient issues, guides the patient through the next best action, captures outcomes and escalates only when automation is insufficient.
+
+Goal:
+Build a 10/10 UX for patient intervention:
+- clear prioritization
+- urgency without alarm
+- automated first-line support
+- patient-friendly rationale
+- measurable action tracking
+- outcome feedback
+- escalation only when clinically or behaviorally appropriate
+- polished enterprise-level interaction design
+
+Do not revert the current per-row interaction model.
+
+Keep:
+- all relevant recommendations visible immediately
+- per-row interaction state
+- “I’ll try this” / “Not for me”
+- outcome feedback: Better / No change / Worse
+- escalation only after Worse or repeated unresolved issues
+- no default “Ask my care team” button
+
+Implement the following:
+
+1. Reframe the section from “recommendations” to “support plan”
+Rename or visually frame the recommendation area as:
+
+“Today’s support plan”
+
+Under it, add a concise explanation:
+“Viva prioritized the steps most likely to help based on today’s check-in.”
+
+This should make the product feel intelligent, not generic.
+
+2. Add an issue severity / priority summary
+Above the recommendations, add a compact summary module.
+
+Example:
+“4 issues surfaced”
+“1 needs attention now”
+“3 supportive steps”
+
+For the current demo state:
+- nausea = priority issue
+- low appetite, low energy and constipation = supportive issues
+
+Use calm clinical language. Avoid scary copy.
+
+3. Add a primary intervention card
+The highest-priority issue should render as a distinct primary card.
+
+Priority ranking:
+1. Severe nausea
+2. Moderate nausea
+3. Very low appetite
+4. Low appetite
+5. Very low energy
+6. Low energy
+7. Constipation
+8. Hydration
+
+For the current demo, nausea should be the primary intervention.
+
+Primary card structure:
+
+Badge:
+“Start here”
+
+Title:
+“Nausea support”
+
+Subtitle:
+“Most important next step”
+
+Body:
+“Try a small, bland protein-forward snack like yogurt, soup or a smoothie, and sip water slowly.”
+
+Rationale line:
+“Why this matters: nausea and low intake can make it harder to stay on track today.”
+
+Time cue:
+“Try within the next hour”
+
+Buttons:
+Primary: “I’ll try this”
+Secondary: “Not for me”
+
+4. Add secondary intervention rows
+All remaining recommendations should render below as secondary rows/cards.
+
+Structure:
+Title
+Timing badge
+One concise body sentence
+Button row
+
+Examples:
+
+Appetite support
+Timing badge: “Next meal”
+Body: “Add one protein-rich snack today, like Greek yogurt, tofu or a smoothie.”
+
+Energy support
+Timing badge: “Helpful today”
+Body: “Add protein to your next meal and take a short break to rest.”
+
+Constipation support
+Timing badge: “This afternoon”
+Body: “Add a fiber-rich food to your next meal and sip water steadily through the afternoon.”
+
+Buttons:
+Primary: “I’ll try this”
+Secondary: “Not for me”
+
+Secondary rows should be more compact than the primary card.
+
+5. Add live progress tracking
+Add a small progress module above the intervention rows.
+
+Example:
+“0 of 4 steps started”
+
+As users tap “I’ll try this”, update the count:
+“1 of 4 steps started”
+
+Add a very lightweight progress bar or segmented indicator if simple to implement.
+
+Do not overbuild this. It should feel motivating but not gamified.
+
+6. Add smart status chips on each row
+Each row should show a status chip based on state:
+
+Default:
+“Ready”
+
+Committed:
+“Started”
+
+Not for me:
+“Skipped”
+
+Better:
+“Helped”
+
+No change:
+“Still tracking”
+
+Worse:
+“Needs follow-up”
+
+Use subtle colors consistent with the existing design.
+
+7. Improve committed state
+When a user taps “I’ll try this”, transform that row into a follow-up state.
+
+Copy:
+“Once you’ve tried it, how do you feel?”
+
+Buttons:
+- “Better”
+- “No change”
+- “Worse”
+
+Also show:
+“Viva will use this to personalize your next step.”
+
+8. Improve “Not for me” state
+When user taps “Not for me”, do not make the row dead.
+
+Show:
+“Got it. Want a different option?”
+
+Buttons:
+- “Show another option”
+- “Skip for today”
+
+For now, if alternate recommendations are not available, “Show another option” can cycle to a fallback suggestion for the same category.
+
+Fallback suggestions:
+
+Nausea:
+“Try ginger tea, crackers or another bland snack, and avoid large portions for now.”
+
+Appetite:
+“Try a few bites of something easy to tolerate, like yogurt, tofu, soup or a smoothie.”
+
+Energy:
+“Take a short rest, hydrate slowly and add protein when you can.”
+
+Constipation:
+“Try a fiber-rich food like berries, chia, beans or vegetables, and keep sipping water.”
+
+Hydration:
+“Take a few small sips every 5 to 10 minutes for the next hour.”
+
+9. Improve “No change” state
+When user taps “No change”, show a supportive automated next step.
+
+Copy:
+“Thanks. Let’s keep watching this today.”
+
+Buttons:
+- “Try another step”
+- “Keep tracking”
+
+Do not escalate immediately on “No change” unless this issue has repeated across multiple check-ins.
+
+10. Improve “Worse” state
+When user taps “Worse”, show a stronger but calm escalation panel.
+
+Copy:
+“Sorry that got worse. Viva can suggest another step now or flag this for your care team.”
+
+Buttons:
+- “Try another step”
+- “Ask my care team”
+
+Only fire the care-team escalation callback when “Ask my care team” is tapped.
+
+11. Add repeated-issue logic placeholder
+Add clean code structure for repeated unresolved issues, even if basic for now.
+
+If the same category is marked:
+- “Worse” today, or
+- “No change” across multiple check-ins, or
+- “Not for me” repeatedly
+
+Then allow escalation or mark the issue as needing follow-up.
+
+For now, implement the UI-ready logic locally if historical data is not available:
+- Create helper function shouldOfferEscalation(category, rowState, history?)
+- Return true for worse
+- Leave TODO comment for repeated unresolved issue history
+
+12. Make the UI more compact and premium
+The screen should feel enterprise-grade, not like oversized cards.
+
+Design guidance:
+- Primary card gets stronger visual emphasis
+- Secondary cards are compact
+- Use badges and chips for hierarchy
+- Reduce vertical padding
+- Keep enough whitespace to avoid clutter
+- Preserve the current Viva blue / white palette
+- Use subtle borders, rounded corners and soft background contrast
+
+13. Improve “What Viva noticed”
+Make this section more actionable.
+
+Current:
+“Viva noticed nausea, low appetite, low energy and constipation in your check-in today.”
+
+Upgrade to:
+“Viva noticed nausea, low appetite, low energy and constipation today. Nausea is the best place to start because it can affect food intake and energy.”
+
+This ties the observation to the support plan.
+
+14. Add clinical guardrail copy
+At the bottom of the support plan, add very small helper text:
+“Viva supports between-visit care. If symptoms feel severe or urgent, contact your care team or seek medical help.”
+
+Keep this subtle. Do not make it scary or dominant.
+
+15. Data / analytics events
+If analytics tracking exists, add events for:
+- intervention_plan_viewed
+- intervention_started
+- intervention_skipped
+- intervention_feedback_better
+- intervention_feedback_no_change
+- intervention_feedback_worse
+- intervention_alternative_requested
+- care_team_escalation_requested
+
+Include:
+- category
+- recommendation title
+- priority level
+- patient id if available
+- timestamp
+
+Do not break if analytics is unavailable.
+
+16. Accessibility
+Add accessible labels for all buttons and state chips.
+
+Examples:
+- “Start nausea support”
+- “Skip appetite support”
+- “Nausea support helped”
+- “Nausea support got worse”
+- “Ask care team about nausea support”
+
+17. Preserve existing server behavior
+Do not break the existing onAccept and onFeedback callbacks.
+
+Expected behavior:
+- First committed action can still fire onAccept as currently designed
+- Better / No change / Worse should save locally if backend does not yet support all states
+- Ask my care team should trigger the escalation callback
+- Avoid duplicate 409s or repeated server calls
+
+18. Verification
+Run:
+- typecheck
+- lint if available
+- mobile/web preview
+
+Test scenario:
+Check-in state:
+- nausea: moderate
+- appetite: low
+- energy: low
+- digestion: constipation
+
+Expected UI:
+- “Today’s support plan”
+- summary module showing 4 surfaced issues
+- nausea appears as the primary “Start here” intervention
+- appetite, energy and constipation appear as compact secondary interventions
+- progress starts at 0 of 4 steps started
+- tapping “I’ll try this” updates progress and shows outcome feedback
+- tapping “Not for me” offers another option or skip for today
+- tapping “No change” suggests another step or continued tracking
+- tapping “Worse” shows “Try another step” and “Ask my care team”
+- “Ask my care team” is not visible by default
