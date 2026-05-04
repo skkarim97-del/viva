@@ -191,8 +191,8 @@ export function rowIntelligence(
     }
   } else if (issueType === "engagement") {
     if (needsReview) {
-      summary = "Patient requested clinician review.";
-      nextAction = "Acknowledge & call";
+      summary = "Patient requested review.";
+      nextAction = "Acknowledge & engage";
     } else if (silent !== null && silent >= 10) {
       summary = `May be disengaging after ${silent} days without check-in.`;
       nextAction = "Contact today";

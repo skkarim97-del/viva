@@ -172,6 +172,19 @@ export function PatientsPage() {
     }
     return empty;
   }, [interventionsWorklist.data]);
+  const interventionsByPatient = useMemo(() => {
+    const map = new Map<number, ClinicWorklistIntervention[]>();
+    const list = interventionsWorklist.data?.interventions ?? [];
+    for (const iv of list) {
+      const existing = map.get(iv.patientUserId);
+      if (existing) {
+        existing.push(iv);
+      } else {
+        map.set(iv.patientUserId, [iv]);
+      }
+    }
+    return map;
+  }, [interventionsWorklist.data]);
   const [, setLocation] = useLocation();
   // Worklist composition.
   //
@@ -453,6 +466,7 @@ export function PatientsPage() {
                   p={p}
                   needsReview
                   onAddNote={() => setNoteTarget({ id: p.id, name: p.name })}
+                  interventions={interventionsByPatient.get(p.id)}
                 />
               ))}
             </div>
@@ -486,6 +500,7 @@ export function PatientsPage() {
                     p={p}
                     needsReview={needsReviewSet.has(p.id)}
                     onAddNote={() => setNoteTarget({ id: p.id, name: p.name })}
+                    interventions={interventionsByPatient.get(p.id)}
                   />
                 ),
               )}
@@ -535,6 +550,7 @@ export function PatientsPage() {
                   p={p}
                   needsReview={needsReviewSet.has(p.id)}
                   onAddNote={() => setNoteTarget({ id: p.id, name: p.name })}
+                  interventions={interventionsByPatient.get(p.id)}
                 />
               ))}
             </div>
@@ -703,9 +719,10 @@ interface CardProps {
   p: PatientRow;
   needsReview?: boolean;
   onAddNote: () => void;
+  interventions?: ClinicWorklistIntervention[];
 }
 
-function PatientCard({ p, needsReview, onAddNote }: CardProps) {
+function PatientCard({ p, needsReview, onAddNote, interventions }: CardProps) {
   // Inline follow-up logger. Hits the SAME backend endpoint the
   // detail page uses so analytics gets one consistent stream.
   const qc = useQueryClient();
@@ -733,7 +750,7 @@ function PatientCard({ p, needsReview, onAddNote }: CardProps) {
 
   const lastNote = p.lastNoteAt
     ? `Last note: ${relativeTime(p.lastNoteAt)}`
-    : "No recent action";
+    : "No recent engagement";
 
   return (
     <Link
@@ -786,6 +803,15 @@ function PatientCard({ p, needsReview, onAddNote }: CardProps) {
           <div className="text-sm text-foreground mt-1.5 font-medium leading-snug">
             {intel.summary}
           </div>
+          {interventions && interventions.length > 0 && (
+            <div className="text-xs text-muted-foreground mt-1 font-medium leading-snug">
+              <span style={{ color: "#142240" }}>Viva:</span>{" "}
+              {vivaSupport(interventions[0])}
+              <span aria-hidden> · </span>
+              <span style={{ color: "#142240" }}>Patient:</span>{" "}
+              {patientResponseLabel(interventions[0])}
+            </div>
+          )}
           {/* Operational next-action hint + supporting context line. */}
           <div className="text-xs text-muted-foreground mt-1.5 font-medium flex items-center gap-2 flex-wrap">
             <span
@@ -1037,42 +1063,38 @@ function InterventionBucketSection({
       </button>
       {open && (
         <ul className="space-y-2">
-          {rows.map((iv) => (
-            <li key={iv.id}>
-              <Link
-                href={`/patients/${iv.patientUserId}`}
-                className="flex items-start gap-3 bg-card rounded-2xl px-4 py-3 hover:opacity-90 transition-opacity"
-              >
-                <span
-                  aria-hidden
-                  className="inline-block w-2 h-2 rounded-full shrink-0 mt-2"
-                  style={{ backgroundColor: dot }}
-                />
-                <div className="flex-1 min-w-0">
+          {rows.map((iv) => {
+            const fb = feedbackChip(iv);
+            const sev = severityChip(iv);
+            return (
+              <li key={iv.id}>
+                <Link
+                  href={`/patients/${iv.patientUserId}`}
+                  className="block bg-card rounded-2xl px-4 py-3 hover:bg-secondary active:scale-[0.995] transition-all no-underline"
+                >
                   <div className="flex items-center gap-2 flex-wrap">
+                    <span
+                      aria-hidden
+                      className="inline-block w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: dot }}
+                    />
                     <span className="font-semibold text-foreground text-sm">
                       {iv.patient?.name ?? `Patient #${iv.patientUserId}`}
                     </span>
-                    <span className="text-xs text-muted-foreground font-medium">
-                      {humanTrigger(iv.triggerType)}
-                    </span>
-                    {severityChip(iv) && (
+                    {sev && (
                       <span
                         className="text-[10px] font-semibold rounded-full px-2 py-0.5"
                         style={{ backgroundColor: "rgba(20,34,64,0.08)", color: "#142240" }}
                       >
-                        {severityChip(iv)}
+                        {sev}
                       </span>
                     )}
-                    {feedbackChip(iv) && (
+                    {fb && (
                       <span
                         className="text-[10px] font-semibold rounded-full px-2 py-0.5"
-                        style={{
-                          backgroundColor: feedbackChip(iv)!.bg,
-                          color: feedbackChip(iv)!.fg,
-                        }}
+                        style={{ backgroundColor: fb.bg, color: fb.fg }}
                       >
-                        {feedbackChip(iv)!.label}
+                        {fb.label}
                       </span>
                     )}
                     {iv.generatedBy === "rules_fallback" && (
@@ -1081,16 +1103,32 @@ function InterventionBucketSection({
                       </span>
                     )}
                   </div>
-                  <p className="text-sm text-foreground font-medium mt-0.5 leading-snug truncate">
-                    {iv.recommendation}
-                  </p>
-                </div>
-                <span className="text-muted-foreground text-xs shrink-0 mt-1">
-                  {relativeTime(iv.createdAt)}
-                </span>
-              </Link>
-            </li>
-          ))}
+                  <div className="text-sm text-foreground font-medium mt-1 leading-snug">
+                    {whySurfaced(iv)}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1 font-medium leading-snug">
+                    <span style={{ color: "#142240" }}>Viva:</span>{" "}
+                    {vivaSupport(iv)}
+                    <span aria-hidden> · </span>
+                    <span style={{ color: "#142240" }}>Patient:</span>{" "}
+                    {patientResponseLabel(iv)}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1.5 font-medium flex items-center gap-2 flex-wrap">
+                    <span
+                      className="font-semibold"
+                      style={{ color: "#142240" }}
+                    >
+                      ▸ Acknowledge &amp; engage
+                    </span>
+                    <span aria-hidden>·</span>
+                    <span className="text-muted-foreground">
+                      {relativeTime(iv.createdAt)}
+                    </span>
+                  </div>
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>
@@ -1152,10 +1190,6 @@ function feedbackChip(
     case "didnt_try":
       return { label: "Didn't try", bg: "rgba(20,34,64,0.08)", fg: "#142240" };
     default:
-      // Worklist payload includes statuses shown / accepted /
-      // pending_feedback / escalated (see WORKLIST_STATUSES in
-      // routes/clinicInterventions.ts). Any of those without a
-      // feedbackResult are awaiting patient feedback.
       if (
         iv.status === "shown" ||
         iv.status === "accepted" ||
@@ -1165,4 +1199,55 @@ function feedbackChip(
       }
       return null;
   }
+}
+
+function cap(s: string): string {
+  if (!s) return s;
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+const CATEGORY_SHORT: Record<string, string> = {
+  hydration: "hydration support",
+  activity: "gentle activity",
+  protein: "protein focus",
+  fiber: "fiber support",
+  small_meal: "small meals + hydration",
+  rest: "rest + hydration",
+  tracking: "tracking support",
+  care_team_review: "care team review",
+};
+
+function vivaSupport(iv: ClinicWorklistIntervention): string {
+  return CATEGORY_SHORT[iv.recommendationCategory] ?? iv.recommendationCategory.replace(/_/g, " ");
+}
+
+function patientResponseLabel(iv: ClinicWorklistIntervention): string {
+  switch (iv.feedbackResult) {
+    case "better":
+      return "tried \u2192 better";
+    case "worse":
+      return "tried \u2192 worse";
+    case "same":
+      return "tried \u2192 no change";
+    case "didnt_try":
+      return "not tried yet";
+    default:
+      return "awaiting feedback";
+  }
+}
+
+function whySurfaced(iv: ClinicWorklistIntervention): string {
+  if (iv.triggerType === "patient_requested_review") return "Patient requested review";
+  const sym = iv.symptomType
+    ? (SYMPTOM_LABEL_W[iv.symptomType] ?? iv.symptomType.replace(/_/g, " "))
+    : null;
+  if (iv.triggerType === "repeated_symptom" && sym) return `${cap(sym)} recurring`;
+  if (iv.triggerType === "worsening_symptom" && sym) return `${cap(sym)} \u2191`;
+  if (typeof iv.severity === "number" && sym) {
+    if (iv.severity >= 5) return `Severe ${sym} reported`;
+    if (iv.severity >= 3) return `${cap(sym)} \u2191`;
+    return `${cap(sym)} active`;
+  }
+  if (sym) return `${cap(sym)} flagged`;
+  return humanTrigger(iv.triggerType);
 }

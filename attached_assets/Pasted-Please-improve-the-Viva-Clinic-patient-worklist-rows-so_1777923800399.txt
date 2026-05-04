@@ -1,0 +1,115 @@
+Please improve the Viva Clinic patient worklist rows so providers can understand escalations in under 10 seconds.
+
+Goal:
+Make the provider row feel like triage context, not a generic patient card.
+
+Do not add new backend logic.
+Do not add new endpoints.
+Do not change patient app logic.
+Do not change escalation thresholds.
+Do not change DB schema unless absolutely necessary.
+Use data already available in the existing patient/intervention/check-in payloads.
+
+Copy-only changes first:
+1. Replace:
+   “Acknowledge & call”
+   with:
+   “Acknowledge & engage”
+
+2. Replace:
+   “No recent action”
+   with:
+   “No recent engagement”
+
+3. Replace:
+   “Patient requested clinician review.”
+   with:
+   “Patient requested review.”
+
+Worklist row improvement:
+Each escalated/review-needed row should clearly show:
+
+1. Why surfaced
+Examples:
+- “Nausea ↑ + appetite ↓”
+- “No check-in 3 days + energy trending down”
+- “Severe nausea reported”
+- “Patient requested review”
+
+2. Viva support shown
+Examples:
+- “Viva: small meals + hydration”
+- “Viva: bland foods + steady fluids”
+- “Viva: rest + hydration support”
+
+3. Patient response
+Examples:
+- “Patient: tried → better”
+- “Patient: tried → worse”
+- “Patient: awaiting feedback”
+- “Patient: not tried yet”
+
+4. Action label
+Use:
+- “Acknowledge & engage”
+
+Avoid:
+- “call”
+- vague “review needed” without context
+- long paragraphs
+
+Recommended row format:
+Line 1:
+[patient name] [category chip] [review now]
+
+Line 2:
+Nausea ↑ + appetite ↓
+
+Line 3:
+Viva: small meals + hydration · Patient: awaiting feedback
+
+Line 4/action:
+Acknowledge & engage · No recent engagement
+
+Keep the row compact. Do not make it visually heavy.
+
+Visual guidance:
+- Keep existing layout and style
+- Add only small chips/text lines if needed
+- Use existing severity/risk colors
+- Red only for true severe/urgent states
+- Orange/amber for review-needed states
+- Do not clutter the row with too many badges
+
+Patient detail page:
+Also verify the patient detail escalation card still shows the fuller context:
+- current symptoms
+- severity
+- trend if available
+- Viva recommendation shown
+- patient action/feedback
+- timestamp
+- suggested next step
+
+If detail page already does this, do not over-edit it.
+
+QA requirements:
+After changes, run a focused Clinic QA:
+
+1. Worklist loads
+2. Patient requested review section renders
+3. Needs follow-up section renders
+4. Each review-needed row has:
+   - reason surfaced
+   - Viva recommendation/support
+   - patient response/feedback
+   - engagement action
+5. Clicking into patient detail still works
+6. Provider detail page still shows full escalation context
+7. No backend/API/patient-app regressions
+8. Dashboard typecheck passes
+
+Acceptance:
+A clinician should be able to scan a row and understand:
+“What happened, what Viva recommended, what the patient did, and what I should do next”
+in under 10 seconds.
