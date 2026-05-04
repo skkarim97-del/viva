@@ -32,8 +32,14 @@ import { logger } from "../lib/logger";
 //     first call and reuses it forever afterwards
 //   - never accepts arbitrary email/password input; the demo identity
 //     is hardcoded so the URL surface is "dev login -> known fake user"
-const DEV_DEMO_PATIENT_EMAIL = "demo.patient@viva.dev";
-const DEV_DEMO_DOCTOR_EMAIL = "demo.doctor@viva.dev";
+// Both emails match the canonical `demo%@itsviva.com` pattern that
+// the analytics filter (artifacts/api-server/src/lib/demoFilter.ts)
+// excludes. Same domain as the public seeded demo doctor
+// (`demo@itsviva.com` from scripts/seed.ts) but with `+` tags so the
+// rows stay distinct -- the seeded demo experience and the dev-login
+// shortcut are intentionally separate accounts.
+const DEV_DEMO_PATIENT_EMAIL = "demo+patient@itsviva.com";
+const DEV_DEMO_DOCTOR_EMAIL = "demo+doctor@itsviva.com";
 const DEV_DEMO_DOCTOR_NAME = "Viva Demo Clinician";
 const DEV_DEMO_PATIENT_NAME = "Viva Demo Patient";
 const DEV_DEMO_CLINIC_NAME = "Viva Demo Clinic";

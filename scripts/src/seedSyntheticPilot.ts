@@ -11,9 +11,14 @@
  *   pnpm --filter @workspace/scripts run seed:pilot   (wipe + seed)
  *   pnpm --filter @workspace/scripts run seed:reset   (wipe only)
  *
- * Synthetic users are tagged by an `@viva.synthetic` email suffix so
- * reset is precise and never touches real accounts. Patient FKs cascade,
- * so deleting the synthetic user rows wipes all derived rows in one go.
+ * Synthetic users are tagged with the canonical demo email pattern
+ * `demo+...@itsviva.com` so they line up with the analytics demo
+ * filter (artifacts/api-server/src/lib/demoFilter.ts) -- pilot
+ * dashboards exclude them automatically without per-script special-
+ * casing. Reset is precise (the same pattern is the only thing this
+ * script ever deletes) and never touches real accounts. Patient FKs
+ * cascade, so deleting the synthetic user rows wipes all derived rows
+ * in one go.
  */
 
 import bcrypt from "bcryptjs";
@@ -32,11 +37,19 @@ import {
 
 // --------- tiny utilities --------------------------------------------
 
-const SUFFIX = "@viva.synthetic";
+// Every synthetic user matches `demo%@itsviva.com` so the analytics
+// demo filter excludes them. Patterns:
+//   doctors:   demo+dr-N-<runtag>@itsviva.com
+//   patients:  demo+pt-N-<cohort>-<runtag>@itsviva.com
+//   demo doc:  demo+riley@itsviva.com  (slot 0; round-robin owner)
+// runtag = base36 timestamp ensures re-seed without prior wipe still
+// gets unique emails (otherwise unique-email constraint would 23505).
+const DEMO_LIKE = "demo%@itsviva.com";
+const RUNTAG = Date.now().toString(36);
 // Demo doctor login surfaced at the end of the seed run.
 const DEMO_DOCTOR = {
   name: "Dr. Riley Kim",
-  email: `riley.kim${SUFFIX}`,
+  email: "demo+riley@itsviva.com",
   password: "viva-pilot",
   clinicName: "Coastal GLP-1 Clinic",
 };
@@ -116,15 +129,20 @@ async function wipeSynthetic(): Promise<number> {
   // care_events / doctor_notes (note doctor_notes.doctorUserId is
   // restrict but the synthetic doctors only have synthetic patients,
   // so deleting the patients first leaves nothing pointing at them).
+  //
+  // Match pattern is the canonical demo-email pattern: this also wipes
+  // any leftover dev-login or seed-script demo rows, which is the
+  // intent for a "reset to clean pilot state" run. Real (non-demo)
+  // doctor and patient rows are NEVER touched.
   const res = await db.execute(sql`
     with del_patients as (
       delete from users
-      where email like ${"%" + SUFFIX} and role = 'patient'
+      where email like ${DEMO_LIKE} and role = 'patient'
       returning id
     ),
     del_doctors as (
       delete from users
-      where email like ${"%" + SUFFIX} and role = 'doctor'
+      where email like ${DEMO_LIKE} and role = 'doctor'
       returning id
     )
     select
@@ -151,7 +169,7 @@ async function seedDoctors(): Promise<number[]> {
   });
   for (let i = 1; i < 10; i++) {
     rows.push({
-      email: `dr.${i + 1}.${Date.now().toString(36)}${SUFFIX}`,
+      email: `demo+dr-${i + 1}-${RUNTAG}@itsviva.com`,
       passwordHash: PWHASH,
       role: "doctor",
       name: `Dr. ${pick(LAST_NAMES)}`,
@@ -270,7 +288,7 @@ async function seedPatients(doctorIds: number[]): Promise<{
       planList.push(plan);
       const seq = userRows.length + 1;
       userRows.push({
-        email: `pt${seq}.${cohort}.${Date.now().toString(36)}${SUFFIX}`,
+        email: `demo+pt-${seq}-${cohort}-${RUNTAG}@itsviva.com`,
         passwordHash: PWHASH,
         role: "patient",
         name: fullName(),
@@ -623,10 +641,10 @@ async function chunkInsert<T>(
 async function summary(): Promise<void> {
   const r = await db.execute(sql`
     with synth as (
-      select id from users where email like ${"%" + SUFFIX} and role = 'patient'
+      select id from users where email like 'demo%@itsviva.com' and role = 'patient'
     )
     select
-      (select count(*)::int from users where email like ${"%" + SUFFIX} and role='doctor') as doctors,
+      (select count(*)::int from users where email like 'demo%@itsviva.com' and role='doctor') as doctors,
       (select count(*)::int from synth) as patients,
       (select count(*)::int from patients p join synth s on s.id=p.user_id where p.treatment_status='active')  as active,
       (select count(*)::int from patients p join synth s on s.id=p.user_id where p.treatment_status='stopped') as stopped,
@@ -663,7 +681,7 @@ async function main() {
   const args = new Set(process.argv.slice(2));
   const resetOnly = args.has("--reset");
 
-  console.log(`Wiping previous synthetic data (matches '%${SUFFIX}')…`);
+  console.log(`Wiping previous synthetic data (matches 'demo%@itsviva.com')…`);
   const deleted = await wipeSynthetic();
   console.log(`  deleted ${deleted} synthetic users (and their cascaded rows).`);
 

@@ -56,7 +56,8 @@
 //     doesn't retroactively flag escalation #1 as reviewed.
 // ----------------------------------------------------------------------
 
-import { and, eq, gte, lte, isNotNull, sql, desc } from "drizzle-orm";
+import { and, eq, gte, lte, isNotNull, notInArray, sql, desc } from "drizzle-orm";
+import { demoUserIdsSelect } from "./demoFilter";
 import {
   db,
   patientsTable,
@@ -231,6 +232,11 @@ export async function computePilotMetrics(
   const cohortConds = [
     isNotNull(patientsTable.activatedAt),
     lte(patientsTable.activatedAt, windowEnd),
+    // Pre-pilot: drop demo accounts at the cohort source so every
+    // downstream KPI in this file (risk bands, intervention engagement,
+    // escalations, outcome attribution) is automatically demo-clean
+    // without having to repeat the filter on each subsequent query.
+    notInArray(patientsTable.userId, demoUserIdsSelect()),
   ];
   if (opts.platformId != null) {
     cohortConds.push(eq(patientsTable.platformId, opts.platformId));

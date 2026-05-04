@@ -1,5 +1,6 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
-import { and, eq, gte, lte, isNotNull, sql, desc } from "drizzle-orm";
+import { and, eq, gte, lte, isNotNull, notInArray, sql, desc } from "drizzle-orm";
+import { excludeDemoCol, demoUserIdsSelect, DEMO_EMAIL_LIKE } from "../lib/demoFilter";
 import { z } from "zod";
 import {
   db,
@@ -128,21 +129,33 @@ router.get("/metrics", requireInternalKey, async (_req, res: Response) => {
     // ---- Invites & activation ---------------------------------------
     // Every patient row corresponds to exactly one invite the doctor
     // sent (patientsTable is created in /patients/invite).
+    // Pre-pilot demo filter applied to every count below: see
+    // ../lib/demoFilter.ts. Real numbers only -- the seeded demo
+    // doctor and any demo-invited patients (matched by email pattern
+    // `demo%@itsviva.com`) are excluded so the operator dashboard
+    // never shows demo activity as pilot signal.
     const [{ count: invitesSent }] = await db
       .select({ count: sql<number>`cast(count(*) as int)` })
-      .from(patientsTable);
+      .from(patientsTable)
+      .where(notInArray(patientsTable.userId, demoUserIdsSelect()));
 
     const [{ count: activated }] = await db
       .select({ count: sql<number>`cast(count(*) as int)` })
       .from(patientsTable)
-      .where(isNotNull(patientsTable.activatedAt));
+      .where(
+        and(
+          isNotNull(patientsTable.activatedAt),
+          notInArray(patientsTable.userId, demoUserIdsSelect()),
+        ),
+      );
 
     // ---- Check-in coverage ------------------------------------------
     const [{ count: completedFirstCheckin }] = await db
       .select({
         count: sql<number>`cast(count(distinct ${patientCheckinsTable.patientUserId}) as int)`,
       })
-      .from(patientCheckinsTable);
+      .from(patientCheckinsTable)
+      .where(notInArray(patientCheckinsTable.patientUserId, demoUserIdsSelect()));
 
     const sevenDaysAgo = ymdDaysAgo(6); // inclusive 7-day window
     const [{ count: checkedInLast7 }] = await db
@@ -150,12 +163,22 @@ router.get("/metrics", requireInternalKey, async (_req, res: Response) => {
         count: sql<number>`cast(count(distinct ${patientCheckinsTable.patientUserId}) as int)`,
       })
       .from(patientCheckinsTable)
-      .where(gte(patientCheckinsTable.date, sevenDaysAgo));
+      .where(
+        and(
+          gte(patientCheckinsTable.date, sevenDaysAgo),
+          notInArray(patientCheckinsTable.patientUserId, demoUserIdsSelect()),
+        ),
+      );
 
     const [{ count: checkinsLast7Total }] = await db
       .select({ count: sql<number>`cast(count(*) as int)` })
       .from(patientCheckinsTable)
-      .where(gte(patientCheckinsTable.date, sevenDaysAgo));
+      .where(
+        and(
+          gte(patientCheckinsTable.date, sevenDaysAgo),
+          notInArray(patientCheckinsTable.patientUserId, demoUserIdsSelect()),
+        ),
+      );
 
     // No-check-in-after-invite:
     //   any patient row whose userId never appears in patientCheckinsTable.
@@ -167,6 +190,7 @@ router.get("/metrics", requireInternalKey, async (_req, res: Response) => {
         select 1 from ${patientCheckinsTable} c
         where c.patient_user_id = p.user_id
       )
+        and ${excludeDemoCol("p.user_id")}
     `);
     const noCheckinAfterInvite =
       Number(
@@ -188,6 +212,7 @@ router.get("/metrics", requireInternalKey, async (_req, res: Response) => {
         last: sql<string>`max(${patientCheckinsTable.date})`,
       })
       .from(patientCheckinsTable)
+      .where(notInArray(patientCheckinsTable.patientUserId, demoUserIdsSelect()))
       .groupBy(patientCheckinsTable.patientUserId);
 
     const today = new Date();
@@ -214,7 +239,12 @@ router.get("/metrics", requireInternalKey, async (_req, res: Response) => {
     const activatedPatients = await db
       .select({ id: patientsTable.userId })
       .from(patientsTable)
-      .where(isNotNull(patientsTable.activatedAt));
+      .where(
+        and(
+          isNotNull(patientsTable.activatedAt),
+          notInArray(patientsTable.userId, demoUserIdsSelect()),
+        ),
+      );
 
     let needsFollowup = 0;
     if (activatedPatients.length > 0) {
@@ -224,7 +254,12 @@ router.get("/metrics", requireInternalKey, async (_req, res: Response) => {
       const cks = await db
         .select()
         .from(patientCheckinsTable)
-        .where(gte(patientCheckinsTable.date, cutoff))
+        .where(
+          and(
+            gte(patientCheckinsTable.date, cutoff),
+            notInArray(patientCheckinsTable.patientUserId, demoUserIdsSelect()),
+          ),
+        )
         .orderBy(desc(patientCheckinsTable.date));
       const byPatient = new Map<number, typeof cks>();
       for (const c of cks) {
@@ -356,6 +391,7 @@ router.get(
             and ie2.occurred_on <= (ie.occurred_on::date + interval '7 days')
             and ie2.intervention_type = 'clinician_escalation'
         )
+          and ${excludeDemoCol("ie.patient_user_id")}
         group by ie.intervention_type
         order by count desc
         limit 10
@@ -375,6 +411,7 @@ router.get(
           limit 1
         ) os on true
         where ie.surface = 'Coach'
+          and ${excludeDemoCol("ie.patient_user_id")}
       `);
       const reEnrich = (
         (reengagementAfterCoachRows.rows?.[0] as
@@ -399,6 +436,7 @@ router.get(
           select distinct ie.patient_user_id, ie.occurred_on
           from intervention_events ie
           where ie.occurred_on >= ${sinceYmd}
+            and ${excludeDemoCol("ie.patient_user_id")}
         ),
         with_followup as (
           select distinct r.patient_user_id
@@ -433,6 +471,7 @@ router.get(
           select patient_user_id, adherence_improved_3d
           from outcome_snapshots
           where snapshot_date >= ${sinceYmd}
+            and ${excludeDemoCol("patient_user_id")}
         )
         select
           (select cast(count(distinct patient_user_id) as int)
@@ -454,6 +493,7 @@ router.get(
           cast(count(*) as int) as count
         from intervention_events
         where occurred_on >= ${sinceYmd}
+          and ${excludeDemoCol("patient_user_id")}
         group by intervention_type
         order by count desc
         limit 3
@@ -473,6 +513,7 @@ router.get(
           cast(count(*) filter (where symptom_trend_3d = 'stable') as int) as stable
         from outcome_snapshots
         where snapshot_date >= ${sinceYmd}
+          and ${excludeDemoCol("patient_user_id")}
       `);
       const symptomTrendRow =
         (symptomTrendRows.rows?.[0] as
@@ -501,6 +542,7 @@ router.get(
           treatment_status as status,
           cast(count(*) as int) as count
         from patients
+        where ${excludeDemoCol("user_id")}
         group by treatment_status
       `);
       const statusCounts = { active: 0, stopped: 0, unknown: 0 };
@@ -550,6 +592,7 @@ router.get(
           from patient_checkins
           group by patient_user_id
         ) la on la.patient_user_id = p.user_id
+        where ${excludeDemoCol("p.user_id")}
       `);
       const disengagementRow = (disengagementRows.rows?.[0] ?? {}) as {
         inactive?: number;
@@ -573,6 +616,7 @@ router.get(
           treatment_status_updated_at
         from patients
         where treatment_status = 'stopped'
+          and ${excludeDemoCol("user_id")}
       `);
       type StoppedRow = {
         stop_reason: string | null;
@@ -672,6 +716,7 @@ router.get(
           started_on,
           treatment_status_updated_at
         from patients
+        where ${excludeDemoCol("user_id")}
       `);
       type CohortRow = {
         treatment_status: "active" | "stopped" | "unknown";
@@ -748,10 +793,12 @@ router.get(
           select patient_user_id as uid, date::date as d
           from patient_checkins
           where date >= ${ymd30}
+            and ${excludeDemoCol("patient_user_id")}
           union
           select patient_user_id as uid, occurred_on::date as d
           from intervention_events
           where occurred_on >= ${ymd30}
+            and ${excludeDemoCol("patient_user_id")}
         )
         select
           (select cast(count(distinct uid) as int) from activity where d = ${today}) as dau,
@@ -769,7 +816,12 @@ router.get(
       const [{ count: totalDoctors }] = await db
         .select({ count: sql<number>`cast(count(*) as int)` })
         .from(usersTable)
-        .where(eq(usersTable.role, "doctor"));
+        .where(
+          and(
+            eq(usersTable.role, "doctor"),
+            notInArray(usersTable.id, demoUserIdsSelect()),
+          ),
+        );
 
       // Doctor activity windows.
       const doctorActivityRows = await db.execute(sql`
@@ -777,6 +829,8 @@ router.get(
           select doctor_user_id as uid, created_at::date as d
           from doctor_notes
           where created_at >= ${ymd30}::date
+            and ${excludeDemoCol("doctor_user_id")}
+            and ${excludeDemoCol("patient_user_id")}
           union
           select treatment_status_updated_by as uid,
                  treatment_status_updated_at::date as d
@@ -784,6 +838,8 @@ router.get(
           where treatment_status_source = 'doctor'
             and treatment_status_updated_at >= ${ymd30}::date
             and treatment_status_updated_by is not null
+            and ${excludeDemoCol("user_id")}
+            and ${excludeDemoCol("treatment_status_updated_by")}
         )
         select
           (select cast(count(distinct uid) as int) from activity where d = ${today}::date) as dau,
@@ -808,6 +864,7 @@ router.get(
         from intervention_events
         where occurred_on >= ${ymd30}
           and treatment_state_snapshot->>'dataTier' = 'wearable'
+          and ${excludeDemoCol("patient_user_id")}
       `);
       const appleHealthConnected = Number(
         (ahRows.rows?.[0] as { connected?: number } | undefined)?.connected ?? 0,
@@ -815,7 +872,12 @@ router.get(
       const [{ count: activatedCount }] = await db
         .select({ count: sql<number>`cast(count(*) as int)` })
         .from(patientsTable)
-        .where(isNotNull(patientsTable.activatedAt));
+        .where(
+          and(
+            isNotNull(patientsTable.activatedAt),
+            notInArray(patientsTable.userId, demoUserIdsSelect()),
+          ),
+        );
       const pctAppleHealthConnected =
         activatedCount > 0 ? appleHealthConnected / activatedCount : 0;
 
@@ -826,6 +888,7 @@ router.get(
         select cast(count(distinct patient_user_id) as int) as n
         from patient_checkins
         where date >= ${ymd7}
+          and ${excludeDemoCol("patient_user_id")}
       `);
       const completingCheckins = Number(
         (checkin7Rows.rows?.[0] as { n?: number } | undefined)?.n ?? 0,
@@ -841,6 +904,7 @@ router.get(
         from intervention_events
         where occurred_on >= ${ymd30}
           and surface = 'Coach'
+          and ${excludeDemoCol("patient_user_id")}
       `);
       const coachEngaged = Number(
         (coachRows.rows?.[0] as { n?: number } | undefined)?.n ?? 0,
@@ -852,12 +916,20 @@ router.get(
       const [{ count: notesWritten30d }] = await db
         .select({ count: sql<number>`cast(count(*) as int)` })
         .from(doctorNotesTable)
-        .where(gte(doctorNotesTable.createdAt, sql`${ymd30}::date`));
+        .where(
+          and(
+            gte(doctorNotesTable.createdAt, sql`${ymd30}::date`),
+            notInArray(doctorNotesTable.doctorUserId, demoUserIdsSelect()),
+            notInArray(doctorNotesTable.patientUserId, demoUserIdsSelect()),
+          ),
+        );
 
       const reviewedRows = await db.execute(sql`
         select cast(count(distinct patient_user_id) as int) as n
         from doctor_notes
         where created_at >= ${ymd30}::date
+          and ${excludeDemoCol("doctor_user_id")}
+          and ${excludeDemoCol("patient_user_id")}
       `);
       const patientsReviewed = Number(
         (reviewedRows.rows?.[0] as { n?: number } | undefined)?.n ?? 0,
@@ -867,6 +939,7 @@ router.get(
         select cast(count(*) as int) as n
         from patients
         where treatment_status_updated_at >= ${ymd30}::date
+          and ${excludeDemoCol("user_id")}
       `);
       const treatmentStatusesUpdated30d = Number(
         (tsuRows.rows?.[0] as { n?: number } | undefined)?.n ?? 0,
@@ -878,6 +951,8 @@ router.get(
       // average down to look like neglect.
       const docsWithPanelRows = await db.execute(sql`
         select cast(count(distinct doctor_id) as int) as n from patients
+        where ${excludeDemoCol("user_id")}
+          and ${excludeDemoCol("doctor_id")}
       `);
       const doctorsWithPanel = Number(
         (docsWithPanelRows.rows?.[0] as { n?: number } | undefined)?.n ?? 0,
@@ -910,6 +985,8 @@ router.get(
         from patients p
         join users u on u.id = p.user_id
         join users d on d.id = p.doctor_id
+        where u.email not like ${DEMO_EMAIL_LIKE}
+          and d.email not like ${DEMO_EMAIL_LIKE}
         order by u.name asc
       `);
       type PatientDrillRow = {
@@ -948,28 +1025,42 @@ router.get(
       );
 
       // ----- Drill-down: doctor list ------------------------------------
+      // Each correlated sub-query also excludes demo patients --
+      // protects against the case where a demo patient is attached to
+      // a real doctor (panel mistakes, manual fixups), which would
+      // otherwise inflate the real doctor's drilldown counts.
       const doctorRows = await db.execute(sql`
         select
           u.id as id,
           u.name as name,
           u.email as email,
-          (select cast(count(*) as int) from patients p where p.doctor_id = u.id) as patient_count,
           (select cast(count(*) as int) from patients p
-             where p.doctor_id = u.id and p.treatment_status = 'active') as active_patients,
+             where p.doctor_id = u.id
+               and ${excludeDemoCol("p.user_id")}) as patient_count,
           (select cast(count(*) as int) from patients p
-             where p.doctor_id = u.id and p.treatment_status = 'stopped') as stopped_patients,
+             where p.doctor_id = u.id and p.treatment_status = 'active'
+               and ${excludeDemoCol("p.user_id")}) as active_patients,
+          (select cast(count(*) as int) from patients p
+             where p.doctor_id = u.id and p.treatment_status = 'stopped'
+               and ${excludeDemoCol("p.user_id")}) as stopped_patients,
           (select cast(count(*) as int) from doctor_notes n
-             where n.doctor_user_id = u.id and n.created_at >= ${ymd30}::date) as notes_written,
+             where n.doctor_user_id = u.id and n.created_at >= ${ymd30}::date
+               and ${excludeDemoCol("n.patient_user_id")}) as notes_written,
           (select cast(count(*) as int) from patients p
              where p.treatment_status_updated_by = u.id
-               and p.treatment_status_updated_at >= ${ymd30}::date) as statuses_updated,
+               and p.treatment_status_updated_at >= ${ymd30}::date
+               and ${excludeDemoCol("p.user_id")}) as statuses_updated,
           greatest(
-            (select max(created_at) from doctor_notes n where n.doctor_user_id = u.id),
+            (select max(created_at) from doctor_notes n
+               where n.doctor_user_id = u.id
+                 and ${excludeDemoCol("n.patient_user_id")}),
             (select max(treatment_status_updated_at) from patients p
-               where p.treatment_status_updated_by = u.id)
+               where p.treatment_status_updated_by = u.id
+                 and ${excludeDemoCol("p.user_id")})
           ) as last_active_at
         from users u
         where u.role = 'doctor'
+          and u.email not like ${DEMO_EMAIL_LIKE}
         order by u.name asc
       `);
       type DoctorDrillRow = {
@@ -1088,6 +1179,7 @@ router.get(
             WHERE created_at >= NOW() - INTERVAL '30 days'
               AND user_type = 'patient'
               AND event_name IN ('plan_item_completed','plan_item_skipped','plan_item_viewed')
+              AND ${excludeDemoCol("user_id")}
           )
           SELECT
             category,
@@ -1121,6 +1213,7 @@ router.get(
             WHERE created_at >= NOW() - INTERVAL '30 days'
               AND user_type = 'patient'
               AND event_name IN ('plan_item_completed','plan_item_skipped','plan_item_viewed')
+              AND ${excludeDemoCol("user_id")}
           `);
           const totalPatients =
             (distinctUsersRow.rows[0] as { n: number } | undefined)?.n ?? 0;
@@ -1173,6 +1266,7 @@ router.get(
               MAX(occurred_at) FILTER (WHERE type = 'doctor_reviewed')      AS last_rev,
               MAX(occurred_at) FILTER (WHERE type = 'follow_up_completed')  AS last_fup
             FROM ${careEventsTable}
+            WHERE ${excludeDemoCol("patient_user_id")}
             GROUP BY patient_user_id
           )
           SELECT
@@ -1342,6 +1436,7 @@ router.get(
           and(
             eq(careEventsTable.source, "viva"),
             gte(careEventsTable.occurredAt, since),
+            notInArray(careEventsTable.patientUserId, demoUserIdsSelect()),
           ),
         );
       const vivaRow = vivaAgg[0] ?? { total: 0, distinctPatients: 0 };
@@ -1353,6 +1448,7 @@ router.get(
           select patient_user_id, min(occurred_at) as first_at
           from care_events
           where source = 'viva' and occurred_at >= ${since.toISOString()}
+            and ${excludeDemoCol("patient_user_id")}
           group by patient_user_id
         )
         select
@@ -1381,6 +1477,7 @@ router.get(
           select patient_user_id, min(occurred_at) as first_at
           from care_events
           where source = 'viva' and occurred_at >= ${since.toISOString()}
+            and ${excludeDemoCol("patient_user_id")}
           group by patient_user_id
         )
         select count(distinct v.patient_user_id)::int as escalated_patients
@@ -1406,6 +1503,7 @@ router.get(
           and(
             eq(careEventsTable.type, "escalation_requested"),
             gte(careEventsTable.occurredAt, since),
+            notInArray(careEventsTable.patientUserId, demoUserIdsSelect()),
           ),
         );
       const escRow = escAgg[0] ?? { total: 0, distinctPatients: 0 };
@@ -1425,6 +1523,7 @@ router.get(
           from care_events
           where type = 'escalation_requested'
             and occurred_at >= ${since.toISOString()}
+            and ${excludeDemoCol("patient_user_id")}
         )
         select
           case
@@ -1445,7 +1544,8 @@ router.get(
 
       const totalActivePatientsRow = await db
         .select({ count: sql<number>`count(*)::int` })
-        .from(patientsTable);
+        .from(patientsTable)
+        .where(notInArray(patientsTable.userId, demoUserIdsSelect()));
       const totalActivePatients =
         Number(totalActivePatientsRow[0]?.count ?? 0) || 0;
 
@@ -1462,6 +1562,7 @@ router.get(
           from care_events ce
           where ce.type = 'escalation_requested'
             and ce.occurred_at >= ${since.toISOString()}
+            and ${excludeDemoCol("ce.patient_user_id")}
         ),
         first_review as (
           select e.esc_id, min(d.occurred_at) as ts
@@ -1527,6 +1628,7 @@ router.get(
             from care_events
             where type = 'follow_up_completed'
               and occurred_at >= ${since.toISOString()}
+              and ${excludeDemoCol("patient_user_id")}
           ) as total_follow_up_events
       `);
       const doctorRow = (doctorJoinRows.rows[0] ?? {}) as {
@@ -1551,6 +1653,7 @@ router.get(
           select patient_user_id, min(occurred_at) as first_at
           from care_events
           where source = 'viva' and occurred_at >= ${since.toISOString()}
+            and ${excludeDemoCol("patient_user_id")}
           group by patient_user_id
         ),
         no_escalation as (
@@ -1598,6 +1701,7 @@ router.get(
           from care_events
           where type = 'escalation_requested'
             and occurred_at >= ${since.toISOString()}
+            and ${excludeDemoCol("patient_user_id")}
           group by patient_user_id
         ),
         doc_action as (
@@ -1787,6 +1891,7 @@ router.get(
           from care_events
           where type = 'escalation_requested'
             and occurred_at >= current_date - (${days - 1})::int
+            and ${excludeDemoCol("patient_user_id")}
           group by occurred_at::date
         ),
         fu_by_day as (
@@ -1795,6 +1900,7 @@ router.get(
           from care_events
           where type = 'follow_up_completed'
             and occurred_at >= current_date - (${days - 1})::int
+            and ${excludeDemoCol("patient_user_id")}
           group by occurred_at::date
         ),
         -- For each escalation in the window, did its linked follow-up
@@ -1818,6 +1924,7 @@ router.get(
           ) ff on true
           where e.type = 'escalation_requested'
             and e.occurred_at >= current_date - (${days - 1})::int
+            and ${excludeDemoCol("e.patient_user_id")}
           group by e.occurred_at::date
         )
         select
@@ -1923,6 +2030,7 @@ router.get(
             MAX(timezone) AS representative_tz
           FROM ${analyticsEventsTable}
           WHERE created_at >= ${since}
+            AND ${excludeDemoCol("user_id")}
           GROUP BY user_type, user_id, COALESCE(session_id, 'evt-' || id::text)
         )
         SELECT
@@ -2018,6 +2126,7 @@ router.get(
         SELECT event_name, user_type, COUNT(*)::int AS n
         FROM ${analyticsEventsTable}
         WHERE created_at >= ${since}
+          AND ${excludeDemoCol("user_id")}
         GROUP BY event_name, user_type
         ORDER BY n DESC
       `);

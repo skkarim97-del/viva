@@ -138,9 +138,17 @@ export async function linkInterventionsToOutcomes(
 > {
   // Confidence band derived in JS from the JSONB summary (Postgres
   // doesn't have a one-liner for "max enum across keys").
+  //
+  // Demo filter: when called from the operator analytics endpoint
+  // (patientUserId === null), exclude any intervention attributed to a
+  // demo user so the operator dashboard never shows seeded demo
+  // activity as pilot signal. When called for a specific patient, the
+  // patient_user_id constraint is the single source of truth and the
+  // demo filter is redundant -- the caller already knows who they're
+  // looking at.
   const where = patientUserId
     ? sql`ie.patient_user_id = ${patientUserId}`
-    : sql`true`;
+    : sql`ie.patient_user_id not in (select id from users where email like 'demo%@itsviva.com')`;
   const rows = await db.execute(sql`
     select
       ie.id                                 as intervention_id,

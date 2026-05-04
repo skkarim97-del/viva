@@ -575,29 +575,44 @@ router.post("/invite", async (req, res: Response) => {
     res.status(409).json({ error: "phone_in_use" });
     return;
   }
-  // Synthesize a unique placeholder email so the legacy notNull/unique
-  // email column is satisfied. The patient never sees this; they sign in
-  // with a password they choose during activation, against the bearer
-  // token issued from the invite link.
-  const placeholderEmail = `invite-${phone}-${randomBytes(4).toString("hex")}@invite.viva.local`;
-  // Random unguessable hash so a stolen invite token can't double as a
-  // password. The patient sets a real password during activation.
-  const placeholderHash = await bcrypt.hash(randomBytes(24).toString("hex"), 10);
-  const token = randomBytes(24).toString("base64url");
-  // Look up the inviting doctor's platform once so we can denormalize it
-  // onto patients.platform_id. Patients formally inherit platform via
-  // doctor_id -> users.platform_id, but copying the value here lets
-  // analytics queries filter by platform without a doubled join. If the
-  // doctor row somehow has no platform (legacy data created before the
-  // platform layer existed AND not covered by backfill), the patient
-  // simply lands platformless -- the FK is nullable for exactly this
-  // case and analytics treats null as "unscoped".
+  // Look up the inviting doctor's platform AND email in one round-trip.
+  // Platform: denormalized onto patients.platform_id so analytics queries
+  // filter by platform without a doubled join. If the doctor row somehow
+  // has no platform (legacy data created before the platform layer
+  // existed AND not covered by backfill), the patient simply lands
+  // platformless -- the FK is nullable for exactly this case and
+  // analytics treats null as "unscoped".
+  // Email: the placeholder address we synthesize for the invitee
+  // inherits the inviter's "demo-ness". A demo doctor (email matches
+  // `demo%@itsviva.com`) inviting a real-looking phone number must
+  // still produce a row that the analytics demo filter excludes,
+  // otherwise stakeholder-demo invites would silently leak into
+  // pilot KPIs.
   const [doctorRow] = await db
-    .select({ platformId: usersTable.platformId })
+    .select({
+      platformId: usersTable.platformId,
+      email: usersTable.email,
+    })
     .from(usersTable)
     .where(eq(usersTable.id, doctorId))
     .limit(1);
   const platformId = doctorRow?.platformId ?? null;
+  const inviterIsDemo = /^demo.*@itsviva\.com$/i.test(doctorRow?.email ?? "");
+  // Synthesize a unique placeholder email so the legacy notNull/unique
+  // email column is satisfied. The patient never sees this; they sign in
+  // with a password they choose during activation, against the bearer
+  // token issued from the invite link.
+  // Pattern flips by inviter: demo doctor -> demo+inv-...@itsviva.com
+  // (matches the analytics demo filter); real doctor -> the legacy
+  // `@invite.viva.local` placeholder so real-pilot invites stay
+  // visibly distinct from any demo activity.
+  const placeholderEmail = inviterIsDemo
+    ? `demo+inv-${phone}-${randomBytes(4).toString("hex")}@itsviva.com`
+    : `invite-${phone}-${randomBytes(4).toString("hex")}@invite.viva.local`;
+  // Random unguessable hash so a stolen invite token can't double as a
+  // password. The patient sets a real password during activation.
+  const placeholderHash = await bcrypt.hash(randomBytes(24).toString("hex"), 10);
+  const token = randomBytes(24).toString("base64url");
   const [user] = await db
     .insert(usersTable)
     .values({
