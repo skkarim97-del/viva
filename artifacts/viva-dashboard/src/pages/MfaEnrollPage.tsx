@@ -18,12 +18,12 @@ export function MfaEnrollPage() {
   );
   const [secret, setSecret] = useState<string>("");
   const [qrcode, setQrcode] = useState<string>("");
-  const [otpauthUrl, setOtpauthUrl] = useState<string>("");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
   const [acknowledged, setAcknowledged] = useState(false);
+  const [keyCopied, setKeyCopied] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -33,14 +33,10 @@ export function MfaEnrollPage() {
         if (cancelled) return;
         setSecret(r.secret);
         setQrcode(r.qrcodeDataUrl);
-        setOtpauthUrl(r.otpauthUrl);
         setStage("verify");
       })
       .catch((e) => {
         if (cancelled) return;
-        // 409 = the doctor is already enrolled (e.g. another tab beat
-        // us to it). Bounce back to the gate which will route to the
-        // verify page or onward as appropriate.
         if (e instanceof HttpError && e.status === 409) {
           qc.invalidateQueries({ queryKey: ["mfa-status"] });
           return;
@@ -83,58 +79,124 @@ export function MfaEnrollPage() {
       .catch(() => {});
   }
 
+  function copySetupKey() {
+    void navigator.clipboard.writeText(secret).then(() => {
+      setKeyCopied(true);
+      setTimeout(() => setKeyCopied(false), 2000);
+    }).catch(() => {});
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-6 py-10">
+    <div className="min-h-screen flex items-center justify-center bg-background px-4 sm:px-6 py-8 sm:py-10">
       <div className="w-full max-w-md">
         <div className="mb-8">
           <ClinicLockup variant="hero" />
         </div>
 
-        <div className="bg-card rounded-[20px] p-7 space-y-5">
-          <div>
-            <h1 className="font-display text-[22px] font-bold text-foreground mb-2">
-              Set up two-factor sign-in
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Patient charts are protected by a second factor. Use an
-              authenticator app like 1Password, Authy, or Google
-              Authenticator to scan the code below.
-            </p>
-          </div>
-
+        <div className="bg-card rounded-[20px] p-5 sm:p-7 space-y-5">
           {stage === "loading" && (
-            <div className="text-sm text-muted-foreground">Loading...</div>
+            <>
+              <div>
+                <h1 className="font-display text-[22px] font-bold text-foreground mb-2">
+                  Secure your Viva Clinic account
+                </h1>
+                <p className="text-sm text-muted-foreground">Loading setup...</p>
+              </div>
+            </>
           )}
 
           {stage === "verify" && (
             <>
-              <div className="flex items-center justify-center bg-background rounded-2xl p-4">
-                {qrcode ? (
-                  <img
-                    src={qrcode}
-                    alt="MFA QR code"
-                    width={200}
-                    height={200}
-                  />
-                ) : null}
+              <div>
+                <h1 className="font-display text-[22px] font-bold text-foreground mb-2">
+                  Secure your Viva Clinic account
+                </h1>
+                <p className="text-sm text-muted-foreground mb-3">
+                  To protect patient information, Viva uses a one-time 6-digit
+                  code when you sign in.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Your code comes from an authenticator app.
+                </p>
               </div>
-              <details className="text-xs text-muted-foreground">
-                <summary className="cursor-pointer font-semibold">
-                  Can't scan? Enter the secret manually
-                </summary>
-                <div className="mt-2 break-all rounded-xl bg-background p-3 font-mono text-foreground">
-                  {secret}
+
+              <div className="rounded-2xl bg-background p-4 space-y-3">
+                <h2 className="font-display text-[15px] font-bold text-foreground">
+                  Need an authenticator app?
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Download Google Authenticator from the App Store, then come
+                  back to finish setup.
+                </p>
+                <a
+                  href="https://apps.apple.com/us/app/google-authenticator/id388497605"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 bg-primary text-primary-foreground font-semibold text-sm px-5 py-2.5 rounded-2xl hover:opacity-90 active:scale-[0.98] transition-all"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  Download Google Authenticator
+                </a>
+                <p className="text-xs text-muted-foreground">
+                  Already use 1Password, Microsoft Authenticator or Authy? You
+                  can use that too.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <h2 className="font-display text-[15px] font-bold text-foreground">
+                  Setup steps
+                </h2>
+                <ol className="text-sm text-muted-foreground list-decimal list-inside space-y-1">
+                  <li>Download or open an authenticator app</li>
+                  <li>Add Viva Clinic using the setup key</li>
+                  <li>Enter the 6-digit code</li>
+                </ol>
+              </div>
+
+              <div className="space-y-3">
+                <div className="rounded-2xl bg-background p-4 space-y-2">
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Setup key
+                  </div>
+                  <div className="break-all font-mono text-sm text-foreground leading-relaxed">
+                    {secret}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={copySetupKey}
+                    className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:opacity-80 active:scale-[0.98] transition-all"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    {keyCopied ? "Copied!" : "Copy setup key"}
+                  </button>
+                  <p className="text-xs text-muted-foreground">
+                    Open your authenticator app, tap +, choose "Enter setup key,"
+                    then paste the setup key.
+                  </p>
                 </div>
-                <div className="mt-2 break-all">
-                  Or open this link on your phone:{" "}
-                  <span className="font-mono">{otpauthUrl}</span>
-                </div>
-              </details>
+
+                <details className="text-xs text-muted-foreground">
+                  <summary className="cursor-pointer font-semibold">
+                    Using another device? Scan this QR code
+                  </summary>
+                  <div className="mt-3 flex items-center justify-center bg-background rounded-2xl p-4">
+                    {qrcode ? (
+                      <img
+                        src={qrcode}
+                        alt="MFA QR code"
+                        width={200}
+                        height={200}
+                      />
+                    ) : null}
+                  </div>
+                </details>
+              </div>
 
               <form onSubmit={onVerify} className="space-y-4">
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                    6-digit code from your app
+                    6-digit code
                   </label>
                   <input
                     inputMode="numeric"
@@ -165,7 +227,7 @@ export function MfaEnrollPage() {
                   disabled={busy || code.length !== 6}
                   className="w-full bg-primary text-primary-foreground font-semibold py-3.5 rounded-2xl hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-60"
                 >
-                  {busy ? "Verifying..." : "Verify and continue"}
+                  {busy ? "Verifying..." : "Finish setup"}
                 </button>
               </form>
             </>
@@ -173,6 +235,11 @@ export function MfaEnrollPage() {
 
           {stage === "codes" && (
             <>
+              <div>
+                <h1 className="font-display text-[22px] font-bold text-foreground mb-2">
+                  You're all set
+                </h1>
+              </div>
               <div className="rounded-xl bg-background p-4 space-y-2">
                 <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   Recovery codes
