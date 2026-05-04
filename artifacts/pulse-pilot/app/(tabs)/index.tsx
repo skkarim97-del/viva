@@ -207,6 +207,7 @@ export default function DashboardScreen() {
   // so an in-progress edit is never overwritten. Best-effort: any
   // failure is silent and leaves the sliders empty.
   const hydratedFromServerRef = useRef(false);
+  const [symptomHydrated, setSymptomHydrated] = useState(false);
   useEffect(() => {
     if (hydratedFromServerRef.current) return;
     const allEmpty =
@@ -217,13 +218,18 @@ export default function DashboardScreen() {
       bowelMovementToday === null;
     if (!allEmpty) {
       hydratedFromServerRef.current = true;
+      setSymptomHydrated(true);
       return;
     }
     let cancelled = false;
     (async () => {
       const row = await sessionApi.getTodayCheckin().catch(() => null);
-      if (cancelled || !row) return;
+      if (cancelled) return;
       hydratedFromServerRef.current = true;
+      if (!row) {
+        setSymptomHydrated(true);
+        return;
+      }
       if (glp1Energy === null && row.energy) setGlp1Energy(row.energy);
       if (nausea === null && row.nausea) setNausea(row.nausea);
       if (appetite === null && row.appetite) setAppetite(row.appetite);
@@ -231,6 +237,7 @@ export default function DashboardScreen() {
       if (bowelMovementToday === null && row.bowelMovement !== null) {
         setBowelMovementToday(row.bowelMovement);
       }
+      setSymptomHydrated(true);
     })();
     return () => {
       cancelled = true;
@@ -371,7 +378,13 @@ export default function DashboardScreen() {
     // (moderate -> severe) silently no-op'd. The server engine de-dupes
     // on its own (allowing supersede when severity escalates), so the
     // frontend just needs to fire the chain on every signature change.
-    if (!hasMinSymptomData) return;
+    //
+    // When the patient deselects all symptom chips (hasMinSymptomData
+    // becomes false) but a stale active intervention card is still
+    // visible, we still need to fire the save+generate chain so the
+    // server can dismiss the card. We default energy/nausea to
+    // baseline ("good"/"none") for the checkin save in that case.
+    if (!hasMinSymptomData && activeInterventions.length === 0) return;
     if (lastSavedSignatureRef.current === symptomSignature) return;
     const handle = setTimeout(async () => {
       const snapshot = symptomSignature;
@@ -380,19 +393,12 @@ export default function DashboardScreen() {
       try {
         await sessionApi.submitCheckin({
           date: todayYmd,
-          energy: glp1Energy!,
-          nausea: nausea!,
+          energy: glp1Energy ?? "good",
+          nausea: nausea ?? "none",
           mood: 3,
           appetite: appetite ?? null,
           digestion: digestion ?? null,
           bowelMovement: bowelMovementToday,
-          // Tags this save as the Today-screen 1.2s autosave so the
-          // pilot symptom-edit timeline (patient_checkin_updated
-          // event in analytics_events) can distinguish it from the
-          // mental-state modal Done button (manual_save) and from
-          // demo seeding. Server-side this also flips
-          // triggeredInterventionRefresh=true on the event row,
-          // since this code path always follows up with /generate.
           source: "today_checkin_autosave",
         });
         savedOk = true;
@@ -416,6 +422,7 @@ export default function DashboardScreen() {
     digestion,
     bowelMovementToday,
     tryGenerate,
+    activeInterventions.length,
   ]);
 
   const onInterventionAccept = React.useCallback(
@@ -1027,13 +1034,13 @@ export default function DashboardScreen() {
                       }
                     : null
                 }
-                liveCheckin={{
+                liveCheckin={symptomHydrated ? {
                   nausea,
                   appetite,
                   energy: glp1Energy,
                   digestion,
                   bowel: bowelSelectedKey,
-                }}
+                } : null}
                 onAccept={onInterventionAccept}
                 onDismiss={onInterventionDismiss}
                 onFeedback={onInterventionFeedback}
@@ -1426,13 +1433,13 @@ export default function DashboardScreen() {
                       }
                     : null
                 }
-                liveCheckin={{
+                liveCheckin={symptomHydrated ? {
                   nausea,
                   appetite,
                   energy: glp1Energy,
                   digestion,
                   bowel: bowelSelectedKey,
-                }}
+                } : null}
                 onAccept={onInterventionAccept}
                 onDismiss={onInterventionDismiss}
                 onFeedback={onInterventionFeedback}

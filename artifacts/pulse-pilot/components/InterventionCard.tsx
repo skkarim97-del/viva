@@ -548,12 +548,10 @@ export type LiveSeverity = "steady" | "mild" | "moderate" | "severe";
 //               are at moderate level
 //   moderate -> any field reads "moderate"-equivalent
 //   mild     -> any field reads "mild"-equivalent
-//   steady   -> nausea is "none" AND energy is at least "good"
-//               AND no other field is negative
-//
-// We require BOTH nausea=none AND energy>=good before flipping to
-// "steady" so a partially-filled check-in doesn't prematurely
-// downgrade an intervention the server generated for real symptoms.
+//   steady   -> no field reads a negative value (null/unset fields
+//               count as "no concern" so the card transitions to the
+//               maintenance layout the moment the patient deselects
+//               their last symptom chip)
 export function deriveLiveSeverity(
   c: LiveCheckin | null | undefined,
 ): LiveSeverity | null {
@@ -588,16 +586,10 @@ export function deriveLiveSeverity(
   ];
   const max = Math.max(...all);
   const heavyCount = all.filter((s) => s >= 2).length;
-  const noNegatives = max === 0;
-  const allGood =
-    noNegatives &&
-    c.nausea === "none" &&
-    (c.energy === "good" || c.energy === "great");
-  if (allGood) return "steady";
   if (max >= 3 || heavyCount >= 3) return "severe";
   if (max >= 2) return "moderate";
   if (max >= 1) return "mild";
-  return null;
+  return "steady";
 }
 
 // =====================================================================
