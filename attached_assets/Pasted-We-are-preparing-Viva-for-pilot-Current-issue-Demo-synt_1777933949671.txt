@@ -1,0 +1,194 @@
+We are preparing Viva for pilot.
+
+Current issue:
+Demo + synthetic data is mixed into the database and polluting analytics.
+
+We need to:
+1) Fully wipe all existing data
+2) Standardize demo users (demo@itsviva.com)
+3) Ensure demo activity NEVER impacts analytics or metrics
+4) Keep demo flows working for Viva Clinic
+
+IMPORTANT CONSTRAINTS:
+- Do NOT drop tables
+- Do NOT break schema or migrations
+- Do NOT break patient app, clinic, or analytics
+- Do NOT remove demo capability
+- Do NOT rely on frontend-only filtering
+
+----------------------------------
+PHASE 1 — BACKUP
+----------------------------------
+
+1. Create full DB backup before any deletion
+- Name: backup_pre_pilot_wipe_TIMESTAMP.sql
+- Confirm backup success before continuing
+
+----------------------------------
+PHASE 2 — FULL DATA WIPE
+----------------------------------
+
+Delete ALL data from:
+
+- patients
+- patient_profiles
+- patient_checkins
+- patient_interventions
+- care_events
+- patient_treatment_logs
+- patient_health_daily_summaries
+- patient_weights
+- analytics_events
+- intervention_events
+- outcome_snapshots
+- pilot_snapshots
+- doctor_notes
+- coach_messages
+- patient_plan_items
+- patient_integrations
+- phi_access_logs (if only demo data)
+- sessions (optional)
+
+Users:
+- Delete ALL patient users
+- Delete ALL demo users:
+  - demo@itsviva.com
+  - demo+*@itsviva.com
+  - any @viva.synthetic
+  - demo.patient@viva.dev
+  - demo.doctor@viva.dev
+
+Preserve ONLY:
+- required admin/operator accounts (for dashboard access)
+
+Use:
+TRUNCATE ... RESTART IDENTITY CASCADE
+or safe delete order
+
+----------------------------------
+PHASE 3 — DEMO USER STANDARDIZATION
+----------------------------------
+
+All demo users must follow:
+
+demo@itsviva.com
+demo+1@itsviva.com
+demo+2@itsviva.com
+
+Update:
+- seed scripts
+- demo reset logic
+- invite flows (if needed)
+
+REMOVE any usage of:
+- @viva.synthetic
+- @viva.dev demo emails
+
+----------------------------------
+PHASE 4 — DEMO FLAGGING (CRITICAL)
+----------------------------------
+
+We must explicitly mark demo data.
+
+Add ONE of the following:
+
+Option A (preferred):
+- Add column: users.is_demo BOOLEAN DEFAULT false
+
+Option B (fallback if no migration):
+- Derive from email LIKE 'demo%@itsviva.com'
+
+Then ensure:
+- All demo users have is_demo = true
+
+----------------------------------
+PHASE 5 — ANALYTICS ISOLATION (MOST IMPORTANT)
+----------------------------------
+
+Update ALL analytics queries to exclude demo data by default:
+
+WHERE users.is_demo = false
+
+OR (fallback):
+WHERE users.email NOT LIKE 'demo%@itsviva.com'
+
+Apply to:
+- Overview metrics
+- Pilot metrics
+- Operating
+- Retention
+- System behavior
+- Care loop
+- Usage
+- Patients
+- Doctors
+- ALL aggregations
+
+This MUST be done at API/query level (NOT frontend only)
+
+----------------------------------
+PHASE 6 — INVITE FLOW FIX (IMPORTANT)
+----------------------------------
+
+Requirement:
+Invites sent from demo@itsviva.com should NOT impact metrics.
+
+Implement:
+
+IF inviter.is_demo = true THEN:
+- created patients should also be marked is_demo = true
+
+This ensures:
+Demo doctor → demo patients → excluded from analytics
+
+----------------------------------
+PHASE 7 — DEMO MODE SAFETY
+----------------------------------
+
+Ensure:
+- Demo seed/reset only works when:
+  NODE_ENV !== 'production'
+  OR ENABLE_DEV_LOGIN = true
+
+- Demo data is easy to wipe/reset
+
+----------------------------------
+PHASE 8 — QA VERIFICATION
+----------------------------------
+
+After wipe:
+
+1. DB state:
+- patients = 0
+- checkins = 0
+- interventions = 0
+- analytics_events = 0
+
+2. Analytics:
+- Dashboard shows 0 patients
+- No fake metrics
+
+3. Demo:
+- Run demo seed
+- Viva Clinic shows demo patients
+- Analytics STILL shows 0 (default view)
+
+4. Invite test:
+- Invite from demo@itsviva.com
+- Confirm new patient is marked demo
+- Confirm excluded from analytics
+
+----------------------------------
+PHASE 9 — REPORT
+----------------------------------
+
+Provide:
+
+- Backup confirmation
+- Tables cleared + row counts
+- Users deleted vs preserved
+- Demo users created (if any)
+- Final DB counts
+- Confirmation analytics excludes demo
+- Confirmation demo flows work
+- Any risks or edge cases
