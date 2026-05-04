@@ -424,22 +424,56 @@ async function seedActivity(
       }
     }
 
-    // Doctor notes — engagement varies by doctor index.
+    // Doctor notes — engagement varies by cohort. Every patient gets
+    // at least one note in the last ~2 weeks so the worklist row reads
+    // "Last note: Nd ago" instead of the cold-start "No recent
+    // engagement". Side-effect cohort gets the most touches; stable
+    // patients get a single light-touch note.
     const noteCount =
-      plan.cohort === "side_effect" ? between(1, 3) :
-      plan.cohort === "stable"      ? between(0, 1) :
-                                      between(0, 2);
+      plan.cohort === "side_effect" ? between(2, 4) :
+      plan.cohort === "stable"      ? between(1, 2) :
+                                      between(1, 3);
+    const NOTE_BODIES = {
+      side_effect: [
+        "Reviewed nausea pattern — advised small frequent meals and slow titration.",
+        "Discussed hydration and electrolytes. Recheck in a week.",
+        "Patient reports symptoms easing; continue current dose.",
+        "Tolerating dose better this week. Continue plan.",
+      ],
+      stable: [
+        "Tolerating dose well. Continue current plan.",
+        "Status update reviewed; no escalation needed.",
+        "Quick check-in — patient on track.",
+      ],
+      disengaging: [
+        "Reached out to re-engage. Awaiting response.",
+        "Discussed barriers to daily check-ins. Patient receptive.",
+        "Encouraged consistency with check-ins and plan.",
+      ],
+      cost_motivation: [
+        "Discussed cost concerns and reviewed coverage options.",
+        "Patient considering alternatives; checking back next week.",
+        "Reviewed motivation and goals. Patient receptive.",
+      ],
+      low_efficacy: [
+        "Reviewed weight trend — discussed next steps.",
+        "Patient asked about alternatives. Plan to revisit.",
+        "Discussed expectations and goal alignment.",
+      ],
+    } as const;
     for (let n = 0; n < noteCount; n++) {
-      const ago = between(1, Math.min(40, plan.startedDaysAgo));
+      // First note for every patient is recent (0-12 days) so the
+      // worklist consistently reads "Last note: Nd ago". Subsequent
+      // notes are spread further back to look lived-in.
+      const ago =
+        n === 0
+          ? between(0, 12)
+          : between(13, Math.min(40, plan.startedDaysAgo));
+      const cohortBodies = NOTE_BODIES[plan.cohort];
       notes.push({
         patientUserId: pid,
         doctorUserId: plan.doctorId,
-        body: pick([
-          "Tolerating dose well. Continue current plan.",
-          "Watching nausea trend — recheck in a week.",
-          "Discussed hydration and protein. Patient receptive.",
-          "Status update reviewed; no escalation needed.",
-        ]),
+        body: pick(cohortBodies),
         resolved: chance(0.5),
         createdAt: daysAgo(ago),
       });
