@@ -185,10 +185,53 @@ router.post("/generate", async (req, res: Response) => {
     const lockedActive = activeRows.find((r) => r.status !== "shown") ?? null;
 
     if (!generated) {
-      // No triggers detected. If the patient already engaged with a
-      // locked card (accepted / awaiting feedback / escalated), keep
-      // surfacing it so feedback flow isn't disrupted. Otherwise
-      // there's truly nothing to show.
+      // No triggers detected — patient's current symptoms don't
+      // warrant a card. Stale-display fix: dismiss any "shown" card
+      // that's still hanging around so /active stops returning it,
+      // and auto-resolve any escalated card whose severe messaging is
+      // now misleading (the escalation history in care_events is
+      // unaffected). Accepted / pending_feedback cards stay: the
+      // patient is mid-feedback-flow and clearing symptoms could be
+      // BECAUSE the recommendation worked — they should still get to
+      // report "better."
+      if (liveEditable) {
+        await db
+          .update(patientInterventionsTable)
+          .set({ status: "dismissed", updatedAt: new Date() })
+          .where(eq(patientInterventionsTable.id, liveEditable.id));
+        fireAnalytics(userId, ["intervention_dismissed"], {
+          intervention_id: liveEditable.id,
+          trigger_type: liveEditable.triggerType,
+          auto_reason: "symptoms_cleared",
+          source,
+        });
+        logger.info(
+          { userId, interventionId: liveEditable.id },
+          "intervention_auto_dismissed_symptoms_cleared",
+        );
+      }
+      if (lockedActive && lockedActive.status === "escalated") {
+        await db
+          .update(patientInterventionsTable)
+          .set({
+            status: "resolved",
+            resolvedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(patientInterventionsTable.id, lockedActive.id));
+        fireAnalytics(userId, ["intervention_resolved"], {
+          intervention_id: lockedActive.id,
+          trigger_type: lockedActive.triggerType,
+          auto_reason: "symptoms_cleared_after_escalation",
+          source,
+        });
+        logger.info(
+          { userId, interventionId: lockedActive.id },
+          "intervention_auto_resolved_symptoms_cleared",
+        );
+        res.json({ intervention: null, reason: "escalation_auto_resolved" });
+        return;
+      }
       if (lockedActive) {
         res.json({ intervention: lockedActive });
         return;
@@ -227,21 +270,53 @@ router.post("/generate", async (req, res: Response) => {
       row = updated;
       liveUpdated = true;
     } else if (lockedActive) {
-      // The patient has already engaged with the active card
-      // (accepted / awaiting feedback / escalated). Don't replace it
-      // and don't pile on a new one -- just return the existing row
-      // so the mobile client can keep rendering it.
-      res.json({ intervention: lockedActive });
-      return;
-    } else {
-      // Path B: no active row. Dismiss any same-trigger superseded
-      // rows that the engine flagged (rare in the unified-card model
-      // but kept for parity with prior behavior) and insert fresh.
+      // The patient has already engaged with the active card.
+      // For accepted / pending_feedback: don't disrupt the feedback
+      // flow — the patient should still report how the recommendation
+      // worked. Return it as-is.
+      // For escalated: the escalation history lives in care_events,
+      // and the card's severe messaging is now stale if symptoms
+      // changed. Auto-resolve it and fall through to Path B to insert
+      // the new (current-symptom) card.
+      if (lockedActive.status === "escalated") {
+        await db
+          .update(patientInterventionsTable)
+          .set({
+            status: "resolved",
+            resolvedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(patientInterventionsTable.id, lockedActive.id));
+        fireAnalytics(userId, ["intervention_resolved"], {
+          intervention_id: lockedActive.id,
+          trigger_type: lockedActive.triggerType,
+          auto_reason: "symptoms_changed_after_escalation",
+          source,
+        });
+        logger.info(
+          { userId, interventionId: lockedActive.id },
+          "intervention_auto_resolved_symptoms_changed",
+        );
+      } else {
+        res.json({ intervention: lockedActive });
+        return;
+      }
+    }
+
+    // Path B: reached when no liveEditable (either no active row at
+    // all, or the only active row was an escalated card we just
+    // resolved above). Dismiss any same-trigger superseded rows that
+    // the engine flagged (rare in the unified-card model but kept for
+    // parity with prior behavior) and insert fresh.
+    if (!row) {
+      const justResolvedId = lockedActive?.status === "escalated"
+        ? lockedActive.id
+        : null;
       const supersededIds = (
         generated.insertRow.contextSummary?.priorInterventions
           ?.activeInterventions ?? []
       )
-        .filter((a) => a.type === generated.insertRow.triggerType)
+        .filter((a) => a.type === generated.insertRow.triggerType && a.id !== justResolvedId)
         .map((a) => a.id);
       if (supersededIds.length > 0) {
         await db

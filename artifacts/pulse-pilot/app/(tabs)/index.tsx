@@ -306,7 +306,7 @@ export default function DashboardScreen() {
         } catch {
           /* swallow -- best effort */
         }
-        if (created) await reloadActiveInterventions();
+        await reloadActiveInterventions();
       } finally {
         generateInFlightRef.current = false;
       }
