@@ -779,9 +779,16 @@ async function loadOwnedPatient(
 // a patient's treatment status. Owns the entire transition: when
 // status leaves 'stopped' we MUST clear the reason/note so they
 // don't linger as ghost data on the next stop event.
+//
+// Write-side enum is intentionally narrower than TREATMENT_STATUSES:
+// the DB still accepts legacy 'unknown' rows (created before the
+// taxonomy refresh), but no NEW write from the Clinic UI -- or any
+// other client of this endpoint -- may set status to 'unknown'. The
+// Clinic dropdown only surfaces "On treatment" and "Stopped".
+const WRITABLE_TREATMENT_STATUSES = ["active", "stopped"] as const;
 const treatmentStatusBody = z
   .object({
-    status: z.enum(TREATMENT_STATUSES),
+    status: z.enum(WRITABLE_TREATMENT_STATUSES),
     stopReason: z.enum(STOP_REASONS).optional(),
     stopNote: z.string().max(500).optional().nullable(),
   })
@@ -789,7 +796,7 @@ const treatmentStatusBody = z
     if (v.status === "stopped" && !v.stopReason) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "stopReason required when status is stopped",
+        message: "Select a reason before saving",
         path: ["stopReason"],
       });
     }
@@ -809,9 +816,19 @@ router.patch("/:id/treatment-status", async (req, res: Response) => {
   }
   const parsed = treatmentStatusBody.safeParse(req.body);
   if (!parsed.success) {
-    res
-      .status(400)
-      .json({ error: "invalid_input", details: parsed.error.flatten() });
+    // Surface the most actionable message at the top of the response
+    // body. The Clinic UI displays this verbatim if the client-side
+    // guard is bypassed (e.g. older bundle, direct API call).
+    const stopReasonIssue = parsed.error.issues.find(
+      (i) => i.path[0] === "stopReason",
+    );
+    const message =
+      stopReasonIssue?.message ?? parsed.error.issues[0]?.message ?? "Invalid input";
+    res.status(400).json({
+      error: stopReasonIssue ? "stop_reason_required" : "invalid_input",
+      message,
+      details: parsed.error.flatten(),
+    });
     return;
   }
   const isStop = parsed.data.status === "stopped";

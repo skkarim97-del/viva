@@ -588,16 +588,26 @@ export function PatientDetailPage({ id }: { id: number }) {
   // a separate query; mutating PATCH returns the fresh PatientDetail
   // and we just push it into the patient cache.
   const [statusEditOpen, setStatusEditOpen] = useState(false);
-  const [statusDraft, setStatusDraft] = useState<TreatmentStatus>("active");
+  const [statusDraft, setStatusDraft] =
+    useState<EditableTreatmentStatus>("active");
+  // Empty-string default forces the doctor to explicitly pick a reason
+  // when stopping a patient -- we no longer pre-select "side effects".
   const [stopReasonDraft, setStopReasonDraft] =
-    useState<StopReason>("side_effects");
+    useState<StopReasonDraft>("");
   const [stopNoteDraft, setStopNoteDraft] = useState("");
   const setStatusMut = useMutation({
     mutationFn: () =>
       api.setTreatmentStatus(id, {
         status: statusDraft,
+        // Only send stopReason when status='stopped' AND a reason has
+        // actually been picked. The Save button is disabled when this
+        // is empty so this branch should never fire on the UI happy
+        // path; the server enforces the same constraint as defense in
+        // depth.
         stopReason:
-          statusDraft === "stopped" ? stopReasonDraft : undefined,
+          statusDraft === "stopped" && stopReasonDraft
+            ? stopReasonDraft
+            : undefined,
         stopNote:
           statusDraft === "stopped" && stopNoteDraft.trim()
             ? stopNoteDraft.trim()
@@ -1032,9 +1042,10 @@ export function PatientDetailPage({ id }: { id: number }) {
       {/* Treatment status. Doctor-owned source of truth for whether
           this patient is currently on GLP-1 therapy. Drives whether
           they show up in the active panel and feeds the retention
-          KPIs in /internal/analytics. We deliberately keep it to
-          three states (active / stopped / unknown) so the control
-          stays unambiguous; risk-band/at-risk is derived elsewhere. */}
+          KPIs in /internal/analytics. The control is intentionally
+          two-state in the UI ("On treatment" / "Stopped"); legacy
+          'unknown' rows in the DB render as "On treatment" until a
+          doctor explicitly stops them. */}
       <TreatmentStatusCard
         status={p.treatmentStatus}
         source={p.treatmentStatusSource}
@@ -1045,8 +1056,18 @@ export function PatientDetailPage({ id }: { id: number }) {
         updatedAt={p.treatmentStatusUpdatedAt}
         editing={statusEditOpen}
         onEdit={() => {
-          setStatusDraft(p.treatmentStatus);
-          setStopReasonDraft((p.stopReason as StopReason) ?? "side_effects");
+          // Normalize legacy 'unknown' to 'active' for the dropdown
+          // so the editor only ever surfaces editable states.
+          setStatusDraft(displayStatus(p.treatmentStatus));
+          // Force an explicit reason pick: even if the patient already
+          // has a stopReason on file, we still pre-fill it so the
+          // doctor sees the previous value, but for any other status
+          // (active, legacy unknown) the dropdown starts blank.
+          setStopReasonDraft(
+            p.treatmentStatus === "stopped" && p.stopReason
+              ? (p.stopReason as StopReason)
+              : "",
+          );
           setStopNoteDraft(p.stopNote ?? "");
           setStatusEditOpen(true);
         }}
@@ -1616,16 +1637,34 @@ function careEventLabel(e: CareEvent): string {
 // will hit this constantly during weekly reviews and a modal would
 // add a click for nothing.
 
-const STATUS_LABEL: Record<TreatmentStatus, string> = {
+// The Clinic UI is intentionally a two-state control: doctors can only
+// set a patient to "On treatment" or "Stopped". Legacy rows in the DB
+// may still have status='unknown' from before the taxonomy refresh; we
+// render those as "On treatment" in the read view (see displayStatus
+// below) so the worklist isn't littered with grey "Unknown" chips, and
+// the editor pre-fills the dropdown to "active" so saving normalizes
+// the row to a real value.
+type EditableTreatmentStatus = "active" | "stopped";
+const EDITABLE_STATUSES: readonly EditableTreatmentStatus[] = [
+  "active",
+  "stopped",
+] as const;
+const STATUS_LABEL: Record<EditableTreatmentStatus, string> = {
   active: "On treatment",
   stopped: "Stopped",
-  unknown: "Unknown",
 };
-const STATUS_STYLE: Record<TreatmentStatus, { bg: string; fg: string }> = {
+const STATUS_STYLE: Record<EditableTreatmentStatus, { bg: string; fg: string }> = {
   active: { bg: "rgba(52,199,89,0.12)", fg: "#1F7A3A" },
   stopped: { bg: "rgba(255,59,48,0.12)", fg: "#B5251D" },
-  unknown: { bg: "rgba(142,142,147,0.16)", fg: "#4A4A55" },
 };
+// Read-mode chip helper: anything that is not explicitly "stopped"
+// (including legacy 'unknown' / null) renders as "On treatment".
+function displayStatus(s: TreatmentStatus): EditableTreatmentStatus {
+  return s === "stopped" ? "stopped" : "active";
+}
+// "" is the editor-only sentinel for "no reason picked yet" -- it is
+// never persisted and is never sent over the wire.
+type StopReasonDraft = StopReason | "";
 const STOP_REASON_LABEL: Record<StopReason, string> = {
   side_effects: "Side effects",
   cost_or_insurance: "Cost or insurance",
@@ -1661,14 +1700,21 @@ function TreatmentStatusCard(props: {
   onSave: () => void;
   saving: boolean;
   errorMessage: string | null;
-  statusDraft: TreatmentStatus;
-  setStatusDraft: (s: TreatmentStatus) => void;
-  stopReasonDraft: StopReason;
-  setStopReasonDraft: (r: StopReason) => void;
+  statusDraft: EditableTreatmentStatus;
+  setStatusDraft: (s: EditableTreatmentStatus) => void;
+  stopReasonDraft: StopReasonDraft;
+  setStopReasonDraft: (r: StopReasonDraft) => void;
   stopNoteDraft: string;
   setStopNoteDraft: (n: string) => void;
 }) {
-  const style = STATUS_STYLE[props.status];
+  // Read-mode chip uses the displayed status (legacy 'unknown' folds
+  // into 'active') so the worklist never shows a grey "Unknown" pill.
+  const shownStatus = displayStatus(props.status);
+  const style = STATUS_STYLE[shownStatus];
+  // Block Save when the doctor picks "Stopped" but hasn't chosen a
+  // reason -- the inline message under the dropdown explains why.
+  const reasonMissing =
+    props.statusDraft === "stopped" && !props.stopReasonDraft;
   return (
     <section className="bg-card rounded-[20px] p-4 sm:p-6">
       {/* Stack title/pills above the Update button on mobile so the
@@ -1683,7 +1729,7 @@ function TreatmentStatusCard(props: {
             className="px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap"
             style={{ backgroundColor: style.bg, color: style.fg }}
           >
-            {STATUS_LABEL[props.status]}
+            {STATUS_LABEL[shownStatus]}
           </span>
           {props.status === "stopped" && props.stopReason && (
             <span
@@ -1743,7 +1789,9 @@ function TreatmentStatusCard(props: {
       {props.editing && (
         <div className="mt-4 space-y-3">
           <div className="flex flex-wrap gap-2">
-            {(Object.keys(STATUS_LABEL) as TreatmentStatus[]).map((s) => {
+            {/* EDITABLE_STATUSES is hard-coded to ["active","stopped"]
+                so legacy 'unknown' is never selectable from the UI. */}
+            {EDITABLE_STATUSES.map((s) => {
               const selected = props.statusDraft === s;
               const sStyle = STATUS_STYLE[s];
               return (
@@ -1774,10 +1822,20 @@ function TreatmentStatusCard(props: {
                 <select
                   value={props.stopReasonDraft}
                   onChange={(e) =>
-                    props.setStopReasonDraft(e.target.value as StopReason)
+                    props.setStopReasonDraft(
+                      e.target.value as StopReasonDraft,
+                    )
                   }
+                  aria-invalid={reasonMissing || undefined}
                   className="bg-background rounded-lg px-3 py-2 text-sm font-medium text-foreground w-full max-w-xs"
                 >
+                  {/* Empty placeholder option keeps the doctor from
+                      saving an unconscious default ("side effects" was
+                      the prior pre-selection). Disabled so it can't be
+                      re-picked once the doctor moves off it. */}
+                  <option value="" disabled>
+                    Select a reason
+                  </option>
                   {(Object.keys(STOP_REASON_LABEL) as StopReason[]).map(
                     (r) => (
                       <option key={r} value={r}>
@@ -1786,6 +1844,14 @@ function TreatmentStatusCard(props: {
                     ),
                   )}
                 </select>
+                {reasonMissing && (
+                  <p
+                    className="text-xs font-medium mt-1.5"
+                    style={{ color: "#B5251D" }}
+                  >
+                    Select a reason before saving
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">
@@ -1817,8 +1883,8 @@ function TreatmentStatusCard(props: {
             <button
               type="button"
               onClick={props.onSave}
-              disabled={props.saving}
-              className="px-4 py-2 rounded-lg text-sm font-semibold text-white transition-colors disabled:opacity-50"
+              disabled={props.saving || reasonMissing}
+              className="px-4 py-2 rounded-lg text-sm font-semibold text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ backgroundColor: "#142240" }}
             >
               {props.saving ? "Saving..." : "Save"}
