@@ -148,7 +148,7 @@ export async function linkInterventionsToOutcomes(
   // looking at.
   const where = patientUserId
     ? sql`ie.patient_user_id = ${patientUserId}`
-    : sql`ie.patient_user_id not in (select id from users where email like 'demo%@itsviva.com')`;
+    : sql`ie.patient_user_id not in (select id from users where email like 'demo%@itsviva.com' or email like '%@vivaai.demo')`;
   const rows = await db.execute(sql`
     select
       ie.id                                 as intervention_id,

@@ -1,6 +1,6 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { and, eq, gte, lte, isNotNull, notInArray, sql, desc } from "drizzle-orm";
-import { excludeDemoCol, demoUserIdsSelect, DEMO_EMAIL_LIKE } from "../lib/demoFilter";
+import { excludeDemoCol, demoUserIdsSelect, DEMO_EMAIL_LIKE, DEMO_VIVAAI_LIKE } from "../lib/demoFilter";
 import { z } from "zod";
 import {
   db,
@@ -986,7 +986,9 @@ router.get(
         join users u on u.id = p.user_id
         join users d on d.id = p.doctor_id
         where u.email not like ${DEMO_EMAIL_LIKE}
+          and u.email not like ${DEMO_VIVAAI_LIKE}
           and d.email not like ${DEMO_EMAIL_LIKE}
+          and d.email not like ${DEMO_VIVAAI_LIKE}
         order by u.name asc
       `);
       type PatientDrillRow = {
@@ -1061,6 +1063,7 @@ router.get(
         from users u
         where u.role = 'doctor'
           and u.email not like ${DEMO_EMAIL_LIKE}
+          and u.email not like ${DEMO_VIVAAI_LIKE}
         order by u.name asc
       `);
       type DoctorDrillRow = {
