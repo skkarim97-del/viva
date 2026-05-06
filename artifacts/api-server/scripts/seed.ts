@@ -377,7 +377,24 @@ async function seedPatient(
   return user!.id;
 }
 
+// HIPAA pilot guardrail: this script seeds demo@itsviva.com + 12 demo
+// patients. Running it against the real pilot RDS would inject PHI-shaped
+// rows that don't belong there. Refuse unless the operator explicitly
+// opts in via ALLOW_DEMO_SEED=true (intended only for the demo DB).
+function assertSeedAllowed(): void {
+  if (process.env.NODE_ENV === "production" && process.env.ALLOW_DEMO_SEED !== "true") {
+    console.error(
+      "[seed] refusing to run: NODE_ENV=production and ALLOW_DEMO_SEED!=true.",
+    );
+    console.error(
+      "[seed] demo seed data must never enter the real pilot DB. Run against the demo DB only.",
+    );
+    process.exit(1);
+  }
+}
+
 async function main(): Promise<void> {
+  assertSeedAllowed();
   const allEmails = [
     DOCTOR_EMAIL,
     ...PATIENTS.map((p) => p.email),

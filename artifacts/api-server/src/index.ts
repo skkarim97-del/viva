@@ -3,6 +3,66 @@ import app from "./app";
 import { logger } from "./lib/logger";
 
 // ----------------------------------------------------------------------
+// Pilot production safety asserts (HIPAA pilot, T100)
+//
+// Fail-closed at boot if the production env is misconfigured in any way
+// that could cause PHI to leak or dev surfaces to be reachable. Every
+// check is "absent OR strict" so local dev is unaffected (NODE_ENV !==
+// "production"). Once production is up, these guarantees are immutable
+// for the process lifetime -- env vars are read once.
+//
+// What this prevents:
+//   * Dev-login routes silently re-enabled in prod (ENABLE_DEV_LOGIN)
+//   * Any AI provider key existing in prod env (no PHI to non-BAA vendors)
+//   * Stale / weak / unset SESSION_SECRET (cookie forgery surface)
+//   * Falling back to the local DATABASE_URL (Replit Postgres) when
+//     the BAA-covered AWS_DATABASE_URL is missing
+// ----------------------------------------------------------------------
+function assertProductionSafety(): void {
+  if (process.env.NODE_ENV !== "production") return;
+
+  const violations: string[] = [];
+
+  if (process.env.ENABLE_DEV_LOGIN) {
+    violations.push(
+      "ENABLE_DEV_LOGIN must not be set in production (would mount /api/dev/*)",
+    );
+  }
+  for (const key of [
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "GEMINI_API_KEY",
+  ] as const) {
+    if (process.env[key]) {
+      violations.push(
+        `${key} must not be set in production (no PHI to non-BAA AI vendors)`,
+      );
+    }
+  }
+  const secret = process.env.SESSION_SECRET ?? "";
+  if (secret.length < 32) {
+    violations.push(
+      "SESSION_SECRET must be set and at least 32 characters in production",
+    );
+  }
+  if (!process.env.AWS_DATABASE_URL) {
+    violations.push(
+      "AWS_DATABASE_URL must be set in production (BAA-covered RDS); refusing to fall back to DATABASE_URL",
+    );
+  }
+
+  if (violations.length > 0) {
+    logger.fatal(
+      { violations },
+      "production safety assert failed -- refusing to start",
+    );
+    process.exit(1);
+  }
+}
+
+assertProductionSafety();
+
+// ----------------------------------------------------------------------
 // Pilot reliability hardening
 //
 // The API crashed once during pilot prep with EADDRINUSE on port 8080.

@@ -598,6 +598,18 @@ router.post("/invite", async (req, res: Response) => {
     .limit(1);
   const platformId = doctorRow?.platformId ?? null;
   const inviterIsDemo = /^demo.*@itsviva\.com$/i.test(doctorRow?.email ?? "");
+  // HIPAA pilot guardrail: the real pilot DB must not accumulate
+  // demo-pattern users. If a demo doctor somehow exists in production
+  // (the demo seed is gated, but belt-and-suspenders), block the invite
+  // so demo identities cannot inject placeholder rows into the real
+  // patient table. Demos must be run against the demo DB.
+  if (inviterIsDemo && process.env.NODE_ENV === "production") {
+    res.status(403).json({
+      error: "demo_invites_blocked_in_production",
+      message: "Demo accounts cannot send invites in the production environment.",
+    });
+    return;
+  }
   // Synthesize a unique placeholder email so the legacy notNull/unique
   // email column is satisfied. The patient never sees this; they sign in
   // with a password they choose during activation, against the bearer

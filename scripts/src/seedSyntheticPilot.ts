@@ -678,6 +678,19 @@ async function summary(): Promise<void> {
 // --------- entrypoint ------------------------------------------------
 
 async function main() {
+  // HIPAA pilot guardrail: synthetic-pilot seed wipes demo%@itsviva.com
+  // and re-seeds 10 demo doctors + 100 demo patients. That belongs in
+  // the demo DB, never the real pilot RDS. Refuse unless the operator
+  // explicitly opts in via ALLOW_DEMO_SEED=true.
+  if (process.env.NODE_ENV === "production" && process.env.ALLOW_DEMO_SEED !== "true") {
+    console.error(
+      "[seed:pilot] refusing to run: NODE_ENV=production and ALLOW_DEMO_SEED!=true.",
+    );
+    console.error(
+      "[seed:pilot] demo seed data must never enter the real pilot DB. Run against the demo DB only.",
+    );
+    process.exit(1);
+  }
   const args = new Set(process.argv.slice(2));
   const resetOnly = args.has("--reset");
 
