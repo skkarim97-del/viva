@@ -6,21 +6,47 @@ import { randomUUID } from "crypto";
 import { tmpdir } from "os";
 import { join } from "path";
 
-if (!process.env.AI_INTEGRATIONS_OPENAI_BASE_URL) {
-  throw new Error(
-    "AI_INTEGRATIONS_OPENAI_BASE_URL must be set. Did you forget to provision the OpenAI AI integration?",
-  );
+// =====================================================================
+// Lazy OpenAI audio client (HIPAA pilot safe-mode compatible)
+// =====================================================================
+// See lib/integrations-openai-ai-server/src/client.ts for the full
+// rationale. Defer instantiation and the env-var presence check to
+// first property access so the api-server can boot in pilot/
+// production safe mode WITHOUT the AI_INTEGRATIONS_OPENAI_* env
+// vars provisioned. Audio is NOT a pilot PHI surface and is never
+// invoked from the api-server. If anyone ever calls voiceChat /
+// textToSpeech / speechToText without provisioning the
+// integration, they get the same loud error as before -- at call
+// time, not import time.
+// =====================================================================
+
+let cachedClient: OpenAI | null = null;
+
+function getOpenAIClient(): OpenAI {
+  if (cachedClient) return cachedClient;
+
+  if (!process.env.AI_INTEGRATIONS_OPENAI_BASE_URL) {
+    throw new Error(
+      "AI_INTEGRATIONS_OPENAI_BASE_URL must be set. Did you forget to provision the OpenAI AI integration?",
+    );
+  }
+  if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY) {
+    throw new Error(
+      "AI_INTEGRATIONS_OPENAI_API_KEY must be set. Did you forget to provision the OpenAI AI integration?",
+    );
+  }
+
+  cachedClient = new OpenAI({
+    apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+    baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+  });
+  return cachedClient;
 }
 
-if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY) {
-  throw new Error(
-    "AI_INTEGRATIONS_OPENAI_API_KEY must be set. Did you forget to provision the OpenAI AI integration?",
-  );
-}
-
-export const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+export const openai = new Proxy({} as OpenAI, {
+  get(_target, prop, receiver) {
+    return Reflect.get(getOpenAIClient(), prop, receiver);
+  },
 });
 
 export type AudioFormat = "wav" | "mp3" | "webm" | "mp4" | "ogg" | "unknown";
