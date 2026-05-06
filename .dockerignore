@@ -1,0 +1,49 @@
+# Keep the Beanstalk / Docker build context lean. Anything not listed
+# here that the Dockerfile does not COPY is irrelevant to the image.
+
+# VCS + editor
+.git
+.gitignore
+.gitattributes
+.vscode
+.idea
+.DS_Store
+
+# Replit-specific (never needed in the production image)
+.replit
+.replit-artifact
+.local
+.cache
+.upm
+.config
+replit.nix
+replit.md
+
+# Build outputs / installed deps (Dockerfile reinstalls cleanly)
+**/node_modules
+**/dist
+**/build
+**/.next
+**/.expo
+**/.expo-shared
+**/coverage
+
+# Logs + tmp
+**/*.log
+**/.DS_Store
+**/.env
+**/.env.*
+!**/.env.prod.template
+
+# Backups + docs (not needed at runtime)
+backups
+docs
+attached_assets
+
+# Other artifacts that are not the api-server (Dockerfile only COPYs
+# lib/ and artifacts/api-server/, so the rest is unused weight in the
+# build context)
+artifacts/pulse-pilot
+artifacts/viva-dashboard
+artifacts/viva-analytics
+artifacts/mockup-sandbox

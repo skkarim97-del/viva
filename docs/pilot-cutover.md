@@ -1,9 +1,17 @@
 # Viva PHI Pilot Cutover Runbook
 
-Move the PHI-handling API off Replit, onto AWS App Runner, and into a
-small controlled real-PHI pilot. Lean but not reckless: every item in
-"Must-do" is here because skipping it materially changes safety,
-reliability, or your ability to recover from a problem.
+Move the PHI-handling API off Replit, onto **AWS Elastic Beanstalk
+(Docker, single-instance)**, and into a small controlled real-PHI
+pilot. Lean but not reckless: every item in "Must-do" is here because
+skipping it materially changes safety, reliability, or your ability to
+recover from a problem.
+
+> **Why Elastic Beanstalk and not App Runner?** App Runner stopped
+> accepting new customers on April 30, 2026. Beanstalk is the
+> simplest remaining HIPAA-eligible AWS path that can build our
+> Dockerfile in-environment (no local Docker, no ECR push step,
+> no CodeBuild project). Same Dockerfile, same RDS, same DNS plan,
+> same env vars, same startup assert.
 
 ---
 
@@ -14,25 +22,30 @@ reliability, or your ability to recover from a problem.
 These are the launch gates. If any one of them is unchecked, do not
 start the pilot.
 
-- [ ] api-server image built (Dockerfile in `artifacts/api-server/`).
-- [ ] Image pushed to ECR (`viva-api:latest` + dated tag).
-- [ ] App Runner service `viva-api-prod` running, health green.
+- [ ] Root `Dockerfile` and `.dockerignore` present (mirrors
+      `artifacts/api-server/Dockerfile`; required by Beanstalk's
+      Docker platform).
+- [ ] Beanstalk environment `viva-api-prod` running, health = Ok,
+      single-instance (no load balancer).
 - [ ] All required env vars set (see `.env.prod.template`); secrets in
-      Secrets Manager, not pasted into the env panel.
+      Secrets Manager, **referenced** from Beanstalk env via the
+      `aws:elasticbeanstalk:application:environment` namespace, not
+      pasted as plaintext.
 - [ ] Zero AI keys (`OPENAI_API_KEY` / `ANTHROPIC_API_KEY` /
-      `GEMINI_API_KEY`) anywhere in the App Runner config.
+      `GEMINI_API_KEY`) anywhere in the Beanstalk environment config.
 - [ ] `ENABLE_DEV_LOGIN` and `ALLOW_DEMO_SEED` are unset in production.
 - [ ] `COACH_PILOT_MODE=safe` and `INTERVENTION_AI_MODE=fallback` set
       explicitly (defaults already safe; explicit value is auditable).
 - [ ] RDS public access OFF, encryption ON, backups >=7d, deletion
       protection ON.
-- [ ] RDS security group inbound 5432 allows ONLY the App Runner SG.
-      No `0.0.0.0/0`, no Replit IPs, no leftover home-IP rules.
+- [ ] RDS security group inbound 5432 allows ONLY the Beanstalk EC2
+      instance SG (`awseb-e-*-stack-AWSEBSecurityGroup-*`). No
+      `0.0.0.0/0`, no Replit IPs, no leftover home-IP rules.
 - [ ] Demo data wiped from production RDS
       (`DELETE FROM users WHERE email LIKE 'demo%@itsviva.com' OR ...`).
       Snapshot before/after counts saved to a file.
-- [ ] `api.itsviva.com` DNS now points to the App Runner host. TTL
-      lowered to 60s before the cutover.
+- [ ] `api.itsviva.com` DNS now points to the Beanstalk environment
+      CNAME. TTL lowered to 60s before the cutover.
 - [ ] `https://api.itsviva.com/api/healthz` returns 200 from outside AWS.
 - [ ] PHI audit logs writing: a real authenticated request increments
       `select count(*) from phi_access_logs where created_at > now() -
@@ -46,7 +59,7 @@ start the pilot.
       (1-doctor-per-patient model is what `canAccessPatient` enforces).
 - [ ] Smoke-test checklist (§Smoke tests below) all green.
 - [ ] Replit api-server deployment **stopped** after 24h of healthy
-      App Runner traffic.
+      Beanstalk traffic.
 - [ ] Rollback plan rehearsed once: you know how to flip the DNS CNAME
       back to the previous host in <2 minutes.
 
@@ -60,12 +73,13 @@ Worth doing in the first 30 days of the pilot. Don't block launch on these.
   BAA-covered.
 - CloudWatch alarms: 5xx rate > 1%, healthz failures, PHI access volume
   per doctor anomaly, RDS CPU > 70%.
-- Automated image build + push on `main` (GitHub Actions → ECR → App
-  Runner auto-deploy).
+- Automated source-bundle deploy on push to `main` (GitHub Actions →
+  upload zip to S3 → `aws elasticbeanstalk create-application-version`
+  → `update-environment`).
 - Independent penetration test scoped to the doctor + patient APIs.
 - Shared-clinic access model (covering doctor / care team) — only if
   a pilot clinic asks for it.
-- A staging App Runner service that points at a staging RDS, so you
+- A staging Beanstalk environment that points at a staging RDS, so you
   can rehearse releases instead of pushing straight to prod.
 
 ### Bucket 3 — Defer until after pilot traction
@@ -79,63 +93,35 @@ have evidence the product works.
 - Major architecture refactor (event bus, microservices, etc.).
 - Formal SOC 2 type 1/2 process.
 - Cross-region failover, blue/green deploys, infra-as-code conversion
-  of the App Runner stack.
+  of the Beanstalk stack (or migration to ECS Fargate when scale
+  requires it).
 
 ---
 
-## Answers to your clarifying questions
+## Operational notes
 
-**1. Can we safely skip the local Docker smoke test and test directly on
-App Runner?**
-Yes. Local Docker mainly catches Dockerfile typos. App Runner's first
-deploy will fail in the same way and tell you in the Logs tab. If you
-want to skip local Docker entirely, that is fine — go straight from
-`docker build + push` to App Runner and read the logs there. Trade-off:
-each App Runner deploy is ~5 min, so an iteration loop on a Dockerfile
-bug is slower than local. **Recommendation: skip local Docker only if
-you don't have Docker Desktop installed and don't want to install it.**
+**No local Docker required.** Beanstalk's Docker platform builds the
+root `Dockerfile` inside the EC2 instance it provisions for you. You
+upload a source bundle (a zip of the repo) and Beanstalk handles
+`docker build` and `docker run`. If the Dockerfile has a bug, you see
+it in the Beanstalk environment logs and fix it in the next upload.
 
-**2. Can this be done from Replit Shell, or do I need Windows
-PowerShell?**
-Replit Shell can do everything except the local Docker test (Replit
-doesn't run Docker for you). So:
-- **Replit Shell** is enough if you skip the local Docker step. You
-  install AWS CLI in the shell, build the image inside Replit using
-  `docker buildx` is NOT available — so build on AWS instead via
-  CodeBuild, OR push your code to a small EC2 build host, OR use App
-  Runner's "source code repository" mode. **Cleanest lean path: use
-  App Runner's source-code mode and skip Docker entirely** (see
-  variant below).
-- **Windows PowerShell + Docker Desktop** is the standard path if you
-  already have Docker Desktop. Faster iteration, identical result.
-
-**Lean variant: App Runner source-code mode (no Docker on your laptop)**
-App Runner can build directly from a GitHub repo. You push the
-`Dockerfile` to a branch, point App Runner at the repo, and it does
-the build for you. Cost is the same; you skip Docker Desktop entirely.
-This is probably the right path for a one-person controlled pilot.
-
-**3. What is the minimum local setup required?**
-- AWS account with billing enabled, an IAM user with App Runner +
-  ECR + Secrets Manager + IAM permissions, and AWS CLI configured.
+**Minimum setup required.**
+- AWS account with billing enabled and an IAM user with Beanstalk +
+  EC2 + RDS + Secrets Manager + IAM permissions.
 - Admin access to the DNS provider hosting `itsviva.com`.
-- A `psql` client (or DBeaver / TablePlus) to run the demo-wipe SQL
-  against RDS. You can also run SQL through the RDS Query Editor in
-  the AWS Console, no local install needed.
-- Optional: Docker Desktop (only if you choose the local-build path).
+- A `psql` client (or DBeaver / TablePlus) for the demo-wipe SQL
+  against RDS — or use the RDS Query Editor in the AWS Console.
 
-**4. Lean path that avoids unnecessary cost but keeps confidence high?**
-- App Runner: 1 vCPU / 2 GB, min instances = 1, max = 3. ~$45/mo.
-- RDS: `db.t4g.small`, `Single-AZ`, 20 GB, automated backups 7d.
-  ~$30/mo. **Single-AZ is fine for a controlled pilot** — the BAA
-  doesn't require Multi-AZ; downtime risk is bounded by your pilot
-  size, not regulatory.
+**Cost (single-instance, pilot footprint).**
+- Beanstalk EC2: `t4g.small`, single instance (no ELB). ~$15/mo.
+- RDS: `db.t4g.small`, Single-AZ, 20 GB, backups 7d. ~$30/mo.
+  Single-AZ is fine for a controlled pilot; the BAA doesn't require
+  Multi-AZ.
 - Secrets Manager: 2 secrets × $0.40 = ~$1/mo.
-- ECR: < $1/mo for a small repo.
 - CloudWatch logs: < $5/mo at pilot volume.
-- **Total: roughly $80/mo of AWS spend** for the pilot footprint.
-  Replit autoscale charges go to ~$0 once you stop the api-server
-  deployment.
+- **Total: roughly $50/mo of AWS spend.** Cheaper than the App Runner
+  estimate because no load balancer.
 
 The single highest-leverage cost-saver: keep `viva-dashboard` and
 `viva-analytics` on Replit static hosting until after the pilot. The
@@ -147,63 +133,66 @@ days post-launch.
 
 ## Step-by-step execution
 
-Pick **one** of two paths.
+### Step 1 — Prepare the source bundle
 
-### Path A — Lean, no local Docker (recommended for one operator)
+The repo already contains a root `Dockerfile` and `.dockerignore` (so
+Beanstalk's Docker platform can build without configuration).
 
-Use App Runner's source-code mode. App Runner pulls from your GitHub
-repo, builds the Dockerfile in AWS, deploys. You never run Docker on
-your laptop.
+Two ways to get the bundle to Beanstalk; pick whichever you prefer:
 
-1. **Push the repo to GitHub** if it isn't already. The `Dockerfile`
-   at `artifacts/api-server/Dockerfile` is what App Runner builds.
-2. **AWS Console → App Runner → Create service**:
-   - Source: **Source code repository** → connect to GitHub → pick the
-     repo and the `main` branch.
-   - Deployment trigger: **Manual** (flip to Automatic after pilot).
-   - Build settings: **Configure all settings here** → Runtime:
-     **Docker** → Dockerfile path: `artifacts/api-server/Dockerfile` →
-     Docker build context: `/` (repo root).
-3. Continue from **Step 4 (RDS lockdown)** below — everything from
-   that point is identical between paths.
+- **Easiest:** GitHub → repo → green **Code** button → **Download ZIP**.
+  This produces `viva-main.zip` containing the full repo.
+- **CLI:** in Replit Shell, `git archive --format=zip --output=viva-main.zip HEAD`.
 
-### Path B — Local Docker build (if you have Docker Desktop)
+Either way, the zip you upload must contain `Dockerfile` at its root.
 
-1. **PowerShell**, in the repo root:
-   ```powershell
-   docker build -f artifacts/api-server/Dockerfile -t viva-api:latest .
-   ```
-2. **(Optional) Local smoke test:**
-   ```powershell
-   $secret = -join ((1..64) | ForEach-Object { '{0:x}' -f (Get-Random -Max 16) })
-   docker run --rm -p 8080:8080 `
-     -e NODE_ENV=production -e PORT=8080 -e SESSION_SECRET=$secret `
-     -e AWS_DATABASE_URL="postgres://...rds...?sslmode=require" `
-     viva-api:latest
-   # in another shell:
-   curl.exe -s http://127.0.0.1:8080/api/healthz
-   ```
-3. **Push to ECR:**
-   ```powershell
-   $AccountId = "<aws-account-id>"
-   $Region    = "us-east-1"
-   $Repo      = "viva-api"
-   $Tag       = (Get-Date -Format "yyyyMMdd-HHmm")
-   $EcrUri    = "$AccountId.dkr.ecr.$Region.amazonaws.com/$Repo"
+### Step 2 — Create the Beanstalk application + environment
 
-   aws ecr create-repository --repository-name $Repo --region $Region
-   aws ecr get-login-password --region $Region | docker login --username AWS --password-stdin "$AccountId.dkr.ecr.$Region.amazonaws.com"
-   docker tag viva-api:latest "${EcrUri}:${Tag}"
-   docker tag viva-api:latest "${EcrUri}:latest"
-   docker push "${EcrUri}:${Tag}"
-   docker push "${EcrUri}:latest"
-   ```
-4. **App Runner → Create service** → **Container registry → Amazon ECR**
-   → pick `viva-api:latest`. Then continue with Step 4.
+**AWS Console → Elastic Beanstalk → Create application.**
 
----
+- Application name: `viva`
+- Platform: **Docker** (running on 64-bit Amazon Linux 2023)
+- Application code: **Upload your code** → upload the zip from Step 1
+- Presets: **Single instance (free tier eligible)**
+- Click **Next**.
 
-### Step 4 — Lock RDS down (both paths)
+Service access:
+
+- Service role: **Create and use new service role** (`aws-elasticbeanstalk-service-role`)
+- EC2 instance profile: **Create and use new** (`aws-elasticbeanstalk-ec2-role`)
+- EC2 key pair: optional (skip for pilot; not needed if you only need EB Console + Logs).
+
+Networking:
+
+- VPC: **the same VPC your RDS instance lives in.**
+- Public IP address: **Activated** (single-instance environments need a public IP to receive direct traffic; the EC2 SG will be locked down to HTTPS-from-anywhere only).
+- Instance subnets: pick **one public subnet** (single instance).
+
+Database: **Do not** attach an RDS instance here. Your existing RDS
+stays separate so it survives environment rebuilds.
+
+Instance traffic and scaling:
+
+- Root volume: 10 GB gp3 (default)
+- Instance type: `t4g.small`
+- Environment type: **Single instance** (already chosen by the preset)
+
+Updates, monitoring, and logging:
+
+- Health reporting: **Enhanced**
+- CloudWatch Logs: **Enabled**, retention **7 days**, **Lifecycle: Delete logs upon environment termination = No** (so logs survive a rebuild).
+
+Environment properties (env vars): paste every REQUIRED var from
+`artifacts/api-server/.env.prod.template`. **No** AI keys, **no**
+`ENABLE_DEV_LOGIN`, **no** `ALLOW_DEMO_SEED`, **no** `DATABASE_URL`.
+For `AWS_DATABASE_URL` and `SESSION_SECRET`, leave a placeholder for
+now — Step 4 swaps them for Secrets Manager references.
+
+Click **Submit**. Beanstalk takes ~5–10 min to provision EC2, build
+the Docker image in the instance, and start the container. When the
+environment health turns **Ok** (green), continue.
+
+### Step 3 — Lock RDS down
 
 **RDS Console → your DB instance → Modify**:
 - Public accessibility = **No**
@@ -212,60 +201,112 @@ your laptop.
 - Deletion protection = **Enabled**
 
 **RDS Console → Connectivity & security → VPC security group**:
-- Remove every inbound rule except the one App Runner will use.
-- Note the VPC ID and the two private subnets the RDS lives in.
+- Note the VPC ID. Confirm it matches the VPC you chose for Beanstalk.
+- Leave the inbound rule edit until Step 5 (we need the Beanstalk EC2
+  SG name first).
 
-### Step 5 — Store secrets
+### Step 4 — Store secrets and reference them from Beanstalk
 
 **Secrets Manager → Store a new secret → Other type**:
 - `viva/prod/AWS_DATABASE_URL` = your full `postgres://...?sslmode=require` string
 - `viva/prod/SESSION_SECRET` = `openssl rand -hex 32` output
 
-### Step 6 — App Runner service config
+**Grant the Beanstalk EC2 role access:** IAM → Roles →
+`aws-elasticbeanstalk-ec2-role` → Add permissions → Create inline
+policy → JSON:
 
-Use `artifacts/api-server/.env.prod.template` as the source of truth.
-Plain values pasted directly; secrets via Secrets Manager ARN
-references.
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": ["secretsmanager:GetSecretValue"],
+    "Resource": [
+      "arn:aws:secretsmanager:<region>:<account-id>:secret:viva/prod/AWS_DATABASE_URL-*",
+      "arn:aws:secretsmanager:<region>:<account-id>:secret:viva/prod/SESSION_SECRET-*"
+    ]
+  }]
+}
+```
 
-- Service name: `viva-api-prod`, 1 vCPU, 2 GB, port 8080.
-- Health check: HTTP `/api/healthz`, 20s, healthy 1, unhealthy 3.
-- Networking → Outgoing: Custom VPC, RDS's VPC + private subnets, new
-  SG `viva-apprunner-sg` (allow all outbound, no inbound).
-- Env vars: every REQUIRED var from the template. **No** AI keys, **no**
-  `ENABLE_DEV_LOGIN`, **no** `ALLOW_DEMO_SEED`, **no** `DATABASE_URL`.
+Beanstalk environments do **not** natively interpolate Secrets Manager
+ARNs in env vars (unlike App Runner). Two acceptable options:
 
-Click Create. Wait 5–10 min for **Running**. App Runner gives you a URL
-like `https://abc123xyz.us-east-1.awsapprunner.com`.
+- **Option A (simplest, pilot-acceptable):** paste the secret values
+  directly into the Beanstalk environment properties panel. They are
+  stored encrypted at rest by Beanstalk and only visible to IAM
+  principals with `elasticbeanstalk:DescribeConfigurationSettings`.
+  Lock that down to your operator IAM user.
+- **Option B (stronger):** add a small `.platform/hooks/prebuild/`
+  shell script that fetches the secrets via `aws secretsmanager
+  get-secret-value` and writes them to `/opt/elasticbeanstalk/deploy/
+  configuration/containerenvironment` before Docker starts. Defer to
+  post-pilot unless your compliance reviewer asks for it.
 
-### Step 7 — Wire RDS to App Runner
+Pick Option A for pilot. Update the `AWS_DATABASE_URL` and
+`SESSION_SECRET` env values in **Beanstalk → Configuration → Updates,
+monitoring, and logging → Environment properties → Edit**.
 
-**RDS security group → Inbound → Add rule**: PostgreSQL / 5432 / Source
-= `viva-apprunner-sg`. Save. Remove every other inbound rule.
+### Step 5 — Wire RDS to the Beanstalk instance
 
-Test:
+**EC2 Console → Security groups** → find the SG named
+`awseb-e-<env-id>-stack-AWSEBSecurityGroup-<random>` (created by
+Beanstalk). Copy its SG ID.
+
+**RDS Console → your DB → Connectivity & security → VPC security
+groups → the one attached → Inbound → Edit:**
+- Add rule: PostgreSQL / 5432 / Source = the Beanstalk EC2 SG ID above.
+- **Remove every other inbound rule** (no `0.0.0.0/0`, no Replit IPs,
+  no home IPs).
+
+Beanstalk gives the environment a CNAME like
+`viva-api-prod.eba-abc123.us-east-1.elasticbeanstalk.com`. Test:
 ```bash
-curl -s https://abc123xyz.us-east-1.awsapprunner.com/api/healthz
+curl -s http://viva-api-prod.eba-abc123.us-east-1.elasticbeanstalk.com/api/healthz
 # expect: 200 OK
 ```
 
-If 5xx: App Runner Console → Logs. The most common failure is the
-startup assert firing — the log line `production safety assert failed`
-lists exactly which env var to fix.
+If 5xx: Beanstalk → Environment → Logs → Request Logs → Last 100
+lines. The most common failure is the startup assert firing — the log
+line `production safety assert failed` lists exactly which env var to
+fix. Update env props, Apply, wait for the rolling restart.
 
-### Step 8 — DNS cutover
+### Step 6 — DNS cutover (HTTPS via ACM)
 
-In your DNS provider:
-1. Lower the TTL on the existing `api.itsviva.com` record to **60s**.
-   Wait the old TTL out (5 min – 1 hr).
-2. App Runner → service → Custom domains → Link `api.itsviva.com`. Add
-   the validation CNAMEs it shows you.
-3. Wait until App Runner status = **Active** with cert issued.
-4. Change the `api.itsviva.com` record to a CNAME pointing at the App
-   Runner URL. Save.
+Beanstalk single-instance environments serve HTTP only by default
+because there is no load balancer to terminate TLS. For HTTPS to
+`api.itsviva.com`, terminate TLS at the EC2 instance using a
+Beanstalk `.platform/nginx/conf.d` snippet + ACM certificate, **or**
+put a small CloudFront distribution in front (recommended — no nginx
+config to maintain, ACM cert at the edge, free tier covers pilot
+volume).
+
+Recommended (CloudFront in front of Beanstalk):
+
+1. ACM (us-east-1) → Request public certificate for `api.itsviva.com`
+   → DNS validation → add the CNAME at your DNS provider → wait for
+   "Issued".
+2. CloudFront → Create distribution:
+   - Origin domain: the Beanstalk environment CNAME
+   - Origin protocol: HTTP only
+   - Viewer protocol policy: Redirect HTTP to HTTPS
+   - Allowed methods: GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE
+   - Cache policy: **CachingDisabled** (this is an API)
+   - Origin request policy: **AllViewerExceptHostHeader**
+   - Alternate domain name (CNAME): `api.itsviva.com`
+   - Custom SSL certificate: pick the ACM cert
+3. Lower TTL on existing `api.itsviva.com` to **60s**, wait the old
+   TTL out.
+4. Change `api.itsviva.com` to a CNAME pointing at the CloudFront
+   distribution domain (`d123abc.cloudfront.net`).
 5. From outside AWS: `curl -s https://api.itsviva.com/api/healthz`
-   should return 200.
+   returns 200.
 
-### Step 9 — Wipe demo data from production RDS
+(Single-instance HTTPS without CloudFront is documented in the
+Beanstalk Docker reference if you prefer; it adds ~30 lines of nginx
+config + a cert renewal script. Not worth it for pilot.)
+
+### Step 7 — Wipe demo data from production RDS
 
 Use `psql` or the RDS Query Editor in the AWS Console.
 ```sql
@@ -292,7 +333,7 @@ COMMIT;
 If FKs to `users.id` aren't `ON DELETE CASCADE`, delete from
 `patient_checkins` and `patients` first within the same transaction.
 
-### Step 10 — Decommission Replit
+### Step 8 — Decommission Replit
 
 Wait 24h after the DNS cutover. Then:
 - Replit Console → Deployments → stop the api-server deployment.
@@ -348,7 +389,9 @@ NODE_ENV=production pnpm --filter @workspace/api-server run seed   # exits 1 wit
 If anything regresses post-cutover:
 1. DNS provider → flip `api.itsviva.com` CNAME back to the previous
    host. ~1 minute to propagate (TTL=60).
-2. Stop the App Runner service to halt billing.
+2. Beanstalk → Environment → Actions → **Terminate environment** to
+   halt billing. (Application stays; you can recreate the environment
+   from the same source bundle.)
 3. RDS data is unchanged — no migration was performed.
 
 ---
