@@ -1,6 +1,9 @@
 import { Router, type Request, type Response } from "express";
 import { eq } from "drizzle-orm";
-import { openai } from "@workspace/integrations-openai-ai-server";
+// AI is fully disabled in the pilot production build. This stub
+// throws on access; /coach/chat 403s in safe mode before reaching
+// any code path that would touch it. See lib/aiDisabledStub.ts.
+import { openai } from "../../lib/aiDisabledStub";
 import {
   db,
   apiTokensTable,
@@ -402,6 +405,15 @@ router.post("/chat", async (req: Request, res: Response) => {
       `[coach/chat ${reqId}] payload: msgLen=${message?.length ?? 0} hasContext=${!!healthContext} historyLen=${conversationHistory?.length ?? 0}`,
     );
 
+    // Pilot production: AI is structurally disabled (see
+    // lib/aiDisabledStub.ts). This branch is unreachable because
+    // safe-mode 403'd above; kept as a final defense-in-depth so a
+    // misconfigured non-prod env can't accidentally call OpenAI.
+    if (process.env.NODE_ENV === "production") {
+      console.error(`[coach/chat ${reqId}] AI disabled in production`);
+      res.status(503).json({ error: "AI coach is disabled in this build." });
+      return;
+    }
     if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY && !process.env.OPENAI_API_KEY) {
       console.error(`[coach/chat ${reqId}] missing OpenAI credentials`);
       res.status(500).json({ error: "Server missing AI credentials. Contact support." });

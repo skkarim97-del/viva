@@ -15,7 +15,11 @@
 // Output schema is constrained to the same shape templates use, so
 // the downstream lifecycle code does not branch on AI vs fallback.
 
-import { openai } from "@workspace/integrations-openai-ai-server";
+// AI is fully disabled in the pilot production build. This stub
+// throws on access; the intervention engine stays in
+// INTERVENTION_AI_MODE=fallback (the default) and never reaches
+// this file's call sites. See lib/aiDisabledStub.ts.
+import { openai } from "../aiDisabledStub";
 import type {
   PatientInterventionRiskLevel,
   PatientInterventionRecommendationCategory,
