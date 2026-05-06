@@ -4,7 +4,7 @@ uploads = []
 id = "pLufypxm1aAY9jLpSQSQE"
 uri = "file://artifacts/pulse-pilot/assets/images/icon.png"
 type = "image"
-title = "Viva app icon V pulse"
+title = "Viva Icon"
 
 [[outputs]]
 id = "sr2iti8pEAHPDQXBl-NFR"
