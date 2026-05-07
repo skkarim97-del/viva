@@ -1,0 +1,56 @@
+Update Viva Care so the Today tab is more focused on input + intervention, and move the “Recent patterns” content into the Trends tab.
+
+Goal:
+- Today tab should focus on:
+  1. Tell us how today is going
+  2. Your treatment
+  3. Today’s check-in
+  4. Today’s support plan / interventions
+- Remove the “Recent patterns” card from the Today tab
+- Merge that logic into the Trends tab under the existing “What We’re Noticing” section
+
+Trends tab changes:
+- Rename / keep section title as “What We’re Noticing”
+- Subtitle: “Patterns from your symptoms, treatment and health data over the last few weeks”
+- Combine:
+  - existing Trends tab “What We’re Noticing” insights
+  - Today tab “Recent patterns” insights
+- Insights should include both symptom-based and biometric-based observations when available
+
+Example insight copy:
+- “Your energy tends to dip around 2 days after your dose”
+- “Your appetite tends to dip around 2 days after your dose”
+- “Digestion has been settling down over the past week”
+- “Lower sleep often lines up with lower energy the next day”
+- “Light movement appears to support steadier energy”
+- “No major symptom pattern detected yet. Keep checking in so Viva can learn your baseline”
+
+Data logic:
+- Use recent check-ins over the last 14-21 days where available
+- Use medication dose dates to identify patterns around dose day / post-dose windows
+- Use Apple Health / biometric data if connected:
+  - sleep
+  - steps / activity
+  - resting heart rate
+  - HRV if available
+- If Apple Health is not connected, still show symptom and treatment patterns
+- If there is not enough data, show a clean empty state:
+  “Not enough pattern data yet”
+  “Complete a few more check-ins so Viva can identify trends in symptoms, treatment and recovery.”
+
+UX requirements:
+- Do not duplicate the same insight in both Today and Trends
+- Today should feel simpler and more action-oriented
+- Trends should feel like the intelligence / pattern-recognition area
+- Keep styling consistent with the current cards, spacing and Montserrat typography
+- Keep the copy concise and patient-friendly
+- Avoid making it feel like a generic wellness tracker
+- Frame insights around treatment support, recovery, symptoms and intervention intelligence
+
+Important:
+- Do not remove any underlying tracking data or database fields
+- Only change where the patterns are displayed
+- Preserve existing check-in and intervention functionality
+- Do not break navigation or tab state
+- Make sure the app still works with no Apple Health connection
+- Make sure the app still works with demo data
