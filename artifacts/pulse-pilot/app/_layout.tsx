@@ -106,7 +106,7 @@ function SplashGate({ fontsReady, children }: { fontsReady: boolean; children: R
 }
 
 // Listen for incoming deep links of the form viva://invite/<token> or
-// https://viva-ai.replit.app/invite/<token>. Both shapes are handled
+// https://api.itsviva.com/invite/<token>. Both shapes are handled
 // here in JS rather than via a file-based [token] route because Expo
 // Router on web can race the route discovery for nested dynamic
 // segments on cold start, producing a "screen doesn't exist" 404. A

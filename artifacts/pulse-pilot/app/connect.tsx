@@ -162,7 +162,7 @@ export default function ConnectScreen() {
                 style={styles.input}
                 value={link}
                 onChangeText={setLink}
-                placeholder="https://viva-ai.replit.app/invite/..."
+                placeholder="https://api.itsviva.com/invite/..."
                 placeholderTextColor={colors.light.mutedForeground}
                 autoCapitalize="none"
                 autoCorrect={false}
