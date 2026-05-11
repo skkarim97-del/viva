@@ -37,6 +37,7 @@ import {
   generatePersonalizedIntervention,
   type InterventionAnalyticsEvent,
 } from "../lib/interventionEngine";
+import { isInterventionAiModeEnabled } from "../lib/interventionEngine/safeMode";
 
 const router: Router = Router();
 
@@ -255,7 +256,7 @@ router.post("/generate", async (req, res: Response) => {
           symptomType: generated.insertRow.symptomType,
           severity: generated.insertRow.severity,
           riskLevel: generated.insertRow.riskLevel,
-          contextSummary: generated.insertRow.contextSummary,
+          contextSummary: isInterventionAiModeEnabled() ? generated.insertRow.contextSummary : {},
           deidentifiedAiPayload: generated.insertRow.deidentifiedAiPayload,
           whatWeNoticed: generated.insertRow.whatWeNoticed,
           recommendation: generated.insertRow.recommendation,
@@ -331,7 +332,14 @@ router.post("/generate", async (req, res: Response) => {
       }
       const [inserted] = await db
         .insert(patientInterventionsTable)
-        .values(generated.insertRow)
+        .values({
+          ...generated.insertRow,
+          // Safe mode: contextSummary holds PHI-bearing engine state. In
+          // fallback mode (no AI calls) there is no reason to persist it.
+          // The supersede logic above already read what it needed from
+          // the in-memory copy before this write.
+          contextSummary: isInterventionAiModeEnabled() ? generated.insertRow.contextSummary : {},
+        })
         .returning();
       row = inserted;
     }
