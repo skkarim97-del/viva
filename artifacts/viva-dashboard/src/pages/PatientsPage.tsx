@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -95,18 +95,48 @@ export function PatientsPage() {
   const needsReview = useQuery({
     queryKey: ["needs-review-ids"],
     queryFn: api.needsReviewIds,
-    // Poll on a 30s cadence so a doctor sitting on the worklist
-    // sees a new "Patient requested review" pill appear within
-    // half a minute of the patient tapping the CTA, without
-    // requiring a manual refresh. Cheap query (returns just ids).
-    staleTime: 30_000,
-    refetchInterval: 30_000,
+    // Poll every 10s so a new "Patient requested review" badge appears
+    // within seconds of the patient tapping the CTA. Cheap query
+    // (returns just an id array).
+    staleTime: 10_000,
+    refetchInterval: 10_000,
     refetchOnWindowFocus: true,
   });
   const needsReviewSet = useMemo(
     () => new Set(needsReview.data?.ids ?? []),
     [needsReview.data],
   );
+
+  // Browser Notification API: alert the doctor when new escalations
+  // arrive while they are on another tab. Fires on any count increase;
+  // skips the first render (prev === null) so mount doesn't notify.
+  // Uses tag:"viva-escalation" + renotify:true so rapid bursts collapse
+  // into one banner rather than stacking.
+  const prevNeedsReviewCountRef = useRef<number | null>(null);
+  useEffect(() => {
+    const currentCount = needsReview.data?.ids.length ?? 0;
+    const prev = prevNeedsReviewCountRef.current;
+    prevNeedsReviewCountRef.current = currentCount;
+    if (prev === null || currentCount <= prev) return;
+    const newCount = currentCount - prev;
+    const fire = () => {
+      new Notification("Patient requested review", {
+        body:
+          newCount === 1
+            ? "A patient has requested clinician review."
+            : `${newCount} patients have requested clinician review.`,
+        tag: "viva-escalation",
+      });
+    };
+    if (typeof Notification === "undefined") return;
+    if (Notification.permission === "granted") {
+      fire();
+    } else if (Notification.permission !== "denied") {
+      void Notification.requestPermission().then((p) => {
+        if (p === "granted") fire();
+      });
+    }
+  }, [needsReview.data]);
 
   // Phase 4 intervention worklist. Returns the flat list of active
   // interventions (shown / accepted / pending_feedback / escalated)
@@ -116,8 +146,8 @@ export function PatientsPage() {
   const interventionsWorklist = useQuery({
     queryKey: ["clinic-interventions-worklist"],
     queryFn: api.clinicInterventionsWorklist,
-    staleTime: 30_000,
-    refetchInterval: 30_000,
+    staleTime: 10_000,
+    refetchInterval: 10_000,
     refetchOnWindowFocus: true,
   });
   const interventionBuckets = useMemo(() => {
