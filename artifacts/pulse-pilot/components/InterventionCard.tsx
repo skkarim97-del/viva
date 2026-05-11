@@ -910,9 +910,9 @@ export function deriveLivePlan(
   };
 }
 
-// Dynamic insight-style card title. Reads as a human observation
-// ("Your energy looks lower today") rather than a feature label.
-// Falls back through livePlan → liveSeverity → triggerType.
+// Short, clean card title derived from live check-in signal or server trigger.
+// Uses the same category vocabulary as the rest of the card copy.
+// No em dashes, no chatbot-style observations.
 function buildInsightTitle(
   livePlan: LivePlan | null,
   liveSeverity: LiveSeverity | null,
@@ -920,21 +920,19 @@ function buildInsightTitle(
 ): string {
   if (livePlan) {
     const kind = livePlan.primaryConcern;
-    if (kind === "nausea-severe") return "Nausea looks heavier today";
-    if (kind === "nausea-moderate") return "Some nausea today — let's settle it";
-    if (kind === "nausea-mild") return "A little nausea today";
-    if (kind === "constipation") return "Digestion needs attention today";
-    if (kind === "appetite-very-low") return "Appetite is quite low today";
-    if (kind === "appetite-low") return "Appetite is lower today";
-    if (kind === "energy-depleted") return "Energy looks depleted today";
-    if (kind === "energy-tired") return "Energy looks lower today";
-    if (kind === "diarrhea") return "Digestion needs support today";
-    if (kind === "bloating") return "Some bloating today";
-    if (kind === "hydration") return "Hydration needs attention today";
+    if (kind === "nausea-severe" || kind === "nausea-moderate" || kind === "nausea-mild")
+      return "Nausea support for today";
+    if (kind === "constipation" || kind === "diarrhea" || kind === "bloating")
+      return "Digestion support for today";
+    if (kind === "appetite-very-low" || kind === "appetite-low")
+      return "Appetite support for today";
+    if (kind === "energy-depleted" || kind === "energy-tired")
+      return "Energy support for today";
+    if (kind === "hydration")
+      return "Hydration support for today";
   }
-  if (liveSeverity === "severe") return "Symptoms are heavier today";
-  if (liveSeverity === "moderate") return "Some symptoms today — here's support";
-  if (liveSeverity === "mild") return "Mild symptoms today";
+  if (liveSeverity === "severe" || liveSeverity === "moderate" || liveSeverity === "mild")
+    return "Recovery support for today";
   switch (triggerType) {
     case "nausea": return "Nausea support for today";
     case "constipation": return "Digestion support for today";
@@ -943,8 +941,8 @@ function buildInsightTitle(
     case "low_food_intake": return "Appetite support for today";
     case "missed_checkin": return "Getting back on track";
     case "rapid_weight_change": return "Weight change noticed";
-    case "worsening_symptom": return "Symptoms changing — here's support";
-    case "repeated_symptom": return "Recurring symptoms — let's address this";
+    case "worsening_symptom": return "Symptom support for today";
+    case "repeated_symptom": return "Symptom support for today";
     case "patient_requested_review": return "Support requested";
     default: return "Today's support";
   }
@@ -1541,19 +1539,8 @@ export function InterventionCard({
   const useWarningTone =
     status === "escalated" || liveSeverity === "severe";
 
-  // Patient-friendly nouns for the symptoms we're targeting today.
-  // Used by both the top "Today:" signal chip and the "More support"
-  // mini-chips. We always exclude the primary category from the
-  // secondary list so a category never appears twice.
-  const allCategoryNouns: string[] = [];
-  {
-    const seen = new Set<RecCategory>();
-    for (const r of displayRows) {
-      if (seen.has(r.category)) continue;
-      seen.add(r.category);
-      allCategoryNouns.push(CATEGORY_NOUN[r.category]);
-    }
-  }
+  // Nouns for the "More support" collapsed header mini-chips.
+  // Primary category is excluded so it never appears twice.
   const secondaryCategoryNouns: string[] = [];
   {
     const seen = new Set<RecCategory>();
@@ -1564,13 +1551,6 @@ export function InterventionCard({
       secondaryCategoryNouns.push(CATEGORY_NOUN[r.category]);
     }
   }
-  // Cap the "Today:" chip label at three nouns so it never wraps.
-  // Anything beyond three is conveyed by "More support" chips below.
-  const todayChipLabel =
-    allCategoryNouns.length > 0
-      ? `Today: ${joinList(allCategoryNouns.slice(0, 3))}`
-      : null;
-
   // Short "Why this appeared" disclosure. Shown at the bottom of the
   // card so the patient understands what triggered the support without
   // it competing with the primary recommendation.
@@ -1615,32 +1595,19 @@ export function InterventionCard({
           <Feather name={icon} size={18} color={accent} />
         </View>
         <View style={{ flex: 1 }}>
-          <View style={styles.badgeRow}>
-            <View
-              style={[
-                styles.badge,
-                {
-                  backgroundColor: useWarningTone
-                    ? warning + "22"
-                    : FEATURED_BADGE_BG,
-                },
-              ]}
-            >
-              <Feather
-                name={useWarningTone ? "alert-circle" : "star"}
-                size={10}
-                color={useWarningTone ? warning : FEATURED_BADGE_FG}
-              />
-              <Text
-                style={[
-                  styles.badgeText,
-                  { color: useWarningTone ? warning : FEATURED_BADGE_FG },
-                ]}
-              >
-                {badgeLabel}
-              </Text>
+          {/* Badge only renders for warning states (escalated / severe)
+              where urgency context is clinically relevant. Lower-severity
+              states omit it to keep the header clean. */}
+          {useWarningTone && (
+            <View style={styles.badgeRow}>
+              <View style={[styles.badge, { backgroundColor: warning + "22" }]}>
+                <Feather name="alert-circle" size={10} color={warning} />
+                <Text style={[styles.badgeText, { color: warning }]}>
+                  {badgeLabel}
+                </Text>
+              </View>
             </View>
-          </View>
+          )}
           <Text
             style={[
               styles.sectionLabel,
@@ -1652,149 +1619,8 @@ export function InterventionCard({
           <Text style={[styles.title, { color: navy }]}>
             {buildInsightTitle(livePlan, liveSeverity, intervention.triggerType)}
           </Text>
-          {/* Subtitle names the actual inputs feeding the support so
-              the patient understands this is personalized -- not a
-              generic tip. We only mention Apple Health when it is
-              connected; otherwise we stay strictly on the check-in
-              so we never imply biometric data we do not have. */}
-          <Text style={[styles.subtitle, { color: mutedForeground }]}>
-            {hasHealthData
-              ? "Personalized support based on today’s check-in and Apple Health trends"
-              : "Personalized support based on today’s check-in"}
-          </Text>
-          {/* The dev-only "[debug] concern=... sev=... supports=..."
-              probe that used to live here was rendering visibly in
-              the patient UI on certain builds. Removed entirely;
-              if we need a similar diagnostic again, log it via
-              console in dev rather than rendering it on the card.
-              `livePlan` is still consumed below for the actual
-              displayed plan, so removing this render is a no-op
-              for the rest of the component. */}
         </View>
       </View>
-
-      {/* -- Signal summary chips ----------------------------------
-            Compact, data-driven row that replaces the long "What we
-            noticed" sentence. Goal: communicate "this is built from
-            your real data" in under a second of glance time. */}
-      {/* The data-source fallback chip ("Apple Health" / "Recent
-          symptoms") always renders, so the row is always non-empty
-          while we have at least the patient's own check-in. */}
-      <View style={styles.signalChipsRow}>
-          {todayChipLabel && (
-            <View
-              style={[
-                styles.signalChip,
-                {
-                  backgroundColor: accent + "14",
-                  borderColor: accent + "33",
-                },
-              ]}
-            >
-              <Feather name="activity" size={11} color={accent} />
-              <Text
-                style={[styles.signalChipText, { color: accent }]}
-                numberOfLines={1}
-              >
-                {todayChipLabel}
-              </Text>
-            </View>
-          )}
-          {hasHealthData ? (
-            <View
-              style={[
-                styles.signalChip,
-                {
-                  backgroundColor: "rgba(31, 79, 138, 0.06)",
-                  borderColor: "rgba(31, 79, 138, 0.12)",
-                },
-              ]}
-            >
-              <Feather name="heart" size={11} color={navy} />
-              <Text
-                style={[styles.signalChipText, { color: navy }]}
-                numberOfLines={1}
-              >
-                Apple Health
-              </Text>
-            </View>
-          ) : (
-            <View
-              style={[
-                styles.signalChip,
-                {
-                  backgroundColor: "rgba(31, 79, 138, 0.06)",
-                  borderColor: "rgba(31, 79, 138, 0.12)",
-                },
-              ]}
-            >
-              <Feather name="clipboard" size={11} color={navy} />
-              <Text
-                style={[styles.signalChipText, { color: navy }]}
-                numberOfLines={1}
-              >
-                Recent symptoms
-              </Text>
-            </View>
-          )}
-          {/* Dose-timing provenance chip. Only renders when the day
-              sits in a post-dose window AND symptoms are at least
-              moderate, so it appears precisely when dose timing is
-              the most likely contributor. This is *provenance*, not
-              advice -- the engine already biases the recommendation
-              toward gentler hydration/fueling on these days; the
-              chip just makes that intelligence visible. */}
-          {doseContext &&
-            (doseContext.position === "dose_day" ||
-              doseContext.position === "day_1_post" ||
-              doseContext.position === "day_2_post") &&
-            (liveSeverity === "moderate" || liveSeverity === "severe") && (
-              <View
-                style={[
-                  styles.signalChip,
-                  {
-                    backgroundColor: warning + "14",
-                    borderColor: warning + "33",
-                  },
-                ]}
-              >
-                <Feather name="clock" size={11} color={warning} />
-                <Text
-                  style={[styles.signalChipText, { color: warning }]}
-                  numberOfLines={1}
-                >
-                  Around dose timing
-                </Text>
-              </View>
-            )}
-          {/* The "Heavier today" severity chip used to live here, but
-              the top status banner already announces that state.
-              Repeating it inside Symptom support made the page feel
-              alarming and over-labeled. The amber-toned badge above
-              and the care-team CTA below carry the same signal
-              visually without saying it twice.
-              The mild-severity "Stay ahead today" chip was also
-              removed -- it duplicated the "Stay ahead" badge a few
-              pixels above it. */}
-        </View>
-
-        {/* Connect-Apple-Health invitation. Only renders when the
-            patient has not connected Apple Health, so we never
-            pretend biometric signals are in the mix when they are
-            not. The line stays small and informational -- this is
-            an invitation to deepen personalization, not an error
-            state or a CTA button. */}
-        {!hasHealthData && (
-          <Text
-            style={[
-              styles.healthHint,
-              { color: mutedForeground },
-            ]}
-            numberOfLines={2}
-          >
-            Connect Apple Health to personalize support with sleep, steps and activity trends.
-          </Text>
-        )}
 
       {/* -- Primary action ---------------------------------------- */}
       {primary && (
@@ -2626,39 +2452,14 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 24,
     padding: 20,
-    gap: 18,
+    gap: 14,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  // -- Signal summary chips ----------------------------------------
+  // -- Signal chips row used by the steady-state maintenance card --
   signalChipsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 6,
-  },
-  signalChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  signalChipText: {
-    fontSize: 11.5,
-    fontFamily: "Montserrat_600SemiBold",
-    fontWeight: "600",
-    letterSpacing: 0.1,
-  },
-  // Subtle one-line invitation that surfaces only when Apple Health
-  // is not connected. Intentionally not a button -- the card's own
-  // CTAs are reserved for symptom support; this is provenance copy.
-  healthHint: {
-    fontSize: 12,
-    fontFamily: "Montserrat_400Regular",
-    lineHeight: 16,
-    marginTop: 8,
-    opacity: 0.8,
   },
   // -- More support: mini category chips ---------------------------
   supportChipsRow: {
