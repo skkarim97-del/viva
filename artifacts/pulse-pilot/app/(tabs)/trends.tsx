@@ -66,8 +66,14 @@ export default function TrendsScreen() {
   const c = useColors();
   const { insights, metrics, completionHistory, weeklyConsistency, weeklyDaysCompleted, streakDays, todayCompletionRate, dailyPlan, profile, medicationLog, inputAnalytics, hasHealthData, availableMetricTypes, adaptiveInsights } = useApp();
 
-  const correlations = useMemo(() => hasHealthData ? buildCorrelations(metrics) : [], [metrics, hasHealthData]);
-  const patterns = useMemo(() => hasHealthData ? detectPatterns(metrics, availableMetricTypes) : [], [metrics, hasHealthData, availableMetricTypes]);
+  const correlations = useMemo(() => {
+    if (!hasHealthData) return [];
+    try { return buildCorrelations(metrics); } catch { return []; }
+  }, [metrics, hasHealthData]);
+  const patterns = useMemo(() => {
+    if (!hasHealthData) return [];
+    try { return detectPatterns(metrics, availableMetricTypes); } catch { return []; }
+  }, [metrics, hasHealthData, availableMetricTypes]);
   const habitStats = useMemo(() => computeHabitStats(completionHistory), [completionHistory]);
   const baseInsights = useMemo(() => hasHealthData ? buildKeyInsights(metrics, habitStats, availableMetricTypes) : [], [metrics, habitStats, hasHealthData, availableMetricTypes]);
   const keyInsights = useMemo(() => {
