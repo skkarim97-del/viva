@@ -22,6 +22,8 @@ import {
   patientInterventionsTable,
   careEventsTable,
   analyticsEventsTable,
+  patientsTable,
+  usersTable,
   PATIENT_INTERVENTION_TRIGGER_TYPES,
   PATIENT_INTERVENTION_FEEDBACK_RESULTS,
   type PatientIntervention,
@@ -38,6 +40,27 @@ import {
   type InterventionAnalyticsEvent,
 } from "../lib/interventionEngine";
 import { isInterventionAiModeEnabled } from "../lib/interventionEngine/safeMode";
+import { sendEscalationEmail } from "../lib/emailSafe";
+
+// Look up the assigned doctor's email for a given patient userId.
+// Returns undefined if the patient has no assigned doctor or the
+// query fails — callers treat undefined as "do not notify".
+async function lookupDoctorEmail(
+  patientUserId: number,
+): Promise<string | undefined> {
+  try {
+    const rows = await db
+      .select({ email: usersTable.email })
+      .from(patientsTable)
+      .innerJoin(usersTable, eq(usersTable.id, patientsTable.doctorId))
+      .where(eq(patientsTable.userId, patientUserId))
+      .limit(1);
+    return rows[0]?.email ?? undefined;
+  } catch (err) {
+    logger.warn({ err, patientUserId }, "lookupDoctorEmail: query failed");
+    return undefined;
+  }
+}
 
 const router: Router = Router();
 
@@ -667,6 +690,11 @@ router.post("/:id/feedback", async (req, res: Response) => {
     analyticsEvents.push("intervention_resolved");
   } else if (feedbackResult === "worse") {
     analyticsEvents.push("intervention_escalated");
+    // Fire-and-forget: notify the assigned doctor. Runs after res.json()
+    // so a slow or failing email never delays the patient response.
+    lookupDoctorEmail(userId).then((email) => {
+      if (email) void sendEscalationEmail(email);
+    });
   }
   fireAnalytics(userId, analyticsEvents, {
     intervention_id: id,
@@ -732,6 +760,12 @@ router.post("/:id/escalate", async (req, res: Response) => {
         "intervention_escalate_care_event_insert_failed",
       );
     });
+
+  // Fire-and-forget: notify the assigned doctor. Runs after res.json()
+  // so email latency is invisible to the patient.
+  lookupDoctorEmail(userId).then((email) => {
+    if (email) void sendEscalationEmail(email);
+  });
 
   fireAnalytics(userId, ["intervention_escalated"], {
     intervention_id: id,
