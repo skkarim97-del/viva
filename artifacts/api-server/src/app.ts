@@ -22,7 +22,7 @@ app.use(
         const rawUrl = req.url?.split("?")[0] ?? "";
         const url = rawUrl.replace(
           /^(\/api)?\/invite\/[^/?#]+/,
-          (_m, api) => `${api ?? ""}/invite/[redacted]`,
+          (_m: string, api: string | undefined) => `${api ?? ""}/invite/[redacted]`,
         );
         return {
           id: req.id,

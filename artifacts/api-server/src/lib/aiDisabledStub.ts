@@ -46,4 +46,5 @@ export const openai = new Proxy({} as AnyOpenAI, {
   construct() {
     throw new Error(ERR);
   },
-}) as never;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+}) as any;
