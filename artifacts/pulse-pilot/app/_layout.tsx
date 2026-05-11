@@ -9,7 +9,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useRef } from "react";
-import { View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -41,7 +41,7 @@ const LAUNCH_BG = "#0F1923";
 const queryClient = new QueryClient();
 
 function SplashGate({ fontsReady, children }: { fontsReady: boolean; children: React.ReactNode }) {
-  const { isLoading } = useApp();
+  const { isLoading, initError, retryLoad } = useApp();
   const { loading: authLoading } = useAuth();
   const ready = fontsReady && !isLoading && !authLoading;
   const hiddenRef = useRef(false);
@@ -90,12 +90,32 @@ function SplashGate({ fontsReady, children }: { fontsReady: boolean; children: R
     };
   }, [ready, fontsReady, isLoading]);
 
-  // While not ready, paint a solid splash-colored View so any moment the OS
-  // peeks behind the native splash shows the same dark color, not white.
-  // Children are intentionally NOT mounted here -- they require hydrated
-  // profile data (initialRouteName depends on profile.onboardingComplete).
+  // While not ready, show a solid splash-colored background so any OS
+  // peek-behind shows the same dark color, not white. Children are
+  // intentionally NOT mounted yet — they need hydrated profile data
+  // (initialRouteName depends on profile.onboardingComplete).
   if (!ready) {
-    return <View style={{ flex: 1, backgroundColor: LAUNCH_BG }} />;
+    return (
+      <View style={splashStyles.root}>
+        <ActivityIndicator size="large" color="#6C8EF5" />
+      </View>
+    );
+  }
+
+  // loadData threw an unrecoverable error (corrupt AsyncStorage, local
+  // engine crash). Show a minimal retry card so the patient isn't stuck
+  // on a blank screen.
+  if (initError) {
+    return (
+      <View style={splashStyles.root}>
+        <Text style={splashStyles.errorText}>
+          Couldn't load your data.{"\n"}Check your connection and try again.
+        </Text>
+        <Pressable style={splashStyles.retryButton} onPress={retryLoad}>
+          <Text style={splashStyles.retryText}>Retry</Text>
+        </Pressable>
+      </View>
+    );
   }
 
   return (
@@ -104,6 +124,34 @@ function SplashGate({ fontsReady, children }: { fontsReady: boolean; children: R
     </View>
   );
 }
+
+const splashStyles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: LAUNCH_BG,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 20,
+  },
+  errorText: {
+    color: "#9CA3AF",
+    fontSize: 15,
+    textAlign: "center",
+    lineHeight: 22,
+    fontFamily: "Montserrat_400Regular",
+  },
+  retryButton: {
+    backgroundColor: "#6C8EF5",
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  retryText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontFamily: "Montserrat_600SemiBold",
+  },
+});
 
 // Listen for incoming deep links of the form viva://invite/<token> or
 // https://api.itsviva.com/invite/<token>. Both shapes are handled

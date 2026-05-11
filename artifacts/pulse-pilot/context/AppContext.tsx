@@ -158,6 +158,8 @@ interface AppContextType {
   integrations: IntegrationStatus[];
   toggleIntegration: (id: string) => void;
   isLoading: boolean;
+  initError: boolean;
+  retryLoad: () => void;
   upgradeTier: (tier: SubscriptionTier) => void;
   insights: DailyInsights | null;
   feeling: FeelingType;
@@ -294,6 +296,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [integrationsState, setIntegrationsState] = useState<IntegrationStatus[]>(defaultIntegrations);
   const [isLoading, setIsLoading] = useState(true);
+  const [initError, setInitError] = useState(false);
   const [insights, setInsights] = useState<DailyInsights | null>(null);
   const [feeling, setFeelingState] = useState<FeelingType>(null);
   const [energy, setEnergyState] = useState<EnergyLevel>(null);
@@ -485,7 +488,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [hasHealthData]);
 
   useEffect(() => {
-    loadData();
+    // 8-second safety net: if network calls in loadData hang (never
+    // resolve or reject), force isLoading to false so the splash gate
+    // unblocks and shows content with whatever local state was hydrated
+    // from AsyncStorage. The timeout is cleared immediately when
+    // loadData resolves normally.
+    const loadTimeout = setTimeout(() => setIsLoading(false), 8_000);
+    void loadData().finally(() => clearTimeout(loadTimeout));
   }, []);
 
   // Best-effort daily Apple Health summary sync. Fires when
@@ -1004,6 +1013,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       computeRisk(allMetrics, loadedGlp1History, loadedHistory, savedProfileData.medicationProfile);
       recomputeAnalytics(loadedGlp1History, savedProfileData.medicationProfile, loadedMedLog, loadedHistory);
     } catch {
+      setInitError(true);
     } finally {
       setIsLoading(false);
     }
@@ -1996,6 +2006,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         integrations: integrationsState,
         toggleIntegration,
         isLoading,
+        initError,
+        retryLoad: () => { setInitError(false); setIsLoading(true); void loadData(); },
         upgradeTier,
         insights,
         feeling,
