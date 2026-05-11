@@ -22,7 +22,7 @@ import { InputRow } from "@/components/InputRow";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SymptomTipCard } from "@/components/SymptomTipCard";
-import { InterventionCard } from "@/components/InterventionCard";
+import { InterventionCard, deriveLiveSeverity } from "@/components/InterventionCard";
 import {
   interventionsApi,
   type PatientIntervention,
@@ -804,6 +804,21 @@ export default function DashboardScreen() {
     setGlp1Energy(glp1Energy === e ? null : e);
   };
 
+  // Severity-based card positioning: elevated/moderate/severe → pinned
+  // above check-in inputs; mild/steady/null → rendered below so calmer
+  // states don't visually compete with the check-in prompt itself.
+  const currentLiveSeverity = symptomHydrated
+    ? deriveLiveSeverity({
+        nausea,
+        appetite,
+        energy: glp1Energy,
+        digestion,
+        bowel: bowelSelectedKey,
+      })
+    : null;
+  const interventionIsElevated =
+    currentLiveSeverity === "moderate" || currentLiveSeverity === "severe";
+
   const sendAskMessage = async (text: string) => {
     if (!text.trim() || isTyping) return;
 
@@ -1003,16 +1018,15 @@ export default function DashboardScreen() {
             kept in the component so we can re-surface this CTA
             elsewhere later without rewiring. */}
 
-        {/* AI-personalized micro-interventions ("Symptom support").
-            Positioned directly under the top status card so the
-            patient sees what to DO immediately after seeing what
-            Viva NOTICED. This is the headline value of the Today
-            tab, so it sits above Treatment / insights / check-in /
-            Plan. Renders only once the patient has met the minimum
-            check-in (energy + nausea, see hasMinSymptomData) and an
-            active intervention exists; the fallback slot lower in
-            the screen handles the unusual no-min-data case. */}
-        {activeInterventions.length > 0 && hasMinSymptomData && (
+        {/* "Today's support" card — elevated position (moderate/severe).
+            Pins above the check-in inputs when symptoms are running at
+            least moderate, so the most urgent recommendation is the
+            first thing the patient sees after the status card.
+            Mild/steady severity renders lower (after the check-in
+            row) so calmer states don't compete with the check-in
+            prompt. The no-min-data fallback slot below handles the
+            edge case of a persisted active row without a fresh check-in. */}
+        {activeInterventions.length > 0 && hasMinSymptomData && interventionIsElevated && (
           <View style={{ marginBottom: 12, gap: 14 }}>
             {activeInterventions.map((iv) => (
               <InterventionCard
@@ -1356,6 +1370,48 @@ export default function DashboardScreen() {
             <InputRow label="Bowel movement today" options={BOWEL_OPTIONS} selected={bowelSelectedKey} onSelect={selectBowelMovement} containerBg={c.background} />
           </View>
         </View>
+
+        {/* "Today's support" card — lower position (mild/steady).
+            When symptoms are mild or steady the card renders here,
+            after the check-in row, so the check-in prompt is visible
+            first. Visually softer state cards (steady = "Your symptoms
+            look steady") belong lower in the reading order. */}
+        {activeInterventions.length > 0 && hasMinSymptomData && !interventionIsElevated && (
+          <View style={{ marginTop: 8, marginBottom: 12, gap: 14 }}>
+            {activeInterventions.map((iv) => (
+              <InterventionCard
+                key={iv.id}
+                intervention={iv}
+                navy={c.foreground}
+                accent={c.accent}
+                cardBg={c.card}
+                background={c.background}
+                mutedForeground={c.mutedForeground}
+                warning={c.warning}
+                hasHealthData={hasHealthData}
+                doseContext={
+                  dailyState
+                    ? {
+                        position: dailyState.doseDayPosition,
+                        recentTitration: dailyState.recentTitration,
+                      }
+                    : null
+                }
+                liveCheckin={symptomHydrated ? {
+                  nausea,
+                  appetite,
+                  energy: glp1Energy,
+                  digestion,
+                  bowel: bowelSelectedKey,
+                } : null}
+                onAccept={onInterventionAccept}
+                onDismiss={onInterventionDismiss}
+                onFeedback={onInterventionFeedback}
+                onEscalate={onInterventionEscalate}
+              />
+            ))}
+          </View>
+        )}
 
         {/* Fallback intervention slot. Only used when an intervention
             has been generated WITHOUT the patient having met the min
