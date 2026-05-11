@@ -196,3 +196,58 @@ The two current rules were chosen because they meet all of the following criteri
 5. **Safe to fail** — the email notification is best-effort; the core escalation record is written to the database regardless of email delivery
 
 The future candidate rules above are deliberately held back until the pilot produces enough signal to validate whether deterministic rules are sufficient or whether probabilistic approaches (risk scoring, ML) are warranted.
+
+---
+
+## 7. Engagement / Operational Alerts (separate layer)
+
+> **These are not clinical escalations.** Engagement alerts and clinical escalations are intentionally separate concepts and must not be merged into the same urgency bucket or notification channel.
+
+### Clinical escalations vs. engagement alerts
+
+| | Clinical escalation | Engagement / operational alert |
+|---|---|---|
+| **What it signals** | Patient has an active clinical need right now | Patient engagement, activation, or retention is at risk |
+| **Urgency** | High — provider review required | Lower — operational follow-up or accountability |
+| **Source** | Patient action (feedback, request) | Timestamp arithmetic on invite / check-in data |
+| **Who acts** | Treating provider | Provider, care coordinator, or platform operator |
+| **Current notification** | Email to assigned doctor | Dashboard-only for pilot v1 |
+| **Audit trail** | `escalation_requested` care event | Computed dynamically (see implementation plan) |
+
+### Why keep them separate
+
+Merging engagement signals into the clinical escalation channel would:
+- Dilute the urgency signal — providers would start ignoring emails if most are operational rather than clinical
+- Create ambiguity about what action is required (call the patient? or just resend an invite?)
+- Risk labeling routine disengagement as a medical alert, which is misleading and potentially creates liability
+
+### Proposed pilot v1 engagement alert candidates
+
+The following are **proposed alerts, not yet implemented**. See `docs/engagement-alerts-plan.md` for the implementation proposal.
+
+| Alert | Trigger condition | Suggested label | Suggested action |
+|---|---|---|---|
+| **Activation pending** | Invited but not activated after 72 hours | `Activation pending` | Resend invite or remind patient |
+| **No first check-in** | Activated but no check-in within 24 hours | `No first check-in` | Encourage patient to complete first check-in |
+| **Engagement slipping** | No check-in for 3 consecutive days | `Engagement slipping` | Provider or care team reminder |
+| **Engagement risk** | No check-in for 5+ consecutive days | `Engagement risk` | Provider outreach |
+| **Re-engagement needed** | Had ≥ 3 check-ins, then silent for 5+ days | `Re-engagement needed` | Higher-signal dropout risk; distinguishable from never-started patients |
+| **Invite friction** | Doctor has resent invite 2+ times without activation | `Invite friction` | Operational friction; may need direct patient contact |
+
+### What engagement alerts should NOT do (pilot v1)
+
+- **Do not send as urgent clinical escalation emails** — these are lower urgency and must use a separate channel or cadence when email is added
+- **Do not label as medical alerts** — engagement signals do not imply clinical deterioration
+- **Do not imply clinical deterioration** unless supported by reported symptoms
+- **Do not overload providers** — if email is added later, consider a once-daily digest rather than per-event notifications
+
+### Relationship to pilot metrics
+
+Engagement signals feed directly into the pilot's activation and retention KPIs already tracked in `GET /api/internal/metrics`:
+- `noCheckinAfterInvite` — patients who never checked in after activation
+- `dropoff.threeDaysPlus / fiveDaysPlus / sevenDaysPlus` — silence buckets for previously-active patients
+- `completedFirstCheckin` — activation funnel completion
+- `checkedInLast7` — rolling weekly engagement
+
+These are already computed server-side. Engagement alerts in the dashboard would give providers a per-patient view of the same signals the operator already sees in aggregate.
+
