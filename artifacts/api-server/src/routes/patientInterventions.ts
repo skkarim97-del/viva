@@ -61,6 +61,18 @@ router.use(
 // Helpers
 // -----------------------------------------------------------------
 
+// contextSummary is internal engine state (PHI-bearing patient context
+// used to generate the recommendation). It is never a patient-readable
+// field and must not appear in any API response. Strip it here at the
+// boundary rather than at every individual call site so future routes
+// can't forget.
+type ClientIntervention = Omit<PatientIntervention, "contextSummary">;
+
+function toClientIntervention(row: PatientIntervention): ClientIntervention {
+  const { contextSummary: _cs, ...rest } = row;
+  return rest;
+}
+
 // Fire-and-forget analytics insert. Never block the response on it,
 // never let an analytics outage surface to the patient. Mirrors the
 // pattern used in routes/analytics.ts.
@@ -233,7 +245,7 @@ router.post("/generate", async (req, res: Response) => {
         return;
       }
       if (lockedActive) {
-        res.json({ intervention: lockedActive });
+        res.json({ intervention: toClientIntervention(lockedActive) });
         return;
       }
       res.json({ intervention: null, reason: "no_trigger_or_active" });
@@ -298,7 +310,7 @@ router.post("/generate", async (req, res: Response) => {
           "intervention_auto_resolved_symptoms_changed",
         );
       } else {
-        res.json({ intervention: lockedActive });
+        res.json({ intervention: toClientIntervention(lockedActive) });
         return;
       }
     }
@@ -390,7 +402,7 @@ router.post("/generate", async (req, res: Response) => {
       live_updated: liveUpdated,
     });
 
-    res.status(liveUpdated ? 200 : 201).json({ intervention: row });
+    res.status(liveUpdated ? 200 : 201).json({ intervention: toClientIntervention(row) });
   } catch (err) {
     logger.error({ err, userId }, "intervention_generate_failed");
     res.status(500).json({ error: "generate_failed" });
@@ -422,7 +434,7 @@ router.get("/active", async (req, res: Response) => {
       )
       .orderBy(desc(patientInterventionsTable.createdAt))
       .limit(10);
-    res.json({ interventions: rows });
+    res.json({ interventions: rows.map(toClientIntervention) });
   } catch (err) {
     logger.error({ err, userId }, "intervention_active_failed");
     res.status(500).json({ error: "list_failed" });
@@ -468,7 +480,7 @@ router.post("/:id/accept", async (req, res: Response) => {
     intervention_id: id,
     trigger_type: existing.triggerType,
   });
-  res.json({ intervention: updated });
+  res.json({ intervention: toClientIntervention(updated) });
 });
 
 // -----------------------------------------------------------------
@@ -513,7 +525,7 @@ router.post("/:id/dismiss", async (req, res: Response) => {
     intervention_id: id,
     reason: parsed.data.reason,
   });
-  res.json({ intervention: updated });
+  res.json({ intervention: toClientIntervention(updated) });
 });
 
 // -----------------------------------------------------------------
@@ -653,7 +665,7 @@ router.post("/:id/feedback", async (req, res: Response) => {
     feedback_result: feedbackResult,
   });
 
-  res.json({ intervention: updated });
+  res.json({ intervention: toClientIntervention(updated) });
 });
 
 // -----------------------------------------------------------------
@@ -716,7 +728,7 @@ router.post("/:id/escalate", async (req, res: Response) => {
   fireAnalytics(userId, ["intervention_escalated"], {
     intervention_id: id,
   });
-  res.json({ intervention: updated });
+  res.json({ intervention: toClientIntervention(updated) });
 });
 
 // Reference unused import to avoid linter noise; sql may be used later
