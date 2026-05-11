@@ -534,7 +534,9 @@ router.post("/chat", async (req: Request, res: Response) => {
           p.glp1Duration ? `- Treatment Duration: ${p.glp1Duration}` : "",
           p.proteinConfidence ? `- Protein Confidence: ${p.proteinConfidence}` : "",
           p.strengthTrainingBaseline ? `- Strength Training: ${p.strengthTrainingBaseline}` : "",
-          `- Available Time: ${p.availableWorkoutTime} min/session, ${p.daysAvailableToTrain} active days/week`,
+          p.availableWorkoutTime || p.daysAvailableToTrain
+            ? `- Available Time: ${p.availableWorkoutTime ?? 45} min/session, ${p.daysAvailableToTrain ?? 4} active days/week`
+            : "",
         );
       }
 

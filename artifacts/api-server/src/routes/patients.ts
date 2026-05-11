@@ -16,6 +16,7 @@ import {
   TREATMENT_STATUSES,
   STOP_REASONS,
   deriveStopTiming,
+  type StopTiming,
 } from "@workspace/db";
 import {
   requireDoctor,
@@ -183,8 +184,8 @@ router.get("/", async (req, res: Response) => {
       .where(inArray(careEventsTable.patientUserId, patientIds))
       .groupBy(careEventsTable.patientUserId);
     for (const r of wfRows) {
-      const lastEsc = r.lastEsc ? new Date(r.lastEsc).getTime() : 0;
-      if (!lastEsc) continue;
+      if (!r.lastEsc) continue;
+      const lastEsc = new Date(r.lastEsc).getTime();
       const lastRev = r.lastRev ? new Date(r.lastRev).getTime() : 0;
       const lastFu = r.lastFu ? new Date(r.lastFu).getTime() : 0;
       const open = lastRev < lastEsc || lastFu < lastEsc;
@@ -551,7 +552,7 @@ function buildInviteLink(req: AuthedRequest, token: string): string {
   // Prefer the public host the dashboard is served on so the link the
   // doctor copies actually opens in their patient's browser.
   const proto = (req.get("x-forwarded-proto") || req.protocol || "https").split(",")[0]!.trim();
-  const host = req.get("host") || "viva-ai.replit.app";
+  const host = req.get("host") || "api.itsviva.com";
   return `${proto}://${host}/invite/${token}`;
 }
 router.post("/invite", async (req, res: Response) => {
@@ -741,7 +742,7 @@ async function loadOwnedPatient(
   // Derived from (treatmentStatusUpdatedAt - startedOn). Both fields are
   // sent so the dashboard can render "stopped 14 days after starting"
   // without re-doing the math.
-  stopTimingBucket: "early" | "mid" | "late" | "unknown";
+  stopTimingBucket: StopTiming;
   daysOnTreatment: number | null;
 } | null> {
   const [row] = await db
