@@ -127,9 +127,9 @@ The following conditions generate intervention cards and appear in the provider 
 | **Nausea within 3 days of last dose** | `nausea` trigger → intervention card shown |
 | **Low energy + sleep < 6h** | `low_energy` trigger → intervention card shown |
 | **Low hydration ≥ 2 of last 7 days** | `low_hydration` trigger → intervention card shown |
-| **Weight drop > 3 lbs in ~7 days** | `rapid_weight_change` trigger → intervention card shown (elevated risk level) |
+| **Weight drop > 3 lbs in ~7 days** | `rapid_weight_change` trigger → intervention card shown (elevated risk level). Intentionally non-escalating in pilot v1 — signal is useful but noisy; needs provider validation before becoming automatic. See §5. |
 | **Worsening symptom trend** | `worsening_symptom` trigger → intervention card shown |
-| **Missed check-ins ≥ 2 of last 7 days** | `missed_checkin` trigger → intervention card shown |
+| **Missed check-ins ≥ 2 of last 7 days** | `missed_checkin` trigger → intervention card shown. Intentionally non-escalating in pilot v1 — treated as a disengagement signal for analytics and patient context only. See §5. |
 | **Patient dismisses intervention** | `dismissed` status, no escalation |
 | **Patient selects "same" feedback** | `feedback_collected` status, no escalation |
 | **No feedback submitted within 48h** | Counted as non-engagement in KPIs, no escalation |
@@ -154,6 +154,16 @@ Escalate if a patient reports the same symptom as "worse" across N consecutive c
 Escalate (not just generate an intervention) if a patient misses ≥ 5 consecutive check-ins after an initial period of regular engagement. This would indicate true disengagement rather than a single off day.
 
 *Rationale:* Current missed-checkin trigger generates a card, but the patient never sees it if they're not opening the app. A care event-level escalation would at least surface the silence to the provider.
+
+**Pilot v1 decision:** Kept as a non-escalating disengagement signal. Missed check-ins are surfaced in patient context and analytics (DAU/WAU, silence buckets in `/api/internal/metrics`) but do not email providers by default. This avoids alert fatigue from patients who simply forget to log for a day or two. The threshold and appropriate provider response should be validated during pilot feedback before enabling auto-escalation.
+
+### Rapid weight change auto-escalation
+
+Escalate directly when weight drops > 3 lbs in ~7 days, bypassing the intervention card cycle.
+
+*Rationale:* This trigger already fires with `riskLevel: "elevated"` — the highest risk level in the system — and generates an intervention card. The question is whether a weight signal at that magnitude should also notify the provider automatically rather than waiting for the patient to engage with the card and report "worse."
+
+**Pilot v1 decision:** Kept as an intervention-only, non-escalating trigger. The signal has been observed to be noisy in practice (scale calibration differences, acute fluid changes post-dose, etc.). The appropriate escalation threshold and clinical response should be validated with providers during pilot before enabling automatic escalation.
 
 ### Severe symptom thresholds
 
