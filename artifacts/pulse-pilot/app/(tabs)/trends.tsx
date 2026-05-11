@@ -64,7 +64,7 @@ function buildSparkPoints(data: number[], width: number, height: number): string
 
 export default function TrendsScreen() {
   const c = useColors();
-  const { insights, metrics, completionHistory, weeklyConsistency, weeklyDaysCompleted, streakDays, todayCompletionRate, dailyPlan, profile, medicationLog, inputAnalytics, hasHealthData, availableMetricTypes } = useApp();
+  const { insights, metrics, completionHistory, weeklyConsistency, weeklyDaysCompleted, streakDays, todayCompletionRate, dailyPlan, profile, medicationLog, inputAnalytics, hasHealthData, availableMetricTypes, adaptiveInsights } = useApp();
 
   const correlations = useMemo(() => hasHealthData ? buildCorrelations(metrics) : [], [metrics, hasHealthData]);
   const patterns = useMemo(() => hasHealthData ? detectPatterns(metrics, availableMetricTypes) : [], [metrics, hasHealthData, availableMetricTypes]);
@@ -221,15 +221,47 @@ export default function TrendsScreen() {
         </View>
       )}
 
-      {keyInsights.length > 0 && (
+      {(adaptiveInsights.length > 0 || keyInsights.length > 0 || hasHealthData) && (
         <View style={styles.sectionWrap}>
           <Text style={[styles.sectionTitle, { color: c.foreground }]}>What We're Noticing</Text>
-          {keyInsights.map((insight, i) => (
-            <View key={i} style={[styles.insightCard, { backgroundColor: c.card }]}>
-              <Feather name="zap" size={13} color={c.accent} />
-              <Text style={[styles.insightText, { color: c.foreground }]}>{insight}</Text>
+          <View style={[styles.patternsCard, { backgroundColor: c.card }]}>
+            <View style={styles.patternsHeader}>
+              <Feather name="bar-chart-2" size={14} color={c.accent} />
+              <Text style={[styles.patternsTitle, { color: c.foreground }]}>Recent patterns</Text>
             </View>
-          ))}
+            <Text style={[styles.patternsSubtitle, { color: c.mutedForeground }]}>
+              {hasHealthData
+                ? "Patterns from your check-ins and Apple Health"
+                : "Patterns from your recent check-ins"}
+            </Text>
+            {adaptiveInsights.length === 0 && keyInsights.length === 0 && hasHealthData && (
+              <View style={styles.patternRow}>
+                <Feather name="clock" size={12} color={c.mutedForeground} style={{ marginTop: 2 }} />
+                <Text style={[styles.patternRowText, { color: c.mutedForeground }]}>
+                  Keep checking in so Viva can learn your patterns.
+                </Text>
+              </View>
+            )}
+            {adaptiveInsights.slice(0, 3).map((insight) => (
+              <View key={insight.id} style={styles.patternRow}>
+                <Feather
+                  name={insight.type === "post_dose" ? "clock" : insight.type === "correlation" ? "link" : insight.type === "trend" ? "trending-up" : "zap"}
+                  size={12}
+                  color={c.accent}
+                  style={{ marginTop: 2 }}
+                />
+                <Text style={[styles.patternRowText, { color: c.mutedForeground }]}>{insight.text}</Text>
+              </View>
+            ))}
+            {keyInsights
+              .filter((k) => !adaptiveInsights.some((a) => a.text === k))
+              .map((insight, i) => (
+                <View key={`ki-${i}`} style={styles.patternRow}>
+                  <Feather name="zap" size={12} color={c.accent} style={{ marginTop: 2 }} />
+                  <Text style={[styles.patternRowText, { color: c.mutedForeground }]}>{insight}</Text>
+                </View>
+              ))}
+          </View>
         </View>
       )}
 
@@ -680,6 +712,38 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Montserrat_500Medium",
     textTransform: "capitalize",
+  },
+  patternsCard: {
+    borderRadius: 20,
+    padding: 16,
+    gap: 10,
+  },
+  patternsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  patternsTitle: {
+    fontSize: 15,
+    fontFamily: "Montserrat_600SemiBold",
+    letterSpacing: -0.2,
+  },
+  patternsSubtitle: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: "Montserrat_500Medium",
+    marginBottom: 4,
+  },
+  patternRow: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "flex-start",
+  },
+  patternRowText: {
+    fontSize: 13,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 19,
+    flex: 1,
   },
   glp1InsightCard: {
     flexDirection: "row",
