@@ -99,6 +99,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   type FeedbackResult,
   type PatientIntervention,
+  type InterventionTriggerType,
 } from "@/lib/api/interventionsClient";
 import type { DoseDayPosition } from "@/lib/engine/dailyState";
 import { logEvent } from "@/lib/analytics/client";
@@ -909,6 +910,46 @@ export function deriveLivePlan(
   };
 }
 
+// Dynamic insight-style card title. Reads as a human observation
+// ("Your energy looks lower today") rather than a feature label.
+// Falls back through livePlan → liveSeverity → triggerType.
+function buildInsightTitle(
+  livePlan: LivePlan | null,
+  liveSeverity: LiveSeverity | null,
+  triggerType: InterventionTriggerType,
+): string {
+  if (livePlan) {
+    const kind = livePlan.primaryConcern;
+    if (kind === "nausea-severe") return "Nausea looks heavier today";
+    if (kind === "nausea-moderate") return "Some nausea today — let's settle it";
+    if (kind === "nausea-mild") return "A little nausea today";
+    if (kind === "constipation") return "Digestion needs attention today";
+    if (kind === "appetite-very-low") return "Appetite is quite low today";
+    if (kind === "appetite-low") return "Appetite is lower today";
+    if (kind === "energy-depleted") return "Energy looks depleted today";
+    if (kind === "energy-tired") return "Energy looks lower today";
+    if (kind === "diarrhea") return "Digestion needs support today";
+    if (kind === "bloating") return "Some bloating today";
+    if (kind === "hydration") return "Hydration needs attention today";
+  }
+  if (liveSeverity === "severe") return "Symptoms are heavier today";
+  if (liveSeverity === "moderate") return "Some symptoms today — here's support";
+  if (liveSeverity === "mild") return "Mild symptoms today";
+  switch (triggerType) {
+    case "nausea": return "Nausea support for today";
+    case "constipation": return "Digestion support for today";
+    case "low_energy": return "Energy support for today";
+    case "low_hydration": return "Hydration support for today";
+    case "low_food_intake": return "Appetite support for today";
+    case "missed_checkin": return "Getting back on track";
+    case "rapid_weight_change": return "Weight change noticed";
+    case "worsening_symptom": return "Symptoms changing — here's support";
+    case "repeated_symptom": return "Recurring symptoms — let's address this";
+    case "patient_requested_review": return "Support requested";
+    default: return "Today's support";
+  }
+}
+
 interface InterventionCardProps {
   intervention: PatientIntervention;
   navy: string;
@@ -1435,7 +1476,7 @@ export function InterventionCard({
                   { color: mutedForeground, marginBottom: 2 },
                 ]}
               >
-                Symptom management
+                Today&apos;s support
               </Text>
             )}
             <Text style={[styles.title, { color: navy }]}>{cardTitle}</Text>
@@ -1530,10 +1571,25 @@ export function InterventionCard({
       ? `Today: ${joinList(allCategoryNouns.slice(0, 3))}`
       : null;
 
-  // The verbose "What we noticed" sentence is now superseded by the
-  // signal chips. Keep the useMemo result reachable so the var isn't
-  // marked as dead, but it's no longer rendered.
-  void noticedSentence;
+  // Short "Why this appeared" disclosure. Shown at the bottom of the
+  // card so the patient understands what triggered the support without
+  // it competing with the primary recommendation.
+  const whyThisAppeared = useMemo(() => {
+    if (livePlan && livePlan.rows.length > 0) {
+      const phrases: string[] = [];
+      const seen = new Set<RecCategory>();
+      for (const r of livePlan.rows.slice(0, 2)) {
+        if (seen.has(r.category)) continue;
+        seen.add(r.category);
+        phrases.push(NOTICED_PHRASE[r.category]);
+      }
+      if (phrases.length > 0) {
+        return `Based on ${joinList(phrases)} in today’s check-in`;
+      }
+    }
+    if (noticedSentence) return noticedSentence;
+    return "Based on your recent check-in";
+  }, [livePlan, noticedSentence]);
 
   return (
     <Animated.View
@@ -1585,8 +1641,16 @@ export function InterventionCard({
               </Text>
             </View>
           </View>
+          <Text
+            style={[
+              styles.sectionLabel,
+              { color: mutedForeground, marginBottom: 2 },
+            ]}
+          >
+            Today&apos;s support
+          </Text>
           <Text style={[styles.title, { color: navy }]}>
-            Symptom support
+            {buildInsightTitle(livePlan, liveSeverity, intervention.triggerType)}
           </Text>
           {/* Subtitle names the actual inputs feeding the support so
               the patient understands this is personalized -- not a
@@ -1595,8 +1659,8 @@ export function InterventionCard({
               so we never imply biometric data we do not have. */}
           <Text style={[styles.subtitle, { color: mutedForeground }]}>
             {hasHealthData
-              ? "Personalized support based on today's check-in and Apple Health trends"
-              : "Personalized support based on today's check-in"}
+              ? "Personalized support based on today’s check-in and Apple Health trends"
+              : "Personalized support based on today’s check-in"}
           </Text>
           {/* The dev-only "[debug] concern=... sev=... supports=..."
               probe that used to live here was rendering visibly in
@@ -1917,6 +1981,17 @@ export function InterventionCard({
         </View>
       )}
 
+      {/* -- Why this appeared (quiet disclosure) ----------------- */}
+      <View style={styles.whyAppearedRow}>
+        <Feather name="info" size={11} color={mutedForeground} style={{ marginTop: 1 }} />
+        <Text
+          style={[styles.whyAppearedText, { color: mutedForeground }]}
+          numberOfLines={3}
+        >
+          {whyThisAppeared}
+        </Text>
+      </View>
+
       {/* -- Subtle clinical guardrail footer ---------------------- */}
       <Text style={[styles.guardrail, { color: mutedForeground }]}>
         Viva supports between-visit care. If symptoms feel severe or
@@ -2159,7 +2234,7 @@ function PrimaryActionCard({
         <AcknowledgeRow
           icon="smile"
           tint={SUCCESS_FG}
-          text="Got it. Viva will remember this helped."
+          text="Support completed — we'll keep monitoring."
           onReset={onReset}
           mutedForeground={mutedForeground}
           a11y={titleA11y}
@@ -2380,7 +2455,7 @@ function SecondaryActionRow({
         <AcknowledgeRow
           icon="smile"
           tint={SUCCESS_FG}
-          text="Got it. Viva will remember this helped."
+          text="Support completed — we'll keep monitoring."
           onReset={onReset}
           mutedForeground={mutedForeground}
           a11y={titleA11y}
@@ -2623,6 +2698,19 @@ const styles = StyleSheet.create({
     fontFamily: "Montserrat_600SemiBold",
     fontWeight: "600",
     letterSpacing: 0.1,
+  },
+  // -- "Why this appeared" quiet disclosure at card bottom ----------
+  whyAppearedRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+  },
+  whyAppearedText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 16,
+    opacity: 0.75,
   },
   // -- Primary card "Why this helps" --------------------------------
   whyRow: {
