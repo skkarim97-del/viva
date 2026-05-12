@@ -75,23 +75,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   Easing,
-  LayoutAnimation,
   Platform,
   Pressable,
   StyleSheet,
   Text,
-  UIManager,
   View,
 } from "react-native";
-
-// Enable LayoutAnimation on Android. iOS has it on by default; web is a
-// no-op. We only need this once per JS runtime.
-if (
-  Platform.OS === "android" &&
-  UIManager.setLayoutAnimationEnabledExperimental
-) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -359,18 +348,6 @@ const RECOMMENDATIONS: Record<RecCategory, { variants: RecContent[] }> = {
   },
 };
 
-// Patient-friendly noun for each category, used in the
-// "More support for today" subtitle, e.g. "2 more supports for
-// appetite and digestion". Distinct from NOTICED_PHRASE which uses
-// symptom-style language like "low appetite" / "nausea".
-const CATEGORY_NOUN: Record<RecCategory, string> = {
-  nausea: "nausea",
-  appetite: "appetite",
-  energy: "energy",
-  constipation: "digestion",
-  hydration: "hydration",
-  other: "support",
-};
 
 // Stable per-category salt so different categories don't all land on
 // the same variant index for the same intervention id on the same day.
@@ -402,29 +379,6 @@ function pickVariants(
   return { primary: variants[primaryIdx]!, alternate: variants[alternateIdx]! };
 }
 
-// Plain-language fragment used to compose the "What we noticed"
-// sentence. Joined with commas + "and" before the last item.
-const NOTICED_PHRASE: Record<RecCategory, string> = {
-  nausea: "nausea",
-  appetite: "low appetite",
-  energy: "low energy",
-  constipation: "constipation",
-  hydration: "low hydration",
-  other: "some symptoms",
-};
-
-// Short clinical reasoning appended to "What we noticed" when there
-// is more than one symptom -- explains in one phrase WHY the primary
-// category is starting first.
-const REASON_FOR_PRIMARY: Record<RecCategory, string> = {
-  nausea: "because it can make eating and hydration harder",
-  appetite:
-    "because keeping protein steady can support your energy and recovery",
-  energy: "because small, supportive steps can help your energy through the day",
-  constipation: "because addressing it early helps prevent it from worsening",
-  hydration: "because steady hydration can make most other symptoms easier",
-  other: "",
-};
 
 // Per-row state machine. Each row drives its own progression.
 type SectionStatus =
@@ -516,9 +470,6 @@ const FEATURED_MUTED = "#5A6A82";
 // important next step without screaming.
 const PRIMARY_SURFACE = "#FFFFFF";
 const PRIMARY_BORDER = "#7FB0E8";
-// Secondary row: compact, muted; less surface area = less clutter.
-const SECONDARY_SURFACE = "#F5F8FC";
-const SECONDARY_BORDER = "#D5E1F0";
 const START_HERE_BG = "#1F4F8A";
 const START_HERE_FG = "#FFFFFF";
 const SUCCESS_FG = "#1F8A3F";
@@ -948,6 +899,95 @@ function buildInsightTitle(
   }
 }
 
+// Compact "Why:" line. Weaves together available signals:
+// today's live check-in, 7-day symptom persistence counts, and
+// dose timing position. Max 3 fragments, separated by " · ".
+// Only signals that actually exist in app state are referenced.
+function buildWhyLine(
+  liveCheckin: LiveCheckin | null | undefined,
+  doseContext: {
+    position: DoseDayPosition | null | undefined;
+    recentTitration?: boolean;
+    daysSinceLastDose?: number | null;
+  } | null | undefined,
+  symptomCounts?: {
+    nausea7d: number;
+    lowAppetite7d: number;
+    lowEnergy7d: number;
+    constipation7d: number;
+  } | null,
+): string {
+  const parts: string[] = [];
+  const n7 = symptomCounts?.nausea7d ?? 0;
+  const a7 = symptomCounts?.lowAppetite7d ?? 0;
+  const e7 = symptomCounts?.lowEnergy7d ?? 0;
+  const c7 = symptomCounts?.constipation7d ?? 0;
+
+  if (liveCheckin?.nausea && liveCheckin.nausea !== "none") {
+    parts.push(
+      n7 >= 2
+        ? `nausea ${n7} of last 7 days`
+        : liveCheckin.nausea === "severe"
+          ? "severe nausea"
+          : "nausea",
+    );
+  } else if (n7 >= 3) {
+    parts.push(`nausea ${n7} of last 7 days`);
+  }
+
+  if (liveCheckin?.appetite === "very_low" || liveCheckin?.appetite === "low") {
+    parts.push(
+      a7 >= 2
+        ? `low appetite ${a7} of last 7 days`
+        : liveCheckin.appetite === "very_low"
+          ? "very low appetite"
+          : "low appetite",
+    );
+  } else if (a7 >= 3) {
+    parts.push(`low appetite ${a7} of last 7 days`);
+  }
+
+  if (liveCheckin?.digestion === "constipated" || liveCheckin?.bowel === "no") {
+    parts.push(c7 >= 2 ? `constipation ${c7} of last 7 days` : "constipation");
+  } else if (c7 >= 3) {
+    parts.push(`constipation ${c7} of last 7 days`);
+  }
+
+  if (liveCheckin?.energy === "depleted" || liveCheckin?.energy === "tired") {
+    parts.push(
+      e7 >= 2
+        ? `low energy ${e7} of last 7 days`
+        : liveCheckin.energy === "depleted"
+          ? "depleted energy"
+          : "low energy",
+    );
+  } else if (e7 >= 3) {
+    parts.push(`low energy ${e7} of last 7 days`);
+  }
+
+  if (doseContext?.position) {
+    const pos = doseContext.position;
+    const days = doseContext.daysSinceLastDose;
+    if (pos === "dose_day") {
+      parts.push("dose day");
+    } else if (days != null && days >= 1 && days <= 3) {
+      parts.push(`${days} day${days !== 1 ? "s" : ""} after dose`);
+    } else if (pos === "day_1_post") {
+      parts.push("1 day after dose");
+    } else if (pos === "day_2_post") {
+      parts.push("2 days after dose");
+    } else if (pos === "day_3_post") {
+      parts.push("3 days after dose");
+    }
+    if (doseContext.recentTitration && parts.length < 3) {
+      parts.push("dose increase this cycle");
+    }
+  }
+
+  if (parts.length === 0) return "Based on today's check-in";
+  return `Why: ${parts.slice(0, 3).join(" · ")}`;
+}
+
 interface InterventionCardProps {
   intervention: PatientIntervention;
   navy: string;
@@ -970,6 +1010,16 @@ interface InterventionCardProps {
   doseContext?: {
     position: DoseDayPosition | null | undefined;
     recentTitration?: boolean;
+    daysSinceLastDose?: number | null;
+  } | null;
+  // 7-day symptom frequency counts computed from glp1InputHistory.
+  // Used by buildWhyLine to surface persistence context ("nausea 4 of
+  // last 7 days") alongside today's live check-in signals.
+  symptomCounts?: {
+    nausea7d: number;
+    lowAppetite7d: number;
+    lowEnergy7d: number;
+    constipation7d: number;
   } | null;
   // Live snapshot of the patient's current check-in selections.
   // When provided, the card derives a severity tier and adapts:
@@ -1029,6 +1079,7 @@ export function InterventionCard({
   warning,
   hasHealthData = false,
   doseContext = null,
+  symptomCounts = null,
   liveCheckin = null,
   onAccept,
   onDismiss,
@@ -1113,8 +1164,8 @@ export function InterventionCard({
   }, [livePlan, orderedRows, intervention.id]);
 
   // Lookup table from synthesized row key -> override RecContent.
-  // Passed through PrimaryActionCard / SecondaryActionRow so they can
-  // bypass pickVariants and render the matrix-derived title/body/helper.
+  // Passed through PrimaryActionCard so it can bypass pickVariants and
+  // render the matrix-derived title/body/helper.
   const liveOverrides = useMemo<Record<string, RecContent>>(() => {
     if (!livePlan) return {};
     const m: Record<string, RecContent> = {};
@@ -1134,10 +1185,6 @@ export function InterventionCard({
   // escalating" panel down to a quiet ack with a Change-response
   // link. Memory-only -- a fresh app launch resurfaces the panel.
   const [noChangeAck, setNoChangeAck] = useState<Record<string, boolean>>({});
-  // Whether the "More support for today" section is expanded. The
-  // spec asks for it to be COLLAPSED by default so the patient sees
-  // exactly one next step on first open.
-  const [secondaryExpanded, setSecondaryExpanded] = useState(false);
 
   // Race-safety for AsyncStorage:
   //   (a) Hydration race -- multiGet may resolve AFTER a user tap.
@@ -1363,38 +1410,12 @@ export function InterventionCard({
     [intervention.id, intervention.status, onAccept, onFeedback],
   );
 
-  // "What we noticed" -- short plain-language sentence built from the
-  // categories present in this intervention. Falls back to the
-  // server's text only when we couldn't resolve any rows.
-  // NOTE: declared BEFORE any conditional early return so the hook
-  // count stays stable across renders (status transitions to
-  // resolved/expired/dismissed return null below).
-  const noticedSentence = useMemo(() => {
-    if (orderedRows.length === 0) {
-      return (intervention.whatWeNoticed ?? "").trim();
-    }
-    // De-dupe categories (a category should only appear once in the
-    // sentence even if the synthesizer surfaced two rows for it).
-    const phrases: string[] = [];
-    const seen = new Set<RecCategory>();
-    for (const r of orderedRows) {
-      if (seen.has(r.category)) continue;
-      seen.add(r.category);
-      phrases.push(NOTICED_PHRASE[r.category]);
-    }
-    let sentence = `You reported ${joinList(phrases)} today.`;
-    // When more than one symptom is present, briefly explain WHY
-    // we're starting with the chosen primary. This makes the order
-    // feel intentional ("nausea first because it can make eating
-    // harder") instead of arbitrary.
-    const primaryCat = orderedRows[0]!.category;
-    const reason = REASON_FOR_PRIMARY[primaryCat];
-    const primaryPhrase = NOTICED_PHRASE[primaryCat];
-    if (phrases.length > 1 && reason.length > 0) {
-      sentence += ` We'll start with ${primaryPhrase} ${reason}.`;
-    }
-    return sentence;
-  }, [orderedRows, intervention.whatWeNoticed]);
+  // Compact "Why:" line. Declared BEFORE any conditional early return
+  // so hook count stays stable across all status transitions.
+  const whyLine = useMemo(
+    () => buildWhyLine(liveCheckin, doseContext, symptomCounts),
+    [liveCheckin, doseContext, symptomCounts],
+  );
 
   // Reference unused legacy props/state so TS stays quiet.
   void onDismiss;
@@ -1515,7 +1536,6 @@ export function InterventionCard({
 
   // -- Derived view-model -------------------------------------------
   const primary = displayRows[0];
-  const secondaries = displayRows.slice(1);
 
   // Badge label/tone reflects the most urgent signal we currently
   // know about. Escalated state always wins. We deliberately do NOT
@@ -1538,38 +1558,6 @@ export function InterventionCard({
             : "Steady today";
   const useWarningTone =
     status === "escalated" || liveSeverity === "severe";
-
-  // Nouns for the "More support" collapsed header mini-chips.
-  // Primary category is excluded so it never appears twice.
-  const secondaryCategoryNouns: string[] = [];
-  {
-    const seen = new Set<RecCategory>();
-    if (primary) seen.add(primary.category);
-    for (const r of secondaries) {
-      if (seen.has(r.category)) continue;
-      seen.add(r.category);
-      secondaryCategoryNouns.push(CATEGORY_NOUN[r.category]);
-    }
-  }
-  // Short "Why this appeared" disclosure. Shown at the bottom of the
-  // card so the patient understands what triggered the support without
-  // it competing with the primary recommendation.
-  const whyThisAppeared = useMemo(() => {
-    if (livePlan && livePlan.rows.length > 0) {
-      const phrases: string[] = [];
-      const seen = new Set<RecCategory>();
-      for (const r of livePlan.rows.slice(0, 2)) {
-        if (seen.has(r.category)) continue;
-        seen.add(r.category);
-        phrases.push(NOTICED_PHRASE[r.category]);
-      }
-      if (phrases.length > 0) {
-        return `Based on ${joinList(phrases)} in today’s check-in`;
-      }
-    }
-    if (noticedSentence) return noticedSentence;
-    return "Based on your recent check-in";
-  }, [livePlan, noticedSentence]);
 
   return (
     <Animated.View
@@ -1683,112 +1671,6 @@ export function InterventionCard({
         </Pressable>
       )}
 
-      {/* -- More support for today (collapsed by default) -------- */}
-      {secondaries.length > 0 && (
-        <View style={styles.section}>
-          <Pressable
-            onPress={() => {
-              tap();
-              // Subtle expand/collapse animation. easeInEaseOut keeps
-              // the motion calm and Apple-like; we avoid spring so the
-              // section doesn't overshoot. Web is a no-op.
-              if (Platform.OS !== "web") {
-                LayoutAnimation.configureNext(
-                  LayoutAnimation.create(
-                    220,
-                    LayoutAnimation.Types.easeInEaseOut,
-                    LayoutAnimation.Properties.opacity,
-                  ),
-                );
-              }
-              setSecondaryExpanded((v) => !v);
-              if (!secondaryExpanded) safeLog("intervention_secondary_expanded");
-            }}
-            accessibilityRole="button"
-            accessibilityState={{ expanded: secondaryExpanded }}
-            accessibilityLabel={
-              secondaryExpanded
-                ? `Hide ${secondaries.length} more support options`
-                : `Show ${secondaries.length} more support options`
-            }
-            style={({ pressed }) => [
-              styles.moreSupportHeader,
-              { borderColor: background, opacity: pressed ? 0.7 : 1 },
-            ]}
-          >
-            <View style={{ flex: 1, gap: 8 }}>
-              <Text style={[styles.moreSupportTitle, { color: navy }]}>
-                More support
-              </Text>
-              {/* Mini category chips -- shows the patient at a glance
-                  WHAT the additional supports cover, not just "N more
-                  things". Tapping the row still expands. */}
-              {secondaryCategoryNouns.length > 0 && (
-                <View style={styles.supportChipsRow}>
-                  {secondaryCategoryNouns.map((noun) => (
-                    <View
-                      key={noun}
-                      style={[
-                        styles.supportChip,
-                        {
-                          backgroundColor: "rgba(31, 79, 138, 0.07)",
-                          borderColor: "rgba(31, 79, 138, 0.10)",
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[styles.supportChipText, { color: navy }]}
-                      >
-                        {noun.charAt(0).toUpperCase() + noun.slice(1)}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-            <View style={styles.moreSupportMeta}>
-              <Text
-                style={[styles.moreSupportCount, { color: mutedForeground }]}
-              >
-                {secondaries.length}
-              </Text>
-              <Feather
-                name={secondaryExpanded ? "chevron-up" : "chevron-down"}
-                size={16}
-                color={mutedForeground}
-              />
-            </View>
-          </Pressable>
-          {secondaryExpanded && (
-            <View style={styles.rowsWrap}>
-              {secondaries.map((r) => (
-                <SecondaryActionRow
-                  key={r.key}
-                  category={r.category}
-                  interventionId={intervention.id}
-                  originalBody={r.section.body}
-                  liveOverride={liveOverrides[r.key] ?? null}
-                  showingAlternate={!!sectionAlt[r.key]}
-                  status={sectionStatus[r.key] ?? null}
-                  noChangeDismissed={!!noChangeAck[r.key]}
-                  navy={navy}
-                  mutedForeground={mutedForeground}
-                  border={background}
-                  accent={accent}
-                  warning={warning}
-                  onCommit={() => handleRowCommit(r.key)}
-                  onToggleAlternate={() => handleRowToggleAlternate(r.key)}
-                  onOutcome={(outcome) => handleRowOutcome(r.key, outcome)}
-                  onReset={() => handleRowReset(r.key)}
-                  onDismissNoChange={() => handleRowDismissNoChange(r.key)}
-                  onAskCareTeam={() => handleRowAskCareTeam(r.key)}
-                />
-              ))}
-            </View>
-          )}
-        </View>
-      )}
-
       {/* Patient-facing success state for the escalation flow.
           Renders whenever the intervention has transitioned to
           "escalated" -- whether the patient got there via the
@@ -1814,7 +1696,7 @@ export function InterventionCard({
           style={[styles.whyAppearedText, { color: mutedForeground }]}
           numberOfLines={3}
         >
-          {whyThisAppeared}
+          {whyLine}
         </Text>
       </View>
 
@@ -2098,218 +1980,6 @@ function PrimaryActionCard({
       )}
 
       {/* -- Worse: escalation panel (only path to care team) ------ */}
-      {status === "worse" && offerEscalation && (
-        <View style={styles.escalateWrap}>
-          <Text style={[styles.escalateCopy, { color: navy }]}>
-            This should be reviewed. You can ask your care team to take a
-            look.
-          </Text>
-          <View style={styles.btnRow}>
-            <Pressable
-              onPress={() => {
-                tap();
-                onToggleAlternate();
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={`Try another option for ${titleA11y}`}
-              style={({ pressed }) => [
-                styles.btnSecondary,
-                { borderColor: border, opacity: pressed ? 0.75 : 1 },
-              ]}
-            >
-              <Feather name="refresh-cw" size={12} color={mutedForeground} />
-              <Text style={[styles.btnText, { color: mutedForeground, fontFamily: "Montserrat_600SemiBold", fontWeight: "600" }]}>
-                Another option
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                tap();
-                onAskCareTeam();
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={`Ask my care team about ${titleA11y}`}
-              style={({ pressed }) => [
-                styles.btnPrimary,
-                {
-                  borderColor: warning,
-                  backgroundColor: warning,
-                  opacity: pressed ? 0.8 : 1,
-                },
-              ]}
-            >
-              <Feather name="message-circle" size={13} color="#FFFFFF" />
-              <Text style={[styles.btnText, { color: "#FFFFFF", fontFamily: "Montserrat_700Bold", fontWeight: "700" }]}>
-                Ask my care team
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-      )}
-    </View>
-  );
-}
-
-// =====================================================================
-// SecondaryActionRow -- compact row for "More support for today".
-// Same state machine, much lighter visual treatment. Sources its
-// content from the same RECOMMENDATIONS map as the primary card.
-// =====================================================================
-function SecondaryActionRow({
-  category,
-  interventionId,
-  originalBody,
-  showingAlternate,
-  status,
-  noChangeDismissed: _noChangeDismissed,
-  navy,
-  mutedForeground,
-  border,
-  accent,
-  warning,
-  onCommit,
-  onToggleAlternate,
-  onOutcome,
-  onReset,
-  onDismissNoChange: _onDismissNoChange,
-  onAskCareTeam,
-  liveOverride,
-}: ActionRowProps) {
-  const picked = useMemo(
-    () => pickVariants(category, interventionId),
-    [category, interventionId],
-  );
-  // See PrimaryActionCard for the liveOverride contract. The
-  // showingAlternate flag must be honored even when liveOverride is
-  // present, otherwise "Another option" would silently no-op on
-  // every secondary row whose category has a live tuned copy.
-  const variant: RecContent = showingAlternate
-    ? picked.alternate
-    : (liveOverride ?? picked.primary);
-  const title = variant.title;
-  const body =
-    !showingAlternate && liveOverride
-      ? liveOverride.body
-      : category === "other" && !showingAlternate
-        ? originalBody || variant.body
-        : variant.body;
-  const titleA11y = title.toLowerCase();
-  const offerEscalation = shouldOfferEscalation(category, status);
-
-  return (
-    <View
-      style={[
-        styles.secondaryRow,
-        { borderColor: SECONDARY_BORDER, backgroundColor: SECONDARY_SURFACE },
-      ]}
-    >
-      <Text style={[styles.secondaryTitle, { color: navy }]}>{title}</Text>
-      <Text style={[styles.secondaryBody, { color: mutedForeground }]}>
-        {body}
-      </Text>
-
-      {/* -- Default: single small "Try this" button --------------- */}
-      {status == null && (
-        <Pressable
-          onPress={() => {
-            tap();
-            onCommit();
-          }}
-          accessibilityRole="button"
-          accessibilityLabel={`Try this: ${titleA11y}`}
-          style={({ pressed }) => [
-            styles.smallBtn,
-            {
-              borderColor: accent,
-              backgroundColor: "#FFFFFF",
-              opacity: pressed ? 0.75 : 1,
-            },
-          ]}
-        >
-          <Feather name="check" size={12} color={accent} />
-          <Text style={[styles.smallBtnText, { color: accent }]}>
-            Try this
-          </Text>
-        </Pressable>
-      )}
-
-      {/* -- Committed: outcome prompt ----------------------------- */}
-      {status === "committed" && (
-        <View style={styles.outcomeWrap}>
-          <Text style={[styles.outcomePromptSmall, { color: navy }]}>
-            Did this help?
-          </Text>
-          <View style={styles.outcomeRow}>
-            <OutcomeButton
-              label="Better"
-              icon="smile"
-              tint={SUCCESS_FG}
-              border={border}
-              onPress={() => {
-                tap();
-                onOutcome("better");
-              }}
-              accessibilityLabel={`Feeling better after ${titleA11y}`}
-            />
-            <OutcomeButton
-              label="Same"
-              icon="meh"
-              tint={mutedForeground}
-              border={border}
-              onPress={() => {
-                tap();
-                onOutcome("no_change");
-              }}
-              accessibilityLabel={`About the same after ${titleA11y}`}
-            />
-            <OutcomeButton
-              label="Worse"
-              icon="frown"
-              tint={warning}
-              border={border}
-              onPress={() => {
-                tap();
-                onOutcome("worse");
-              }}
-              accessibilityLabel={`Worse after ${titleA11y}`}
-            />
-          </View>
-        </View>
-      )}
-
-      {status === "better" && (
-        <AcknowledgeRow
-          icon="smile"
-          tint={SUCCESS_FG}
-          text="Support completed — we'll keep monitoring."
-          onReset={onReset}
-          mutedForeground={mutedForeground}
-          a11y={titleA11y}
-        />
-      )}
-
-      {status === "no_change" && (
-        <AcknowledgeRow
-          icon="meh"
-          tint={mutedForeground}
-          text="Thanks. We'll adjust future recommendations."
-          onReset={onReset}
-          mutedForeground={mutedForeground}
-          a11y={titleA11y}
-        />
-      )}
-
-      {status === "didnt_try" && (
-        <AcknowledgeRow
-          icon="minus-circle"
-          tint={mutedForeground}
-          text="Got it. We won't count that one."
-          onReset={onReset}
-          mutedForeground={mutedForeground}
-          a11y={titleA11y}
-        />
-      )}
-
       {status === "worse" && offerEscalation && (
         <View style={styles.escalateWrap}>
           <Text style={[styles.escalateCopy, { color: navy }]}>

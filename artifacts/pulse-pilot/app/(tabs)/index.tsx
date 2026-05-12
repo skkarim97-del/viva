@@ -175,7 +175,19 @@ export default function DashboardScreen() {
     medicationLog, logMedicationDose, removeMedicationDose,
     hasHealthData,
     availableMetricTypes,
+    glp1InputHistory,
   } = useApp();
+
+  const symptomCounts = React.useMemo(() => {
+    if (glp1InputHistory.length === 0) return null;
+    const last7 = glp1InputHistory.slice(-7);
+    return {
+      nausea7d: last7.filter(d => d.nausea === "mild" || d.nausea === "moderate" || d.nausea === "severe").length,
+      lowAppetite7d: last7.filter(d => d.appetite === "low" || d.appetite === "very_low").length,
+      lowEnergy7d: last7.filter(d => d.energy === "tired" || d.energy === "depleted").length,
+      constipation7d: last7.filter(d => d.digestion === "constipated" || d.bowelMovementToday === false).length,
+    };
+  }, [glp1InputHistory]);
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   // ----- AI-personalized micro-intervention loop (Phase 3) -----
@@ -1026,40 +1038,40 @@ export default function DashboardScreen() {
             row) so calmer states don't compete with the check-in
             prompt. The no-min-data fallback slot below handles the
             edge case of a persisted active row without a fresh check-in. */}
-        {activeInterventions.length > 0 && hasMinSymptomData && interventionIsElevated && (
-          <View style={{ marginBottom: 12, gap: 14 }}>
-            {activeInterventions.map((iv) => (
-              <InterventionCard
-                key={iv.id}
-                intervention={iv}
-                navy={c.foreground}
-                accent={c.accent}
-                cardBg={c.card}
-                background={c.background}
-                mutedForeground={c.mutedForeground}
-                warning={c.warning}
-                hasHealthData={hasHealthData}
-                doseContext={
-                  dailyState
-                    ? {
-                        position: dailyState.doseDayPosition,
-                        recentTitration: dailyState.recentTitration,
-                      }
-                    : null
-                }
-                liveCheckin={symptomHydrated ? {
-                  nausea,
-                  appetite,
-                  energy: glp1Energy,
-                  digestion,
-                  bowel: bowelSelectedKey,
-                } : null}
-                onAccept={onInterventionAccept}
-                onDismiss={onInterventionDismiss}
-                onFeedback={onInterventionFeedback}
-                onEscalate={onInterventionEscalate}
-              />
-            ))}
+        {activeInterventions.length > 0 && hasMinSymptomData && interventionIsElevated && activeInterventions[0] && (
+          <View style={{ marginBottom: 12 }}>
+            <InterventionCard
+              key={activeInterventions[0].id}
+              intervention={activeInterventions[0]}
+              navy={c.foreground}
+              accent={c.accent}
+              cardBg={c.card}
+              background={c.background}
+              mutedForeground={c.mutedForeground}
+              warning={c.warning}
+              hasHealthData={hasHealthData}
+              doseContext={
+                dailyState
+                  ? {
+                      position: dailyState.doseDayPosition,
+                      recentTitration: dailyState.recentTitration,
+                      daysSinceLastDose: dailyState.daysSinceLastDose,
+                    }
+                  : null
+              }
+              symptomCounts={symptomCounts}
+              liveCheckin={symptomHydrated ? {
+                nausea,
+                appetite,
+                energy: glp1Energy,
+                digestion,
+                bowel: bowelSelectedKey,
+              } : null}
+              onAccept={onInterventionAccept}
+              onDismiss={onInterventionDismiss}
+              onFeedback={onInterventionFeedback}
+              onEscalate={onInterventionEscalate}
+            />
           </View>
         )}
 
@@ -1376,40 +1388,40 @@ export default function DashboardScreen() {
             after the check-in row, so the check-in prompt is visible
             first. Visually softer state cards (steady = "Your symptoms
             look steady") belong lower in the reading order. */}
-        {activeInterventions.length > 0 && hasMinSymptomData && !interventionIsElevated && (
-          <View style={{ marginTop: 8, marginBottom: 12, gap: 14 }}>
-            {activeInterventions.map((iv) => (
-              <InterventionCard
-                key={iv.id}
-                intervention={iv}
-                navy={c.foreground}
-                accent={c.accent}
-                cardBg={c.card}
-                background={c.background}
-                mutedForeground={c.mutedForeground}
-                warning={c.warning}
-                hasHealthData={hasHealthData}
-                doseContext={
-                  dailyState
-                    ? {
-                        position: dailyState.doseDayPosition,
-                        recentTitration: dailyState.recentTitration,
-                      }
-                    : null
-                }
-                liveCheckin={symptomHydrated ? {
-                  nausea,
-                  appetite,
-                  energy: glp1Energy,
-                  digestion,
-                  bowel: bowelSelectedKey,
-                } : null}
-                onAccept={onInterventionAccept}
-                onDismiss={onInterventionDismiss}
-                onFeedback={onInterventionFeedback}
-                onEscalate={onInterventionEscalate}
-              />
-            ))}
+        {activeInterventions.length > 0 && hasMinSymptomData && !interventionIsElevated && activeInterventions[0] && (
+          <View style={{ marginTop: 8, marginBottom: 12 }}>
+            <InterventionCard
+              key={activeInterventions[0].id}
+              intervention={activeInterventions[0]}
+              navy={c.foreground}
+              accent={c.accent}
+              cardBg={c.card}
+              background={c.background}
+              mutedForeground={c.mutedForeground}
+              warning={c.warning}
+              hasHealthData={hasHealthData}
+              doseContext={
+                dailyState
+                  ? {
+                      position: dailyState.doseDayPosition,
+                      recentTitration: dailyState.recentTitration,
+                      daysSinceLastDose: dailyState.daysSinceLastDose,
+                    }
+                  : null
+              }
+              symptomCounts={symptomCounts}
+              liveCheckin={symptomHydrated ? {
+                nausea,
+                appetite,
+                energy: glp1Energy,
+                digestion,
+                bowel: bowelSelectedKey,
+              } : null}
+              onAccept={onInterventionAccept}
+              onDismiss={onInterventionDismiss}
+              onFeedback={onInterventionFeedback}
+              onEscalate={onInterventionEscalate}
+            />
           </View>
         )}
 
@@ -1418,40 +1430,40 @@ export default function DashboardScreen() {
             check-in threshold (an unusual but possible state, e.g. a
             persisted/legacy active row from a prior session). In the
             normal flow the card above this comment renders instead. */}
-        {activeInterventions.length > 0 && !hasMinSymptomData && (
-          <View style={{ marginTop: 8, marginBottom: 20, gap: 14 }}>
-            {activeInterventions.map((iv) => (
-              <InterventionCard
-                key={iv.id}
-                intervention={iv}
-                navy={c.foreground}
-                accent={c.accent}
-                cardBg={c.card}
-                background={c.background}
-                mutedForeground={c.mutedForeground}
-                warning={c.warning}
-                hasHealthData={hasHealthData}
-                doseContext={
-                  dailyState
-                    ? {
-                        position: dailyState.doseDayPosition,
-                        recentTitration: dailyState.recentTitration,
-                      }
-                    : null
-                }
-                liveCheckin={symptomHydrated ? {
-                  nausea,
-                  appetite,
-                  energy: glp1Energy,
-                  digestion,
-                  bowel: bowelSelectedKey,
-                } : null}
-                onAccept={onInterventionAccept}
-                onDismiss={onInterventionDismiss}
-                onFeedback={onInterventionFeedback}
-                onEscalate={onInterventionEscalate}
-              />
-            ))}
+        {activeInterventions.length > 0 && !hasMinSymptomData && activeInterventions[0] && (
+          <View style={{ marginTop: 8, marginBottom: 20 }}>
+            <InterventionCard
+              key={activeInterventions[0].id}
+              intervention={activeInterventions[0]}
+              navy={c.foreground}
+              accent={c.accent}
+              cardBg={c.card}
+              background={c.background}
+              mutedForeground={c.mutedForeground}
+              warning={c.warning}
+              hasHealthData={hasHealthData}
+              doseContext={
+                dailyState
+                  ? {
+                      position: dailyState.doseDayPosition,
+                      recentTitration: dailyState.recentTitration,
+                      daysSinceLastDose: dailyState.daysSinceLastDose,
+                    }
+                  : null
+              }
+              symptomCounts={symptomCounts}
+              liveCheckin={symptomHydrated ? {
+                nausea,
+                appetite,
+                energy: glp1Energy,
+                digestion,
+                bowel: bowelSelectedKey,
+              } : null}
+              onAccept={onInterventionAccept}
+              onDismiss={onInterventionDismiss}
+              onFeedback={onInterventionFeedback}
+              onEscalate={onInterventionEscalate}
+            />
           </View>
         )}
 
