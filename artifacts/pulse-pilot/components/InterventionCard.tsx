@@ -1074,6 +1074,12 @@ interface InterventionCardProps {
   // Fires ~1.5 s after the card enters the "better" resolution state,
   // giving the parent a signal to close the support sheet.
   onDone?: () => void;
+  // How many times the patient has indicated they are still struggling.
+  // Persisted in the parent across sheet open/close cycles.
+  // 0 = haven't tried yet  1 = first step tried + still struggling
+  // 2+ = both steps tried  → escalation surfaces as primary action
+  initialStruggleCount?: number;
+  onStruggleCountChange?: (count: number) => void;
 
   onAccept: (id: number) => Promise<void>;
   onDismiss: (id: number) => Promise<void>;
@@ -1141,6 +1147,8 @@ export function InterventionCard({
   initialPhase,
   onPhaseChange,
   onDone,
+  initialStruggleCount,
+  onStruggleCountChange,
   onAccept,
   onDismiss: _onDismiss,
   onFeedback,
@@ -1156,6 +1164,7 @@ export function InterventionCard({
   );
 
   const [phase, setPhase] = useState<InteractionPhase>(initialPhase ?? "default");
+  const [struggleCount, setStruggleCount] = useState(initialStruggleCount ?? 0);
 
   const setEngagedPhase = useCallback(
     (next: InteractionPhase) => {
@@ -1402,9 +1411,19 @@ export function InterventionCard({
       tension: 120,
       friction: 7,
     }).start();
+    const newCount = struggleCount + 1;
+    setStruggleCount(newCount);
+    onStruggleCountChange?.(newCount);
     setEngagedPhase("struggling");
     safeLog("intervention_feedback_no_change");
-  }, [swipeX, setEngagedPhase]);
+  }, [swipeX, setEngagedPhase, struggleCount, onStruggleCountChange]);
+
+  // Sends the patient into a second checking loop with the alternate step.
+  const handleTryAdjusted = useCallback(() => {
+    tap();
+    safeLog("intervention_adjusted_started");
+    setEngagedPhase("checking");
+  }, [setEngagedPhase]);
 
   swipeRightRef.current = handleSwipeRight;
   swipeLeftRef.current = handleSwipeLeft;
@@ -1508,56 +1527,78 @@ export function InterventionCard({
     );
   }
 
-  // == Struggling phase: adjusted recommendation ==
+  // == Struggling phase ==
+  // Round 1 (struggleCount === 1): adjusted step + "Try adjusted support"
+  // Round 2+ (struggleCount >= 2): care-team escalation as the primary action
   if (phase === "struggling") {
+    const isEscalationRound = struggleCount >= 2;
     return (
       <Animated.View style={[styles.card, animatedStyle]}>
         <View style={styles.supportPill}>
           <Text style={styles.supportPillText}>{pillLabel}</Text>
         </View>
         <Text style={[styles.cardTitle, { color: navy }]}>
-          Let's try something adjusted
+          {isEscalationRound ? "Let's get you more support" : "Let's try something adjusted"}
         </Text>
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>ADJUSTED RECOMMENDATION</Text>
-          <Text style={[styles.sectionBody, { color: navy }]}>
-            {alternateContent.body}
-          </Text>
-        </View>
-        {alternateContent.helper.trim().length > 0 && (
+
+        {!isEscalationRound ? (
           <>
-            <View style={styles.divider} />
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>WHY IT HELPS</Text>
-              <Text style={[styles.sectionBody, { color: navy }]}>
-                {alternateContent.helper}
+            <View style={styles.heroPanel}>
+              <View style={styles.heroPanelHeader}>
+                <Feather name="refresh-cw" size={11} color="#6B8AB5" />
+                <Text style={styles.heroPanelLabel}>Adjusted step</Text>
+              </View>
+              <Text style={[styles.heroBody, { color: navy }]}>
+                {alternateContent.body}
               </Text>
             </View>
-          </>
-        )}
-        <View style={styles.divider} />
-        <Text style={[styles.guardrail, { color: mutedForeground }]}>
-          Viva supports between-visit care. If symptoms feel severe or urgent,
-          contact your care team or seek medical help.
-        </Text>
-        {(offerEscalationInStruggling || liveSeverity === "severe") && status !== "escalated" && (
-          <Pressable
-            style={styles.careTeamBtn}
-            onPress={() => void handleAskCareTeam()}
-            accessibilityRole="button"
-            accessibilityLabel="Ask my care team to review"
-          >
-            <Feather name="message-circle" size={13} color={CARD_MUTED} />
-            <Text style={styles.careTeamBtnText}>Ask my care team</Text>
-          </Pressable>
-        )}
-        {status === "escalated" && (
-          <View style={styles.resolvedContainer}>
-            <Feather name="check-circle" size={14} color={warning} />
-            <Text style={[styles.sectionBody, { color: warning, fontSize: 12 }]}>
-              Review requested. Your care team can see today's symptoms.
+            {alternateContent.helper.trim().length > 0 && (
+              <Text style={styles.cardSubtitle}>{alternateContent.helper}</Text>
+            )}
+            <Pressable
+              style={({ pressed }) => [styles.primaryBtn, { opacity: pressed ? 0.82 : 1 }]}
+              onPress={handleTryAdjusted}
+              accessibilityRole="button"
+              accessibilityLabel="Try adjusted support"
+            >
+              <Text style={styles.primaryBtnText}>Try adjusted support</Text>
+            </Pressable>
+            <Text style={[styles.guardrail, { color: mutedForeground }]}>
+              Viva supports between-visit care. If symptoms feel severe or urgent,
+              contact your care team or seek medical help.
             </Text>
-          </View>
+          </>
+        ) : (
+          <>
+            <Text style={[styles.sectionBody, { color: mutedForeground, textAlign: "center" }]}>
+              You've tried two steps and are still struggling. It may be time for your care team to step in.
+            </Text>
+            {status !== "escalated" ? (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.careTeamEscalateBtn,
+                  { backgroundColor: warning, opacity: pressed ? 0.82 : 1 },
+                ]}
+                onPress={() => void handleAskCareTeam()}
+                accessibilityRole="button"
+                accessibilityLabel="Ask my care team to review"
+              >
+                <Feather name="message-circle" size={15} color="#FFFFFF" />
+                <Text style={styles.careTeamEscalateBtnText}>Ask my care team to review</Text>
+              </Pressable>
+            ) : (
+              <View style={[styles.resolvedContainer, { marginTop: 12 }]}>
+                <Feather name="check-circle" size={14} color={warning} />
+                <Text style={[styles.sectionBody, { color: warning, fontSize: 12, flexShrink: 1 }]}>
+                  Review requested. Your care team can see today's symptoms.
+                </Text>
+              </View>
+            )}
+            <Text style={[styles.guardrail, { color: mutedForeground }]}>
+              Viva supports between-visit care. If symptoms feel severe or urgent,
+              contact your care team or seek medical help.
+            </Text>
+          </>
         )}
       </Animated.View>
     );
@@ -1565,33 +1606,35 @@ export function InterventionCard({
 
   // == Checking phase ==
   if (phase === "checking") {
+    const isRound2 = struggleCount >= 1;
     return (
       <Animated.View style={[styles.card, animatedStyle]}>
         <View style={styles.supportPill}>
           <Text style={styles.supportPillText}>{pillLabel}</Text>
         </View>
         <Text style={[styles.cardTitle, { color: navy }]}>{cardTitle}</Text>
+        {isRound2 && (
+          <View style={styles.heroPanel}>
+            <View style={styles.heroPanelHeader}>
+              <Feather name="refresh-cw" size={11} color="#6B8AB5" />
+              <Text style={styles.heroPanelLabel}>Adjusted step</Text>
+            </View>
+            <Text style={[styles.heroBody, { color: navy }]} numberOfLines={4}>
+              {alternateContent.body}
+            </Text>
+          </View>
+        )}
         <View style={styles.checkingContainer}>
           <Feather name="clock" size={20} color={CARD_MUTED} />
-          <Text
-            style={[
-              styles.sectionBody,
-              { textAlign: "center", color: mutedForeground },
-            ]}
-          >
-            Support is active.{"\n"}Try the step above, then let us know.
+          <Text style={[styles.sectionBody, { textAlign: "center", color: mutedForeground }]}>
+            {isRound2
+              ? "Adjusted support is active.\nCheck in when you're ready."
+              : "Support is active.\nTry the step above, then let us know."}
           </Text>
-          <Pressable
-            onPress={() => setEngagedPhase("feedback")}
-            accessibilityRole="button"
-          >
+          <Pressable onPress={() => setEngagedPhase("feedback")} accessibilityRole="button">
             <Text style={styles.checkNowLink}>I'm ready to check in →</Text>
           </Pressable>
         </View>
-        <Text style={[styles.guardrail, { color: mutedForeground }]}>
-          Viva supports between-visit care. If symptoms feel severe or urgent,
-          contact your care team or seek medical help.
-        </Text>
       </Animated.View>
     );
   }
@@ -1856,6 +1899,22 @@ const styles = StyleSheet.create({
     fontFamily: "Montserrat_500Medium",
     color: CARD_MUTED,
     flexShrink: 1,
+  },
+  careTeamEscalateBtn: {
+    borderRadius: 999,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 16,
+  },
+  careTeamEscalateBtnText: {
+    fontSize: 14,
+    fontFamily: "Montserrat_700Bold",
+    color: "#FFFFFF",
+    letterSpacing: 0.1,
   },
   // Legacy — still used in struggling/checking phases
   careTeamBtn: {
