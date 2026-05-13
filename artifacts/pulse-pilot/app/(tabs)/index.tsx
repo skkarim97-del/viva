@@ -23,8 +23,7 @@ import { InputRow } from "@/components/InputRow";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SymptomTipCard } from "@/components/SymptomTipCard";
-import { InterventionCard, deriveLiveSeverity, buildContextChips, type InteractionPhase } from "@/components/InterventionCard";
-import { SupportTriggerCard } from "@/components/SupportTriggerCard";
+import { InterventionCard, deriveLiveSeverity, type InteractionPhase } from "@/components/InterventionCard";
 import { BlurView } from "expo-blur";
 import {
   interventionsApi,
@@ -1016,50 +1015,19 @@ export default function DashboardScreen() {
       }
     : null;
 
-  // Compact trigger card signals
+  // Floating pill signals — short symptom label used in pill copy
   const liveCheckinForTrigger = symptomHydrated
     ? { nausea, appetite, energy: glp1Energy, digestion, bowel: bowelSelectedKey }
     : null;
 
-  const triggerChips = React.useMemo(
-    () =>
-      buildContextChips(
-        liveCheckinForTrigger,
-        dailyState
-          ? {
-              position: dailyState.doseDayPosition,
-              recentTitration: dailyState.recentTitration,
-              daysSinceLastDose: dailyState.daysSinceLastDose,
-            }
-          : null,
-        symptomCounts,
-      ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [nausea, appetite, glp1Energy, digestion, bowelSelectedKey, dailyState, symptomCounts],
-  );
-
-  const triggerHeadline = React.useMemo((): string => {
-    const c = liveCheckinForTrigger;
-    if (c?.nausea === "severe") return "Nausea is more intense today.";
-    if (c?.nausea === "moderate") return "Nausea is elevated today.";
-    if (c?.appetite === "very_low") return "Appetite is significantly lower today.";
-    if (c?.nausea === "mild" && c?.appetite === "low")
-      return "Nausea and lower appetite today.";
-    if (c?.nausea === "mild") return "Mild nausea is present today.";
-    if (c?.appetite === "low") return "Appetite is lower than usual.";
-    if (c?.energy === "depleted") return "Energy is very low today.";
-    if (currentLiveSeverity === "severe" || currentLiveSeverity === "moderate")
-      return "Symptoms are elevated today.";
-    return "Viva has a support step ready.";
+  const symptomShortLabel = React.useMemo((): string => {
+    const ch = liveCheckinForTrigger;
+    if (ch?.nausea === "severe" || ch?.nausea === "moderate" || ch?.nausea === "mild") return "nausea";
+    if (ch?.appetite === "very_low" || ch?.appetite === "low") return "appetite";
+    if (ch?.energy === "depleted") return "energy";
+    return "symptoms";
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nausea, appetite, glp1Energy, currentLiveSeverity]);
-
-  const triggerPillLabel =
-    currentLiveSeverity === "severe" || currentLiveSeverity === "moderate"
-      ? "Extra support today"
-      : currentLiveSeverity === "mild"
-        ? "Stay ahead"
-        : "Symptom support";
+  }, [nausea, appetite, glp1Energy]);
 
   // Status chip + hero come from the central selectors. They
   // automatically degrade to a calm "Set up your day" / "Tell us how
@@ -1182,25 +1150,6 @@ export default function DashboardScreen() {
             kept in the component so we can re-surface this CTA
             elsewhere later without rewiring. */}
 
-        {/* "Today's support" card — elevated position (moderate/severe).
-            Pins above the check-in inputs when symptoms are running at
-            least moderate, so the most urgent recommendation is the
-            first thing the patient sees after the status card.
-            Mild/steady severity renders lower (after the check-in
-            row) so calmer states don't compete with the check-in
-            prompt. The no-min-data fallback slot below handles the
-            edge case of a persisted active row without a fresh check-in. */}
-        {activeInterventions.length > 0 && hasMinSymptomData && interventionIsElevated && activeInterventions[0] && (
-          <View style={{ marginBottom: 12 }}>
-            <SupportTriggerCard
-              pillLabel={triggerPillLabel}
-              headline={triggerHeadline}
-              chips={triggerChips}
-              onStart={openSupportSheet}
-              isActive={supportBannerVisible}
-            />
-          </View>
-        )}
 
         {profile.medicationProfile && (() => {
           const mp = profile.medicationProfile!;
@@ -1510,39 +1459,6 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* "Today's support" card — lower position (mild/steady).
-            When symptoms are mild or steady the card renders here,
-            after the check-in row, so the check-in prompt is visible
-            first. Visually softer state cards (steady = "Your symptoms
-            look steady") belong lower in the reading order. */}
-        {activeInterventions.length > 0 && hasMinSymptomData && !interventionIsElevated && activeInterventions[0] && (
-          <View style={{ marginTop: 8, marginBottom: 12 }}>
-            <SupportTriggerCard
-              pillLabel={triggerPillLabel}
-              headline={triggerHeadline}
-              chips={triggerChips}
-              onStart={openSupportSheet}
-              isActive={supportBannerVisible}
-            />
-          </View>
-        )}
-
-        {/* Fallback intervention slot. Only used when an intervention
-            has been generated WITHOUT the patient having met the min
-            check-in threshold (an unusual but possible state, e.g. a
-            persisted/legacy active row from a prior session). In the
-            normal flow the card above this comment renders instead. */}
-        {activeInterventions.length > 0 && !hasMinSymptomData && activeInterventions[0] && (
-          <View style={{ marginTop: 8, marginBottom: 20 }}>
-            <SupportTriggerCard
-              pillLabel={triggerPillLabel}
-              headline="Viva has a personalised support step ready."
-              chips={[]}
-              onStart={openSupportSheet}
-              isActive={supportBannerVisible}
-            />
-          </View>
-        )}
 
         {/* Pilot empty-state. The legacy SymptomTipCard fallback has
             been removed from the Today tab so the patient never sees
@@ -2415,18 +2331,30 @@ export default function DashboardScreen() {
           </ScrollView>
         </Animated.View>
       )}
-      {/* Persistent support banner — shown when a support step is active
-          but the full sheet has been dismissed so the patient can keep
-          using the app. Positioned just above the tab bar. */}
-      {supportBannerVisible && !supportSheetOpen && (
+      {/* Floating support pill — ambient entry point for symptom management.
+          Visible whenever an intervention is ready or in progress, hidden
+          while the sheet is open. Tapping always opens the support sheet. */}
+      {activeLoaded && activeInterventions.length > 0 && !supportSheetOpen && (
         <Pressable
-          style={[styles.supportBanner, { bottom: sheetBottomOffset + 8 }]}
+          style={[
+            styles.supportBanner,
+            supportBannerVisible && styles.supportBannerActive,
+            { bottom: sheetBottomOffset + 8 },
+          ]}
           onPress={openSupportSheet}
           accessibilityRole="button"
-          accessibilityLabel="Support in progress, tap to check in"
+          accessibilityLabel={
+            supportBannerVisible
+              ? "Support in progress, tap to check in"
+              : `Manage ${symptomShortLabel}, tap to start support`
+          }
         >
-          <View style={styles.supportBannerDot} />
-          <Text style={styles.supportBannerTitle}>Support in progress · Tap to check in</Text>
+          <View style={[styles.supportBannerDot, supportBannerVisible && styles.supportBannerDotActive]} />
+          <Text style={styles.supportBannerTitle}>
+            {supportBannerVisible
+              ? "Support in progress · Tap to check in"
+              : `Manage ${symptomShortLabel} · Start support`}
+          </Text>
           <Feather name="chevron-up" size={13} color="#5A82B0" />
         </Pressable>
       )}
@@ -2499,11 +2427,18 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  supportBannerActive: {
+    backgroundColor: "#EBF3FD",
+    borderColor: "#C4DAFA",
+  },
   supportBannerDot: {
     width: 7,
     height: 7,
     borderRadius: 3.5,
     backgroundColor: "#3D7CC9",
+  },
+  supportBannerDotActive: {
+    backgroundColor: "#2A6DB5",
   },
   supportBannerTitle: {
     flex: 1,
