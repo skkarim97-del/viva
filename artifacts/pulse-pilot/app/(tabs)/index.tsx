@@ -251,6 +251,11 @@ export default function DashboardScreen() {
   // Persistent mini-banner shown while support is active but the full
   // sheet is dismissed, so the patient can keep using the app.
   const [supportBannerVisible, setSupportBannerVisible] = useState(false);
+  // How many times the patient has indicated "still struggling" across
+  // the current intervention cycle. Drives the two-loop flow:
+  //   0 = not started  1 = first step tried → show adjusted step
+  //   2+ = both steps tried → surface care-team escalation
+  const [supportStruggleCount, setSupportStruggleCount] = useState(0);
 
   // Wraps setSupportPhase with side effects: auto-dismiss the sheet
   // when the patient starts a support step (checking phase) and hide
@@ -262,18 +267,24 @@ export default function DashboardScreen() {
       setSupportBannerVisible(true);
     } else if (phase === "default") {
       setSupportBannerVisible(false);
+      setSupportStruggleCount(0);
     }
   }, [closeSupportSheet]);
 
   // Fires when the card reaches "better" (resolved). Closes the sheet,
-  // hides the banner, and resets phase so the flow is clean next time.
+  // hides the banner, and resets all support state for the next cycle.
   const handleSupportDone = React.useCallback(() => {
     closeSupportSheet();
     setSupportBannerVisible(false);
     setSupportPhase("default");
+    setSupportStruggleCount(0);
   }, [closeSupportSheet]);
 
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
+  // Standard tab bar heights: 49pt iOS, 56dp Android. The sheet and its
+  // backdrop stop here so the navigation chrome stays fully visible.
+  const TAB_BAR_HEIGHT = Platform.select({ ios: 49, android: 56, default: 52 }) ?? 52;
+  const sheetBottomOffset = insets.bottom + TAB_BAR_HEIGHT;
 
   // ----- AI-personalized micro-intervention loop (Phase 3) -----
   // The personalized card REPLACES the legacy SymptomTipCard layer
@@ -2325,7 +2336,7 @@ export default function DashboardScreen() {
           On web: plain dark-navy translucent overlay. */}
       <Animated.View
         pointerEvents={supportSheetOpen ? "auto" : "none"}
-        style={[StyleSheet.absoluteFill, { opacity: backdropAnim }]}
+        style={[StyleSheet.absoluteFill, { bottom: sheetBottomOffset, opacity: backdropAnim }]}
       >
         {Platform.OS !== "web" ? (
           <BlurView
@@ -2349,7 +2360,11 @@ export default function DashboardScreen() {
         <Animated.View
           style={[
             styles.supportSheet,
-            { maxHeight: windowHeight * 0.88, transform: [{ translateY: sheetAnim }] },
+            {
+              bottom: sheetBottomOffset,
+              maxHeight: windowHeight * 0.82,
+              transform: [{ translateY: sheetAnim }],
+            },
           ]}
         >
           {/* Drag handle */}
@@ -2359,7 +2374,7 @@ export default function DashboardScreen() {
             showsVerticalScrollIndicator={false}
             bounces={false}
             keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 24, 44) }}
+            contentContainerStyle={{ paddingBottom: 32 }}
           >
             <InterventionCard
               key={activeInterventions[0].id}
@@ -2374,6 +2389,8 @@ export default function DashboardScreen() {
               initialPhase={supportPhase}
               onPhaseChange={handleSupportPhaseChange}
               onDone={handleSupportDone}
+              initialStruggleCount={supportStruggleCount}
+              onStruggleCountChange={setSupportStruggleCount}
               doseContext={
                 dailyState
                   ? {
@@ -2400,7 +2417,7 @@ export default function DashboardScreen() {
           using the app. Positioned just above the tab bar. */}
       {supportBannerVisible && !supportSheetOpen && (
         <Pressable
-          style={[styles.supportBanner, { bottom: insets.bottom + 58 }]}
+          style={[styles.supportBanner, { bottom: sheetBottomOffset + 8 }]}
           onPress={openSupportSheet}
           accessibilityRole="button"
           accessibilityLabel="Support active, tap to check in"
