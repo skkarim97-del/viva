@@ -1541,6 +1541,12 @@ export function InterventionCard({
           {isEscalationRound ? "Let's get you more support" : "Let's try something adjusted"}
         </Text>
 
+        {!isEscalationRound && (
+          <Text style={styles.adaptiveHint}>
+            Adjusting your support based on your feedback.
+          </Text>
+        )}
+
         {!isEscalationRound ? (
           <>
             <View style={styles.heroPanel}>
@@ -1720,9 +1726,9 @@ export function InterventionCard({
 const styles = StyleSheet.create({
   card: {
     borderRadius: 0,
-    paddingHorizontal: 22,
-    paddingTop: 16,
-    paddingBottom: 28,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 36,
     backgroundColor: "transparent",
   },
   supportPill: {
@@ -1742,27 +1748,27 @@ const styles = StyleSheet.create({
     color: CARD_MUTED,
   },
   cardTitle: {
-    fontSize: 22,
+    fontSize: 23,
     fontFamily: "Montserrat_700Bold",
-    lineHeight: 29,
+    lineHeight: 31,
     color: CARD_TEXT,
-    marginBottom: 6,
+    marginBottom: 12,
   },
   cardSubtitle: {
     fontSize: 14,
     fontFamily: "Montserrat_400Regular",
-    lineHeight: 20,
+    lineHeight: 21,
     color: CARD_MUTED,
-    marginBottom: 14,
+    marginBottom: 16,
   },
   // Hero action panel — white island on the tinted sheet, creates depth
   heroPanel: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 6,
-    marginBottom: 14,
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    gap: 10,
+    marginBottom: 20,
   },
   heroPanelHeader: {
     flexDirection: "row",
@@ -1777,9 +1783,9 @@ const styles = StyleSheet.create({
     color: "#6B8AB5",
   },
   heroBody: {
-    fontSize: 15,
+    fontSize: 16,
     fontFamily: "Montserrat_500Medium",
-    lineHeight: 22,
+    lineHeight: 24,
     color: CARD_TEXT,
   },
   // Context chips row
@@ -1852,9 +1858,9 @@ const styles = StyleSheet.create({
   primaryBtn: {
     backgroundColor: CARD_TEXT,
     borderRadius: 999,
-    paddingVertical: 16,
+    paddingVertical: 17,
     alignItems: "center",
-    marginTop: 18,
+    marginTop: 24,
     ...Platform.select({
       web: {
         boxShadow: "0 3px 8px rgba(20, 34, 64, 0.18)",
@@ -1932,8 +1938,8 @@ const styles = StyleSheet.create({
   },
   checkingContainer: {
     alignItems: "center",
-    gap: 14,
-    paddingVertical: 14,
+    gap: 16,
+    paddingVertical: 20,
     marginBottom: 4,
   },
   checkNowLink: {
@@ -1985,6 +1991,14 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     flexDirection: "row",
     justifyContent: "center",
+  },
+  adaptiveHint: {
+    fontSize: 13,
+    fontFamily: "Montserrat_500Medium",
+    lineHeight: 19,
+    color: "#8B6C14",
+    marginBottom: 6,
+    opacity: 0.85,
   },
   guardrail: {
     fontSize: 11,

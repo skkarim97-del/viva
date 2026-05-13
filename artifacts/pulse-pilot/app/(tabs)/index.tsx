@@ -232,6 +232,9 @@ export default function DashboardScreen() {
   }, [sheetAnim, backdropAnim]);
 
   const closeSupportSheet = React.useCallback(() => {
+    // Clear surrounding-content dimming immediately when the sheet closes —
+    // the patient should be able to use the app normally with just the pill.
+    setInterventionEngaged(false);
     Animated.parallel([
       Animated.spring(sheetAnim, {
         toValue: windowHeight,
@@ -255,13 +258,18 @@ export default function DashboardScreen() {
   //   0 = not started  1 = first step tried → show adjusted step
   //   2+ = both steps tried → surface care-team escalation
   const [supportStruggleCount, setSupportStruggleCount] = useState(0);
+  // Timer ref for the brief "resolved" green-pill state before it clears.
+  const resolvedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Wraps setSupportPhase with side effects: auto-dismiss the sheet
   // when the patient starts a support step (checking phase) and hide
   // the banner when support resolves back to default.
   const handleSupportPhaseChange = React.useCallback((phase: InteractionPhase) => {
     setSupportPhase(phase);
-    if (phase === "checking") {
+    if (phase === "checking" || phase === "struggling") {
+      // Minimize the sheet into the ambient pill so the patient can keep
+      // using the app. Pill colour signals current state (purple = active,
+      // orange = not helped / adjusted step ready).
       closeSupportSheet();
       setSupportBannerVisible(true);
     } else if (phase === "default") {
@@ -271,12 +279,17 @@ export default function DashboardScreen() {
   }, [closeSupportSheet]);
 
   // Fires when the card reaches "better" (resolved). Closes the sheet,
-  // hides the banner, and resets all support state for the next cycle.
+  // briefly shows a green resolved pill, then clears all support state.
   const handleSupportDone = React.useCallback(() => {
     closeSupportSheet();
-    setSupportBannerVisible(false);
-    setSupportPhase("default");
-    setSupportStruggleCount(0);
+    setSupportPhase("better");
+    setSupportBannerVisible(true);
+    if (resolvedTimerRef.current) clearTimeout(resolvedTimerRef.current);
+    resolvedTimerRef.current = setTimeout(() => {
+      setSupportBannerVisible(false);
+      setSupportPhase("default");
+      setSupportStruggleCount(0);
+    }, 3000);
   }, [closeSupportSheet]);
 
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -1028,6 +1041,31 @@ export default function DashboardScreen() {
     return "symptoms";
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nausea, appetite, glp1Energy]);
+
+  // Semantic pill state drives colour + copy for the floating pill.
+  //   blue   = intervention ready, not yet started
+  //   purple = support active / adjusted support active
+  //   orange = user reported no improvement — adjusted step or escalation ready
+  //   green  = resolved — brief completion state before pill disappears
+  const supportPillState = React.useMemo((): "blue" | "purple" | "orange" | "green" => {
+    if (!supportBannerVisible) return "blue";
+    if (supportPhase === "better") return "green";
+    if (supportPhase === "struggling") return "orange";
+    return "purple";
+  }, [supportBannerVisible, supportPhase]);
+
+  const supportPillText = React.useMemo((): string => {
+    if (!supportBannerVisible) return `Manage ${symptomShortLabel} · Start support`;
+    if (supportPhase === "better") return "Support helped · Keep monitoring";
+    if (supportPhase === "struggling") {
+      return supportStruggleCount >= 2
+        ? "Care team support available · Tap to review"
+        : "Additional support ready · Tap to review";
+    }
+    return supportStruggleCount >= 1
+      ? "Updated support in progress · Tap to check in"
+      : "Support in progress · Tap to check in";
+  }, [supportBannerVisible, supportPhase, supportStruggleCount, symptomShortLabel]);
 
   // Status chip + hero come from the central selectors. They
   // automatically degrade to a calm "Set up your day" / "Tell us how
@@ -2333,29 +2371,37 @@ export default function DashboardScreen() {
       )}
       {/* Floating support pill — ambient entry point for symptom management.
           Visible whenever an intervention is ready or in progress, hidden
-          while the sheet is open. Tapping always opens the support sheet. */}
+          while the sheet is open. Colour signals current journey state. */}
       {activeLoaded && activeInterventions.length > 0 && !supportSheetOpen && (
         <Pressable
           style={[
             styles.supportBanner,
-            supportBannerVisible && styles.supportBannerActive,
+            supportPillState === "purple" && styles.supportBannerPurple,
+            supportPillState === "orange" && styles.supportBannerOrange,
+            supportPillState === "green" && styles.supportBannerGreen,
             { bottom: sheetBottomOffset + 8 },
           ]}
           onPress={openSupportSheet}
           accessibilityRole="button"
-          accessibilityLabel={
-            supportBannerVisible
-              ? "Support in progress, tap to check in"
-              : `Manage ${symptomShortLabel}, tap to start support`
-          }
+          accessibilityLabel={supportPillText}
         >
-          <View style={[styles.supportBannerDot, supportBannerVisible && styles.supportBannerDotActive]} />
-          <Text style={styles.supportBannerTitle}>
-            {supportBannerVisible
-              ? "Support in progress · Tap to check in"
-              : `Manage ${symptomShortLabel} · Start support`}
-          </Text>
-          <Feather name="chevron-up" size={13} color="#5A82B0" />
+          <View style={[
+            styles.supportBannerDot,
+            supportPillState === "purple" && styles.supportBannerDotPurple,
+            supportPillState === "orange" && styles.supportBannerDotOrange,
+            supportPillState === "green" && styles.supportBannerDotGreen,
+          ]} />
+          <Text style={styles.supportBannerTitle}>{supportPillText}</Text>
+          <Feather
+            name="chevron-up"
+            size={13}
+            color={
+              supportPillState === "purple" ? "#7B5EA7"
+              : supportPillState === "orange" ? "#B87333"
+              : supportPillState === "green" ? "#2D9E6A"
+              : "#5A82B0"
+            }
+          />
         </Pressable>
       )}
     </KeyboardAvoidingView>
@@ -2427,19 +2473,20 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  supportBannerActive: {
-    backgroundColor: "#EBF3FD",
-    borderColor: "#C4DAFA",
-  },
+  // Semantic pill colour variants — backgrounds and borders are low-opacity
+  // tints; dots and chevron carry the full hue so the pill stays calm.
+  supportBannerPurple: { backgroundColor: "#F4F0FF", borderColor: "#D8CCFA" },
+  supportBannerOrange: { backgroundColor: "#FFF8F0", borderColor: "#FAD9AA" },
+  supportBannerGreen:  { backgroundColor: "#F0FBF5", borderColor: "#A8E6C0" },
   supportBannerDot: {
     width: 7,
     height: 7,
     borderRadius: 3.5,
     backgroundColor: "#3D7CC9",
   },
-  supportBannerDotActive: {
-    backgroundColor: "#2A6DB5",
-  },
+  supportBannerDotPurple: { backgroundColor: "#7B5EA7" },
+  supportBannerDotOrange: { backgroundColor: "#D97706" },
+  supportBannerDotGreen:  { backgroundColor: "#2D9E6A" },
   supportBannerTitle: {
     flex: 1,
     fontSize: 13,
