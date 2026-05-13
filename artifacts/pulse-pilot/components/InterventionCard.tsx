@@ -972,6 +972,60 @@ function buildContextParagraph(
   return `${cap(first!)}, ${rest.slice(0, -1).join(", ")}, and ${rest[rest.length - 1]}.`;
 }
 
+function buildContextChips(
+  liveCheckin: LiveCheckin | null | undefined,
+  doseContext: {
+    position: DoseDayPosition | null | undefined;
+    recentTitration?: boolean;
+    daysSinceLastDose?: number | null;
+  } | null | undefined,
+  symptomCounts?: {
+    nausea7d: number;
+    lowAppetite7d: number;
+    lowEnergy7d: number;
+    constipation7d: number;
+  } | null,
+): string[] {
+  const chips: string[] = [];
+  const n7 = symptomCounts?.nausea7d ?? 0;
+  const a7 = symptomCounts?.lowAppetite7d ?? 0;
+
+  if (liveCheckin?.nausea === "severe" || liveCheckin?.nausea === "moderate") {
+    chips.push("Nausea elevated today");
+  } else if (liveCheckin?.nausea === "mild") {
+    chips.push("Mild nausea today");
+  } else if (n7 >= 3) {
+    chips.push("Nausea recurring");
+  }
+
+  if (liveCheckin?.appetite === "very_low" || liveCheckin?.appetite === "low") {
+    chips.push(a7 >= 3 ? "Appetite lower this week" : "Appetite lower today");
+  } else if (a7 >= 3) {
+    chips.push("Appetite lower this week");
+  }
+
+  if (liveCheckin?.energy === "depleted") {
+    chips.push("Energy very low");
+  } else if (liveCheckin?.energy === "tired") {
+    chips.push("Energy lower today");
+  }
+
+  if (liveCheckin?.digestion === "constipated" || liveCheckin?.bowel === "no") {
+    chips.push("Digestion sluggish");
+  }
+
+  const days = doseContext?.daysSinceLastDose;
+  const pos = doseContext?.position;
+  if (days === 1 || pos === "day_1_post") chips.push("1 day after dose");
+  else if (days === 2 || pos === "day_2_post") chips.push("2 days after dose");
+  else if (days === 3 || pos === "day_3_post") chips.push("3 days after dose");
+  else if (days === 0 || pos === "dose_day") chips.push("Dose day");
+
+  if (doseContext?.recentTitration && chips.length < 3) chips.push("Dose increased");
+
+  return chips.slice(0, 3);
+}
+
 interface InterventionCardProps {
   intervention: PatientIntervention;
   navy: string;
@@ -1251,6 +1305,11 @@ export function InterventionCard({
   const contextParagraph = useMemo(
     () => buildContextParagraph(liveCheckin, doseContext, symptomCounts, wearableContext),
     [liveCheckin, doseContext, symptomCounts, wearableContext],
+  );
+
+  const contextChips = useMemo(
+    () => buildContextChips(liveCheckin, doseContext, symptomCounts),
+    [liveCheckin, doseContext, symptomCounts],
   );
 
   // Swipe card background interpolates: orange (left) → white (center) → green (right)
@@ -1560,45 +1619,50 @@ export function InterventionCard({
         <Text style={styles.supportPillText}>{pillLabel}</Text>
       </View>
 
-      {/* Title */}
+      {/* Title — specific clinical headline */}
       <Text style={[styles.cardTitle, { color: navy }]}>{cardTitle}</Text>
 
-      {/* Recommendation — hero panel, visually dominant */}
-      <View style={styles.recPanel}>
-        <Text style={styles.recMicroLabel}>Recommended now</Text>
-        <Text style={[styles.recBody, { color: navy }]} numberOfLines={2}>
+      {/* Subtitle — one short supporting sentence */}
+      {primaryContent.helper.trim().length > 0 && (
+        <Text style={styles.cardSubtitle} numberOfLines={2}>
+          {primaryContent.helper}
+        </Text>
+      )}
+
+      {/* Hero action panel — blue-ice surface, prominent */}
+      <View style={styles.heroPanel}>
+        <View style={styles.heroPanelHeader}>
+          <Feather
+            name={categoryIcon(intervention.recommendationCategory)}
+            size={14}
+            color="#3D7CC9"
+          />
+          <Text style={styles.heroPanelLabel}>Recommended now</Text>
+        </View>
+        <Text style={[styles.heroBody, { color: navy }]} numberOfLines={3}>
           {primaryContent.body}
         </Text>
       </View>
 
-      {/* Why it helps — supporting, smaller, muted */}
-      {primaryContent.helper.trim().length > 0 && (
-        <View style={styles.supportSection}>
-          <Text style={styles.supportMicroLabel}>Why this may help</Text>
-          <Text style={styles.supportBody} numberOfLines={2}>
-            {primaryContent.helper}
-          </Text>
+      {/* Context chips — compact signal row */}
+      {contextChips.length > 0 && (
+        <View style={styles.chipsSection}>
+          <Text style={styles.chipsSectionLabel}>WHAT VIVA NOTICED</Text>
+          <View style={styles.chipsRow}>
+            {contextChips.map((chip) => (
+              <View key={chip} style={styles.contextChip}>
+                <Text style={styles.contextChipText}>{chip}</Text>
+              </View>
+            ))}
+          </View>
         </View>
       )}
-
-      {/* Your context — supporting, smaller, muted */}
-      <View
-        style={[
-          styles.supportSection,
-          { marginTop: primaryContent.helper.trim().length > 0 ? 12 : 16 },
-        ]}
-      >
-        <Text style={styles.supportMicroLabel}>What Viva noticed</Text>
-        <Text style={styles.supportBody} numberOfLines={2}>
-          {contextParagraph}
-        </Text>
-      </View>
 
       {/* Primary CTA */}
       <Pressable
         style={({ pressed }) => [
           styles.primaryBtn,
-          { opacity: pressed ? 0.78 : 1 },
+          { opacity: pressed ? 0.82 : 1 },
         ]}
         onPress={() => void handleCommit()}
         accessibilityRole="button"
@@ -1607,23 +1671,22 @@ export function InterventionCard({
         <Text style={styles.primaryBtnText}>I'll try this</Text>
       </Pressable>
 
-      {/* Care team (secondary, subtle) */}
+      {/* Care team — underline link only, very secondary */}
       {(offerEscalationInStruggling || liveSeverity === "severe") && status !== "escalated" && (
         <Pressable
-          style={styles.careTeamBtn}
+          style={styles.careTeamLink}
           onPress={() => void handleAskCareTeam()}
           accessibilityRole="button"
           accessibilityLabel="Ask my care team to review"
         >
-          <Feather name="message-circle" size={13} color={CARD_MUTED} />
-          <Text style={styles.careTeamBtnText}>Ask my care team</Text>
+          <Text style={styles.careTeamLinkText}>Ask my care team</Text>
         </Pressable>
       )}
 
       {status === "escalated" && (
-        <View style={styles.careTeamBtn}>
-          <Feather name="check-circle" size={13} color={warning} />
-          <Text style={[styles.careTeamBtnText, { color: warning }]}>
+        <View style={styles.escalatedNotice}>
+          <Feather name="check-circle" size={12} color={warning} />
+          <Text style={[styles.escalatedNoticeText, { color: warning }]}>
             Review requested — your care team has been notified.
           </Text>
         </View>
@@ -1641,20 +1704,24 @@ export function InterventionCard({
 const styles = StyleSheet.create({
   card: {
     borderRadius: 20,
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 24,
     backgroundColor: "#FFFFFF",
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: CARD_BORDER,
+    borderTopWidth: 3,
+    borderTopColor: "#3D7CC9",
     ...Platform.select({
       web: {
-        boxShadow: "0 2px 12px rgba(26, 46, 74, 0.08)",
+        boxShadow: "0 4px 20px rgba(26, 46, 74, 0.10)",
       },
       default: {
         shadowColor: "#1A2E4A",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
-        elevation: 3,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.10,
+        shadowRadius: 16,
+        elevation: 4,
       },
     }),
   },
@@ -1675,34 +1742,77 @@ const styles = StyleSheet.create({
     color: CARD_MUTED,
   },
   cardTitle: {
-    fontSize: 23,
+    fontSize: 22,
     fontFamily: "Montserrat_700Bold",
-    lineHeight: 30,
+    lineHeight: 29,
     color: CARD_TEXT,
-    marginBottom: 14,
+    marginBottom: 6,
   },
-  // Recommendation hero panel
-  recPanel: {
-    backgroundColor: "#F2F6FB",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 6,
+  cardSubtitle: {
+    fontSize: 14,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 20,
+    color: CARD_MUTED,
     marginBottom: 18,
   },
-  recMicroLabel: {
-    fontSize: 10,
-    fontFamily: "Montserrat_500Medium",
-    letterSpacing: 0.1,
-    color: CARD_MUTED,
+  // Hero action panel — blue-ice surface
+  heroPanel: {
+    backgroundColor: "#E8F1FB",
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 8,
+    marginBottom: 18,
   },
-  recBody: {
-    fontSize: 16,
+  heroPanelHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  heroPanelLabel: {
+    fontSize: 10,
     fontFamily: "Montserrat_600SemiBold",
-    lineHeight: 23,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    color: "#3D7CC9",
+  },
+  heroBody: {
+    fontSize: 15,
+    fontFamily: "Montserrat_600SemiBold",
+    lineHeight: 22,
     color: CARD_TEXT,
   },
-  // Supporting sections (Why / Context) — de-emphasized
+  // Context chips row
+  chipsSection: {
+    gap: 8,
+    marginBottom: 4,
+  },
+  chipsSectionLabel: {
+    fontSize: 9,
+    fontFamily: "Montserrat_600SemiBold",
+    letterSpacing: 0.8,
+    color: "#9BAABF",
+  },
+  chipsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  contextChip: {
+    backgroundColor: "#F0F5FC",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#D0DEEF",
+  },
+  contextChipText: {
+    fontSize: 11,
+    fontFamily: "Montserrat_500Medium",
+    color: CARD_MUTED,
+    letterSpacing: 0.1,
+  },
+  // Legacy kept for supporting text in other phases
   supportSection: {
     gap: 4,
     marginTop: 16,
@@ -1744,16 +1854,55 @@ const styles = StyleSheet.create({
   primaryBtn: {
     backgroundColor: CARD_TEXT,
     borderRadius: 999,
-    paddingVertical: 17,
+    paddingVertical: 18,
     alignItems: "center",
     marginTop: 22,
+    ...Platform.select({
+      web: {
+        boxShadow: "0 4px 14px rgba(20, 34, 64, 0.28)",
+      },
+      default: {
+        shadowColor: "#142240",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.28,
+        shadowRadius: 10,
+        elevation: 5,
+      },
+    }),
   },
   primaryBtnText: {
     color: "#FFFFFF",
     fontSize: 15,
     fontFamily: "Montserrat_700Bold",
-    letterSpacing: 0.1,
+    letterSpacing: 0.2,
   },
+  // Escalation — minimal underline text link only
+  careTeamLink: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 14,
+    paddingVertical: 4,
+  },
+  careTeamLinkText: {
+    fontSize: 13,
+    fontFamily: "Montserrat_500Medium",
+    color: CARD_MUTED,
+    textDecorationLine: "underline",
+  },
+  escalatedNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    marginTop: 12,
+  },
+  escalatedNoticeText: {
+    fontSize: 12,
+    fontFamily: "Montserrat_500Medium",
+    color: CARD_MUTED,
+    flexShrink: 1,
+  },
+  // Legacy — still used in struggling/checking phases
   careTeamBtn: {
     flexDirection: "row",
     alignItems: "center",
