@@ -74,7 +74,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
-  Easing,
+  PanResponder,
   Platform,
   Pressable,
   StyleSheet,
@@ -83,8 +83,6 @@ import {
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-
 import {
   type FeedbackResult,
   type PatientIntervention,
@@ -455,24 +453,12 @@ function joinList(items: string[]): string {
 }
 
 // =====================================================================
-// Visual tokens. Light, fixed surface so contrast stays correct in
-// dark mode (the theme's `cardBg`/`navy` would produce light-on-light).
+// Visual tokens (fixed light surface — works correctly in dark mode)
 // =====================================================================
-const FEATURED_TINT = "#E8F1FB";
-const FEATURED_BORDER = "#BFD7F0";
-const STEADY_TINT = "#EAF6EE";
-const STEADY_BORDER = "#BFE0CB";
-const FEATURED_BADGE_BG = "#DCE9F7";
-const FEATURED_BADGE_FG = "#1F4F8A";
-const FEATURED_TEXT = "#142240";
-const FEATURED_MUTED = "#5A6A82";
-// Primary action card surface (white, soft shadow) reads as the most
-// important next step without screaming.
-const PRIMARY_SURFACE = "#FFFFFF";
-const PRIMARY_BORDER = "#7FB0E8";
-const START_HERE_BG = "#1F4F8A";
-const START_HERE_FG = "#FFFFFF";
 const SUCCESS_FG = "#1F8A3F";
+const CARD_TEXT = "#142240";
+const CARD_MUTED = "#6B7FA3";
+const CARD_BORDER = "#E2E8F0";
 
 // Live check-in snapshot used to drive severity-aware adaptations.
 // All fields are nullable so the card can render before the patient
@@ -899,11 +885,17 @@ function buildInsightTitle(
   }
 }
 
-// Compact "Why:" line. Weaves together available signals:
-// today's live check-in, 7-day symptom persistence counts, and
-// dose timing position. Max 3 fragments, separated by " · ".
-// Only signals that actually exist in app state are referenced.
-function buildWhyLine(
+// =====================================================================
+// Wearable + signal context paragraph
+// =====================================================================
+export interface WearableContext {
+  steps?: number | null;
+  sleepHours?: number | null;
+  restingHR?: number | null;
+  activeCalories?: number | null;
+}
+
+function buildContextParagraph(
   liveCheckin: LiveCheckin | null | undefined,
   doseContext: {
     position: DoseDayPosition | null | undefined;
@@ -916,76 +908,68 @@ function buildWhyLine(
     lowEnergy7d: number;
     constipation7d: number;
   } | null,
+  wearableContext?: WearableContext | null,
 ): string {
   const parts: string[] = [];
   const n7 = symptomCounts?.nausea7d ?? 0;
   const a7 = symptomCounts?.lowAppetite7d ?? 0;
-  const e7 = symptomCounts?.lowEnergy7d ?? 0;
   const c7 = symptomCounts?.constipation7d ?? 0;
 
-  if (liveCheckin?.nausea && liveCheckin.nausea !== "none") {
-    parts.push(
-      n7 >= 2
-        ? `nausea ${n7} of last 7 days`
-        : liveCheckin.nausea === "severe"
-          ? "severe nausea"
-          : "nausea",
-    );
+  if (liveCheckin?.nausea === "severe") {
+    parts.push(n7 >= 3 ? `nausea is elevated today (${n7} of the past 7 days)` : "nausea is elevated today");
+  } else if (liveCheckin?.nausea === "moderate") {
+    parts.push(n7 >= 3 ? `nausea is present today (${n7} of the past 7 days)` : "nausea is present today");
+  } else if (liveCheckin?.nausea === "mild") {
+    parts.push("mild nausea today");
   } else if (n7 >= 3) {
-    parts.push(`nausea ${n7} of last 7 days`);
+    parts.push(`nausea has been present for ${n7} of the past 7 days`);
   }
 
-  if (liveCheckin?.appetite === "very_low" || liveCheckin?.appetite === "low") {
-    parts.push(
-      a7 >= 2
-        ? `low appetite ${a7} of last 7 days`
-        : liveCheckin.appetite === "very_low"
-          ? "very low appetite"
-          : "low appetite",
-    );
+  if (liveCheckin?.appetite === "very_low") {
+    parts.push(a7 >= 3 ? "appetite is very low — lower for most of this week" : "appetite is very low today");
+  } else if (liveCheckin?.appetite === "low") {
+    parts.push("appetite is lower than usual");
   } else if (a7 >= 3) {
-    parts.push(`low appetite ${a7} of last 7 days`);
+    parts.push("appetite has been lower for most of this week");
   }
 
   if (liveCheckin?.digestion === "constipated" || liveCheckin?.bowel === "no") {
-    parts.push(c7 >= 2 ? `constipation ${c7} of last 7 days` : "constipation");
-  } else if (c7 >= 3) {
-    parts.push(`constipation ${c7} of last 7 days`);
+    parts.push(c7 >= 3 ? `constipation is recurring (${c7} of 7 days this week)` : "digestion is sluggish today");
+  } else if (c7 >= 4) {
+    parts.push("constipation has been recurring this week");
   }
 
-  if (liveCheckin?.energy === "depleted" || liveCheckin?.energy === "tired") {
-    parts.push(
-      e7 >= 2
-        ? `low energy ${e7} of last 7 days`
-        : liveCheckin.energy === "depleted"
-          ? "depleted energy"
-          : "low energy",
-    );
-  } else if (e7 >= 3) {
-    parts.push(`low energy ${e7} of last 7 days`);
+  if (liveCheckin?.energy === "depleted") parts.push("energy is very low today");
+  else if (liveCheckin?.energy === "tired") parts.push("energy is lower than usual");
+
+  const days = doseContext?.daysSinceLastDose;
+  const pos = doseContext?.position;
+  if (days === 1 || pos === "day_1_post") {
+    parts.push("you're one day after your dose, when side effects often peak");
+  } else if (days === 2 || pos === "day_2_post") {
+    parts.push("you're two days after your dose");
+  } else if (days === 3 || pos === "day_3_post") {
+    parts.push("three days after your dose");
+  } else if (days === 0 || pos === "dose_day") {
+    parts.push("today is your dose day");
+  }
+  if (doseContext?.recentTitration) {
+    parts.push("your dose was recently increased, which can intensify early side effects");
   }
 
-  if (doseContext?.position) {
-    const pos = doseContext.position;
-    const days = doseContext.daysSinceLastDose;
-    if (pos === "dose_day") {
-      parts.push("dose day");
-    } else if (days != null && days >= 1 && days <= 3) {
-      parts.push(`${days} day${days !== 1 ? "s" : ""} after dose`);
-    } else if (pos === "day_1_post") {
-      parts.push("1 day after dose");
-    } else if (pos === "day_2_post") {
-      parts.push("2 days after dose");
-    } else if (pos === "day_3_post") {
-      parts.push("3 days after dose");
-    }
-    if (doseContext.recentTitration && parts.length < 3) {
-      parts.push("dose increase this cycle");
-    }
+  if (wearableContext?.sleepHours != null && wearableContext.sleepHours > 0 && wearableContext.sleepHours < 6) {
+    parts.push(`sleep was shorter than usual last night (${wearableContext.sleepHours.toFixed(1)} hrs)`);
+  }
+  if (wearableContext?.steps != null && wearableContext.steps > 0 && wearableContext.steps < 3000) {
+    parts.push("your step count is lower than usual today");
   }
 
-  if (parts.length === 0) return "Based on today's check-in";
-  return `Why: ${parts.slice(0, 3).join(" · ")}`;
+  if (parts.length === 0) return "Your check-in and treatment history shaped this recommendation.";
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+  if (parts.length === 1) return cap(parts[0]!) + ".";
+  const [first, ...rest] = parts;
+  if (rest.length === 1) return `${cap(first!)} and ${rest[0]}.`;
+  return `${cap(first!)}, ${rest.slice(0, -1).join(", ")}, and ${rest[rest.length - 1]}.`;
 }
 
 interface InterventionCardProps {
@@ -1013,19 +997,20 @@ interface InterventionCardProps {
     daysSinceLastDose?: number | null;
   } | null;
   // 7-day symptom frequency counts computed from glp1InputHistory.
-  // Used by buildWhyLine to surface persistence context ("nausea 4 of
-  // last 7 days") alongside today's live check-in signals.
   symptomCounts?: {
     nausea7d: number;
     lowAppetite7d: number;
     lowEnergy7d: number;
     constipation7d: number;
   } | null;
+  // Wearable signals (steps, sleep, HR) from HealthKit / Apple Health.
+  // Used by buildContextParagraph to weave in objective context naturally.
+  wearableContext?: WearableContext | null;
   // Live snapshot of the patient's current check-in selections.
-  // When provided, the card derives a severity tier and adapts:
-  // severe states surface a care-team CTA; mild states soften copy;
-  // an all-good state swaps to a maintenance layout entirely.
   liveCheckin?: LiveCheckin | null;
+  // Called when the card's interaction phase changes. Parent uses this
+  // to dim surrounding content when the card is in active focus.
+  onEngaged?: (engaged: boolean) => void;
 
   onAccept: (id: number) => Promise<void>;
   onDismiss: (id: number) => Promise<void>;
@@ -1066,52 +1051,118 @@ function safeLog(name: string): void {
   }
 }
 
+type InteractionPhase = "default" | "checking" | "feedback" | "better" | "struggling";
+
+function tap(): void {
+  try {
+    Haptics.selectionAsync();
+  } catch {
+    /* best-effort */
+  }
+}
+
 export function InterventionCard({
   intervention,
-  // Theme `navy` / `mutedForeground` / `background` are intentionally
-  // shadowed because the featured card uses a fixed light blue
-  // surface in BOTH light and dark mode.
   navy: _themeNavy,
-  accent,
+  accent: _accent,
   cardBg: _cardBg,
   background: _themeBackground,
   mutedForeground: _themeMuted,
   warning,
-  hasHealthData = false,
+  hasHealthData: _hasHealthData,
   doseContext = null,
   symptomCounts = null,
+  wearableContext = null,
   liveCheckin = null,
+  onEngaged,
   onAccept,
-  onDismiss,
+  onDismiss: _onDismiss,
   onFeedback,
-  onEscalate,
+  onEscalate: _onEscalate,
 }: InterventionCardProps) {
-  // Severity is recomputed every render off the (cheap) prop. No
-  // need for useMemo -- the cost is trivial and React's diff handles
-  // the rerender efficiently.
+  const navy = CARD_TEXT;
+  const mutedForeground = CARD_MUTED;
+
   const liveSeverity = deriveLiveSeverity(liveCheckin);
-  // Pure derivation off the live check-in. Recomputes within React's
-  // normal render cycle whenever a chip in the check-in row changes,
-  // so the displayed title / body / supports adapt within the spec's
-  // 1-2s budget without any /generate round-trip.
   const livePlan = useMemo(
     () => deriveLivePlan(liveCheckin, liveSeverity),
     [liveCheckin, liveSeverity],
   );
-  const navy = FEATURED_TEXT;
-  const mutedForeground = FEATURED_MUTED;
-  const background = FEATURED_BORDER;
-  const [busy, setBusy] = useState<
-    null | "accept" | "dismiss" | "feedback" | "escalate"
-  >(null);
 
-  const status = intervention.status;
-  const icon = useMemo(
-    () => categoryIcon(intervention.recommendationCategory),
-    [intervention.recommendationCategory],
+  const [phase, setPhase] = useState<InteractionPhase>("default");
+
+  const setEngagedPhase = useCallback(
+    (next: InteractionPhase) => {
+      setPhase(next);
+      if (next === "default" || next === "better") {
+        onEngaged?.(false);
+      } else {
+        onEngaged?.(true);
+      }
+    },
+    [onEngaged],
   );
 
-  // -- Section parsing + sorting ------------------------------------
+  // Spring entrance animation — all hooks must precede any early return
+  const enter = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.spring(enter, {
+      toValue: 1,
+      tension: 65,
+      friction: 11,
+      useNativeDriver: Platform.OS !== "web",
+    }).start();
+  }, [enter]);
+  const animatedStyle = {
+    opacity: enter,
+    transform: [
+      {
+        translateY: enter.interpolate({
+          inputRange: [0, 1],
+          outputRange: [14, 0],
+        }),
+      },
+    ],
+  };
+
+  // Swipe gesture for feedback phase
+  const swipeX = useRef(new Animated.Value(0)).current;
+  const swipeRightRef = useRef<() => void>(() => {});
+  const swipeLeftRef = useRef<() => void>(() => {});
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gs) =>
+        Math.abs(gs.dx) > 10 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.2,
+      onPanResponderMove: Animated.event([null, { dx: swipeX }], {
+        useNativeDriver: false,
+      }),
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dx > 90) swipeRightRef.current();
+        else if (gs.dx < -90) swipeLeftRef.current();
+        else
+          Animated.spring(swipeX, {
+            toValue: 0,
+            useNativeDriver: false,
+            tension: 120,
+            friction: 7,
+          }).start();
+      },
+    }),
+  ).current;
+
+  // Backend call guards
+  const acceptFiredRef = useRef(false);
+  const escalateFiredRef = useRef(false);
+  const viewLoggedRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (viewLoggedRef.current === intervention.id) return;
+    viewLoggedRef.current = intervention.id;
+    safeLog("intervention_plan_viewed");
+  }, [intervention.id]);
+
+  // Content derivation
   const sections = useMemo(
     () => parseRecommendationSections(intervention.recommendation),
     [intervention.recommendation],
@@ -1144,14 +1195,6 @@ export function InterventionCard({
     intervention.severity,
   ]);
 
-  // When the patient's live check-in produces a derivable plan, swap
-  // the server-built rows for a client-derived set whose title, body
-  // and category mix react to the chip selectors. The server-built
-  // rows still drive intervention id, status, accept / feedback wiring
-  // and persistence -- only the displayed copy + ordering change.
-  // Synthesized keys are namespaced ("live:<id>:<cat>:<i>") so they
-  // never collide with the server section keys; AsyncStorage will
-  // simply hold a parallel set of entries for any user-touched rows.
   const displayRows = useMemo(() => {
     if (!livePlan) return orderedRows;
     return livePlan.rows.map((r, i) => ({
@@ -1163,9 +1206,6 @@ export function InterventionCard({
     }));
   }, [livePlan, orderedRows, intervention.id]);
 
-  // Lookup table from synthesized row key -> override RecContent.
-  // Passed through PrimaryActionCard so it can bypass pickVariants and
-  // render the matrix-derived title/body/helper.
   const liveOverrides = useMemo<Record<string, RecContent>>(() => {
     if (!livePlan) return {};
     const m: Record<string, RecContent> = {};
@@ -1175,1377 +1215,589 @@ export function InterventionCard({
     return m;
   }, [livePlan, intervention.id]);
 
-  // -- Per-row local state ------------------------------------------
-  const [sectionStatus, setSectionStatus] = useState<
-    Record<string, SectionStatus>
-  >({});
-  const [sectionAlt, setSectionAlt] = useState<Record<string, boolean>>({});
-  // Per-row "Check again later" flag. When true for a key, the row's
-  // no_change branch collapses from the two-button "try again before
-  // escalating" panel down to a quiet ack with a Change-response
-  // link. Memory-only -- a fresh app launch resurfaces the panel.
-  const [noChangeAck, setNoChangeAck] = useState<Record<string, boolean>>({});
+  const primary = displayRows[0];
 
-  // Race-safety for AsyncStorage:
-  //   (a) Hydration race -- multiGet may resolve AFTER a user tap.
-  //       Hydration only fills keys the user hasn't touched.
-  //   (b) Rapid-tap write race -- writes are serialized per key via
-  //       a promise chain so the LAST tap's value is always what
-  //       ends up persisted.
-  const touchedKeysRef = useRef<Set<string>>(new Set());
-  const writeChainRef = useRef<Record<string, Promise<unknown>>>({});
+  const primaryContent = useMemo<RecContent>(() => {
+    if (!primary) {
+      return {
+        title: buildInsightTitle(livePlan, liveSeverity, intervention.triggerType),
+        body: intervention.recommendation,
+        helper: "",
+      };
+    }
+    const override = liveOverrides[primary.key];
+    if (override) return override;
+    const picked = pickVariants(primary.category, intervention.id);
+    if (primary.category === "other") {
+      return { ...picked.primary, body: primary.section.body || picked.primary.body };
+    }
+    return picked.primary;
+  }, [
+    primary,
+    liveOverrides,
+    intervention.id,
+    intervention.recommendation,
+    livePlan,
+    liveSeverity,
+    intervention.triggerType,
+  ]);
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const pairs = await AsyncStorage.multiGet(sectionKeys);
-        if (cancelled) return;
-        setSectionStatus((prev) => {
-          const next = { ...prev };
-          for (const [k, v] of pairs) {
-            if (touchedKeysRef.current.has(k)) continue;
-            if (k in next) continue;
-            const coerced = coercePersistedStatus(v);
-            if (coerced != null) next[k] = coerced;
-          }
-          return next;
-        });
-      } catch {
-        /* best-effort */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [sectionKeys]);
+  const alternateContent = useMemo<RecContent>(() => {
+    if (!primary) return primaryContent;
+    const picked = pickVariants(primary.category, intervention.id);
+    return picked.alternate;
+  }, [primary, primaryContent, intervention.id]);
 
-  // Tracks whether we've already issued the server `accept` call for
-  // this card during this session. First commit transitions the
-  // intervention server-side from "shown" -> "pending_feedback".
-  const acceptFiredRef = useRef(false);
-  // Card-level "fired worse to server" tracker. Independent of the
-  // per-row state machine.
-  const escalateFiredRef = useRef(false);
-  // Fire `intervention_plan_viewed` once per intervention id.
-  const viewLoggedRef = useRef<number | null>(null);
-  useEffect(() => {
-    if (viewLoggedRef.current === intervention.id) return;
-    viewLoggedRef.current = intervention.id;
-    safeLog("intervention_plan_viewed");
-  }, [intervention.id]);
-
-  const setRowStatus = useCallback(
-    async (key: string, value: SectionStatus | null) => {
-      // Mark the key as user-touched so a late hydration won't
-      // clobber it with the persisted snapshot.
-      touchedKeysRef.current.add(key);
-      // Apply in-memory state immediately.
-      setSectionStatus((prev) => {
-        const next = { ...prev };
-        if (value == null) delete next[key];
-        else next[key] = value;
-        return next;
-      });
-      // Serialize the persistence write behind any prior in-flight
-      // write on the same key so out-of-order setItem awaits don't
-      // leave stale data on disk.
-      const prior = writeChainRef.current[key] ?? Promise.resolve();
-      const next = prior
-        .catch(() => undefined)
-        .then(async () => {
-          try {
-            if (value == null) await AsyncStorage.removeItem(key);
-            else await AsyncStorage.setItem(key, value);
-          } catch {
-            /* best-effort persistence */
-          }
-        });
-      writeChainRef.current[key] = next;
-      await next;
-    },
-    [],
+  const contextParagraph = useMemo(
+    () => buildContextParagraph(liveCheckin, doseContext, symptomCounts, wearableContext),
+    [liveCheckin, doseContext, symptomCounts, wearableContext],
   );
 
-  // Subtle entrance animation. Declared BEFORE any conditional early
-  // return so the hook count stays stable when status transitions.
-  const enter = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.timing(enter, {
-      toValue: 1,
-      duration: 320,
-      delay: 60,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: Platform.OS !== "web",
-    }).start();
-  }, [enter]);
-  const animatedStyle = {
-    opacity: enter,
-    transform: [
-      {
-        translateY: enter.interpolate({
-          inputRange: [0, 1],
-          outputRange: [12, 0],
-        }),
-      },
-    ],
-  };
+  // Swipe card background interpolates: orange (left) → white (center) → green (right)
+  const swipeCardBg = swipeX.interpolate({
+    inputRange: [-150, 0, 150],
+    outputRange: ["#FFF7ED", "#FFFFFF", "#F0FDF4"],
+    extrapolate: "clamp",
+  });
 
-  // -- Per-row action handlers --------------------------------------
-  const handleRowCommit = useCallback(
-    async (key: string) => {
-      void setRowStatus(key, "committed");
-      safeLog("intervention_started");
-      if (acceptFiredRef.current) return;
-      if (intervention.status !== "shown") {
-        acceptFiredRef.current = true;
-        return;
-      }
+  // Handlers
+  const handleCommit = useCallback(async () => {
+    tap();
+    setEngagedPhase("checking");
+    safeLog("intervention_started");
+    if (!acceptFiredRef.current) {
       acceptFiredRef.current = true;
       try {
         await onAccept(intervention.id);
       } catch {
-        // If the call FAILS and the server is still "shown", clear
-        // the guard so a later commit (or the worse-panel pre-accept
-        // path) can retry.
-        if (intervention.status === "shown") {
-          acceptFiredRef.current = false;
+        if (intervention.status === "shown") acceptFiredRef.current = false;
+      }
+    }
+  }, [intervention.id, intervention.status, onAccept, setEngagedPhase]);
+
+  const handleAskCareTeam = useCallback(async () => {
+    tap();
+    if (intervention.status === "escalated") return;
+    if (escalateFiredRef.current) return;
+    escalateFiredRef.current = true;
+    safeLog("care_team_escalation_requested");
+    try {
+      if (intervention.status === "shown" && !acceptFiredRef.current) {
+        acceptFiredRef.current = true;
+        try {
+          await onAccept(intervention.id);
+        } catch {
+          if (intervention.status === "shown") acceptFiredRef.current = false;
         }
       }
-    },
-    [setRowStatus, intervention.id, intervention.status, onAccept],
+      await onFeedback(intervention.id, "worse");
+    } catch {
+      escalateFiredRef.current = false;
+    }
+  }, [intervention.id, intervention.status, onAccept, onFeedback]);
+
+  const handleSwipeRight = useCallback(async () => {
+    tap();
+    Animated.spring(swipeX, {
+      toValue: 400,
+      useNativeDriver: false,
+      tension: 80,
+      friction: 8,
+    }).start(() => {
+      setEngagedPhase("better");
+      swipeX.setValue(0);
+    });
+    safeLog("intervention_feedback_better");
+    try {
+      await onFeedback(intervention.id, "better");
+    } catch {
+      /* best-effort */
+    }
+  }, [intervention.id, onFeedback, swipeX, setEngagedPhase]);
+
+  const handleSwipeLeft = useCallback(() => {
+    tap();
+    Animated.spring(swipeX, {
+      toValue: 0,
+      useNativeDriver: false,
+      tension: 120,
+      friction: 7,
+    }).start();
+    setEngagedPhase("struggling");
+    safeLog("intervention_feedback_no_change");
+  }, [swipeX, setEngagedPhase]);
+
+  swipeRightRef.current = handleSwipeRight;
+  swipeLeftRef.current = handleSwipeLeft;
+
+  const status = intervention.status;
+  // In the new phase UX there is no per-row "worse" outcome — escalation is
+  // always offered in the struggling phase and for severe live severity.
+  const offerEscalationInStruggling = shouldOfferEscalation(
+    primary?.category ?? "other",
+    "worse",
   );
+  const pillLabel =
+    status === "escalated"
+      ? "Review requested"
+      : liveSeverity === "severe" || liveSeverity === "moderate"
+        ? "Extra support today"
+        : liveSeverity === "mild"
+          ? "Stay ahead"
+          : "Symptom support";
 
-  const handleRowOutcome = useCallback(
-    (
-      key: string,
-      outcome: "better" | "no_change" | "worse" | "didnt_try",
-    ) => {
-      void setRowStatus(key, outcome);
-      if (outcome === "better") safeLog("intervention_feedback_better");
-      else if (outcome === "no_change") safeLog("intervention_feedback_no_change");
-      else if (outcome === "didnt_try") safeLog("intervention_feedback_didnt_try");
-      else safeLog("intervention_feedback_worse");
-    },
-    [setRowStatus],
-  );
-
-  const handleRowReset = useCallback(
-    (key: string) => {
-      void setRowStatus(key, null);
-      // Clear the "check again later" ack so the patient gets the
-      // full no_change panel again next time they go through the
-      // outcome flow.
-      setNoChangeAck((prev) => {
-        if (!prev[key]) return prev;
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-    },
-    [setRowStatus],
-  );
-
-  const handleRowDismissNoChange = useCallback((key: string) => {
-    safeLog("intervention_check_again_later");
-    setNoChangeAck((prev) => ({ ...prev, [key]: true }));
-  }, []);
-
-  const handleRowToggleAlternate = useCallback(
-    (key: string) => {
-      setSectionAlt((prev) => {
-        const wasShowing = !!prev[key];
-        if (!wasShowing) safeLog("intervention_alternative_requested");
-        return { ...prev, [key]: !wasShowing };
-      });
-      // Reset the row to default so the patient can tap "I'll try
-      // this" on the alternate copy. Also clear the no_change ack
-      // since we're effectively starting a fresh attempt.
-      void setRowStatus(key, null);
-      setNoChangeAck((prev) => {
-        if (!prev[key]) return prev;
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-    },
-    [setRowStatus],
-  );
-
-  const handleRowAskCareTeam = useCallback(
-    async (_key: string) => {
-      if (intervention.status === "escalated") return;
-      if (escalateFiredRef.current) return;
-      escalateFiredRef.current = true;
-      safeLog("care_team_escalation_requested");
-      try {
-        // /feedback's status guard requires accepted/pending_feedback.
-        // If the card is still "shown", pre-accept first so the
-        // /feedback below doesn't 409. Gate on acceptFiredRef so a
-        // race with an in-flight handleRowCommit doesn't double-fire
-        // /accept (the server is idempotent on repeat-accept of a
-        // pending_feedback row, but we'd rather not depend on that).
-        if (
-          intervention.status === "shown" &&
-          !acceptFiredRef.current
-        ) {
-          acceptFiredRef.current = true;
-          try {
-            await onAccept(intervention.id);
-          } catch {
-            // Pre-accept failed and prop status is still "shown",
-            // meaning a later commit (or another escalate retry)
-            // should be allowed to call /accept again. Clear the
-            // guard so we don't permanently strand the card.
-            if (intervention.status === "shown") {
-              acceptFiredRef.current = false;
-            }
-          }
-        }
-        await onFeedback(intervention.id, "worse");
-      } catch {
-        escalateFiredRef.current = false;
-      }
-    },
-    [intervention.id, intervention.status, onAccept, onFeedback],
-  );
-
-  // Compact "Why:" line. Declared BEFORE any conditional early return
-  // so hook count stays stable across all status transitions.
-  const whyLine = useMemo(
-    () => buildWhyLine(liveCheckin, doseContext, symptomCounts),
-    [liveCheckin, doseContext, symptomCounts],
-  );
-
-  // Reference unused legacy props/state so TS stays quiet.
-  void onDismiss;
-  void onEscalate;
-  void busy;
-  void setBusy;
-
+  // -- Early returns (all hooks declared above) --
   if (status === "resolved" || status === "expired" || status === "dismissed") {
     return null;
   }
 
-  // Steady-mode swap: when the live check-in reads as all-good,
-  // collapse the symptom-rescue UI to a calm maintenance card
-  // instead of leaving stale heavier rows on screen. We render this
-  // even when status === "escalated" -- the prior wording ("don't
-  // appear to downgrade an active care-team flag") was leaving
-  // outdated severe-state recommendations visible after the patient
-  // improved, which is the opposite of clinically safe. Instead, in
-  // the escalated branch we (a) keep the warning-toned "Review
-  // requested" badge so the request history stays visible, (b)
-  // explicitly tell the patient their latest check-in looks better,
-  // and (c) reassure them that the care team can still see today's
-  // symptoms and support history. The on-server escalation row is
-  // never erased -- the visible card just stops misleading them.
+  // Steady state: calm maintenance card
   if (liveSeverity === "steady") {
     const isEscalated = status === "escalated";
     const accentColor = isEscalated ? warning : SUCCESS_FG;
-    const badgeLabel = isEscalated ? "Review requested" : "Stable today";
-    const badgeIcon: keyof typeof Feather.glyphMap = isEscalated
-      ? "check-circle"
-      : "check";
-    const cardTitle = isEscalated
+    const steadyTitle = isEscalated
       ? "Latest check-in looks better"
       : "Your symptoms look steady";
-    const cardSubtitle = isEscalated
-      ? "Your symptoms have eased since the review request."
-      : "No major symptoms surfaced in today's check-in.";
-    const cardBody = isEscalated
-      ? "Your care team can still see today's symptoms and support history. Keep checking in -- we'll let them know if anything changes."
+    const steadyBody = isEscalated
+      ? "Your symptoms have eased since the review request. Your care team can still see today's symptoms and support history."
       : "Keep hydration, protein and routine consistent. Viva will adjust support if symptoms change.";
     return (
-      <Animated.View
-        style={[
-          styles.card,
-          styles.cardFeatured,
-          {
-            backgroundColor: STEADY_TINT,
-            borderColor: STEADY_BORDER,
-          },
-          animatedStyle,
-        ]}
-      >
-        <View style={styles.headerRow}>
-          <View
-            style={[styles.iconWrap, { backgroundColor: accentColor + "1F" }]}
-          >
-            <Feather name="check-circle" size={18} color={accentColor} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <View style={styles.badgeRow}>
-              <View
-                style={[
-                  styles.badge,
-                  { backgroundColor: accentColor + "1A" },
-                ]}
-              >
-                <Feather name={badgeIcon} size={10} color={accentColor} />
-                <Text style={[styles.badgeText, { color: accentColor }]}>
-                  {badgeLabel}
-                </Text>
-              </View>
-            </View>
-            {!isEscalated && (
-              <Text
-                style={[
-                  styles.sectionLabel,
-                  { color: mutedForeground, marginBottom: 2 },
-                ]}
-              >
-                Today&apos;s support
-              </Text>
-            )}
-            <Text style={[styles.title, { color: navy }]}>{cardTitle}</Text>
-            <Text style={[styles.subtitle, { color: mutedForeground }]}>
-              {cardSubtitle}
-            </Text>
-          </View>
+      <Animated.View style={[styles.card, animatedStyle]}>
+        <View style={styles.supportPill}>
+          <Feather
+            name="check-circle"
+            size={11}
+            color={accentColor}
+            style={{ marginRight: 4 }}
+          />
+          <Text style={[styles.supportPillText, { color: accentColor }]}>
+            {isEscalated ? "Review requested" : "Stable today"}
+          </Text>
         </View>
+        <Text style={[styles.cardTitle, { color: navy }]}>{steadyTitle}</Text>
+        <Text style={[styles.sectionBody, { color: mutedForeground }]}>
+          {steadyBody}
+        </Text>
+      </Animated.View>
+    );
+  }
 
-        <Text style={[styles.steadyBody, { color: navy }]}>{cardBody}</Text>
+  const cardTitle = buildInsightTitle(livePlan, liveSeverity, intervention.triggerType);
 
-        {/* Maintenance chips are check-in-focused, not symptom-focused,
-            so they read correctly in both the plain steady and the
-            "improved after escalation" branches. */}
-        <View style={styles.signalChipsRow}>
-          {["Hydration", "Protein", "Routine"].map((label) => (
-            <View
-              key={label}
-              style={[
-                styles.supportChip,
-                {
-                  backgroundColor: accentColor + "14",
-                  borderColor: accentColor + "33",
-                },
-              ]}
-            >
-              <Text
-                style={[styles.supportChipText, { color: accentColor }]}
-              >
-                {label}
-              </Text>
-            </View>
-          ))}
+  // == Better: quiet resolved state ==
+  if (phase === "better") {
+    return (
+      <Animated.View style={[styles.card, animatedStyle]}>
+        <View style={styles.resolvedContainer}>
+          <Feather name="check-circle" size={20} color={SUCCESS_FG} />
+          <Text style={[styles.sectionBody, { textAlign: "center", color: navy }]}>
+            Support completed.{"\n"}We'll keep monitoring.
+          </Text>
         </View>
       </Animated.View>
     );
   }
 
-  // -- Derived view-model -------------------------------------------
-  const primary = displayRows[0];
-
-  // Badge label/tone reflects the most urgent signal we currently
-  // know about. Escalated state always wins. We deliberately do NOT
-  // repeat the high-level severity wording ("Heavier today") here:
-  // that lives in the top status banner so the page only says it
-  // once. The badge instead characterizes the *response* level, so
-  // it stays complementary to the banner: banner says "what we
-  // noticed", badge says "how we're supporting you". This card
-  // stays visually linked to the banner through its amber accent
-  // (useWarningTone) and the care-team CTA below.
-  const badgeLabel =
-    status === "escalated"
-      ? "Review may help"
-      : liveSeverity === "severe"
-        ? "Extra support today"
-        : liveSeverity === "moderate"
-          ? "Support today"
-          : liveSeverity === "mild"
-            ? "Stay ahead"
-            : "Steady today";
-  const useWarningTone =
-    status === "escalated" || liveSeverity === "severe";
-
-  return (
-    <Animated.View
-      style={[
-        styles.card,
-        styles.cardFeatured,
-        {
-          backgroundColor: FEATURED_TINT,
-          // Outer border stays the calm featured-blue regardless of
-          // severity. The severe state still reads clearly via the
-          // "Heavier today" badge + signal chip + the explicit
-          // care-team CTA below; flooding the whole card edge with
-          // orange made the page feel alarming and competed with
-          // the in-card escalation button.
-          borderColor: FEATURED_BORDER,
-        },
-        animatedStyle,
-      ]}
-    >
-      {/* -- Header ------------------------------------------------- */}
-      <View style={styles.headerRow}>
-        <View style={[styles.iconWrap, { backgroundColor: accent + "22" }]}>
-          <Feather name={icon} size={18} color={accent} />
-        </View>
-        <View style={{ flex: 1 }}>
-          {/* Badge only renders for warning states (escalated / severe)
-              where urgency context is clinically relevant. Lower-severity
-              states omit it to keep the header clean. */}
-          {useWarningTone && (
-            <View style={styles.badgeRow}>
-              <View style={[styles.badge, { backgroundColor: warning + "22" }]}>
-                <Feather name="alert-circle" size={10} color={warning} />
-                <Text style={[styles.badgeText, { color: warning }]}>
-                  {badgeLabel}
-                </Text>
-              </View>
-            </View>
-          )}
-          <Text
-            style={[
-              styles.sectionLabel,
-              { color: mutedForeground, marginBottom: 2 },
-            ]}
-          >
-            Today&apos;s support
-          </Text>
-          <Text style={[styles.title, { color: navy }]}>
-            {buildInsightTitle(livePlan, liveSeverity, intervention.triggerType)}
-          </Text>
-        </View>
-      </View>
-
-      {/* -- Primary action ---------------------------------------- */}
-      {primary && (
-        <PrimaryActionCard
-          category={primary.category}
-          interventionId={intervention.id}
-          originalBody={primary.section.body}
-          liveOverride={liveOverrides[primary.key] ?? null}
-          showingAlternate={!!sectionAlt[primary.key]}
-          status={sectionStatus[primary.key] ?? null}
-          noChangeDismissed={!!noChangeAck[primary.key]}
-          navy={navy}
-          mutedForeground={mutedForeground}
-          border={background}
-          accent={accent}
-          warning={warning}
-          onCommit={() => handleRowCommit(primary.key)}
-          onToggleAlternate={() => handleRowToggleAlternate(primary.key)}
-          onOutcome={(outcome) => handleRowOutcome(primary.key, outcome)}
-          onReset={() => handleRowReset(primary.key)}
-          onDismissNoChange={() => handleRowDismissNoChange(primary.key)}
-          onAskCareTeam={() => handleRowAskCareTeam(primary.key)}
-        />
-      )}
-
-      {/* -- Severe-mode escalation shortcut ----------------------- */}
-      {/* Patient self-reported severe symptoms. We surface a       */}
-      {/* prominent care-team CTA so the option isn't buried in     */}
-      {/* the worse-feedback panel. Still requires an explicit tap  */}
-      {/* -- no auto-escalation -- which preserves the worse-only   */}
-      {/* guardrail (multiple buttons may fire onFeedback("worse"), */}
-      {/* what matters is the patient initiates it).                */}
-      {liveSeverity === "severe" && status !== "escalated" && (
-        <Pressable
-          onPress={async () => {
-            tap();
-            // Route through handleRowAskCareTeam so we get the
-            // shared pre-accept (server /feedback requires status
-            // accepted|pending_feedback -- without this, a card
-            // still in "shown" state would 409 silently) and the
-            // escalateFiredRef duplicate-tap guard. The key isn't
-            // read inside the handler so a card-level sentinel is
-            // fine; we use one that can't collide with any row key.
-            await handleRowAskCareTeam("__card_severe_cta__");
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Ask my care team to review"
-          style={({ pressed }) => [
-            styles.severeCta,
-            {
-              backgroundColor: warning,
-              opacity: pressed ? 0.85 : 1,
-            },
+  // == Feedback phase: swipe card ==
+  if (phase === "feedback") {
+    return (
+      <Animated.View style={[styles.card, animatedStyle]}>
+        <Text style={[styles.feedbackPrompt, { color: navy }]}>
+          How are you feeling now?
+        </Text>
+        <Text
+          style={[
+            styles.sectionLabel,
+            { textAlign: "center", color: mutedForeground, marginBottom: 8 },
           ]}
         >
-          <Feather name="message-circle" size={14} color="#FFFFFF" />
-          <Text style={styles.severeCtaText}>
-            Ask my care team to review
-          </Text>
-        </Pressable>
-      )}
+          SWIPE TO RESPOND
+        </Text>
+        <View style={styles.swipeArea} {...panResponder.panHandlers}>
+          <Animated.View
+            style={[
+              styles.swipeCard,
+              {
+                backgroundColor: swipeCardBg as any,
+                transform: [{ translateX: swipeX }],
+              },
+            ]}
+          >
+            <Feather name="move" size={16} color={CARD_MUTED} />
+            <Text
+              style={[
+                styles.sectionBody,
+                { textAlign: "center", fontSize: 12, color: mutedForeground },
+              ]}
+            >
+              {"← Still struggling   Improving →"}
+            </Text>
+          </Animated.View>
+        </View>
+        <View style={styles.feedbackBtnRow}>
+          <Pressable
+            style={styles.feedbackBtn}
+            onPress={() => handleSwipeLeft()}
+            accessibilityRole="button"
+            accessibilityLabel="Still struggling"
+          >
+            <Feather name="frown" size={14} color={CARD_MUTED} />
+            <Text style={[styles.sectionBody, { fontSize: 13, color: navy }]}>
+              Still struggling
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.feedbackBtn, styles.feedbackBtnImproving]}
+            onPress={() => { void handleSwipeRight(); }}
+            accessibilityRole="button"
+            accessibilityLabel="Improving"
+          >
+            <Feather name="smile" size={14} color={SUCCESS_FG} />
+            <Text
+              style={[styles.sectionBody, { fontSize: 13, color: SUCCESS_FG }]}
+            >
+              Improving
+            </Text>
+          </Pressable>
+        </View>
+      </Animated.View>
+    );
+  }
 
-      {/* Patient-facing success state for the escalation flow.
-          Renders whenever the intervention has transitioned to
-          "escalated" -- whether the patient got there via the
-          severe-state top CTA, the worse-panel "Ask my care team"
-          button, or the auto-escalate-on-worse path. The copy
-          confirms what the provider can see (today's symptoms +
-          support history) so the patient knows the request landed
-          with useful context, not into a void. */}
-      {status === "escalated" && (
-        <View style={styles.escalatedRow}>
-          <Feather name="check-circle" size={14} color={warning} />
-          <Text style={[styles.escalatedText, { color: warning }]}>
-            Review requested. Your care team can see today&apos;s
-            symptoms and support history.
+  // == Struggling phase: adjusted recommendation ==
+  if (phase === "struggling") {
+    return (
+      <Animated.View style={[styles.card, animatedStyle]}>
+        <View style={styles.supportPill}>
+          <Text style={styles.supportPillText}>{pillLabel}</Text>
+        </View>
+        <Text style={[styles.cardTitle, { color: navy }]}>
+          Let's try something adjusted
+        </Text>
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>ADJUSTED RECOMMENDATION</Text>
+          <Text style={[styles.sectionBody, { color: navy }]}>
+            {alternateContent.body}
           </Text>
         </View>
-      )}
+        {alternateContent.helper.trim().length > 0 && (
+          <>
+            <View style={styles.divider} />
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>WHY IT HELPS</Text>
+              <Text style={[styles.sectionBody, { color: navy }]}>
+                {alternateContent.helper}
+              </Text>
+            </View>
+          </>
+        )}
+        <View style={styles.divider} />
+        <Text style={[styles.guardrail, { color: mutedForeground }]}>
+          Viva supports between-visit care. If symptoms feel severe or urgent,
+          contact your care team or seek medical help.
+        </Text>
+        {(offerEscalationInStruggling || liveSeverity === "severe") && status !== "escalated" && (
+          <Pressable
+            style={styles.careTeamBtn}
+            onPress={() => void handleAskCareTeam()}
+            accessibilityRole="button"
+            accessibilityLabel="Ask my care team to review"
+          >
+            <Feather name="message-circle" size={13} color={CARD_MUTED} />
+            <Text style={styles.careTeamBtnText}>Ask my care team</Text>
+          </Pressable>
+        )}
+        {status === "escalated" && (
+          <View style={styles.resolvedContainer}>
+            <Feather name="check-circle" size={14} color={warning} />
+            <Text style={[styles.sectionBody, { color: warning, fontSize: 12 }]}>
+              Review requested. Your care team can see today's symptoms.
+            </Text>
+          </View>
+        )}
+      </Animated.View>
+    );
+  }
 
-      {/* -- Why this appeared (quiet disclosure) ----------------- */}
-      <View style={styles.whyAppearedRow}>
-        <Feather name="info" size={11} color={mutedForeground} style={{ marginTop: 1 }} />
-        <Text
-          style={[styles.whyAppearedText, { color: mutedForeground }]}
-          numberOfLines={3}
-        >
-          {whyLine}
+  // == Checking phase ==
+  if (phase === "checking") {
+    return (
+      <Animated.View style={[styles.card, animatedStyle]}>
+        <View style={styles.supportPill}>
+          <Text style={styles.supportPillText}>{pillLabel}</Text>
+        </View>
+        <Text style={[styles.cardTitle, { color: navy }]}>{cardTitle}</Text>
+        <View style={styles.checkingContainer}>
+          <Feather name="clock" size={20} color={CARD_MUTED} />
+          <Text
+            style={[
+              styles.sectionBody,
+              { textAlign: "center", color: mutedForeground },
+            ]}
+          >
+            We'll check back in shortly.
+          </Text>
+          <Pressable
+            onPress={() => setEngagedPhase("feedback")}
+            accessibilityRole="button"
+          >
+            <Text style={styles.checkNowLink}>How are you feeling now? →</Text>
+          </Pressable>
+        </View>
+        <Text style={[styles.guardrail, { color: mutedForeground }]}>
+          Viva supports between-visit care. If symptoms feel severe or urgent,
+          contact your care team or seek medical help.
+        </Text>
+      </Animated.View>
+    );
+  }
+
+  // == Default phase ==
+  return (
+    <Animated.View style={[styles.card, animatedStyle]}>
+      {/* Pill */}
+      <View style={styles.supportPill}>
+        <Text style={styles.supportPillText}>{pillLabel}</Text>
+      </View>
+
+      {/* Title */}
+      <Text style={[styles.cardTitle, { color: navy }]}>{cardTitle}</Text>
+
+      {/* Recommendation */}
+      <View style={styles.section}>
+        <Text style={styles.sectionLabel}>RECOMMENDATION</Text>
+        <Text style={[styles.sectionBody, { color: navy }]}>
+          {primaryContent.body}
         </Text>
       </View>
 
-      {/* -- Subtle clinical guardrail footer ---------------------- */}
+      {/* Why it helps */}
+      {primaryContent.helper.trim().length > 0 && (
+        <>
+          <View style={styles.divider} />
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>WHY IT HELPS</Text>
+            <Text style={[styles.sectionBody, { color: navy }]}>
+              {primaryContent.helper}
+            </Text>
+          </View>
+        </>
+      )}
+
+      {/* Your context */}
+      <View style={styles.divider} />
+      <View style={styles.section}>
+        <Text style={styles.sectionLabel}>YOUR CONTEXT</Text>
+        <Text style={[styles.sectionBody, { color: navy }]}>
+          {contextParagraph}
+        </Text>
+      </View>
+
+      {/* Primary CTA */}
+      <Pressable
+        style={({ pressed }) => [
+          styles.primaryBtn,
+          { opacity: pressed ? 0.85 : 1 },
+        ]}
+        onPress={() => void handleCommit()}
+        accessibilityRole="button"
+        accessibilityLabel="I'll try this"
+      >
+        <Text style={styles.primaryBtnText}>I'll try this</Text>
+      </Pressable>
+
+      {/* Care team (secondary, subtle) */}
+      {(offerEscalationInStruggling || liveSeverity === "severe") && status !== "escalated" && (
+        <Pressable
+          style={styles.careTeamBtn}
+          onPress={() => void handleAskCareTeam()}
+          accessibilityRole="button"
+          accessibilityLabel="Ask my care team to review"
+        >
+          <Feather name="message-circle" size={13} color={CARD_MUTED} />
+          <Text style={styles.careTeamBtnText}>Ask my care team</Text>
+        </Pressable>
+      )}
+
+      {status === "escalated" && (
+        <View style={styles.careTeamBtn}>
+          <Feather name="check-circle" size={13} color={warning} />
+          <Text style={[styles.careTeamBtnText, { color: warning }]}>
+            Review requested — your care team has been notified.
+          </Text>
+        </View>
+      )}
+
+      {/* Guardrail */}
       <Text style={[styles.guardrail, { color: mutedForeground }]}>
-        Viva supports between-visit care. If symptoms feel severe or
-        urgent, contact your care team or seek medical help.
+        Viva supports between-visit care. If symptoms feel severe or urgent,
+        contact your care team or seek medical help.
       </Text>
     </Animated.View>
   );
 }
 
-// =====================================================================
-// PrimaryActionCard -- the prominent "Start here" card.
-// =====================================================================
-interface ActionRowProps {
-  category: RecCategory;
-  // Stable id of the parent intervention. Used by pickVariants() to
-  // deterministically rotate which variant of the recommendation we
-  // show for this category, so the same patient doesn't see the
-  // identical "snack" suggestion every day.
-  interventionId: number;
-  // Server-provided body. Only used as a fallback for the "other"
-  // category where we don't have a canned clinical micro-protocol.
-  // For the five known symptom categories, the body comes from the
-  // picked variant in RECOMMENDATIONS[category].variants.
-  originalBody: string;
-  showingAlternate: boolean;
-  status: SectionStatus | null;
-  // Legacy: used to live with a 2-button no_change panel. The current
-  // UX collapses no_change to a single ack so this prop is no longer
-  // read, but it's kept on the interface to keep call sites stable.
-  noChangeDismissed: boolean;
-  navy: string;
-  mutedForeground: string;
-  border: string;
-  accent: string;
-  warning: string;
-  onCommit: () => void;
-  onToggleAlternate: () => void;
-  onOutcome: (
-    outcome: "better" | "no_change" | "worse" | "didnt_try",
-  ) => void;
-  onReset: () => void;
-  // Legacy: see noChangeDismissed above.
-  onDismissNoChange: () => void;
-  onAskCareTeam: () => void;
-  // When the parent has derived a live plan from the patient's check-in
-  // selectors, it passes the override here. Present -> bypass
-  // pickVariants / showingAlternate and render this copy directly.
-  // Absent -> fall back to the server-driven RECOMMENDATIONS variant.
-  liveOverride?: RecContent | null;
-}
-
-function tap(): void {
-  try {
-    Haptics.selectionAsync();
-  } catch {
-    /* best-effort */
-  }
-}
-
-function PrimaryActionCard({
-  category,
-  interventionId,
-  originalBody,
-  showingAlternate,
-  status,
-  noChangeDismissed: _noChangeDismissed,
-  navy,
-  mutedForeground,
-  border,
-  accent,
-  warning,
-  onCommit,
-  onToggleAlternate,
-  onOutcome,
-  onReset,
-  onDismissNoChange: _onDismissNoChange,
-  onAskCareTeam,
-  liveOverride,
-}: ActionRowProps) {
-  const picked = useMemo(
-    () => pickVariants(category, interventionId),
-    [category, interventionId],
-  );
-  // When the parent derived a live plan from the check-in selectors,
-  // its copy is the DEFAULT we render -- symptom-tuned title/body/
-  // helper for this category. But if the patient taps "Another
-  // option", they're explicitly asking to see a different safe
-  // recommendation, so we honor that by falling back to the canned
-  // pickVariants alternate from the same category. Without this
-  // override, "Another option" was a no-op whenever a livePlan was
-  // active (i.e. nearly always for a real symptom check-in) -- the
-  // sectionAlt flag flipped, the button label said "Back", but the
-  // visible copy never changed.
-  const variant: RecContent = showingAlternate
-    ? picked.alternate
-    : (liveOverride ?? picked.primary);
-  const title = variant.title;
-  const helper = variant.helper;
-  // For "other" we don't have category-specific clinical copy, so fall
-  // back to the server's body when not showing the alternate. Known
-  // categories always use the canned clinical micro-protocol.
-  const body =
-    !showingAlternate && liveOverride
-      ? liveOverride.body
-      : category === "other" && !showingAlternate
-        ? originalBody || variant.body
-        : variant.body;
-  const titleA11y = title.toLowerCase();
-  const offerEscalation = shouldOfferEscalation(category, status);
-
-  return (
-    <View
-      style={[
-        styles.primaryCard,
-        { borderColor: PRIMARY_BORDER, backgroundColor: PRIMARY_SURFACE },
-      ]}
-    >
-      <View style={styles.startHerePillRow}>
-        <View style={[styles.startHerePill, { backgroundColor: START_HERE_BG }]}>
-          <Feather name="zap" size={10} color={START_HERE_FG} />
-          <Text style={[styles.startHerePillText, { color: START_HERE_FG }]}>
-            Start here
-          </Text>
-        </View>
-      </View>
-
-      <Text style={[styles.primaryTitle, { color: navy }]}>{title}</Text>
-      <Text style={[styles.primaryBody, { color: navy }]}>{body}</Text>
-
-      {/* "Why this helps" -- only on the default state. Once the
-          patient has acted, the row becomes a feedback prompt and
-          we keep the surface uncluttered. The labeled treatment
-          (small caps label + accent dot + helper sentence) reads as
-          a clinical justification rather than fine print. */}
-      {status == null && helper.trim().length > 0 && (
-        <View style={styles.whyRow}>
-          <View style={[styles.whyDot, { backgroundColor: accent }]} />
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.whyLabel, { color: mutedForeground }]}>
-              Why this helps
-            </Text>
-            <Text style={[styles.whyText, { color: navy }]}>{helper}</Text>
-          </View>
-        </View>
-      )}
-
-      {/* -- Default: I'll try this / Show me another option (or Back) -- */}
-      {status == null && (
-        <View style={styles.btnRow}>
-          <Pressable
-            onPress={() => {
-              tap();
-              onCommit();
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={`I will try this: ${titleA11y}`}
-            style={({ pressed }) => [
-              styles.btnPrimary,
-              {
-                borderColor: accent,
-                backgroundColor: accent,
-                opacity: pressed ? 0.8 : 1,
-              },
-            ]}
-          >
-            <Feather name="check" size={13} color="#FFFFFF" />
-            <Text style={[styles.btnText, { color: "#FFFFFF", fontFamily: "Montserrat_700Bold", fontWeight: "700" }]}>
-              I&apos;ll try this
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => {
-              tap();
-              onToggleAlternate();
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={
-              showingAlternate
-                ? `Go back to original suggestion for ${titleA11y}`
-                : `Show me another option for ${titleA11y}`
-            }
-            style={({ pressed }) => [
-              styles.btnSecondary,
-              { borderColor: border, opacity: pressed ? 0.75 : 1 },
-            ]}
-          >
-            <Text style={[styles.btnText, { color: mutedForeground, fontFamily: "Montserrat_600SemiBold", fontWeight: "600" }]}>
-              {showingAlternate ? "Back" : "Another option"}
-            </Text>
-          </Pressable>
-        </View>
-      )}
-
-      {/* -- Committed: outcome prompt ----------------------------- */}
-      {status === "committed" && (
-        <View style={styles.outcomeWrap}>
-          <Text style={[styles.outcomePrompt, { color: navy }]}>
-            Did this help?
-          </Text>
-          <View style={styles.outcomeRow}>
-            <OutcomeButton
-              label="Better"
-              icon="smile"
-              tint={SUCCESS_FG}
-              border={border}
-              onPress={() => {
-                tap();
-                onOutcome("better");
-              }}
-              accessibilityLabel={`Feeling better after ${titleA11y}`}
-            />
-            <OutcomeButton
-              label="Same"
-              icon="meh"
-              tint={mutedForeground}
-              border={border}
-              onPress={() => {
-                tap();
-                onOutcome("no_change");
-              }}
-              accessibilityLabel={`About the same after ${titleA11y}`}
-            />
-            <OutcomeButton
-              label="Worse"
-              icon="frown"
-              tint={warning}
-              border={border}
-              onPress={() => {
-                tap();
-                onOutcome("worse");
-              }}
-              accessibilityLabel={`Worse after ${titleA11y}`}
-            />
-          </View>
-        </View>
-      )}
-
-      {/* -- Better -- quiet acknowledgement ----------------------- */}
-      {status === "better" && (
-        <AcknowledgeRow
-          icon="smile"
-          tint={SUCCESS_FG}
-          text="Support completed — we'll keep monitoring."
-          onReset={onReset}
-          mutedForeground={mutedForeground}
-          a11y={titleA11y}
-        />
-      )}
-
-      {/* -- Same: quiet ack. Per the redesign spec we no longer
-            front-load a "try a different step before escalating"
-            panel here -- the patient can still tap "Change response"
-            in the ack to revisit, and the escalation path lives on
-            the Worse branch. */}
-      {status === "no_change" && (
-        <AcknowledgeRow
-          icon="meh"
-          tint={mutedForeground}
-          text="Thanks. We'll adjust future recommendations."
-          onReset={onReset}
-          mutedForeground={mutedForeground}
-          a11y={titleA11y}
-        />
-      )}
-
-      {/* -- Didn't try: quiet ack so the row doesn't penalize the
-            patient for skipping. Resetting reopens the outcome
-            prompt if they later want to log a real outcome. */}
-      {status === "didnt_try" && (
-        <AcknowledgeRow
-          icon="minus-circle"
-          tint={mutedForeground}
-          text="Got it. We won't count that one."
-          onReset={onReset}
-          mutedForeground={mutedForeground}
-          a11y={titleA11y}
-        />
-      )}
-
-      {/* -- Worse: escalation panel (only path to care team) ------ */}
-      {status === "worse" && offerEscalation && (
-        <View style={styles.escalateWrap}>
-          <Text style={[styles.escalateCopy, { color: navy }]}>
-            This should be reviewed. You can ask your care team to take a
-            look.
-          </Text>
-          <View style={styles.btnRow}>
-            <Pressable
-              onPress={() => {
-                tap();
-                onToggleAlternate();
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={`Try another option for ${titleA11y}`}
-              style={({ pressed }) => [
-                styles.btnSecondary,
-                { borderColor: border, opacity: pressed ? 0.75 : 1 },
-              ]}
-            >
-              <Feather name="refresh-cw" size={12} color={mutedForeground} />
-              <Text style={[styles.btnText, { color: mutedForeground, fontFamily: "Montserrat_600SemiBold", fontWeight: "600" }]}>
-                Another option
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                tap();
-                onAskCareTeam();
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={`Ask my care team about ${titleA11y}`}
-              style={({ pressed }) => [
-                styles.btnPrimary,
-                {
-                  borderColor: warning,
-                  backgroundColor: warning,
-                  opacity: pressed ? 0.8 : 1,
-                },
-              ]}
-            >
-              <Feather name="message-circle" size={13} color="#FFFFFF" />
-              <Text style={[styles.btnText, { color: "#FFFFFF", fontFamily: "Montserrat_700Bold", fontWeight: "700" }]}>
-                Ask my care team
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-      )}
-    </View>
-  );
-}
-
-// =====================================================================
-// Small helpers
-// =====================================================================
-interface AcknowledgeRowProps {
-  icon: keyof typeof Feather.glyphMap;
-  tint: string;
-  text: string;
-  onReset: () => void;
-  mutedForeground: string;
-  a11y: string;
-}
-
-function AcknowledgeRow({
-  icon,
-  tint,
-  text,
-  onReset,
-  mutedForeground,
-  a11y,
-}: AcknowledgeRowProps) {
-  return (
-    <View style={styles.ackRow}>
-      <View style={styles.ackTextRow}>
-        <Feather name={icon} size={13} color={tint} />
-        <Text style={[styles.ackText, { color: tint }]}>{text}</Text>
-      </View>
-      <Pressable
-        onPress={() => {
-          tap();
-          onReset();
-        }}
-        accessibilityRole="button"
-        accessibilityLabel={`Change response for ${a11y}`}
-        style={({ pressed }) => [
-          styles.changeLink,
-          { opacity: pressed ? 0.6 : 1 },
-        ]}
-      >
-        <Text style={[styles.changeLinkText, { color: mutedForeground }]}>
-          Change response
-        </Text>
-      </Pressable>
-    </View>
-  );
-}
-
-interface OutcomeButtonProps {
-  label: string;
-  icon: keyof typeof Feather.glyphMap;
-  tint: string;
-  border: string;
-  onPress: () => void;
-  accessibilityLabel: string;
-}
-
-function OutcomeButton({
-  label,
-  icon,
-  tint,
-  border,
-  onPress,
-  accessibilityLabel,
-}: OutcomeButtonProps) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      style={({ pressed }) => [
-        styles.outcomeBtn,
-        { borderColor: border, opacity: pressed ? 0.75 : 1 },
-      ]}
-    >
-      <Feather name={icon} size={13} color={tint} />
-      <Text
-        style={[styles.outcomeBtnText, { color: tint }]}
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.85}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 24,
-    padding: 20,
-    gap: 14,
+    borderRadius: 20,
+    padding: 24,
+    backgroundColor: "#FFFFFF",
     borderWidth: StyleSheet.hairlineWidth,
-  },
-  // -- Signal chips row used by the steady-state maintenance card --
-  signalChipsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-  },
-  // -- More support: mini category chips ---------------------------
-  supportChipsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 5,
-  },
-  steadyBody: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontFamily: "Montserrat_500Medium",
-    fontWeight: "500",
-  },
-  severeCta: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-  },
-  severeCtaText: {
-    color: "#FFFFFF",
-    fontSize: 13,
-    fontFamily: "Montserrat_600SemiBold",
-    fontWeight: "600",
-  },
-  supportChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  supportChipText: {
-    fontSize: 11,
-    fontFamily: "Montserrat_600SemiBold",
-    fontWeight: "600",
-    letterSpacing: 0.1,
-  },
-  // -- "Why this appeared" quiet disclosure at card bottom ----------
-  whyAppearedRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 6,
-  },
-  whyAppearedText: {
-    flex: 1,
-    fontSize: 12,
-    fontFamily: "Montserrat_400Regular",
-    lineHeight: 16,
-    opacity: 0.75,
-  },
-  // -- Primary card "Why this helps" --------------------------------
-  whyRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 8,
-    marginTop: 4,
-    paddingTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "rgba(31, 79, 138, 0.10)",
-  },
-  whyDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginTop: 6,
-  },
-  whyLabel: {
-    fontSize: 10,
-    fontFamily: "Montserrat_700Bold",
-    fontWeight: "700",
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
-    marginBottom: 2,
-  },
-  whyText: {
-    fontFamily: "Montserrat_500Medium",
-    fontSize: 13,
-    fontWeight: "500",
-    lineHeight: 18,
-  },
-  cardFeatured: {
-    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: CARD_BORDER,
     ...Platform.select({
       web: {
-        boxShadow: "0 10px 32px rgba(31, 79, 138, 0.08)",
+        boxShadow: "0 2px 12px rgba(26, 46, 74, 0.08)",
       },
       default: {
-        shadowColor: "#1F4F8A",
+        shadowColor: "#1A2E4A",
+        shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.08,
-        shadowRadius: 20,
-        shadowOffset: { width: 0, height: 8 },
-        elevation: 2,
+        shadowRadius: 12,
+        elevation: 3,
       },
     }),
   },
-  // -- Header -------------------------------------------------------
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-  },
-  iconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  badgeRow: {
-    flexDirection: "row",
-    marginBottom: 6,
-  },
-  badge: {
+  supportPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(31,79,138,0.07)",
     borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginBottom: 10,
   },
-  badgeText: {
+  supportPillText: {
     fontSize: 11,
     fontFamily: "Montserrat_600SemiBold",
-    fontWeight: "600",
-    letterSpacing: 0.1,
+    letterSpacing: 0.2,
+    color: CARD_MUTED,
   },
-  title: {
-    fontSize: 18,
+  cardTitle: {
+    fontSize: 21,
     fontFamily: "Montserrat_700Bold",
-    fontWeight: "700",
-    lineHeight: 22,
+    lineHeight: 27,
+    color: CARD_TEXT,
+    marginBottom: 20,
   },
-  subtitle: {
-    fontSize: 13,
-    fontFamily: "Montserrat_500Medium",
-    fontWeight: "500",
-    marginTop: 3,
-    lineHeight: 17,
-  },
-  // -- Sections -----------------------------------------------------
   section: {
-    gap: 6,
+    gap: 5,
   },
   sectionLabel: {
-    fontSize: 12,
-    fontFamily: "Montserrat_600SemiBold",
-    fontWeight: "600",
-    letterSpacing: 0.1,
+    fontSize: 10,
+    fontFamily: "Montserrat_700Bold",
+    letterSpacing: 0.9,
+    textTransform: "uppercase",
+    color: CARD_MUTED,
   },
   sectionBody: {
-    fontFamily: "Montserrat_400Regular",
     fontSize: 14,
-    lineHeight: 20,
-  },
-  // -- More support for today (collapsible secondary header) -------
-  // Less boxy: no hard border, slightly tinted surface only.
-  moreSupportHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    backgroundColor: "rgba(255, 255, 255, 0.7)",
-  },
-  moreSupportTitle: {
-    fontSize: 13,
-    fontFamily: "Montserrat_700Bold",
-    fontWeight: "700",
-  },
-  moreSupportSubtitle: {
-    fontSize: 12,
     fontFamily: "Montserrat_500Medium",
-    fontWeight: "500",
-    marginTop: 2,
-    lineHeight: 16,
+    lineHeight: 21,
+    color: CARD_TEXT,
   },
-  moreSupportMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: "#E8EEF5",
+    marginVertical: 16,
   },
-  moreSupportCount: {
-    fontSize: 12,
-    fontFamily: "Montserrat_700Bold",
-    fontWeight: "700",
-    fontVariant: ["tabular-nums"],
-  },
-  // -- Primary action card ------------------------------------------
-  // Softer, less boxy: hairline border + subtle long-radius shadow.
-  primaryCard: {
-    borderRadius: 20,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 18,
-    paddingVertical: 18,
-    gap: 10,
-    ...Platform.select({
-      web: {
-        boxShadow: "0 4px 16px rgba(31, 79, 138, 0.06)",
-      },
-      default: {
-        shadowColor: "#1F4F8A",
-        shadowOpacity: 0.06,
-        shadowRadius: 14,
-        shadowOffset: { width: 0, height: 4 },
-        elevation: 1,
-      },
-    }),
-  },
-  startHerePillRow: {
-    flexDirection: "row",
-  },
-  startHerePill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+  primaryBtn: {
+    backgroundColor: CARD_TEXT,
     borderRadius: 999,
-  },
-  startHerePillText: {
-    fontSize: 11,
-    fontFamily: "Montserrat_600SemiBold",
-    fontWeight: "600",
-    letterSpacing: 0.1,
-  },
-  primaryTitle: {
-    fontSize: 19,
-    fontFamily: "Montserrat_700Bold",
-    fontWeight: "700",
-    lineHeight: 25,
-    marginTop: 2,
-  },
-  primaryBody: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontFamily: "Montserrat_400Regular",
-    fontWeight: "400",
-  },
-  helperLine: {
-    fontFamily: "Montserrat_400Regular",
-    fontSize: 12,
-    lineHeight: 16,
-    fontStyle: "italic",
-  },
-  // -- Secondary rows -----------------------------------------------
-  rowsWrap: {
-    gap: 6,
-  },
-  secondaryRow: {
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    gap: 6,
-  },
-  secondaryTitle: {
-    fontSize: 14,
-    fontFamily: "Montserrat_700Bold",
-    fontWeight: "700",
-    lineHeight: 18,
-  },
-  secondaryBody: {
-    fontFamily: "Montserrat_400Regular",
-    fontSize: 12,
-    lineHeight: 17,
-  },
-  smallBtn: {
-    alignSelf: "flex-start",
-    flexDirection: "row",
+    paddingVertical: 15,
     alignItems: "center",
-    gap: 5,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    borderWidth: 1,
+    marginTop: 20,
   },
-  smallBtnText: {
-    fontSize: 12,
+  primaryBtnText: {
+    color: "#FFFFFF",
+    fontSize: 15,
     fontFamily: "Montserrat_700Bold",
-    fontWeight: "700",
   },
-  // -- Buttons (shared) --------------------------------------------
-  btnRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 2,
-  },
-  btnPrimary: {
-    flex: 1,
+  careTeamBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
+    marginTop: 12,
+    paddingVertical: 8,
   },
-  btnSecondary: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    backgroundColor: "#FFFFFF",
-  },
-  btnText: {
-    fontFamily: "Montserrat_600SemiBold",
-    fontSize: 13,
-  },
-  // -- Outcome ------------------------------------------------------
-  outcomeWrap: {
-    gap: 6,
-    marginTop: 2,
-  },
-  outcomePrompt: {
+  careTeamBtnText: {
     fontSize: 13,
     fontFamily: "Montserrat_600SemiBold",
-    fontWeight: "600",
+    color: CARD_MUTED,
   },
-  outcomePromptSmall: {
-    fontSize: 12,
-    fontFamily: "Montserrat_600SemiBold",
-    fontWeight: "600",
-  },
-  outcomeRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  outcomeBtn: {
-    flex: 1,
-    flexDirection: "row",
+  checkingContainer: {
     alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    backgroundColor: "#FFFFFF",
+    gap: 12,
+    paddingVertical: 8,
   },
-  outcomeBtnText: {
-    fontSize: 12,
+  checkNowLink: {
+    fontSize: 13,
     fontFamily: "Montserrat_600SemiBold",
-    fontWeight: "600",
-  },
-  // -- Acknowledgement (better / no_change) -------------------------
-  ackRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 2,
-    gap: 8,
-  },
-  ackTextRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    flex: 1,
-  },
-  ackText: {
-    fontSize: 12,
-    fontFamily: "Montserrat_600SemiBold",
-    fontWeight: "600",
-  },
-  changeLink: {
-    paddingVertical: 2,
-  },
-  changeLinkText: {
-    fontSize: 11,
-    fontFamily: "Montserrat_500Medium",
-    fontWeight: "500",
+    color: "#1F4F8A",
     textDecorationLine: "underline",
   },
-  // -- Worse / escalation panel -------------------------------------
-  escalateWrap: {
-    gap: 8,
-    marginTop: 2,
+  feedbackPrompt: {
+    fontSize: 17,
+    fontFamily: "Montserrat_700Bold",
+    textAlign: "center",
+    color: CARD_TEXT,
+    marginBottom: 4,
   },
-  escalateCopy: {
-    fontFamily: "Montserrat_500Medium",
-    fontSize: 13,
-    lineHeight: 18,
+  swipeArea: {
+    position: "relative",
+    height: 100,
+    justifyContent: "center",
+    overflow: "hidden",
+    marginVertical: 8,
   },
-  // -- Card-level escalation banner ---------------------------------
-  escalatedRow: {
-    flexDirection: "row",
+  swipeCard: {
+    position: "absolute",
+    left: "15%" as any,
+    right: "15%" as any,
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#DDE5F0",
     alignItems: "center",
     gap: 6,
-    marginTop: 2,
   },
-  escalatedText: {
-    fontSize: 13,
-    fontFamily: "Montserrat_600SemiBold",
-    fontWeight: "600",
+  feedbackBtnRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 4,
   },
-  // -- Clinical guardrail footer ------------------------------------
-  // Intentionally subtle: present but not visually competing with the
-  // primary action. Smaller text + Regular weight + extra top margin
-  // pushes it away from the action area, and a reduced opacity gives
-  // it a lighter visual presence than the muted-foreground color
-  // alone would.
+  feedbackBtn: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#D5DEEA",
+    alignItems: "center",
+    backgroundColor: "#F5F8FC",
+    gap: 6,
+    flexDirection: "row",
+    justifyContent: "center",
+  },
+  feedbackBtnImproving: {
+    backgroundColor: SUCCESS_FG + "0F",
+    borderColor: SUCCESS_FG + "30",
+  },
+  resolvedContainer: {
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 8,
+    flexDirection: "row",
+    justifyContent: "center",
+  },
   guardrail: {
+    fontSize: 11,
     fontFamily: "Montserrat_400Regular",
-    fontSize: 9,
-    lineHeight: 13,
-    marginTop: 14,
+    lineHeight: 16,
+    color: CARD_MUTED,
+    marginTop: 12,
     fontStyle: "italic",
     opacity: 0.65,
   },
 });
+
