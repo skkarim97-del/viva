@@ -1723,33 +1723,17 @@ export function InterventionCard({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 20,
+    borderRadius: 0,
     paddingHorizontal: 22,
-    paddingTop: 20,
-    paddingBottom: 20,
-    backgroundColor: "#FFFFFF",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: CARD_BORDER,
-    borderTopWidth: 2,
-    borderTopColor: "rgba(61,124,201,0.30)",
-    ...Platform.select({
-      web: {
-        boxShadow: "0 2px 12px rgba(26, 46, 74, 0.07)",
-      },
-      default: {
-        shadowColor: "#1A2E4A",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.07,
-        shadowRadius: 12,
-        elevation: 3,
-      },
-    }),
+    paddingTop: 16,
+    paddingBottom: 16,
+    backgroundColor: "transparent",
   },
   supportPill: {
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-start",
-    backgroundColor: "rgba(31,79,138,0.07)",
+    backgroundColor: "rgba(255,255,255,0.55)",
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -1775,12 +1759,12 @@ const styles = StyleSheet.create({
     color: CARD_MUTED,
     marginBottom: 14,
   },
-  // Hero action panel — very light tinted surface, integrated feel
+  // Hero action panel — white island on the tinted sheet, creates depth
   heroPanel: {
-    backgroundColor: "rgba(61,124,201,0.06)",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     gap: 6,
     marginBottom: 14,
   },
@@ -1819,7 +1803,7 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   contextChip: {
-    backgroundColor: "rgba(107,127,163,0.09)",
+    backgroundColor: "rgba(255,255,255,0.70)",
     borderRadius: 6,
     paddingHorizontal: 9,
     paddingVertical: 3,
