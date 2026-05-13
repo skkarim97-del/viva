@@ -1197,6 +1197,7 @@ export default function DashboardScreen() {
               headline={triggerHeadline}
               chips={triggerChips}
               onStart={openSupportSheet}
+              isActive={supportBannerVisible}
             />
           </View>
         )}
@@ -1521,6 +1522,7 @@ export default function DashboardScreen() {
               headline={triggerHeadline}
               chips={triggerChips}
               onStart={openSupportSheet}
+              isActive={supportBannerVisible}
             />
           </View>
         )}
@@ -1537,6 +1539,7 @@ export default function DashboardScreen() {
               headline="Viva has a personalised support step ready."
               chips={[]}
               onStart={openSupportSheet}
+              isActive={supportBannerVisible}
             />
           </View>
         )}
@@ -2420,11 +2423,10 @@ export default function DashboardScreen() {
           style={[styles.supportBanner, { bottom: sheetBottomOffset + 8 }]}
           onPress={openSupportSheet}
           accessibilityRole="button"
-          accessibilityLabel="Support active, tap to check in"
+          accessibilityLabel="Support in progress, tap to check in"
         >
           <View style={styles.supportBannerDot} />
-          <Text style={styles.supportBannerTitle}>Support active</Text>
-          <Text style={styles.supportBannerSub}>Tap to check in</Text>
+          <Text style={styles.supportBannerTitle}>Support in progress · Tap to check in</Text>
           <Feather name="chevron-up" size={13} color="#5A82B0" />
         </Pressable>
       )}
@@ -2509,11 +2511,6 @@ const styles = StyleSheet.create({
     fontFamily: "Montserrat_600SemiBold",
     color: "#142240",
     letterSpacing: 0.1,
-  },
-  supportBannerSub: {
-    fontSize: 12,
-    fontFamily: "Montserrat_500Medium",
-    color: "#6B7FA3",
   },
 
   tagline: {
