@@ -1563,32 +1563,33 @@ export function InterventionCard({
       {/* Title */}
       <Text style={[styles.cardTitle, { color: navy }]}>{cardTitle}</Text>
 
-      {/* Recommendation */}
-      <View style={styles.section}>
-        <Text style={styles.sectionLabel}>RECOMMENDATION</Text>
-        <Text style={[styles.sectionBody, { color: navy }]}>
+      {/* Recommendation — hero panel, visually dominant */}
+      <View style={styles.recPanel}>
+        <Text style={styles.recMicroLabel}>Recommended now</Text>
+        <Text style={[styles.recBody, { color: navy }]} numberOfLines={2}>
           {primaryContent.body}
         </Text>
       </View>
 
-      {/* Why it helps */}
+      {/* Why it helps — supporting, smaller, muted */}
       {primaryContent.helper.trim().length > 0 && (
-        <>
-          <View style={styles.divider} />
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>WHY IT HELPS</Text>
-            <Text style={[styles.sectionBody, { color: navy }]}>
-              {primaryContent.helper}
-            </Text>
-          </View>
-        </>
+        <View style={styles.supportSection}>
+          <Text style={styles.supportMicroLabel}>Why this may help</Text>
+          <Text style={styles.supportBody} numberOfLines={2}>
+            {primaryContent.helper}
+          </Text>
+        </View>
       )}
 
-      {/* Your context */}
-      <View style={styles.divider} />
-      <View style={styles.section}>
-        <Text style={styles.sectionLabel}>YOUR CONTEXT</Text>
-        <Text style={[styles.sectionBody, { color: navy }]}>
+      {/* Your context — supporting, smaller, muted */}
+      <View
+        style={[
+          styles.supportSection,
+          { marginTop: primaryContent.helper.trim().length > 0 ? 12 : 16 },
+        ]}
+      >
+        <Text style={styles.supportMicroLabel}>What Viva noticed</Text>
+        <Text style={styles.supportBody} numberOfLines={2}>
           {contextParagraph}
         </Text>
       </View>
@@ -1597,7 +1598,7 @@ export function InterventionCard({
       <Pressable
         style={({ pressed }) => [
           styles.primaryBtn,
-          { opacity: pressed ? 0.85 : 1 },
+          { opacity: pressed ? 0.78 : 1 },
         ]}
         onPress={() => void handleCommit()}
         accessibilityRole="button"
@@ -1674,12 +1675,51 @@ const styles = StyleSheet.create({
     color: CARD_MUTED,
   },
   cardTitle: {
-    fontSize: 21,
+    fontSize: 23,
     fontFamily: "Montserrat_700Bold",
-    lineHeight: 27,
+    lineHeight: 30,
     color: CARD_TEXT,
-    marginBottom: 20,
+    marginBottom: 14,
   },
+  // Recommendation hero panel
+  recPanel: {
+    backgroundColor: "#F2F6FB",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 6,
+    marginBottom: 18,
+  },
+  recMicroLabel: {
+    fontSize: 10,
+    fontFamily: "Montserrat_500Medium",
+    letterSpacing: 0.1,
+    color: CARD_MUTED,
+  },
+  recBody: {
+    fontSize: 16,
+    fontFamily: "Montserrat_600SemiBold",
+    lineHeight: 23,
+    color: CARD_TEXT,
+  },
+  // Supporting sections (Why / Context) — de-emphasized
+  supportSection: {
+    gap: 4,
+    marginTop: 16,
+  },
+  supportMicroLabel: {
+    fontSize: 10,
+    fontFamily: "Montserrat_500Medium",
+    letterSpacing: 0.1,
+    color: "#9BAABF",
+  },
+  supportBody: {
+    fontSize: 13,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 19,
+    color: CARD_MUTED,
+  },
+  // Legacy shared section styles (used by struggling/feedback phases)
   section: {
     gap: 5,
   },
@@ -1704,14 +1744,15 @@ const styles = StyleSheet.create({
   primaryBtn: {
     backgroundColor: CARD_TEXT,
     borderRadius: 999,
-    paddingVertical: 15,
+    paddingVertical: 17,
     alignItems: "center",
-    marginTop: 20,
+    marginTop: 22,
   },
   primaryBtnText: {
     color: "#FFFFFF",
     fontSize: 15,
     fontFamily: "Montserrat_700Bold",
+    letterSpacing: 0.1,
   },
   careTeamBtn: {
     flexDirection: "row",
