@@ -1634,8 +1634,8 @@ export function InterventionCard({
         <View style={styles.heroPanelHeader}>
           <Feather
             name={categoryIcon(intervention.recommendationCategory)}
-            size={14}
-            color="#3D7CC9"
+            size={13}
+            color="#6B8AB5"
           />
           <Text style={styles.heroPanelLabel}>Recommended now</Text>
         </View>
@@ -1704,24 +1704,24 @@ export function InterventionCard({
 const styles = StyleSheet.create({
   card: {
     borderRadius: 20,
-    paddingHorizontal: 24,
+    paddingHorizontal: 22,
     paddingTop: 20,
-    paddingBottom: 24,
+    paddingBottom: 20,
     backgroundColor: "#FFFFFF",
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: CARD_BORDER,
-    borderTopWidth: 3,
-    borderTopColor: "#3D7CC9",
+    borderTopWidth: 2,
+    borderTopColor: "rgba(61,124,201,0.30)",
     ...Platform.select({
       web: {
-        boxShadow: "0 4px 20px rgba(26, 46, 74, 0.10)",
+        boxShadow: "0 2px 12px rgba(26, 46, 74, 0.07)",
       },
       default: {
         shadowColor: "#1A2E4A",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.10,
-        shadowRadius: 16,
-        elevation: 4,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.07,
+        shadowRadius: 12,
+        elevation: 3,
       },
     }),
   },
@@ -1753,64 +1753,62 @@ const styles = StyleSheet.create({
     fontFamily: "Montserrat_400Regular",
     lineHeight: 20,
     color: CARD_MUTED,
-    marginBottom: 18,
+    marginBottom: 14,
   },
-  // Hero action panel — blue-ice surface
+  // Hero action panel — very light tinted surface, integrated feel
   heroPanel: {
-    backgroundColor: "#E8F1FB",
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 8,
-    marginBottom: 18,
+    backgroundColor: "rgba(61,124,201,0.06)",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 6,
+    marginBottom: 14,
   },
   heroPanelHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 5,
   },
   heroPanelLabel: {
     fontSize: 10,
     fontFamily: "Montserrat_600SemiBold",
-    letterSpacing: 0.5,
+    letterSpacing: 0.4,
     textTransform: "uppercase",
-    color: "#3D7CC9",
+    color: "#6B8AB5",
   },
   heroBody: {
     fontSize: 15,
-    fontFamily: "Montserrat_600SemiBold",
+    fontFamily: "Montserrat_500Medium",
     lineHeight: 22,
     color: CARD_TEXT,
   },
   // Context chips row
   chipsSection: {
-    gap: 8,
-    marginBottom: 4,
+    gap: 6,
+    marginBottom: 2,
   },
   chipsSectionLabel: {
     fontSize: 9,
     fontFamily: "Montserrat_600SemiBold",
-    letterSpacing: 0.8,
+    letterSpacing: 0.7,
     color: "#9BAABF",
   },
   chipsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 6,
+    gap: 5,
   },
   contextChip: {
-    backgroundColor: "#F0F5FC",
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#D0DEEF",
+    backgroundColor: "rgba(107,127,163,0.09)",
+    borderRadius: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
   },
   contextChipText: {
     fontSize: 11,
     fontFamily: "Montserrat_500Medium",
     color: CARD_MUTED,
-    letterSpacing: 0.1,
+    letterSpacing: 0.05,
   },
   // Legacy kept for supporting text in other phases
   supportSection: {
@@ -1854,19 +1852,19 @@ const styles = StyleSheet.create({
   primaryBtn: {
     backgroundColor: CARD_TEXT,
     borderRadius: 999,
-    paddingVertical: 18,
+    paddingVertical: 16,
     alignItems: "center",
-    marginTop: 22,
+    marginTop: 18,
     ...Platform.select({
       web: {
-        boxShadow: "0 4px 14px rgba(20, 34, 64, 0.28)",
+        boxShadow: "0 3px 8px rgba(20, 34, 64, 0.18)",
       },
       default: {
         shadowColor: "#142240",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.28,
-        shadowRadius: 10,
-        elevation: 5,
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.18,
+        shadowRadius: 7,
+        elevation: 3,
       },
     }),
   },
@@ -1880,7 +1878,7 @@ const styles = StyleSheet.create({
   careTeamLink: {
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 14,
+    marginTop: 12,
     paddingVertical: 4,
   },
   careTeamLinkText: {
