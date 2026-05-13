@@ -1691,7 +1691,7 @@ export function InterventionCard({
         <Text style={styles.primaryBtnText}>Start support</Text>
       </Pressable>
 
-      {/* Care team — underline link only, very secondary */}
+      {/* Care team — amber underline link, clearly escalation but secondary */}
       {(offerEscalationInStruggling || liveSeverity === "severe") && status !== "escalated" && (
         <Pressable
           style={styles.careTeamLink}
@@ -1699,7 +1699,7 @@ export function InterventionCard({
           accessibilityRole="button"
           accessibilityLabel="Ask my care team to review"
         >
-          <Text style={styles.careTeamLinkText}>Ask my care team</Text>
+          <Text style={[styles.careTeamLinkText, { color: warning }]}>Ask my care team</Text>
         </Pressable>
       )}
 
@@ -1726,7 +1726,7 @@ const styles = StyleSheet.create({
     borderRadius: 0,
     paddingHorizontal: 22,
     paddingTop: 16,
-    paddingBottom: 16,
+    paddingBottom: 28,
     backgroundColor: "transparent",
   },
   supportPill: {
@@ -1878,12 +1878,12 @@ const styles = StyleSheet.create({
     fontFamily: "Montserrat_700Bold",
     letterSpacing: 0.2,
   },
-  // Escalation — minimal underline text link only
+  // Escalation — amber underline link, secondary to navy CTA
   careTeamLink: {
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 12,
-    paddingVertical: 4,
+    marginTop: 20,
+    paddingVertical: 10,
   },
   careTeamLinkText: {
     fontSize: 13,
@@ -1920,14 +1920,16 @@ const styles = StyleSheet.create({
   },
   checkingContainer: {
     alignItems: "center",
-    gap: 12,
-    paddingVertical: 8,
+    gap: 14,
+    paddingVertical: 14,
+    marginBottom: 4,
   },
   checkNowLink: {
     fontSize: 13,
     fontFamily: "Montserrat_600SemiBold",
     color: "#1F4F8A",
     textDecorationLine: "underline",
+    paddingVertical: 6,
   },
   feedbackPrompt: {
     fontSize: 17,
@@ -1987,7 +1989,7 @@ const styles = StyleSheet.create({
     fontFamily: "Montserrat_400Regular",
     lineHeight: 16,
     color: CARD_MUTED,
-    marginTop: 12,
+    marginTop: 18,
     fontStyle: "italic",
     opacity: 0.65,
   },
