@@ -1477,21 +1477,17 @@ export function InterventionCard({
     );
   }
 
-  // == Feedback phase: swipe card ==
+  // == Feedback phase: swipe-only card ==
   if (phase === "feedback") {
     return (
       <Animated.View style={[styles.card, animatedStyle]}>
         <Text style={[styles.feedbackPrompt, { color: navy }]}>
           How are you feeling now?
         </Text>
-        <Text
-          style={[
-            styles.sectionLabel,
-            { textAlign: "center", color: mutedForeground, marginBottom: 8 },
-          ]}
-        >
-          SWIPE TO RESPOND
-        </Text>
+        <View style={styles.swipeHintRow}>
+          <Text style={[styles.swipeHintLabel, { color: warning }]}>← Still struggling</Text>
+          <Text style={[styles.swipeHintLabel, { color: SUCCESS_FG }]}>Improving →</Text>
+        </View>
         <View style={styles.swipeArea} {...panResponder.panHandlers}>
           <Animated.View
             style={[
@@ -1502,42 +1498,11 @@ export function InterventionCard({
               },
             ]}
           >
-            <Feather name="move" size={16} color={CARD_MUTED} />
-            <Text
-              style={[
-                styles.sectionBody,
-                { textAlign: "center", fontSize: 12, color: mutedForeground },
-              ]}
-            >
-              {"← Still struggling   Improving →"}
+            <Feather name="move" size={18} color={CARD_MUTED} />
+            <Text style={[styles.sectionBody, { textAlign: "center", fontSize: 13, color: mutedForeground }]}>
+              Swipe to respond
             </Text>
           </Animated.View>
-        </View>
-        <View style={styles.feedbackBtnRow}>
-          <Pressable
-            style={styles.feedbackBtn}
-            onPress={() => handleSwipeLeft()}
-            accessibilityRole="button"
-            accessibilityLabel="Still struggling"
-          >
-            <Feather name="frown" size={14} color={CARD_MUTED} />
-            <Text style={[styles.sectionBody, { fontSize: 13, color: navy }]}>
-              Still struggling
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[styles.feedbackBtn, styles.feedbackBtnImproving]}
-            onPress={() => { void handleSwipeRight(); }}
-            accessibilityRole="button"
-            accessibilityLabel="Improving"
-          >
-            <Feather name="smile" size={14} color={SUCCESS_FG} />
-            <Text
-              style={[styles.sectionBody, { fontSize: 13, color: SUCCESS_FG }]}
-            >
-              Improving
-            </Text>
-          </Pressable>
         </View>
       </Animated.View>
     );
@@ -1690,18 +1655,6 @@ export function InterventionCard({
       >
         <Text style={styles.primaryBtnText}>Start support</Text>
       </Pressable>
-
-      {/* Care team — amber underline link, clearly escalation but secondary */}
-      {(offerEscalationInStruggling || liveSeverity === "severe") && status !== "escalated" && (
-        <Pressable
-          style={styles.careTeamLink}
-          onPress={() => void handleAskCareTeam()}
-          accessibilityRole="button"
-          accessibilityLabel="Ask my care team to review"
-        >
-          <Text style={[styles.careTeamLinkText, { color: warning }]}>Ask my care team</Text>
-        </Pressable>
-      )}
 
       {status === "escalated" && (
         <View style={styles.escalatedNotice}>
@@ -1932,50 +1885,40 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   feedbackPrompt: {
-    fontSize: 17,
+    fontSize: 20,
     fontFamily: "Montserrat_700Bold",
     textAlign: "center",
     color: CARD_TEXT,
-    marginBottom: 4,
+    marginBottom: 16,
+  },
+  swipeHintRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 4,
+    marginBottom: 6,
+  },
+  swipeHintLabel: {
+    fontSize: 11,
+    fontFamily: "Montserrat_600SemiBold",
+    letterSpacing: 0.1,
   },
   swipeArea: {
-    position: "relative",
-    height: 100,
+    height: 120,
     justifyContent: "center",
     overflow: "hidden",
-    marginVertical: 8,
+    marginBottom: 24,
   },
   swipeCard: {
     position: "absolute",
-    left: "15%" as any,
-    right: "15%" as any,
-    borderRadius: 14,
-    padding: 16,
+    left: 0,
+    right: 0,
+    borderRadius: 18,
+    paddingVertical: 22,
+    paddingHorizontal: 20,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "#DDE5F0",
     alignItems: "center",
-    gap: 6,
-  },
-  feedbackBtnRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 4,
-  },
-  feedbackBtn: {
-    flex: 1,
-    paddingVertical: 11,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#D5DEEA",
-    alignItems: "center",
-    backgroundColor: "#F5F8FC",
-    gap: 6,
-    flexDirection: "row",
-    justifyContent: "center",
-  },
-  feedbackBtnImproving: {
-    backgroundColor: SUCCESS_FG + "0F",
-    borderColor: SUCCESS_FG + "30",
+    gap: 8,
   },
   resolvedContainer: {
     alignItems: "center",

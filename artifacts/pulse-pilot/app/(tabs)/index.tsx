@@ -248,6 +248,31 @@ export default function DashboardScreen() {
     ]).start(() => setSupportSheetOpen(false));
   }, [sheetAnim, backdropAnim, windowHeight]);
 
+  // Persistent mini-banner shown while support is active but the full
+  // sheet is dismissed, so the patient can keep using the app.
+  const [supportBannerVisible, setSupportBannerVisible] = useState(false);
+
+  // Wraps setSupportPhase with side effects: auto-dismiss the sheet
+  // when the patient starts a support step (checking phase) and hide
+  // the banner when support resolves back to default.
+  const handleSupportPhaseChange = React.useCallback((phase: InteractionPhase) => {
+    setSupportPhase(phase);
+    if (phase === "checking") {
+      closeSupportSheet();
+      setSupportBannerVisible(true);
+    } else if (phase === "default") {
+      setSupportBannerVisible(false);
+    }
+  }, [closeSupportSheet]);
+
+  // Fires when the card reaches "better" (resolved). Closes the sheet,
+  // hides the banner, and resets phase so the flow is clean next time.
+  const handleSupportDone = React.useCallback(() => {
+    closeSupportSheet();
+    setSupportBannerVisible(false);
+    setSupportPhase("default");
+  }, [closeSupportSheet]);
+
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   // ----- AI-personalized micro-intervention loop (Phase 3) -----
@@ -2324,44 +2349,67 @@ export default function DashboardScreen() {
         <Animated.View
           style={[
             styles.supportSheet,
-            { paddingBottom: Math.max(insets.bottom + 16, 36), transform: [{ translateY: sheetAnim }] },
+            { maxHeight: windowHeight * 0.88, transform: [{ translateY: sheetAnim }] },
           ]}
         >
           {/* Drag handle */}
           <View style={styles.sheetHandle} />
 
-          <InterventionCard
-            key={activeInterventions[0].id}
-            intervention={activeInterventions[0]}
-            navy={c.foreground}
-            accent={c.accent}
-            cardBg={c.card}
-            background={c.background}
-            mutedForeground={c.mutedForeground}
-            warning={c.warning}
-            hasHealthData={hasHealthData}
-            initialPhase={supportPhase}
-            onPhaseChange={setSupportPhase}
-            onDone={closeSupportSheet}
-            doseContext={
-              dailyState
-                ? {
-                    position: dailyState.doseDayPosition,
-                    recentTitration: dailyState.recentTitration,
-                    daysSinceLastDose: dailyState.daysSinceLastDose,
-                  }
-                : null
-            }
-            symptomCounts={symptomCounts}
-            wearableContext={wearableContextForCard}
-            liveCheckin={liveCheckinForTrigger}
-            onEngaged={setInterventionEngaged}
-            onAccept={onInterventionAccept}
-            onDismiss={onInterventionDismiss}
-            onFeedback={onInterventionFeedback}
-            onEscalate={onInterventionEscalate}
-          />
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 24, 44) }}
+          >
+            <InterventionCard
+              key={activeInterventions[0].id}
+              intervention={activeInterventions[0]}
+              navy={c.foreground}
+              accent={c.accent}
+              cardBg={c.card}
+              background={c.background}
+              mutedForeground={c.mutedForeground}
+              warning={c.warning}
+              hasHealthData={hasHealthData}
+              initialPhase={supportPhase}
+              onPhaseChange={handleSupportPhaseChange}
+              onDone={handleSupportDone}
+              doseContext={
+                dailyState
+                  ? {
+                      position: dailyState.doseDayPosition,
+                      recentTitration: dailyState.recentTitration,
+                      daysSinceLastDose: dailyState.daysSinceLastDose,
+                    }
+                  : null
+              }
+              symptomCounts={symptomCounts}
+              wearableContext={wearableContextForCard}
+              liveCheckin={liveCheckinForTrigger}
+              onEngaged={setInterventionEngaged}
+              onAccept={onInterventionAccept}
+              onDismiss={onInterventionDismiss}
+              onFeedback={onInterventionFeedback}
+              onEscalate={onInterventionEscalate}
+            />
+          </ScrollView>
         </Animated.View>
+      )}
+      {/* Persistent support banner — shown when a support step is active
+          but the full sheet has been dismissed so the patient can keep
+          using the app. Positioned just above the tab bar. */}
+      {supportBannerVisible && !supportSheetOpen && (
+        <Pressable
+          style={[styles.supportBanner, { bottom: insets.bottom + 58 }]}
+          onPress={openSupportSheet}
+          accessibilityRole="button"
+          accessibilityLabel="Support active, tap to check in"
+        >
+          <View style={styles.supportBannerDot} />
+          <Text style={styles.supportBannerTitle}>Support active</Text>
+          <Text style={styles.supportBannerSub}>Tap to check in</Text>
+          <Feather name="chevron-up" size={13} color="#5A82B0" />
+        </Pressable>
       )}
     </KeyboardAvoidingView>
   );
@@ -2407,6 +2455,48 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(100,130,170,0.30)",
     alignSelf: "center",
     marginBottom: 8,
+  },
+  supportBanner: {
+    position: "absolute",
+    left: 20,
+    right: 20,
+    backgroundColor: "#F3F8FF",
+    borderRadius: 50,
+    paddingVertical: 11,
+    paddingHorizontal: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#D7E8FB",
+    ...Platform.select({
+      web: { boxShadow: "0 4px 20px rgba(20,34,64,0.18)" },
+      default: {
+        shadowColor: "#142240",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.16,
+        shadowRadius: 18,
+        elevation: 10,
+      },
+    }),
+  },
+  supportBannerDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: "#3D7CC9",
+  },
+  supportBannerTitle: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: "Montserrat_600SemiBold",
+    color: "#142240",
+    letterSpacing: 0.1,
+  },
+  supportBannerSub: {
+    fontSize: 12,
+    fontFamily: "Montserrat_500Medium",
+    color: "#6B7FA3",
   },
 
   tagline: {
