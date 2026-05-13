@@ -2324,7 +2324,7 @@ export default function DashboardScreen() {
         <Animated.View
           style={[
             styles.supportSheet,
-            { paddingBottom: Math.max(insets.bottom, 20), transform: [{ translateY: sheetAnim }] },
+            { paddingBottom: Math.max(insets.bottom + 16, 36), transform: [{ translateY: sheetAnim }] },
           ]}
         >
           {/* Drag handle */}
