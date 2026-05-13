@@ -283,7 +283,7 @@ export default function DashboardScreen() {
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
   // Standard tab bar heights: 49pt iOS, 56dp Android. The sheet and its
   // backdrop stop here so the navigation chrome stays fully visible.
-  const TAB_BAR_HEIGHT = Platform.select({ ios: 49, android: 56, default: 52 }) ?? 52;
+  const TAB_BAR_HEIGHT = Platform.select({ ios: 49, android: 56, web: 84, default: 52 }) ?? 52;
   const sheetBottomOffset = insets.bottom + TAB_BAR_HEIGHT;
 
   // ----- AI-personalized micro-intervention loop (Phase 3) -----
