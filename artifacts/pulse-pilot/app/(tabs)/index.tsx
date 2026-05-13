@@ -188,6 +188,19 @@ export default function DashboardScreen() {
       constipation7d: last7.filter(d => d.digestion === "constipated" || d.bowelMovementToday === false).length,
     };
   }, [glp1InputHistory]);
+
+  // Focused support mode: dim surrounding cards when intervention card
+  // is in an active engagement phase (checking / feedback / struggling).
+  const [interventionEngaged, setInterventionEngaged] = useState(false);
+  const surroundingOpacity = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    Animated.timing(surroundingOpacity, {
+      toValue: interventionEngaged ? 0.55 : 1,
+      duration: 450,
+      useNativeDriver: Platform.OS !== "web",
+    }).start();
+  }, [interventionEngaged, surroundingOpacity]);
+
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   // ----- AI-personalized micro-intervention loop (Phase 3) -----
@@ -911,6 +924,15 @@ export default function DashboardScreen() {
   ];
   const metricItems = allMetricItems.filter(item => availableMetricTypes.includes(item.requiredType as any));
 
+  const wearableContextForCard = hasHealthData
+    ? {
+        steps: todayMetrics.steps,
+        sleepHours: todayMetrics.sleepDuration,
+        restingHR: typeof todayMetrics.restingHeartRate === "number" ? todayMetrics.restingHeartRate : null,
+        activeCalories: todayMetrics.activeCalories ?? null,
+      }
+    : null;
+
   // Status chip + hero come from the central selectors. They
   // automatically degrade to a calm "Set up your day" / "Tell us how
   // today is going" prompt when sufficiency is too low for a
@@ -970,6 +992,7 @@ export default function DashboardScreen() {
 
         <Text style={[styles.tagline, { color: c.mutedForeground }]}>{greetingText}</Text>
 
+        <Animated.View style={{ opacity: surroundingOpacity }}>
         <View style={[styles.statusCard, { backgroundColor: c.card }]}>
           {streakDays > 0 && (
             <View style={styles.streakRow}>
@@ -1018,6 +1041,7 @@ export default function DashboardScreen() {
             </View>
           )}
         </View>
+        </Animated.View>
 
         {/* The standalone "Request review" / "Heads up" care-team CTA
             that used to live here has been removed. The intervention
@@ -1060,6 +1084,7 @@ export default function DashboardScreen() {
                   : null
               }
               symptomCounts={symptomCounts}
+              wearableContext={wearableContextForCard}
               liveCheckin={symptomHydrated ? {
                 nausea,
                 appetite,
@@ -1067,6 +1092,7 @@ export default function DashboardScreen() {
                 digestion,
                 bowel: bowelSelectedKey,
               } : null}
+              onEngaged={setInterventionEngaged}
               onAccept={onInterventionAccept}
               onDismiss={onInterventionDismiss}
               onFeedback={onInterventionFeedback}
@@ -1410,6 +1436,7 @@ export default function DashboardScreen() {
                   : null
               }
               symptomCounts={symptomCounts}
+              wearableContext={wearableContextForCard}
               liveCheckin={symptomHydrated ? {
                 nausea,
                 appetite,
@@ -1417,6 +1444,7 @@ export default function DashboardScreen() {
                 digestion,
                 bowel: bowelSelectedKey,
               } : null}
+              onEngaged={setInterventionEngaged}
               onAccept={onInterventionAccept}
               onDismiss={onInterventionDismiss}
               onFeedback={onInterventionFeedback}
@@ -1452,6 +1480,7 @@ export default function DashboardScreen() {
                   : null
               }
               symptomCounts={symptomCounts}
+              wearableContext={wearableContextForCard}
               liveCheckin={symptomHydrated ? {
                 nausea,
                 appetite,
@@ -1459,6 +1488,7 @@ export default function DashboardScreen() {
                 digestion,
                 bowel: bowelSelectedKey,
               } : null}
+              onEngaged={setInterventionEngaged}
               onAccept={onInterventionAccept}
               onDismiss={onInterventionDismiss}
               onFeedback={onInterventionFeedback}
@@ -1494,6 +1524,7 @@ export default function DashboardScreen() {
           </View>
         )}
 
+        <Animated.View style={{ opacity: surroundingOpacity }}>
         <View style={[styles.dayCard, { backgroundColor: c.card }]}>
           <View style={styles.dayHeader}>
             <View style={styles.dayTitleRow}>
@@ -1566,6 +1597,7 @@ export default function DashboardScreen() {
             );
           })}
         </View>
+        </Animated.View>
 
         {dailyPlan?.whyThisPlan?.length > 0 && (
           <Pressable
