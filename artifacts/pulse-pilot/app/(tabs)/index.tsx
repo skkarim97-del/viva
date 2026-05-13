@@ -25,6 +25,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SymptomTipCard } from "@/components/SymptomTipCard";
 import { InterventionCard, deriveLiveSeverity, buildContextChips, type InteractionPhase } from "@/components/InterventionCard";
 import { SupportTriggerCard } from "@/components/SupportTriggerCard";
+import { BlurView } from "expo-blur";
 import {
   interventionsApi,
   type PatientIntervention,
@@ -216,15 +217,16 @@ export default function DashboardScreen() {
   const openSupportSheet = React.useCallback(() => {
     setSupportSheetOpen(true);
     Animated.parallel([
+      // Snappy upward spring — mirrors native iOS modal presentation
       Animated.spring(sheetAnim, {
         toValue: 0,
-        tension: 62,
-        friction: 11,
+        tension: 72,
+        friction: 13,
         useNativeDriver: true,
       }),
       Animated.timing(backdropAnim, {
         toValue: 1,
-        duration: 220,
+        duration: 200,
         useNativeDriver: true,
       }),
     ]).start();
@@ -234,13 +236,13 @@ export default function DashboardScreen() {
     Animated.parallel([
       Animated.spring(sheetAnim, {
         toValue: windowHeight,
-        tension: 80,
-        friction: 12,
+        tension: 90,
+        friction: 14,
         useNativeDriver: true,
       }),
       Animated.timing(backdropAnim, {
         toValue: 0,
-        duration: 180,
+        duration: 160,
         useNativeDriver: true,
       }),
     ]).start(() => setSupportSheetOpen(false));
@@ -2293,18 +2295,27 @@ export default function DashboardScreen() {
           the sheet and manages its own phase state machine; we persist
           phase here so it survives the sheet closing and reopening. */}
 
-      {/* Backdrop — always in tree, opacity animated to 0 when closed */}
+      {/* Backdrop — always in tree, opacity animated to 0 when closed.
+          On native: BlurView gives true iOS-style dark desaturation.
+          On web: plain dark-navy translucent overlay. */}
       <Animated.View
         pointerEvents={supportSheetOpen ? "auto" : "none"}
-        style={[
-          StyleSheet.absoluteFill,
-          {
-            backgroundColor: "rgba(14,28,54,0.45)",
-            opacity: backdropAnim,
-          },
-        ]}
+        style={[StyleSheet.absoluteFill, { opacity: backdropAnim }]}
       >
-        <Pressable style={StyleSheet.absoluteFill} onPress={closeSupportSheet} />
+        {Platform.OS !== "web" ? (
+          <BlurView
+            intensity={22}
+            tint="dark"
+            style={StyleSheet.absoluteFill}
+          >
+            <View style={[StyleSheet.absoluteFill, styles.backdropDark]} />
+            <Pressable style={StyleSheet.absoluteFill} onPress={closeSupportSheet} />
+          </BlurView>
+        ) : (
+          <View style={[StyleSheet.absoluteFill, styles.backdropDark]}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={closeSupportSheet} />
+          </View>
+        )}
       </Animated.View>
 
       {/* Sheet — rendered only while open so InterventionCard mounts
@@ -2365,24 +2376,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   // Support sheet
+  backdropDark: {
+    backgroundColor: "rgba(5,10,24,0.52)",
+  },
   supportSheet: {
     position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
     backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
     paddingHorizontal: 16,
     paddingTop: 8,
     ...Platform.select({
-      web: { boxShadow: "0 -4px 24px rgba(14,28,54,0.14)" },
+      web: { boxShadow: "0 -8px 48px rgba(5,10,24,0.28)" },
       default: {
-        shadowColor: "#0E1C36",
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.14,
-        shadowRadius: 20,
-        elevation: 20,
+        shadowColor: "#05080F",
+        shadowOffset: { width: 0, height: -6 },
+        shadowOpacity: 0.26,
+        shadowRadius: 32,
+        elevation: 28,
       },
     }),
   },
