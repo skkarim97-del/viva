@@ -972,7 +972,7 @@ function buildContextParagraph(
   return `${cap(first!)}, ${rest.slice(0, -1).join(", ")}, and ${rest[rest.length - 1]}.`;
 }
 
-function buildContextChips(
+export function buildContextChips(
   liveCheckin: LiveCheckin | null | undefined,
   doseContext: {
     position: DoseDayPosition | null | undefined;
@@ -1065,6 +1065,15 @@ interface InterventionCardProps {
   // Called when the card's interaction phase changes. Parent uses this
   // to dim surrounding content when the card is in active focus.
   onEngaged?: (engaged: boolean) => void;
+  // Phase to initialise the card at (used when the parent persists
+  // phase across sheet open/close cycles).
+  initialPhase?: InteractionPhase;
+  // Fires whenever the interaction phase changes (mirrors internal state
+  // upward so the parent can persist it across remounts).
+  onPhaseChange?: (phase: InteractionPhase) => void;
+  // Fires ~1.5 s after the card enters the "better" resolution state,
+  // giving the parent a signal to close the support sheet.
+  onDone?: () => void;
 
   onAccept: (id: number) => Promise<void>;
   onDismiss: (id: number) => Promise<void>;
@@ -1105,7 +1114,7 @@ function safeLog(name: string): void {
   }
 }
 
-type InteractionPhase = "default" | "checking" | "feedback" | "better" | "struggling";
+export type InteractionPhase = "default" | "checking" | "feedback" | "better" | "struggling";
 
 function tap(): void {
   try {
@@ -1129,6 +1138,9 @@ export function InterventionCard({
   wearableContext = null,
   liveCheckin = null,
   onEngaged,
+  initialPhase,
+  onPhaseChange,
+  onDone,
   onAccept,
   onDismiss: _onDismiss,
   onFeedback,
@@ -1143,18 +1155,19 @@ export function InterventionCard({
     [liveCheckin, liveSeverity],
   );
 
-  const [phase, setPhase] = useState<InteractionPhase>("default");
+  const [phase, setPhase] = useState<InteractionPhase>(initialPhase ?? "default");
 
   const setEngagedPhase = useCallback(
     (next: InteractionPhase) => {
       setPhase(next);
+      onPhaseChange?.(next);
       if (next === "default" || next === "better") {
         onEngaged?.(false);
       } else {
         onEngaged?.(true);
       }
     },
-    [onEngaged],
+    [onEngaged, onPhaseChange],
   );
 
   // Spring entrance animation — all hooks must precede any early return
@@ -1167,6 +1180,13 @@ export function InterventionCard({
       useNativeDriver: Platform.OS !== "web",
     }).start();
   }, [enter]);
+
+  // Notify parent to close the sheet ~1.5 s after support completes.
+  useEffect(() => {
+    if (phase !== "better") return;
+    const t = setTimeout(() => onDone?.(), 1500);
+    return () => clearTimeout(t);
+  }, [phase, onDone]);
   const animatedStyle = {
     opacity: enter,
     transform: [
@@ -1594,13 +1614,13 @@ export function InterventionCard({
               { textAlign: "center", color: mutedForeground },
             ]}
           >
-            We'll check back in shortly.
+            Support is active.{"\n"}Try the step above, then let us know.
           </Text>
           <Pressable
             onPress={() => setEngagedPhase("feedback")}
             accessibilityRole="button"
           >
-            <Text style={styles.checkNowLink}>How are you feeling now? →</Text>
+            <Text style={styles.checkNowLink}>I'm ready to check in →</Text>
           </Pressable>
         </View>
         <Text style={[styles.guardrail, { color: mutedForeground }]}>
@@ -1666,9 +1686,9 @@ export function InterventionCard({
         ]}
         onPress={() => void handleCommit()}
         accessibilityRole="button"
-        accessibilityLabel="I'll try this"
+        accessibilityLabel="Start support"
       >
-        <Text style={styles.primaryBtnText}>I'll try this</Text>
+        <Text style={styles.primaryBtnText}>Start support</Text>
       </Pressable>
 
       {/* Care team — underline link only, very secondary */}

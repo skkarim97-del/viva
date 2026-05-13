@@ -15,6 +15,7 @@ import {
   Modal,
   Animated,
   Alert,
+  Dimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -22,7 +23,8 @@ import { InputRow } from "@/components/InputRow";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SymptomTipCard } from "@/components/SymptomTipCard";
-import { InterventionCard, deriveLiveSeverity } from "@/components/InterventionCard";
+import { InterventionCard, deriveLiveSeverity, buildContextChips, type InteractionPhase } from "@/components/InterventionCard";
+import { SupportTriggerCard } from "@/components/SupportTriggerCard";
 import {
   interventionsApi,
   type PatientIntervention,
@@ -200,6 +202,49 @@ export default function DashboardScreen() {
       useNativeDriver: Platform.OS !== "web",
     }).start();
   }, [interventionEngaged, surroundingOpacity]);
+
+  // Support sheet — compact trigger card in Today tab, full card in a
+  // native-feeling bottom sheet. The sheet slides in from below the
+  // fold; the backdrop fades behind it. Phase is persisted here so the
+  // InterventionCard doesn't reset if the sheet is briefly closed.
+  const [supportSheetOpen, setSupportSheetOpen] = useState(false);
+  const [supportPhase, setSupportPhase] = useState<InteractionPhase>("default");
+  const windowHeight = Dimensions.get("window").height;
+  const sheetAnim = useRef(new Animated.Value(windowHeight)).current;
+  const backdropAnim = useRef(new Animated.Value(0)).current;
+
+  const openSupportSheet = React.useCallback(() => {
+    setSupportSheetOpen(true);
+    Animated.parallel([
+      Animated.spring(sheetAnim, {
+        toValue: 0,
+        tension: 62,
+        friction: 11,
+        useNativeDriver: true,
+      }),
+      Animated.timing(backdropAnim, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [sheetAnim, backdropAnim]);
+
+  const closeSupportSheet = React.useCallback(() => {
+    Animated.parallel([
+      Animated.spring(sheetAnim, {
+        toValue: windowHeight,
+        tension: 80,
+        friction: 12,
+        useNativeDriver: true,
+      }),
+      Animated.timing(backdropAnim, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start(() => setSupportSheetOpen(false));
+  }, [sheetAnim, backdropAnim, windowHeight]);
 
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -933,6 +978,51 @@ export default function DashboardScreen() {
       }
     : null;
 
+  // Compact trigger card signals
+  const liveCheckinForTrigger = symptomHydrated
+    ? { nausea, appetite, energy: glp1Energy, digestion, bowel: bowelSelectedKey }
+    : null;
+
+  const triggerChips = React.useMemo(
+    () =>
+      buildContextChips(
+        liveCheckinForTrigger,
+        dailyState
+          ? {
+              position: dailyState.doseDayPosition,
+              recentTitration: dailyState.recentTitration,
+              daysSinceLastDose: dailyState.daysSinceLastDose,
+            }
+          : null,
+        symptomCounts,
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [nausea, appetite, glp1Energy, digestion, bowelSelectedKey, dailyState, symptomCounts],
+  );
+
+  const triggerHeadline = React.useMemo((): string => {
+    const c = liveCheckinForTrigger;
+    if (c?.nausea === "severe") return "Nausea is more intense today.";
+    if (c?.nausea === "moderate") return "Nausea is elevated today.";
+    if (c?.appetite === "very_low") return "Appetite is significantly lower today.";
+    if (c?.nausea === "mild" && c?.appetite === "low")
+      return "Nausea and lower appetite today.";
+    if (c?.nausea === "mild") return "Mild nausea is present today.";
+    if (c?.appetite === "low") return "Appetite is lower than usual.";
+    if (c?.energy === "depleted") return "Energy is very low today.";
+    if (currentLiveSeverity === "severe" || currentLiveSeverity === "moderate")
+      return "Symptoms are elevated today.";
+    return "Viva has a support step ready.";
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nausea, appetite, glp1Energy, currentLiveSeverity]);
+
+  const triggerPillLabel =
+    currentLiveSeverity === "severe" || currentLiveSeverity === "moderate"
+      ? "Extra support today"
+      : currentLiveSeverity === "mild"
+        ? "Stay ahead"
+        : "Symptom support";
+
   // Status chip + hero come from the central selectors. They
   // automatically degrade to a calm "Set up your day" / "Tell us how
   // today is going" prompt when sufficiency is too low for a
@@ -1064,39 +1154,11 @@ export default function DashboardScreen() {
             edge case of a persisted active row without a fresh check-in. */}
         {activeInterventions.length > 0 && hasMinSymptomData && interventionIsElevated && activeInterventions[0] && (
           <View style={{ marginBottom: 12 }}>
-            <InterventionCard
-              key={activeInterventions[0].id}
-              intervention={activeInterventions[0]}
-              navy={c.foreground}
-              accent={c.accent}
-              cardBg={c.card}
-              background={c.background}
-              mutedForeground={c.mutedForeground}
-              warning={c.warning}
-              hasHealthData={hasHealthData}
-              doseContext={
-                dailyState
-                  ? {
-                      position: dailyState.doseDayPosition,
-                      recentTitration: dailyState.recentTitration,
-                      daysSinceLastDose: dailyState.daysSinceLastDose,
-                    }
-                  : null
-              }
-              symptomCounts={symptomCounts}
-              wearableContext={wearableContextForCard}
-              liveCheckin={symptomHydrated ? {
-                nausea,
-                appetite,
-                energy: glp1Energy,
-                digestion,
-                bowel: bowelSelectedKey,
-              } : null}
-              onEngaged={setInterventionEngaged}
-              onAccept={onInterventionAccept}
-              onDismiss={onInterventionDismiss}
-              onFeedback={onInterventionFeedback}
-              onEscalate={onInterventionEscalate}
+            <SupportTriggerCard
+              pillLabel={triggerPillLabel}
+              headline={triggerHeadline}
+              chips={triggerChips}
+              onStart={openSupportSheet}
             />
           </View>
         )}
@@ -1416,39 +1478,11 @@ export default function DashboardScreen() {
             look steady") belong lower in the reading order. */}
         {activeInterventions.length > 0 && hasMinSymptomData && !interventionIsElevated && activeInterventions[0] && (
           <View style={{ marginTop: 8, marginBottom: 12 }}>
-            <InterventionCard
-              key={activeInterventions[0].id}
-              intervention={activeInterventions[0]}
-              navy={c.foreground}
-              accent={c.accent}
-              cardBg={c.card}
-              background={c.background}
-              mutedForeground={c.mutedForeground}
-              warning={c.warning}
-              hasHealthData={hasHealthData}
-              doseContext={
-                dailyState
-                  ? {
-                      position: dailyState.doseDayPosition,
-                      recentTitration: dailyState.recentTitration,
-                      daysSinceLastDose: dailyState.daysSinceLastDose,
-                    }
-                  : null
-              }
-              symptomCounts={symptomCounts}
-              wearableContext={wearableContextForCard}
-              liveCheckin={symptomHydrated ? {
-                nausea,
-                appetite,
-                energy: glp1Energy,
-                digestion,
-                bowel: bowelSelectedKey,
-              } : null}
-              onEngaged={setInterventionEngaged}
-              onAccept={onInterventionAccept}
-              onDismiss={onInterventionDismiss}
-              onFeedback={onInterventionFeedback}
-              onEscalate={onInterventionEscalate}
+            <SupportTriggerCard
+              pillLabel={triggerPillLabel}
+              headline={triggerHeadline}
+              chips={triggerChips}
+              onStart={openSupportSheet}
             />
           </View>
         )}
@@ -1460,39 +1494,11 @@ export default function DashboardScreen() {
             normal flow the card above this comment renders instead. */}
         {activeInterventions.length > 0 && !hasMinSymptomData && activeInterventions[0] && (
           <View style={{ marginTop: 8, marginBottom: 20 }}>
-            <InterventionCard
-              key={activeInterventions[0].id}
-              intervention={activeInterventions[0]}
-              navy={c.foreground}
-              accent={c.accent}
-              cardBg={c.card}
-              background={c.background}
-              mutedForeground={c.mutedForeground}
-              warning={c.warning}
-              hasHealthData={hasHealthData}
-              doseContext={
-                dailyState
-                  ? {
-                      position: dailyState.doseDayPosition,
-                      recentTitration: dailyState.recentTitration,
-                      daysSinceLastDose: dailyState.daysSinceLastDose,
-                    }
-                  : null
-              }
-              symptomCounts={symptomCounts}
-              wearableContext={wearableContextForCard}
-              liveCheckin={symptomHydrated ? {
-                nausea,
-                appetite,
-                energy: glp1Energy,
-                digestion,
-                bowel: bowelSelectedKey,
-              } : null}
-              onEngaged={setInterventionEngaged}
-              onAccept={onInterventionAccept}
-              onDismiss={onInterventionDismiss}
-              onFeedback={onInterventionFeedback}
-              onEscalate={onInterventionEscalate}
+            <SupportTriggerCard
+              pillLabel={triggerPillLabel}
+              headline="Viva has a personalised support step ready."
+              chips={[]}
+              onStart={openSupportSheet}
             />
           </View>
         )}
@@ -2280,6 +2286,72 @@ export default function DashboardScreen() {
           updateProfileForWeightSync({ weight: w });
         }}
       />
+
+      {/* ── Support sheet ────────────────────────────────────────────
+          The backdrop and sheet are absolute siblings to the ScrollView
+          so they overlay the full tab. The InterventionCard lives inside
+          the sheet and manages its own phase state machine; we persist
+          phase here so it survives the sheet closing and reopening. */}
+
+      {/* Backdrop — always in tree, opacity animated to 0 when closed */}
+      <Animated.View
+        pointerEvents={supportSheetOpen ? "auto" : "none"}
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            backgroundColor: "rgba(14,28,54,0.45)",
+            opacity: backdropAnim,
+          },
+        ]}
+      >
+        <Pressable style={StyleSheet.absoluteFill} onPress={closeSupportSheet} />
+      </Animated.View>
+
+      {/* Sheet — rendered only while open so InterventionCard mounts
+          fresh (initialPhase carries forward the last-known phase). */}
+      {supportSheetOpen && activeInterventions[0] && (
+        <Animated.View
+          style={[
+            styles.supportSheet,
+            { paddingBottom: Math.max(insets.bottom, 20), transform: [{ translateY: sheetAnim }] },
+          ]}
+        >
+          {/* Drag handle */}
+          <View style={styles.sheetHandle} />
+
+          <InterventionCard
+            key={activeInterventions[0].id}
+            intervention={activeInterventions[0]}
+            navy={c.foreground}
+            accent={c.accent}
+            cardBg={c.card}
+            background={c.background}
+            mutedForeground={c.mutedForeground}
+            warning={c.warning}
+            hasHealthData={hasHealthData}
+            initialPhase={supportPhase}
+            onPhaseChange={setSupportPhase}
+            onDone={closeSupportSheet}
+            doseContext={
+              dailyState
+                ? {
+                    position: dailyState.doseDayPosition,
+                    recentTitration: dailyState.recentTitration,
+                    daysSinceLastDose: dailyState.daysSinceLastDose,
+                  }
+                : null
+            }
+            symptomCounts={symptomCounts}
+            wearableContext={wearableContextForCard}
+            liveCheckin={liveCheckinForTrigger}
+            onEngaged={setInterventionEngaged}
+            onAccept={onInterventionAccept}
+            onDismiss={onInterventionDismiss}
+            onFeedback={onInterventionFeedback}
+            onEscalate={onInterventionEscalate}
+          />
+        </Animated.View>
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -2291,6 +2363,36 @@ const styles = StyleSheet.create({
   loading: { flex: 1, alignItems: "center", justifyContent: "center" },
   content: {
     paddingHorizontal: 24,
+  },
+  // Support sheet
+  supportSheet: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    ...Platform.select({
+      web: { boxShadow: "0 -4px 24px rgba(14,28,54,0.14)" },
+      default: {
+        shadowColor: "#0E1C36",
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.14,
+        shadowRadius: 20,
+        elevation: 20,
+      },
+    }),
+  },
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#D0D9E4",
+    alignSelf: "center",
+    marginBottom: 8,
   },
 
   tagline: {
