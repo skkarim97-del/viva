@@ -74,7 +74,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
-  PanResponder,
   Platform,
   Pressable,
   StyleSheet,
@@ -1208,31 +1207,6 @@ export function InterventionCard({
     ],
   };
 
-  // Swipe gesture for feedback phase
-  const swipeX = useRef(new Animated.Value(0)).current;
-  const swipeRightRef = useRef<() => void>(() => {});
-  const swipeLeftRef = useRef<() => void>(() => {});
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gs) =>
-        Math.abs(gs.dx) > 10 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.2,
-      onPanResponderMove: Animated.event([null, { dx: swipeX }], {
-        useNativeDriver: false,
-      }),
-      onPanResponderRelease: (_, gs) => {
-        if (gs.dx > 90) swipeRightRef.current();
-        else if (gs.dx < -90) swipeLeftRef.current();
-        else
-          Animated.spring(swipeX, {
-            toValue: 0,
-            useNativeDriver: false,
-            tension: 120,
-            friction: 7,
-          }).start();
-      },
-    }),
-  ).current;
 
   // Backend call guards
   const acceptFiredRef = useRef(false);
@@ -1342,12 +1316,6 @@ export function InterventionCard({
   );
 
   // Swipe card background interpolates: orange (left) → white (center) → green (right)
-  const swipeCardBg = swipeX.interpolate({
-    inputRange: [-150, 0, 150],
-    outputRange: ["#FFF7ED", "#FFFFFF", "#F0FDF4"],
-    extrapolate: "clamp",
-  });
-
   // Handlers
   const handleCommit = useCallback(async () => {
     tap();
@@ -1384,39 +1352,25 @@ export function InterventionCard({
     }
   }, [intervention.id, intervention.status, onAccept, onFeedback]);
 
-  const handleSwipeRight = useCallback(async () => {
+  const handleFeedbackBetter = useCallback(async () => {
     tap();
-    Animated.spring(swipeX, {
-      toValue: 400,
-      useNativeDriver: false,
-      tension: 80,
-      friction: 8,
-    }).start(() => {
-      setEngagedPhase("better");
-      swipeX.setValue(0);
-    });
+    setEngagedPhase("better");
     safeLog("intervention_feedback_better");
     try {
       await onFeedback(intervention.id, "better");
     } catch {
       /* best-effort */
     }
-  }, [intervention.id, onFeedback, swipeX, setEngagedPhase]);
+  }, [intervention.id, onFeedback, setEngagedPhase]);
 
-  const handleSwipeLeft = useCallback(() => {
+  const handleFeedbackStruggling = useCallback(() => {
     tap();
-    Animated.spring(swipeX, {
-      toValue: 0,
-      useNativeDriver: false,
-      tension: 120,
-      friction: 7,
-    }).start();
     const newCount = struggleCount + 1;
     setStruggleCount(newCount);
     onStruggleCountChange?.(newCount);
     setEngagedPhase("struggling");
     safeLog("intervention_feedback_no_change");
-  }, [swipeX, setEngagedPhase, struggleCount, onStruggleCountChange]);
+  }, [setEngagedPhase, struggleCount, onStruggleCountChange]);
 
   // Sends the patient into a second checking loop with the alternate step.
   const handleTryAdjusted = useCallback(() => {
@@ -1424,9 +1378,6 @@ export function InterventionCard({
     safeLog("intervention_adjusted_started");
     setEngagedPhase("checking");
   }, [setEngagedPhase]);
-
-  swipeRightRef.current = handleSwipeRight;
-  swipeLeftRef.current = handleSwipeLeft;
 
   const status = intervention.status;
   // In the new phase UX there is no per-row "worse" outcome — escalation is
@@ -1496,32 +1447,35 @@ export function InterventionCard({
     );
   }
 
-  // == Feedback phase: swipe-only card ==
+  // == Feedback phase: two-button response ==
   if (phase === "feedback") {
     return (
       <Animated.View style={[styles.card, animatedStyle]}>
         <Text style={[styles.feedbackPrompt, { color: navy }]}>
           How are you feeling now?
         </Text>
-        <View style={styles.swipeHintRow}>
-          <Text style={[styles.swipeHintLabel, { color: warning }]}>← Still struggling</Text>
-          <Text style={[styles.swipeHintLabel, { color: SUCCESS_FG }]}>Improving →</Text>
-        </View>
-        <View style={styles.swipeArea} {...panResponder.panHandlers}>
-          <Animated.View
-            style={[
-              styles.swipeCard,
-              {
-                backgroundColor: swipeCardBg as any,
-                transform: [{ translateX: swipeX }],
-              },
-            ]}
+        <Text style={[styles.feedbackSub, { color: mutedForeground }]}>
+          Let us know and we'll adapt your support.
+        </Text>
+        <View style={styles.feedbackBtnRow}>
+          <Pressable
+            style={({ pressed }) => [styles.feedbackBtnStruggling, { opacity: pressed ? 0.8 : 1 }]}
+            onPress={handleFeedbackStruggling}
+            accessibilityRole="button"
+            accessibilityLabel="Still struggling"
           >
-            <Feather name="move" size={18} color={CARD_MUTED} />
-            <Text style={[styles.sectionBody, { textAlign: "center", fontSize: 13, color: mutedForeground }]}>
-              Swipe to respond
-            </Text>
-          </Animated.View>
+            <Feather name="refresh-cw" size={14} color="#B45309" />
+            <Text style={[styles.feedbackBtnText, { color: "#B45309" }]}>Still struggling</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.feedbackBtnHelped, { opacity: pressed ? 0.8 : 1 }]}
+            onPress={() => void handleFeedbackBetter()}
+            accessibilityRole="button"
+            accessibilityLabel="Helped"
+          >
+            <Feather name="check" size={14} color="#166534" />
+            <Text style={[styles.feedbackBtnText, { color: "#166534" }]}>Helped</Text>
+          </Pressable>
         </View>
       </Animated.View>
     );
@@ -1950,40 +1904,51 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   feedbackPrompt: {
-    fontSize: 20,
+    fontSize: 22,
     fontFamily: "Montserrat_700Bold",
     textAlign: "center",
     color: CARD_TEXT,
-    marginBottom: 16,
+    marginBottom: 8,
   },
-  swipeHintRow: {
+  feedbackSub: {
+    fontSize: 14,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 20,
+    textAlign: "center",
+    marginBottom: 28,
+  },
+  feedbackBtnRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 4,
-    marginBottom: 6,
+    gap: 12,
   },
-  swipeHintLabel: {
-    fontSize: 11,
-    fontFamily: "Montserrat_600SemiBold",
-    letterSpacing: 0.1,
-  },
-  swipeArea: {
-    height: 120,
-    justifyContent: "center",
-    overflow: "hidden",
-    marginBottom: 24,
-  },
-  swipeCard: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    borderRadius: 18,
-    paddingVertical: 22,
-    paddingHorizontal: 20,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#DDE5F0",
+  feedbackBtnStruggling: {
+    flex: 1,
+    flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    justifyContent: "center",
+    gap: 7,
+    backgroundColor: "#FFF8F0",
+    borderWidth: 1,
+    borderColor: "#FBD5A0",
+    borderRadius: 999,
+    paddingVertical: 16,
+  },
+  feedbackBtnHelped: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    backgroundColor: "#F0FBF4",
+    borderWidth: 1,
+    borderColor: "#BBE5CA",
+    borderRadius: 999,
+    paddingVertical: 16,
+  },
+  feedbackBtnText: {
+    fontSize: 14,
+    fontFamily: "Montserrat_700Bold",
+    letterSpacing: 0.1,
   },
   resolvedContainer: {
     alignItems: "center",

@@ -258,8 +258,12 @@ export default function DashboardScreen() {
   //   0 = not started  1 = first step tried → show adjusted step
   //   2+ = both steps tried → surface care-team escalation
   const [supportStruggleCount, setSupportStruggleCount] = useState(0);
-  // Timer ref for the brief "resolved" green-pill state before it clears.
-  const resolvedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Persistent "resolved" state — pill stays green until symptoms change.
+  const [supportResolved, setSupportResolved] = useState(false);
+  // Tracks symptom signature at the moment of resolution so we can
+  // detect when inputs materially change and clear the green state.
+  const currentSympSigRef = useRef("");
+  const resolvedAtSigRef = useRef<string | null>(null);
 
   // Wraps setSupportPhase with side effects: auto-dismiss the sheet
   // when the patient starts a support step (checking phase) and hide
@@ -279,17 +283,15 @@ export default function DashboardScreen() {
   }, [closeSupportSheet]);
 
   // Fires when the card reaches "better" (resolved). Closes the sheet,
-  // briefly shows a green resolved pill, then clears all support state.
+  // shows the persistent green pill, and captures the current symptom
+  // signature so the green state can self-clear if inputs change later.
   const handleSupportDone = React.useCallback(() => {
+    resolvedAtSigRef.current = currentSympSigRef.current;
     closeSupportSheet();
     setSupportPhase("better");
-    setSupportBannerVisible(true);
-    if (resolvedTimerRef.current) clearTimeout(resolvedTimerRef.current);
-    resolvedTimerRef.current = setTimeout(() => {
-      setSupportBannerVisible(false);
-      setSupportPhase("default");
-      setSupportStruggleCount(0);
-    }, 3000);
+    setSupportBannerVisible(false);
+    setSupportStruggleCount(0);
+    setSupportResolved(true);
   }, [closeSupportSheet]);
 
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -484,6 +486,18 @@ export default function DashboardScreen() {
   // diverging from that snapshot trigger the auto-save chain.
   const symptomSignature = `${glp1Energy ?? ""}|${appetite ?? ""}|${nausea ?? ""}|${digestion ?? ""}|${bowelMovementToday ?? ""}`;
   const hasMinSymptomData = !!(glp1Energy && nausea);
+
+  // Keep the ref in sync so handleSupportDone can snapshot the current sig.
+  useEffect(() => { currentSympSigRef.current = symptomSignature; }, [symptomSignature]);
+  // Clear green resolved pill when the patient changes any symptom input.
+  useEffect(() => {
+    if (!supportResolved || resolvedAtSigRef.current === null) return;
+    if (symptomSignature !== resolvedAtSigRef.current) {
+      setSupportResolved(false);
+      resolvedAtSigRef.current = null;
+    }
+  }, [symptomSignature, supportResolved]);
+
   const lastSavedSignatureRef = useRef<string | null>(null);
   useEffect(() => {
     if (!activeLoaded) return;
@@ -1046,26 +1060,26 @@ export default function DashboardScreen() {
   //   blue   = intervention ready, not yet started
   //   purple = support active / adjusted support active
   //   orange = user reported no improvement — adjusted step or escalation ready
-  //   green  = resolved — brief completion state before pill disappears
+  //   green  = resolved — persists until symptoms change or a new cycle starts
   const supportPillState = React.useMemo((): "blue" | "purple" | "orange" | "green" => {
+    if (supportResolved) return "green";
     if (!supportBannerVisible) return "blue";
-    if (supportPhase === "better") return "green";
     if (supportPhase === "struggling") return "orange";
     return "purple";
-  }, [supportBannerVisible, supportPhase]);
+  }, [supportResolved, supportBannerVisible, supportPhase]);
 
   const supportPillText = React.useMemo((): string => {
-    if (!supportBannerVisible) return `Manage ${symptomShortLabel} · Start support`;
-    if (supportPhase === "better") return "Support helped · Keep monitoring";
+    if (supportResolved) return "Symptoms improving · Monitoring";
+    if (!supportBannerVisible) return "Manage symptoms";
     if (supportPhase === "struggling") {
       return supportStruggleCount >= 2
-        ? "Care team support available · Tap to review"
-        : "Additional support ready · Tap to review";
+        ? "Care team support available"
+        : "Additional support ready · Review";
     }
     return supportStruggleCount >= 1
-      ? "Updated support in progress · Tap to check in"
-      : "Support in progress · Tap to check in";
-  }, [supportBannerVisible, supportPhase, supportStruggleCount, symptomShortLabel]);
+      ? "Updated support in progress"
+      : "Support in progress · Check in";
+  }, [supportResolved, supportBannerVisible, supportPhase, supportStruggleCount]);
 
   // Status chip + hero come from the central selectors. They
   // automatically degrade to a calm "Set up your day" / "Tell us how
@@ -2370,9 +2384,9 @@ export default function DashboardScreen() {
         </Animated.View>
       )}
       {/* Floating support pill — ambient entry point for symptom management.
-          Visible whenever an intervention is ready or in progress, hidden
-          while the sheet is open. Colour signals current journey state. */}
-      {activeLoaded && activeInterventions.length > 0 && !supportSheetOpen && (
+          Shown when an intervention is ready, in progress, or recently
+          resolved. Hidden while the sheet is open. Colour signals state. */}
+      {!supportSheetOpen && (supportResolved || (activeLoaded && activeInterventions.length > 0)) && (
         <Pressable
           style={[
             styles.supportBanner,
@@ -2381,7 +2395,9 @@ export default function DashboardScreen() {
             supportPillState === "green" && styles.supportBannerGreen,
             { bottom: sheetBottomOffset + 8 },
           ]}
-          onPress={openSupportSheet}
+          onPress={supportPillState === "green"
+            ? () => setSupportResolved(false)
+            : openSupportSheet}
           accessibilityRole="button"
           accessibilityLabel={supportPillText}
         >
@@ -2391,9 +2407,11 @@ export default function DashboardScreen() {
             supportPillState === "orange" && styles.supportBannerDotOrange,
             supportPillState === "green" && styles.supportBannerDotGreen,
           ]} />
-          <Text style={styles.supportBannerTitle}>{supportPillText}</Text>
+          <Text style={styles.supportBannerTitle} numberOfLines={1} ellipsizeMode="tail">
+            {supportPillText}
+          </Text>
           <Feather
-            name="chevron-up"
+            name={supportPillState === "green" ? "x" : "chevron-up"}
             size={13}
             color={
               supportPillState === "purple" ? "#7B5EA7"
