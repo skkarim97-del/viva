@@ -1246,6 +1246,28 @@ export function InterventionCard({
     }).start();
   }, [enter]);
 
+  // Slow pulse on the clock icon while support is in progress
+  const clockPulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (phase !== "checking") return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(clockPulse, {
+          toValue: 0.3,
+          duration: 900,
+          useNativeDriver: Platform.OS !== "web",
+        }),
+        Animated.timing(clockPulse, {
+          toValue: 1,
+          duration: 900,
+          useNativeDriver: Platform.OS !== "web",
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [phase, clockPulse]);
+
   // Notify parent to close the sheet ~1.5 s after support completes.
   useEffect(() => {
     if (phase !== "better") return;
@@ -1729,14 +1751,23 @@ export function InterventionCard({
           </View>
         )}
         <View style={styles.checkingContainer}>
-          <Feather name="clock" size={20} color={CARD_MUTED} />
+          <View style={styles.checkingStatusModule}>
+            <Animated.View style={{ opacity: clockPulse }}>
+              <Feather name="clock" size={15} color="#1F4F8A" />
+            </Animated.View>
+            <Text style={styles.checkingStatusText}>Support in progress</Text>
+          </View>
           <Text style={[styles.sectionBody, { textAlign: "center", color: mutedForeground }]}>
             {isRound2
-              ? "Adjusted support is active.\nCheck in when you're ready."
-              : "Support is active.\nTry the step above, then let us know."}
+              ? "Adjusted support is active. Check back in when you're ready."
+              : "Try the step above, then check back in."}
           </Text>
-          <Pressable onPress={() => setEngagedPhase("feedback")} accessibilityRole="button">
-            <Text style={styles.checkNowLink}>I'm ready to check in →</Text>
+          <Pressable
+            style={styles.checkingCheckInBtn}
+            onPress={() => setEngagedPhase("feedback")}
+            accessibilityRole="button"
+          >
+            <Text style={styles.primaryBtnText}>Check in now</Text>
           </Pressable>
         </View>
       </Animated.View>
@@ -2044,16 +2075,43 @@ const styles = StyleSheet.create({
   },
   checkingContainer: {
     alignItems: "center",
-    gap: 16,
-    paddingVertical: 20,
-    marginBottom: 4,
+    gap: 20,
+    paddingTop: 28,
+    paddingBottom: 8,
   },
-  checkNowLink: {
+  checkingStatusModule: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    backgroundColor: "#EEF3FA",
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  checkingStatusText: {
     fontSize: 13,
     fontFamily: "Montserrat_600SemiBold",
     color: "#1F4F8A",
-    textDecorationLine: "underline",
-    paddingVertical: 6,
+  },
+  checkingCheckInBtn: {
+    backgroundColor: CARD_TEXT,
+    borderRadius: 999,
+    paddingVertical: 17,
+    alignItems: "center",
+    alignSelf: "stretch",
+    marginTop: 4,
+    ...Platform.select({
+      web: {
+        boxShadow: "0 3px 8px rgba(20, 34, 64, 0.18)",
+      },
+      default: {
+        shadowColor: "#142240",
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.18,
+        shadowRadius: 7,
+        elevation: 3,
+      },
+    }),
   },
   feedbackPrompt: {
     fontSize: 22,
