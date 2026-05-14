@@ -1570,7 +1570,7 @@ export function InterventionCard({
             </Pressable>
             <Text style={[styles.guardrail, { color: mutedForeground }]}>
               Viva supports between-visit care. If symptoms feel severe or urgent,
-              contact your care team or seek medical help.
+              call 911 or contact your care team.
             </Text>
           </>
         ) : (
@@ -1601,7 +1601,7 @@ export function InterventionCard({
             )}
             <Text style={[styles.guardrail, { color: mutedForeground }]}>
               Viva supports between-visit care. If symptoms feel severe or urgent,
-              contact your care team or seek medical help.
+              call 911 or contact your care team.
             </Text>
           </>
         )}
@@ -1716,7 +1716,7 @@ export function InterventionCard({
       {/* Guardrail */}
       <Text style={[styles.guardrail, { color: mutedForeground }]}>
         Viva supports between-visit care. If symptoms feel severe or urgent,
-        contact your care team or seek medical help.
+        call 911 or contact your care team.
       </Text>
     </Animated.View>
   );
