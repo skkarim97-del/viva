@@ -123,7 +123,7 @@ export function deriveSymptomTips(input: SymptomInputs): SymptomTip[] {
         ? "Do this for the next 15 minutes to give your stomach time to settle."
         : "Try this in the next 10 minutes to stop nausea from building.",
       cta: severe
-        ? "Stop solid food for now. Take slow sips of water, Pedialyte, or ginger tea — a few sips every 2 minutes — for 15 minutes."
+        ? "Stop solid food for now. Take slow sips of water, Pedialyte, or ginger tea, a few sips every 2 minutes, for 15 minutes."
         : "Take 5 slow sips of water or ginger tea right now. Wait 10 minutes, then try 2–3 small bites.",
       example: severe
         ? "(after fluids settle: crackers, toast, banana, or rice)"
@@ -131,7 +131,7 @@ export function deriveSymptomTips(input: SymptomInputs): SymptomTip[] {
       ctaLabel: "Done",
       ctaCompleted: "Logged. Nice work.",
       followupSummary: severe
-        ? "Fluids-first — sips every 2 min for 15 min"
+        ? "Fluids first, sips every 2 min for 15 min"
         : "5 sips of water, then 2–3 bites",
       factors,
     });
@@ -147,17 +147,17 @@ export function deriveSymptomTips(input: SymptomInputs): SymptomTip[] {
     const plan = input.planActivity ?? "normal_activity";
     const cta =
       plan === "full_rest"
-        ? "Drink 6–8 oz of warm water or ginger tea right now. Then do 2 minutes of slow abdominal breathing — in for 4 counts, out for 6."
+        ? "Drink 6–8 oz of warm water or ginger tea right now. Then do 2 minutes of slow abdominal breathing: in for 4 counts, out for 6."
         : plan === "light_activity"
         ? "Drink 6–8 oz of warm water or ginger tea right now. Then take a slow 5-minute walk around the room or outside."
         : "Drink 6–8 oz of warm water or ginger tea right now. Then take a slow 5-minute walk around the room or outside.";
     const example =
       plan === "full_rest"
         ? "(warm water, ginger tea, or peppermint tea)"
-        : "(warm water, ginger tea, or peppermint tea — then a loop around the block or a hallway)";
+        : "(warm water, ginger tea, or peppermint tea; then a loop around the block or a hallway)";
     const urgency =
       plan === "full_rest"
-        ? "Do this now — warm fluids and breathing can help even without movement."
+        ? "Do this now. Warm fluids and breathing can help even without movement."
         : "Do this within the next 15 minutes to help things move.";
     tips.push({
       symptom: "constipation",
@@ -188,7 +188,7 @@ export function deriveSymptomTips(input: SymptomInputs): SymptomTip[] {
       title: veryLow ? "Sip a smoothie for 10 minutes" : "Try 2–3 bites of protein now",
       urgency: "Do this in the next 10–15 minutes to keep nutrition coming in.",
       cta: veryLow
-        ? "Make or order a simple smoothie with protein. Sip it slowly for 10–15 minutes — no pressure to finish it."
+        ? "Make or order a simple smoothie with protein. Sip it slowly for 10–15 minutes. No pressure to finish it."
         : "Eat 2–3 bites of a protein-rich food right now. Stop and wait 10 minutes before eating more.",
       example: veryLow
         ? "(example: Greek yogurt + banana blend, or a protein shake)"

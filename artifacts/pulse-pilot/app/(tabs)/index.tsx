@@ -1807,7 +1807,7 @@ export default function DashboardScreen() {
             />
             <Text style={[styles.checkInDoneText, { color: c.mutedForeground }]}>
               {checkinSyncStatus === "failed"
-                ? "Saved on this device — we'll sync when you're back online"
+                ? "Saved on this device. We'll sync when you're back online"
                 : checkinSyncStatus === "pending"
                 ? "Reflection saved · syncing…"
                 : "Reflection saved"}
@@ -2502,29 +2502,50 @@ const styles = StyleSheet.create({
     right: 20,
     backgroundColor: "#F3F8FF",
     borderRadius: 50,
-    paddingVertical: 11,
+    paddingVertical: 15,
     paddingHorizontal: 18,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     borderWidth: 1,
-    borderColor: "#D7E8FB",
+    borderColor: "#C4D9F4",
     ...Platform.select({
-      web: { boxShadow: "0 4px 20px rgba(20,34,64,0.18)" },
+      web: { boxShadow: "0 4px 24px rgba(61,124,201,0.14)" },
       default: {
-        shadowColor: "#142240",
+        shadowColor: "#3D7CC9",
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.16,
-        shadowRadius: 18,
+        shadowOpacity: 0.14,
+        shadowRadius: 20,
         elevation: 10,
       },
     }),
   },
-  // Semantic pill colour variants — backgrounds and borders are low-opacity
-  // tints; dots and chevron carry the full hue so the pill stays calm.
-  supportBannerPurple: { backgroundColor: "#F4F0FF", borderColor: "#D8CCFA" },
-  supportBannerOrange: { backgroundColor: "#FFF8F0", borderColor: "#FAD9AA" },
-  supportBannerGreen:  { backgroundColor: "#F0FBF5", borderColor: "#A8E6C0" },
+  // Semantic pill colour variants — backgrounds, borders, and glow match
+  // each state hue; dots and chevron carry the full hue so the pill stays calm.
+  supportBannerPurple: {
+    backgroundColor: "#F4F0FF",
+    borderColor: "#C8B5F5",
+    ...Platform.select({
+      web: { boxShadow: "0 4px 24px rgba(123,94,167,0.12)" },
+      default: { shadowColor: "#7B5EA7", shadowOpacity: 0.12 },
+    }),
+  },
+  supportBannerOrange: {
+    backgroundColor: "#FFF8F0",
+    borderColor: "#F5C770",
+    ...Platform.select({
+      web: { boxShadow: "0 4px 24px rgba(217,119,6,0.10)" },
+      default: { shadowColor: "#D97706", shadowOpacity: 0.10 },
+    }),
+  },
+  supportBannerGreen: {
+    backgroundColor: "#F0FBF5",
+    borderColor: "#8ED4AE",
+    ...Platform.select({
+      web: { boxShadow: "0 4px 24px rgba(45,158,106,0.12)" },
+      default: { shadowColor: "#2D9E6A", shadowOpacity: 0.12 },
+    }),
+  },
   supportBannerDot: {
     width: 7,
     height: 7,
