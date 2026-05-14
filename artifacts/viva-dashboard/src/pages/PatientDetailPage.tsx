@@ -156,7 +156,6 @@ interface IntelligenceInputs {
   followUpPending: boolean;
   lastEscalationAt: string | null;
   recentLowMood: boolean;
-  recentNegativeTrend: boolean;
 }
 
 interface Intelligence {
@@ -280,7 +279,8 @@ function computeIntelligence(i: IntelligenceInputs): Intelligence {
 
   if (issueType === "combined") {
     if (topFlag && i.silentDays !== null && i.silentDays >= 3) {
-      summary = `Patient reported ${symptomDir} ${symptomName} and then stopped checking in.`;
+      const dur = topFlag.daysObserved > 1 ? ` (${topFlag.daysObserved}d)` : "";
+      summary = `Patient reported ${symptomDir} ${symptomName}${dur} and then stopped checking in.`;
       nextAction = `Contact patient and review ${symptomName} severity together.`;
     } else if (topFlag && i.escalationOpen) {
       summary = `Patient flagged ${symptomDir} ${symptomName} and requested clinician review.`;
@@ -294,7 +294,8 @@ function computeIntelligence(i: IntelligenceInputs): Intelligence {
     }
   } else if (issueType === "clinical") {
     if (topFlag && topFlag.persistence === "worsening") {
-      summary = `Patient is reporting worsening ${symptomName} and may need treatment support.`;
+      const dur = topFlag.daysObserved > 1 ? ` over the past ${topFlag.daysObserved} days` : "";
+      summary = `Patient is reporting worsening ${symptomName}${dur} and may need treatment support.`;
       nextAction = `Review ${symptomName} severity and treatment tolerance.`;
     } else if (topFlag && topFlag.severity === "severe") {
       summary = `Patient is reporting severe ${symptomName}; clinician review is recommended.`;
@@ -355,11 +356,13 @@ function PatientSummaryCard({
   patient,
   weight,
   risk,
+  hasAnyCheckin,
 }: {
   intel: Intelligence;
   patient: PatientDetail;
   weight: PatientWeightSummary | undefined;
   risk: Risk | null;
+  hasAnyCheckin: boolean;
 }) {
   const style = PRIORITY_STYLE[intel.priority];
   const issueStyle = ISSUE_STYLE[intel.issueType];
@@ -375,6 +378,7 @@ function PatientSummaryCard({
       ? { label: "Follow-up pending", color: "#7A4A00" }
       : { label: "None", color: "#5A6478" };
   const confidence = (() => {
+    if (!hasAnyCheckin) return { label: "Partial", color: "#5A6478" };
     if (risk !== null && !!weight?.latest) return { label: "High", color: "#1E8E3E" };
     if (risk !== null || !!weight?.latest) return { label: "Moderate", color: "#0B6FAA" };
     return { label: "Partial", color: "#5A6478" };
@@ -556,12 +560,14 @@ function PatientSummaryCard({
 function VivaFlagsDetail({
   symptomFlags,
   silentDays,
+  escalationOpen,
   escalationCount,
   recentLowMood,
   weight,
 }: {
   symptomFlags: SymptomFlag[];
   silentDays: number | null;
+  escalationOpen: boolean;
   escalationCount: number;
   recentLowMood: boolean;
   weight: PatientWeightSummary | undefined;
@@ -570,18 +576,29 @@ function VivaFlagsDetail({
 
   for (const flag of symptomFlags) {
     const sym = SYMPTOM_LABEL[flag.symptom];
+    const sev = SEVERITY_LABEL[flag.severity]; // "Mild", "Moderate", "Severe"
+    const dur = flag.daysObserved > 1 ? ` over ${flag.daysObserved} days` : "";
+    // Surface patient-reported trajectory when available; fall back to
+    // server-computed escalation reason for specificity.
+    const trendCtx =
+      flag.trendResponse === "better"
+        ? "; patient reports recent improvement"
+        : flag.trendResponse === "worse"
+          ? "; patient reports it is getting worse"
+          : "";
+    const escCtx =
+      !trendCtx && flag.escalationReasons.length > 0
+        ? ` — ${flag.escalationReasons[0].toLowerCase()}`
+        : "";
+
     if (flag.persistence === "worsening") {
-      bullets.push(
-        `${sym} has been worsening${flag.daysObserved > 1 ? ` over ${flag.daysObserved} days` : ""}.`,
-      );
+      bullets.push(`${sev} ${sym.toLowerCase()} has been worsening${dur}${trendCtx}${escCtx}.`);
     } else if (flag.persistence === "persistent") {
-      bullets.push(
-        `${sym} has been persistent${flag.daysObserved > 1 ? ` for ${flag.daysObserved} days` : ""}.`,
-      );
+      bullets.push(`${sev} ${sym.toLowerCase()} has been persistent${dur}${trendCtx}${escCtx}.`);
     } else if (flag.severity === "severe") {
-      bullets.push(`Patient reported severe ${sym.toLowerCase()}.`);
+      bullets.push(`Patient reported severe ${sym.toLowerCase()}${trendCtx}${escCtx}.`);
     } else if (flag.suggestFollowup) {
-      bullets.push(`${sym} may warrant clinician follow-up.`);
+      bullets.push(`${sym} may warrant follow-up${escCtx}.`);
     }
   }
 
@@ -593,10 +610,12 @@ function VivaFlagsDetail({
     }
   }
 
-  if (escalationCount >= 2) {
-    bullets.push(`Patient has requested clinical review ${escalationCount} times.`);
-  } else if (escalationCount === 1) {
-    bullets.push("Patient has requested clinical review.");
+  // Show current open escalation OR a pattern of repeated requests.
+  // Avoid a raw lifetime count without time context — misleading on older patients.
+  if (escalationOpen) {
+    bullets.push("Patient has an open review request pending clinician response.");
+  } else if (escalationCount >= 2) {
+    bullets.push("Patient has requested clinical review more than once.");
   }
 
   if (recentLowMood) {
@@ -628,6 +647,7 @@ function VivaFlagsDetail({
           </li>
         ))}
       </ul>
+      <PatientInsightsNotice className="mt-4" />
     </section>
   );
 }
@@ -779,7 +799,6 @@ export function PatientDetailPage({ id }: { id: number }) {
     followUpPending: !!care.data?.followUpPending,
     lastEscalationAt: care.data?.lastEscalationAt ?? null,
     recentLowMood,
-    recentNegativeTrend: false,
   });
 
   return (
@@ -802,10 +821,12 @@ export function PatientDetailPage({ id }: { id: number }) {
         patient={p}
         weight={weight.data}
         risk={risk.data ?? null}
+        hasAnyCheckin={!!checkins.data && checkins.data.length > 0}
       />
       <VivaFlagsDetail
         symptomFlags={risk.data?.symptomFlags ?? []}
         silentDays={silentDays}
+        escalationOpen={!!care.data?.escalationOpen}
         escalationCount={care.data?.events.filter((e) => e.type === "escalation_requested").length ?? 0}
         recentLowMood={recentLowMood}
         weight={weight.data}
@@ -1566,6 +1587,7 @@ function interventionPatternInsight(ivs: ClinicIntervention[]): string | null {
   if (withFeedback.length < 3) return null;
   const betterCount = withFeedback.filter((iv) => iv.feedbackResult === "better").length;
   const worseCount = withFeedback.filter((iv) => iv.feedbackResult === "worse").length;
+  const didntTryCount = withFeedback.filter((iv) => iv.feedbackResult === "didnt_try").length;
   const total = withFeedback.length;
   if (betterCount / total >= 0.6) {
     return "Patient tends to act on Viva suggestions and reports improvement.";
@@ -1577,7 +1599,11 @@ function interventionPatternInsight(ivs: ClinicIntervention[]): string | null {
     return "Patient response has been mixed across recent suggestions.";
   }
   if (betterCount === 0 && worseCount === 0) {
-    return "Patient has engaged with suggestions but outcomes are not yet clear.";
+    // Distinguish: didn't engage vs engaged but no improvement
+    if (didntTryCount > total / 2) {
+      return "Patient has not been acting on most of Viva's recent suggestions.";
+    }
+    return "Patient has tried suggestions but reports no noticeable change yet.";
   }
   return null;
 }
