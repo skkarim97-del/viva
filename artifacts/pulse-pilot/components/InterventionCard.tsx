@@ -89,6 +89,13 @@ import {
 } from "@/lib/api/interventionsClient";
 import type { DoseDayPosition } from "@/lib/engine/dailyState";
 import { logEvent } from "@/lib/analytics/client";
+import {
+  selectIntervention,
+  buildLibraryContext,
+  categoryToSymptomTarget,
+  liveSeverityToTier,
+} from "@/lib/interventions/selector";
+import type { StrategyType, SelectionResult } from "@/lib/interventions/types";
 
 // =====================================================================
 // Recommendation parsing
@@ -1156,9 +1163,9 @@ function categoryIcon(
   }
 }
 
-function safeLog(name: string): void {
+function safeLog(name: string, payload?: Record<string, unknown>): void {
   try {
-    void logEvent(name);
+    void logEvent(name, payload);
   } catch {
     /* analytics is fire-and-forget */
   }
@@ -1209,6 +1216,11 @@ export function InterventionCard({
 
   const [phase, setPhase] = useState<InteractionPhase>(initialPhase ?? "default");
   const [struggleCount, setStruggleCount] = useState(initialStruggleCount ?? 0);
+  // Adaptive intervention layer — tracks which strategies have been tried
+  // in this session so the selector can rotate to a meaningfully different
+  // approach on the adjusted step instead of cycling within the same category.
+  const [failedStrategyTypes, setFailedStrategyTypes] = useState<StrategyType[]>([]);
+  const [lastEntryId, setLastEntryId] = useState<string | null>(null);
 
   const setEngagedPhase = useCallback(
     (next: InteractionPhase) => {
@@ -1319,7 +1331,56 @@ export function InterventionCard({
 
   const primary = displayRows[0];
 
+  // Adaptive selection — compute initial + adjusted in one pass so the
+  // adjusted result can guarantee it differs from the initial strategy.
+  const selections = useMemo<{
+    initial: SelectionResult;
+    adjusted: SelectionResult;
+  } | null>(() => {
+    if (!primary || !liveSeverity || liveSeverity === "steady") return null;
+    const symptomTarget = categoryToSymptomTarget(primary.category);
+    const severityTier = liveSeverityToTier(liveSeverity);
+    const ctx = buildLibraryContext({
+      primarySymptom: symptomTarget,
+      severityTier,
+      hasSevereNausea: liveCheckin?.nausea === "severe",
+      hasLowAppetite:
+        liveCheckin?.appetite === "low" || liveCheckin?.appetite === "very_low",
+      hasVeryLowAppetite: liveCheckin?.appetite === "very_low",
+      postDose:
+        doseContext?.position === "dose_day" ||
+        doseContext?.position === "day_1_post" ||
+        doseContext?.position === "day_2_post",
+      interventionId: intervention.id,
+      lastEntryId,
+      failedStrategyTypes,
+    });
+    const initial = selectIntervention(ctx, "initial");
+    // For adjusted: suppress the initial strategy and mark initial entry as last
+    const adjustedCtx = {
+      ...ctx,
+      lastEntryId: initial.entry.id,
+      failedStrategyTypes: [
+        ...failedStrategyTypes,
+        initial.entry.strategyType,
+      ],
+    };
+    const adjusted = selectIntervention(adjustedCtx, "adjusted");
+    return { initial, adjusted };
+  }, [
+    primary,
+    liveSeverity,
+    liveCheckin,
+    intervention.id,
+    doseContext,
+    lastEntryId,
+    failedStrategyTypes,
+  ]);
+
   const primaryContent = useMemo<RecContent>(() => {
+    // Library selection wins when available — richer metadata and strategy-aware
+    if (selections) return selections.initial.entry.copy;
+    // No live plan + no library selection → fall back to server recommendation
     if (!primary) {
       return {
         title: buildInsightTitle(livePlan, liveSeverity, intervention.triggerType),
@@ -1327,6 +1388,7 @@ export function InterventionCard({
         helper: "",
       };
     }
+    // Live override from deriveLivePlan (covers the multi-row display path)
     const override = liveOverrides[primary.key];
     if (override) return override;
     const picked = pickVariants(primary.category, intervention.id);
@@ -1335,6 +1397,7 @@ export function InterventionCard({
     }
     return picked.primary;
   }, [
+    selections,
     primary,
     liveOverrides,
     intervention.id,
@@ -1345,10 +1408,12 @@ export function InterventionCard({
   ]);
 
   const alternateContent = useMemo<RecContent>(() => {
+    // Adjusted library selection → cross-strategy (different strategyType)
+    if (selections) return selections.adjusted.entry.copy;
     if (!primary) return primaryContent;
     const picked = pickVariants(primary.category, intervention.id);
     return picked.alternate;
-  }, [primary, primaryContent, intervention.id]);
+  }, [selections, primary, primaryContent, intervention.id]);
 
   const contextParagraph = useMemo(
     () => buildContextParagraph(liveCheckin, doseContext, symptomCounts, wearableContext),
@@ -1365,7 +1430,13 @@ export function InterventionCard({
   const handleCommit = useCallback(async () => {
     tap();
     setEngagedPhase("checking");
-    safeLog("intervention_started");
+    safeLog("intervention_started", {
+      strategyType: selections?.initial.entry.strategyType ?? null,
+      symptomTarget: primary?.category ?? null,
+      severityTier: liveSeverity,
+      wasInitialOrAdjusted: "initial",
+      interventionEntryId: selections?.initial.entry.id ?? null,
+    });
     if (!acceptFiredRef.current) {
       acceptFiredRef.current = true;
       try {
@@ -1381,7 +1452,11 @@ export function InterventionCard({
     if (intervention.status === "escalated") return;
     if (escalateFiredRef.current) return;
     escalateFiredRef.current = true;
-    safeLog("care_team_escalation_requested");
+    safeLog("care_team_escalation_requested", {
+      strategyType: selections?.initial.entry.strategyType ?? null,
+      failedStrategyTypes: failedStrategyTypes,
+      severityTier: liveSeverity,
+    });
     try {
       if (intervention.status === "shown" && !acceptFiredRef.current) {
         acceptFiredRef.current = true;
@@ -1400,7 +1475,13 @@ export function InterventionCard({
   const handleFeedbackBetter = useCallback(async () => {
     tap();
     setEngagedPhase("better");
-    safeLog("intervention_feedback_better");
+    safeLog("intervention_feedback_better", {
+      strategyType: failedStrategyTypes.length > 0
+        ? selections?.adjusted.entry.strategyType ?? null
+        : selections?.initial.entry.strategyType ?? null,
+      wasInitialOrAdjusted: failedStrategyTypes.length > 0 ? "adjusted" : "initial",
+      severityTier: liveSeverity,
+    });
     try {
       await onFeedback(intervention.id, "better");
     } catch {
@@ -1414,13 +1495,30 @@ export function InterventionCard({
     setStruggleCount(newCount);
     onStruggleCountChange?.(newCount);
     setEngagedPhase("struggling");
-    safeLog("intervention_feedback_no_change");
-  }, [setEngagedPhase, struggleCount, onStruggleCountChange]);
+    // Record the strategy that failed so adjusted selection avoids it
+    if (selections?.initial) {
+      const failedStrategy = selections.initial.entry.strategyType;
+      setFailedStrategyTypes((prev) =>
+        prev.includes(failedStrategy) ? prev : [...prev, failedStrategy],
+      );
+      setLastEntryId(selections.initial.entry.id);
+    }
+    safeLog("intervention_feedback_no_change", {
+      strategyType: selections?.initial.entry.strategyType ?? null,
+      symptomTarget: primary?.category ?? null,
+      severityTier: liveSeverity,
+    });
+  }, [setEngagedPhase, struggleCount, onStruggleCountChange, selections, primary, liveSeverity]);
 
   // Sends the patient into a second checking loop with the alternate step.
   const handleTryAdjusted = useCallback(() => {
     tap();
-    safeLog("intervention_adjusted_started");
+    safeLog("intervention_adjusted_started", {
+      adjustedStrategyType: selections?.adjusted.entry.strategyType ?? null,
+      failedStrategyType: selections?.initial.entry.strategyType ?? null,
+      wasInitialOrAdjusted: "adjusted",
+      severityTier: liveSeverity,
+    });
     setEngagedPhase("checking");
   }, [setEngagedPhase]);
 
@@ -1542,7 +1640,8 @@ export function InterventionCard({
 
         {!isEscalationRound && (
           <Text style={styles.adaptiveHint}>
-            Adjusting your support based on your feedback.
+            {selections?.adjusted.explainWhy ??
+              "Adjusting your support based on your feedback."}
           </Text>
         )}
 
@@ -1659,6 +1758,14 @@ export function InterventionCard({
       {primaryContent.helper.trim().length > 0 && (
         <Text style={styles.cardSubtitle}>
           {primaryContent.helper}
+        </Text>
+      )}
+
+      {/* Explainability — why this strategy was selected. One sentence,
+          natural language. Hidden when context is obvious. */}
+      {selections?.initial.explainWhy && (
+        <Text style={[styles.explainWhy, { color: mutedForeground }]}>
+          {selections.initial.explainWhy}
         </Text>
       )}
 
@@ -2018,6 +2125,15 @@ const styles = StyleSheet.create({
     marginTop: 18,
     fontStyle: "italic",
     opacity: 0.65,
+  },
+  explainWhy: {
+    fontSize: 11,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 16,
+    color: CARD_MUTED,
+    marginBottom: 8,
+    fontStyle: "italic",
+    opacity: 0.8,
   },
 });
 

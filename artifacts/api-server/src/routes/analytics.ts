@@ -27,6 +27,11 @@ const eventSchema = z.object({
   // column. Older client builds won't send this; the column is null
   // for those rows and the server falls back to UTC at query time.
   timezone: z.string().min(1).max(64).nullish(),
+  // Optional structured payload for typed events (e.g. intervention
+  // strategy metadata). PHI discipline: callers must only put symptom
+  // enums, strategy ids, and boolean signals here -- no free-text,
+  // no names, no identifiers beyond what's already in the row.
+  payload: z.record(z.unknown()).nullish(),
 });
 
 const batchSchema = z.object({
@@ -50,6 +55,7 @@ router.post("/events", requireAuth, async (req, res: Response) => {
       sessionId: e.sessionId ?? null,
       platform: e.platform ?? null,
       timezone: e.timezone ?? null,
+      payload: e.payload ?? null,
     }));
     await db.insert(analyticsEventsTable).values(rows);
     res.json({ ok: true, inserted: rows.length });
