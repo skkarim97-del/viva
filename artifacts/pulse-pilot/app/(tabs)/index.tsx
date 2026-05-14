@@ -191,23 +191,26 @@ export default function DashboardScreen() {
     };
   }, [glp1InputHistory]);
 
-  // Focused support mode: dim surrounding cards when intervention card
-  // is in an active engagement phase (checking / feedback / struggling).
+  // Focused support mode: dim surrounding cards when the support sheet is
+  // open AND the intervention card is in an active engagement phase.
+  // Gated on supportSheetOpen so the pill-minimized state never dims content.
   const [interventionEngaged, setInterventionEngaged] = useState(false);
   const surroundingOpacity = useRef(new Animated.Value(1)).current;
-  useEffect(() => {
-    Animated.timing(surroundingOpacity, {
-      toValue: interventionEngaged ? 0.55 : 1,
-      duration: 450,
-      useNativeDriver: Platform.OS !== "web",
-    }).start();
-  }, [interventionEngaged, surroundingOpacity]);
 
   // Support sheet — compact trigger card in Today tab, full card in a
   // native-feeling bottom sheet. The sheet slides in from below the
   // fold; the backdrop fades behind it. Phase is persisted here so the
   // InterventionCard doesn't reset if the sheet is briefly closed.
   const [supportSheetOpen, setSupportSheetOpen] = useState(false);
+
+  // Dim effect declared after supportSheetOpen so both values are in scope.
+  useEffect(() => {
+    Animated.timing(surroundingOpacity, {
+      toValue: interventionEngaged && supportSheetOpen ? 0.55 : 1,
+      duration: 450,
+      useNativeDriver: Platform.OS !== "web",
+    }).start();
+  }, [interventionEngaged, supportSheetOpen, surroundingOpacity]);
   const [supportPhase, setSupportPhase] = useState<InteractionPhase>("default");
   const windowHeight = Dimensions.get("window").height;
   const sheetAnim = useRef(new Animated.Value(windowHeight)).current;
