@@ -112,9 +112,8 @@ export default function PlanScreen() {
         showsVerticalScrollIndicator={false}
       >
         <ScreenHeader />
-        <Text style={[styles.title, { color: c.foreground }]}>Your Week</Text>
 
-        <View style={[styles.summaryCard, { backgroundColor: c.card }]}>
+        <View style={[styles.summaryCard, { backgroundColor: c.card, marginTop: 18 }]}>
           <Text style={[styles.summaryHeader, { color: c.foreground }]}>This Week</Text>
           {weeklyPlan.weekSummary.split("\n\n").map((line, i) => (
             <Text key={i} style={[styles.summaryText, { color: c.foreground }, i > 0 && { marginTop: 10 }]}>{line}</Text>
