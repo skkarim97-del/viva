@@ -80,7 +80,7 @@ export const LIBRARY: LibraryEntry[] = [
     escalationPrevention: true,
     exampleContextTriggers: ["nausea moderate", "nausea severe", "can't keep food down"],
     copy: {
-      title: "Pause food — small sips every 2 minutes",
+      title: "Pause food: small sips every 2 minutes",
       body: "Stop solid food for now. Try ice chips or a chilled electrolyte drink like Pedialyte. Take a few sips every 2 minutes for the next 15 minutes. If nausea eases, try 2–3 plain crackers.",
       helper: "If nausea worsens or you can't keep fluids down, contact your care team.",
     },
@@ -105,7 +105,7 @@ export const LIBRARY: LibraryEntry[] = [
     exampleContextTriggers: ["nausea mild", "nausea moderate", "indoor/stuffy environment"],
     copy: {
       title: "Fresh air and upright posture for 5 minutes",
-      body: "Step outside or open a window. Sit upright and breathe slowly — in through the nose for 4 counts, out through the mouth for 6. Repeat for 5 minutes. Then take 4–5 sips of cold water.",
+      body: "Step outside or open a window. Sit upright and breathe slowly: in through the nose for 4 counts, out through the mouth for 6. Repeat for 5 minutes. Then take 4–5 sips of cold water.",
       helper: "Fresh air and upright breathing can ease nausea quickly before you try any food or drink.",
     },
   },
@@ -153,7 +153,7 @@ export const LIBRARY: LibraryEntry[] = [
     exampleContextTriggers: ["nausea mild", "empty stomach"],
     copy: {
       title: "2–3 plain crackers or a slice of toast",
-      body: "Try 2–3 plain crackers or a slice of dry toast now. Eat very slowly. Stop immediately if nausea increases — don't push through it.",
+      body: "Try 2–3 plain crackers or a slice of dry toast now. Eat very slowly. Stop immediately if nausea increases. Don't push through it.",
       helper: "A small amount of bland starch can settle mild nausea better than an empty stomach.",
     },
   },
@@ -251,7 +251,7 @@ export const LIBRARY: LibraryEntry[] = [
     exampleContextTriggers: ["low appetite", "skipping meals"],
     copy: {
       title: "One bite every 5 minutes",
-      body: "Set a 20-minute timer. Every 5 minutes, eat one small bite of a familiar food — yogurt, banana, crackers, or soup. Stop when the timer finishes.",
+      body: "Set a 20-minute timer. Every 5 minutes, eat one small bite of a familiar food: yogurt, banana, crackers, or soup. Stop when the timer finishes.",
       helper: "Ultra-slow pacing takes pressure off the stomach and often leads to more total intake than forcing a full meal.",
     },
   },
@@ -277,7 +277,7 @@ export const LIBRARY: LibraryEntry[] = [
     exampleContextTriggers: ["tired energy", "low steps", "mild fatigue"],
     copy: {
       title: "A slow 3-minute walk",
-      body: "Take a slow, easy 3-minute walk around the room or outside. No pace target — just move gently. Drink 6–8 oz of water before or after.",
+      body: "Take a slow, easy 3-minute walk around the room or outside. No pace target. Just move gently. Drink 6–8 oz of water before or after.",
       helper: "Even a very short walk after fluids may shift tired energy more than rest does.",
     },
   },
@@ -350,7 +350,7 @@ export const LIBRARY: LibraryEntry[] = [
     copy: {
       title: "Drink 8 oz of water or electrolytes now",
       body: "Drink a full 8 oz of water or an electrolyte drink (Pedialyte, LMNT, or water with a pinch of salt) right now. Sit quietly for 5 minutes after.",
-      helper: "Even mild dehydration can intensify fatigue — common on GLP-1 medications when appetite and fluid intake are lower than usual.",
+      helper: "Even mild dehydration can intensify fatigue, which is common on GLP-1 medications when appetite and fluid intake are lower than usual.",
     },
   },
 
@@ -373,7 +373,7 @@ export const LIBRARY: LibraryEntry[] = [
     exampleContextTriggers: ["tired energy", "low food intake", "skipped meal"],
     copy: {
       title: "Small protein-and-carb combination",
-      body: "Eat a small protein-and-carb combo now — Greek yogurt with a banana, eggs on toast, or soup with soft tofu. Rest for 10 minutes after eating.",
+      body: "Eat a small protein-and-carb combo now: Greek yogurt with a banana, eggs on toast, or soup with soft tofu. Rest for 10 minutes after eating.",
       helper: "Protein paired with a carb may stabilize energy more reliably than either one alone.",
     },
   },
@@ -447,7 +447,7 @@ export const LIBRARY: LibraryEntry[] = [
     exampleContextTriggers: ["digestion discomfort", "after eating", "bloating"],
     copy: {
       title: "Sit fully upright for 15 minutes",
-      body: "Sit up straight in a chair — not reclined and not lying down. Drink 6–8 oz of water. Stay upright for at least 15 minutes, then reassess discomfort.",
+      body: "Sit up straight in a chair, not reclined and not lying down. Drink 6–8 oz of water. Stay upright for at least 15 minutes, then reassess discomfort.",
       helper: "Gravity supports digestion when you stay upright after a meal or fluids.",
     },
   },
@@ -593,7 +593,7 @@ export const LIBRARY: LibraryEntry[] = [
     exampleContextTriggers: ["poor sleep", "low hydration", "waking at night"],
     copy: {
       title: "4–6 oz of water 30 minutes before bed",
-      body: "Sip 4–6 oz of water at room temperature about 30 minutes before you plan to sleep. Not cold, not a full glass — just enough to stay hydrated overnight.",
+      body: "Sip 4–6 oz of water at room temperature about 30 minutes before you plan to sleep. Not cold, not a full glass. Just enough to stay hydrated overnight.",
       helper: "Staying hydrated overnight may reduce mid-night waking caused by thirst or dry mouth.",
     },
   },
@@ -667,7 +667,7 @@ export const LIBRARY: LibraryEntry[] = [
     exampleContextTriggers: ["low hydration", "cold drinks not tolerated", "digestion discomfort"],
     copy: {
       title: "Warm water or herbal tea, small sips",
-      body: "Try warm water, ginger tea, or peppermint tea — a few small sips every 3–5 minutes for the next 20 minutes. Don't force it down.",
+      body: "Try warm water, ginger tea, or peppermint tea. Take a few small sips every 3–5 minutes for the next 20 minutes. Don't force it down.",
       helper: "A temperature change often makes fluids easier to tolerate when cold water feels off or worsens nausea.",
     },
   },
@@ -717,7 +717,7 @@ export const LIBRARY: LibraryEntry[] = [
     exampleContextTriggers: ["after meal", "nausea", "digestion", "post-dose"],
     copy: {
       title: "Sit upright for 10 minutes",
-      body: "Sit fully upright in a chair — not reclined and not lying down. Take 4–5 slow sips of water. Stay in this position for 10 minutes.",
+      body: "Sit fully upright in a chair, not reclined and not lying down. Take 4–5 slow sips of water. Stay in this position for 10 minutes.",
       helper: "Upright posture can reduce pressure on the stomach and may ease both nausea and digestion discomfort.",
     },
   },
@@ -741,7 +741,7 @@ export const LIBRARY: LibraryEntry[] = [
     exampleContextTriggers: ["severe symptoms", "multiple moderate symptoms", "high symptom burden"],
     copy: {
       title: "10 minutes of quiet rest",
-      body: "Find a quiet spot. Sit or lie down for 10 minutes with no phone or screen. Focus on slow breathing — in for 4, out for 6. Reassess how you feel after.",
+      body: "Find a quiet spot. Sit or lie down for 10 minutes with no phone or screen. Focus on slow breathing: in for 4, out for 6. Reassess how you feel after.",
       helper: "When symptoms feel like too much, a short rest without stimulation is often the best first step before trying anything else.",
     },
   },

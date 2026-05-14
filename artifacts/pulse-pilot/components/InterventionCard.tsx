@@ -231,7 +231,7 @@ const RECOMMENDATIONS: Record<RecCategory, { variants: RecContent[] }> = {
       {
         // Variant 3: pause food, timed sip protocol
         title: "Pause food, sip every 2 minutes",
-        body: "Stop solid food for 15 minutes. Sip water, Pedialyte, or peppermint tea \u2014 a few sips every 2\u20133 minutes. After 15 minutes, try one bite of toast or a cracker.",
+        body: "Stop solid food for 15 minutes. Sip water, Pedialyte, or peppermint tea, a few sips every 2\u20133 minutes. After 15 minutes, try one bite of toast or a cracker.",
         helper:
           "Timed small sips are easier to keep down than a full glass when nausea is active.",
       },
@@ -256,7 +256,7 @@ const RECOMMENDATIONS: Record<RecCategory, { variants: RecContent[] }> = {
       {
         // Alternate (adjusted step): pivot to liquid nutrition
         title: "Sip a smoothie instead of eating",
-        body: "Make or order a simple smoothie with protein \u2014 Greek yogurt, cottage cheese, or protein powder. Sip it slowly over 10\u201315 minutes.",
+        body: "Make or order a simple smoothie with protein: Greek yogurt, cottage cheese, or protein powder. Sip it slowly over 10\u201315 minutes.",
         helper:
           "Liquid protein is easier to take in when chewing or strong flavors feel like too much.",
       },
@@ -270,7 +270,7 @@ const RECOMMENDATIONS: Record<RecCategory, { variants: RecContent[] }> = {
       {
         // Variant 4: ultra-slow timed pacing
         title: "One bite every 5 minutes",
-        body: "Set a 20-minute timer. Every 5 minutes, eat one small bite of a familiar food \u2014 Greek yogurt, banana, crackers, or soup. Stop when the timer runs out.",
+        body: "Set a 20-minute timer. Every 5 minutes, eat one small bite of a familiar food: Greek yogurt, banana, crackers, or soup. Stop when the timer runs out.",
         helper:
           "Ultra-slow pacing takes pressure off the stomach and often leads to more total intake than forcing a full meal.",
       },
@@ -302,7 +302,7 @@ const RECOMMENDATIONS: Record<RecCategory, { variants: RecContent[] }> = {
       {
         // Variant 4: protein + carb refuel
         title: "Refuel with protein and a carb",
-        body: "Eat a small protein-and-carb combo right now \u2014 Greek yogurt with a banana, eggs on toast, or soup with tofu. Rest for 10 minutes after.",
+        body: "Eat a small protein-and-carb combo right now: Greek yogurt with a banana, eggs on toast, or soup with tofu. Rest for 10 minutes after.",
         helper:
           "Protein paired with a carb stabilizes blood sugar more reliably than either one alone.",
       },
@@ -327,7 +327,7 @@ const RECOMMENDATIONS: Record<RecCategory, { variants: RecContent[] }> = {
       {
         // Variant 3: hydration + upright posture
         title: "8 oz of warm water, stay upright for 10 minutes",
-        body: "Drink 8 oz of warm water right now. Stay sitting upright \u2014 avoid lying down \u2014 for at least 10 minutes, then reassess discomfort.",
+        body: "Drink 8 oz of warm water right now. Stay sitting upright and avoid lying down for at least 10 minutes, then reassess discomfort.",
         helper:
           "Staying upright after fluids lets gravity support digestion and reduces discomfort.",
       },
@@ -359,7 +359,7 @@ const RECOMMENDATIONS: Record<RecCategory, { variants: RecContent[] }> = {
       {
         // Variant 3: warm fluids
         title: "Try warm fluids instead",
-        body: "Sip warm water, ginger tea, or peppermint tea \u2014 a few small sips every 3\u20135 minutes for the next 20 minutes.",
+        body: "Sip warm water, ginger tea, or peppermint tea. Take a few small sips every 3\u20135 minutes for the next 20 minutes.",
         helper:
           "A temperature change often makes fluids easier to tolerate when cold water feels off.",
       },
@@ -634,9 +634,9 @@ function nauseaCopy(
 ): RecContent {
   if (level === "severe") {
     return {
-      title: "Pause food \u2014 sip fluids for 15 minutes",
+      title: "Pause food: sip fluids for 15 minutes",
       body:
-        "Stop solid food for now. Take slow sips of water, Pedialyte, or ginger tea \u2014 a few sips every 2 minutes \u2014 for the next 15 minutes. If nausea eases, try 2\u20133 bites of crackers, toast, or a banana.",
+        "Stop solid food for now. Take slow sips of water, Pedialyte, or ginger tea, a few sips every 2 minutes, for the next 15 minutes. If nausea eases, try 2\u20133 bites of crackers, toast, or a banana.",
       helper:
         "If nausea is getting worse or you can\u2019t keep fluids down, contact your care team.",
     };
@@ -706,7 +706,7 @@ function diarrheaCopy(): RecContent {
   return {
     title: "Small sips every 5 minutes for 30 minutes",
     body:
-      "Take 4\u20135 slow sips of water or an electrolyte drink (Pedialyte, LMNT, or Liquid I.V.) every 5 minutes for the next 30 minutes. Stick to bland foods \u2014 rice, toast, or bananas.",
+      "Take 4\u20135 slow sips of water or an electrolyte drink (Pedialyte, LMNT, or Liquid I.V.) every 5 minutes for the next 30 minutes. Stick to bland foods: rice, toast, or bananas.",
     helper:
       "Steady sips replace fluids without overwhelming the gut; bland foods reduce irritation.",
   };
@@ -717,7 +717,7 @@ function energyCopy(level: "tired" | "depleted"): RecContent {
     return {
       title: "Fluids first, then a small refuel",
       body:
-        "Drink 8 oz of water or an electrolyte drink (Pedialyte, LMNT, or water with a pinch of salt) right now. Sit or lie down for 10 minutes. Then try a small protein-and-carb snack \u2014 Greek yogurt with a banana, eggs on toast, or soup with tofu.",
+        "Drink 8 oz of water or an electrolyte drink (Pedialyte, LMNT, or water with a pinch of salt) right now. Sit or lie down for 10 minutes. Then try a small protein-and-carb snack: Greek yogurt with a banana, eggs on toast, or soup with tofu.",
       helper:
         "Low hydration amplifies fatigue. Fluids first helps the refuel land better.",
     };
