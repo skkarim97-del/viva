@@ -37,7 +37,7 @@ export function OverviewPage({ data }: { data: AnalyticsSummary }) {
       {/* PRIMARY -- the four numbers a pilot operator should read
           first. Plus total panel for context (so the others aren't
           read in a vacuum). */}
-      <SectionHead hint="Across the whole panel — the numbers to read first">
+      <SectionHead hint="Across the whole panel, the numbers to read first">
         Primary metrics · pilot health
       </SectionHead>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
@@ -116,7 +116,7 @@ export function OverviewPage({ data }: { data: AnalyticsSummary }) {
         <JumpCard
           to="/patients"
           label="Drill-down"
-          desc="Patient and doctor tables — exactly the rows that produced the rollups above."
+          desc="Patient and doctor tables: exactly the rows that produced the rollups above."
         />
       </div>
 

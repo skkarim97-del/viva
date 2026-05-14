@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AnalyticsGlobalNotice } from "@/components/LegalNotice";
 import {
   CartesianGrid,
   ComposedChart,
@@ -244,6 +245,7 @@ export function CareLoopPage() {
           ))}
         </ul>
       </Card>
+      <AnalyticsGlobalNotice className="mt-2" />
     </>
   );
 }

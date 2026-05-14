@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useApp } from "@/context/AppContext";
 import { Logo } from "@/components/Logo";
+import { DataSignalNotice } from "@/components/LegalNotice";
 import { useColors } from "@/hooks/useColors";
 import type { HealthGoal, SideEffectType, MedicationProfile } from "@/types";
 import {
@@ -864,6 +865,7 @@ export default function OnboardingScreen() {
                 <Text style={[styles.healthPrePromptOptional, { color: c.mutedForeground }]}>
                   Apple Health is optional, but recommended for the best experience.
                 </Text>
+                <DataSignalNotice style={{ marginTop: 8 }} />
               </View>
               <Pressable
                 style={[styles.healthConnectBtn, { backgroundColor: c.accent }]}

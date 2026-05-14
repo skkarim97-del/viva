@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { logEvent as logAnalytics } from "@/lib/analytics";
+import { EscalationNotice, PatientInsightsNotice } from "@/components/LegalNotice";
 import {
   api,
   type CareEvent,
@@ -795,7 +796,7 @@ export function PatientDetailPage({ id }: { id: number }) {
           if (r === "same") return { tone: "neutral" as const, label: "No change after Viva's suggestion" };
           if (r === "worse") return { tone: "alert" as const, label: "Felt worse after Viva's suggestion" };
           if (r === "didnt_try") return { tone: "neutral" as const, label: "Didn't try Viva's suggestion" };
-          if (latestIntervention.status === "shown") return { tone: "neutral" as const, label: "Suggestion shown — no feedback yet" };
+          if (latestIntervention.status === "shown") return { tone: "neutral" as const, label: "Suggestion shown, no feedback yet" };
           return null;
         })();
 
@@ -908,6 +909,7 @@ export function PatientDetailPage({ id }: { id: number }) {
             <div className="pl-8 text-[11px] italic opacity-80">
               Suggested next step: review today's symptoms and reach out via your usual channel.
             </div>
+            <EscalationNotice className="pl-8 mt-2 not-italic" />
           </div>
         );
       })()}
@@ -1116,6 +1118,7 @@ export function PatientDetailPage({ id }: { id: number }) {
       {risk.data && risk.data.symptomFlags.length > 0 && (
         <section className="bg-card rounded-[20px] p-6">
           <SectionTitle>Symptom flags</SectionTitle>
+          <PatientInsightsNotice className="mb-4" />
           <ul className="space-y-3">
             {risk.data.symptomFlags.map((f) => {
               const sev = SEVERITY_STYLE[f.severity];

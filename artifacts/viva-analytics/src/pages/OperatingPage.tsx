@@ -24,7 +24,7 @@ export function OperatingPage({ data }: { data: AnalyticsSummary }) {
     <>
       <PageHeader
         title="Operating"
-        subtitle={`Pilot adoption and engagement over the last ${op.windowDays} days, derived from existing tables — no schema additions, no synthetic flags.`}
+        subtitle={`Pilot adoption and engagement over the last ${op.windowDays} days, derived from existing tables. No schema additions, no synthetic flags.`}
       />
 
       {/* PRIMARY -- pilot adoption: who got activated, who is coming

@@ -686,9 +686,9 @@ function PendingCard({ p }: { p: PatientRow }) {
     isInvited && daysRemaining !== null && daysRemaining <= 3;
   const expiryLabel =
     daysRemaining === 0
-      ? "Expires today — resend now"
+      ? "Expires today. Resend now."
       : daysRemaining === 1
-        ? "Expires tomorrow — resend if needed"
+        ? "Expires tomorrow. Resend if needed."
         : `Expires in ${daysRemaining} days`;
 
   return (
@@ -745,7 +745,7 @@ function PendingCard({ p }: { p: PatientRow }) {
           role="alert"
         >
           <span aria-hidden>⚠️</span>
-          <span>Failed to resend — please try again</span>
+          <span>Failed to resend. Please try again.</span>
         </div>
       )}
       {isInvited && (
@@ -754,7 +754,7 @@ function PendingCard({ p }: { p: PatientRow }) {
             readOnly
             value={link ?? "Generating..."}
             onFocus={(e) => e.currentTarget.select()}
-            title="Invite link — click to select all, then copy"
+            title="Invite link: click to select all, then copy"
             className="flex-1 px-3 py-2 rounded-lg bg-background text-foreground text-xs font-mono focus:outline-none focus:ring-2 focus:ring-accent"
           />
           <button
