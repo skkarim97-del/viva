@@ -77,7 +77,7 @@ export function BehaviorPage({ data }: { data: AnalyticsSummary }) {
 
       {/* SECONDARY -- what the product is actually firing. Useful to
           spot drift in the intervention mix. */}
-      <SectionHead hint="What the product is firing — context for the lift signals above">
+      <SectionHead hint="What the product is firing, with context for the lift signals above">
         Secondary metrics · top intervention types
       </SectionHead>
       <Card>

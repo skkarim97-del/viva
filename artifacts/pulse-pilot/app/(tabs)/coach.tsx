@@ -32,6 +32,7 @@ import { logIntervention } from "@/lib/intervention/logger";
 import { logCareEventDeduped, logCareEventImmediate } from "@/lib/care-events/client";
 import { Alert } from "react-native";
 import { buildCoachContext } from "@/lib/engine/coachEngine";
+import { EmergencyNotice } from "@/components/LegalNotice";
 import type { ChatMessage } from "@/types";
 
 const quickActions = [
@@ -852,6 +853,10 @@ export default function CoachScreen() {
                   )}
                 </View>
               </>
+            )}
+
+            {selectedCategory === "urgent_concern" && (
+              <EmergencyNotice style={{ marginBottom: 8 }} />
             )}
 
             <Pressable

@@ -40,6 +40,7 @@ import { sessionApi } from "@/lib/api/sessionClient";
 import { connectAppleHealth } from "@/data/healthProviders";
 import { logCareEventImmediate } from "@/lib/care-events/client";
 import { Alert } from "react-native";
+import { LEGAL } from "@/lib/legal";
 
 const GOAL_LABELS: Record<string, string> = {
   fat_loss: "Weight Loss",
@@ -647,9 +648,12 @@ export default function SettingsScreen() {
           carries low visual priority and never sits above important
           actions. */}
       <SignOutSection />
-      <Text style={[styles.disclaimer, { color: c.mutedForeground }]}>
-        Viva provides wellness support and does not replace medical advice from your care team.
-      </Text>
+      <Text style={[styles.sectionLabel, { color: c.mutedForeground }]}>Legal</Text>
+      <View style={[styles.section, { backgroundColor: c.card }]}>
+        <Text style={[styles.legalNotice, { color: c.mutedForeground }]}>
+          {LEGAL.CORE_CLINICAL_RESPONSIBILITY}
+        </Text>
+      </View>
       <View style={{ height: 24 }} />
       <WeightLogModal
         visible={weightLogOpen}
@@ -1067,14 +1071,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   devQaText: { flex: 1, fontSize: 14, fontWeight: "600" },
-  disclaimer: {
+  legalNotice: {
     fontSize: 12,
     fontFamily: "Montserrat_400Regular",
     lineHeight: 18,
-    textAlign: "center",
-    paddingHorizontal: 20,
-    marginTop: 12,
-    opacity: 0.6,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   // Tiny gray caption used directly under a section card for optional
   // helper text (e.g. the "Skipped once you check in" line under

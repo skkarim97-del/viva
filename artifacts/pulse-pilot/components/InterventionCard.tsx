@@ -970,7 +970,7 @@ function buildContextParagraph(
   }
 
   if (liveCheckin?.appetite === "very_low") {
-    parts.push(a7 >= 3 ? "appetite is very low — lower for most of this week" : "appetite is very low today");
+    parts.push(a7 >= 3 ? "appetite is very low, lower for most of this week" : "appetite is very low today");
   } else if (liveCheckin?.appetite === "low") {
     parts.push("appetite is lower than usual");
   } else if (a7 >= 3) {
@@ -1708,7 +1708,7 @@ export function InterventionCard({
         <View style={styles.escalatedNotice}>
           <Feather name="check-circle" size={12} color={warning} />
           <Text style={[styles.escalatedNoticeText, { color: warning }]}>
-            Review requested — your care team has been notified.
+            Review requested. Your care team has been notified.
           </Text>
         </View>
       )}

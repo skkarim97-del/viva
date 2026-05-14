@@ -7,6 +7,7 @@ import type {
 } from "@/lib/types";
 import { pctStr, fmtTime } from "@/lib/format";
 import { KEY_STORAGE } from "@/lib/api";
+import { PilotMetricsNotice } from "@/components/LegalNotice";
 import {
   usePilotSnapshotsList,
   usePilotSnapshotDetail,
@@ -128,7 +129,7 @@ function LiveView({ pilot }: { pilot: PilotBlock | undefined }) {
       <Card>
         <Empty>
           Pilot metrics are temporarily unavailable. The rest of the
-          dashboard is still up — try refreshing in a minute.
+          dashboard is still up. Try refreshing in a minute.
         </Empty>
       </Card>
     );
@@ -550,6 +551,7 @@ function PilotSections({ pilot }: { pilot: PilotBlock }) {
       <InterventionSection pilot={pilot} />
       <ProviderSection pilot={pilot} />
       <RulesNote pilot={pilot} isEmpty={isEmpty} />
+      <PilotMetricsNotice className="mt-2" />
     </>
   );
 }
@@ -742,7 +744,7 @@ function RulesNote({ pilot, isEmpty }: { pilot: PilotBlock; isEmpty: boolean }) 
           <strong>Reviewed:</strong> {r.reviewedDefinition.replace(/_/g, " ")}.
         </li>
         <li>
-          <strong>Acted on:</strong> {r.actedOnDefinition.replace(/_/g, " ")} — doctor_reviewed alone does NOT count.
+          <strong>Acted on:</strong> {r.actedOnDefinition.replace(/_/g, " ")}. Note: doctor_reviewed alone does not qualify.
         </li>
         <li>
           <strong>External readout:</strong> a future external endpoint will

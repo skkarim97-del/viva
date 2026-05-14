@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import type { ReactNode } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Logo } from "@/components/Logo";
+import { LEGAL } from "@/lib/legal";
 
 export function Shell({ children }: { children: ReactNode }) {
   const { me, logout } = useAuth();
@@ -59,8 +60,13 @@ export function Shell({ children }: { children: ReactNode }) {
       <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-8">
         {children}
       </main>
-      <footer className="text-center text-xs text-muted-foreground pb-8">
-        viva clinic
+      <footer className="border-t border-border mt-auto">
+        <div className="max-w-6xl mx-auto px-6 py-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <span className="text-[11px] text-muted-foreground font-medium shrink-0">viva clinic</span>
+          <p className="text-[11px] text-muted-foreground sm:text-right leading-relaxed max-w-xl">
+            {LEGAL.CORE_CLINICAL_RESPONSIBILITY}
+          </p>
+        </div>
       </footer>
     </div>
   );

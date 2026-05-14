@@ -139,7 +139,7 @@ export function UsagePage() {
           a 10s session that lands a check-in is a win, a 5min wander
           is not. Event flow helps spot a client that stopped firing.
           Timezone coverage is just for transparency on the chart axis. */}
-      <SectionHead hint="Descriptive only — not a success metric">
+      <SectionHead hint="Descriptive only, not a success metric">
         Diagnostic metrics · session length
       </SectionHead>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
