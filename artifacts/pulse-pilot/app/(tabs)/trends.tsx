@@ -155,10 +155,9 @@ export default function TrendsScreen() {
       showsVerticalScrollIndicator={false}
     >
       <ScreenHeader />
-      <Text style={[styles.title, { color: c.foreground }]}>Trends</Text>
 
       {insights && (
-        <View style={[styles.summaryCard, { backgroundColor: c.card }]}>
+        <View style={[styles.summaryCard, { backgroundColor: c.card, marginTop: 18 }]}>
           <Text style={[styles.summaryHeader, { color: c.foreground }]}>How You're Doing</Text>
           {insights.weekSummary.split("\n\n").map((line, i) => (
             <Text key={i} style={[styles.summaryText, { color: c.foreground }]}>{line}</Text>
@@ -170,7 +169,7 @@ export default function TrendsScreen() {
       )}
 
       {profile.medicationProfile && (
-        <View style={[styles.medSection, { backgroundColor: c.card }]}>
+        <View style={[styles.medSection, { backgroundColor: c.card, ...(!insights && { marginTop: 18 }) }]}>
           <View style={styles.medSectionHeader}>
             <Feather name="package" size={16} color={c.accent} />
             <Text style={[styles.medSectionTitle, { color: c.foreground }]}>Medication</Text>

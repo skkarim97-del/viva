@@ -255,9 +255,8 @@ export default function SettingsScreen() {
       showsVerticalScrollIndicator={false}
     >
       <ScreenHeader />
-      <Text style={[styles.title, { color: c.foreground }]}>Settings</Text>
 
-      <View style={[styles.profileCard, { backgroundColor: c.card }]}>
+      <View style={[styles.profileCard, { backgroundColor: c.card, marginTop: 18 }]}>
         <View style={[styles.profileAvatar, { backgroundColor: c.accent + "12" }]}>
           <Text style={[styles.profileInitial, { color: c.accent }]}>
             {profile.name ? profile.name[0].toUpperCase() : "V"}
