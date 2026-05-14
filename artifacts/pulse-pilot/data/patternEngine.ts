@@ -136,7 +136,7 @@ function findSignificantPostDoseDrops(postDose: PostDosePattern[], rollingAvgs: 
       if (cat === "nausea") {
         patterns.push({
           id: `post_dose_${cat}_day1`,
-          description: `Nausea tends to increase 1 day after your dose`,
+          description: `Nausea tends to peak 1 day after your dose`,
           confidence: confidence as PatternConfidence,
           dataPoints: day1.sampleSize,
           lastSeen: today,
@@ -144,7 +144,7 @@ function findSignificantPostDoseDrops(postDose: PostDosePattern[], rollingAvgs: 
       } else if (cat === "digestion") {
         patterns.push({
           id: `post_dose_${cat}_day1`,
-          description: `Digestion tends to be more unsettled 1 day after your dose`,
+          description: `Digestion is usually more unsettled the day after your dose`,
           confidence: confidence as PatternConfidence,
           dataPoints: day1.sampleSize,
           lastSeen: today,
@@ -152,7 +152,7 @@ function findSignificantPostDoseDrops(postDose: PostDosePattern[], rollingAvgs: 
       } else {
         patterns.push({
           id: `post_dose_${cat}_day1`,
-          description: `Your ${categoryLabels[cat]} tends to dip 1 day after your dose`,
+          description: `Your ${categoryLabels[cat]} tends to be lower the day after your dose`,
           confidence: confidence as PatternConfidence,
           dataPoints: day1.sampleSize,
           lastSeen: today,
@@ -165,7 +165,7 @@ function findSignificantPostDoseDrops(postDose: PostDosePattern[], rollingAvgs: 
       if (cat === "nausea") {
         patterns.push({
           id: `post_dose_${cat}_day2`,
-          description: `Nausea tends to linger for 2 days after your dose`,
+          description: `Nausea typically persists for 2 days after your dose`,
           confidence: confidence as PatternConfidence,
           dataPoints: day2.sampleSize,
           lastSeen: today,
@@ -173,7 +173,7 @@ function findSignificantPostDoseDrops(postDose: PostDosePattern[], rollingAvgs: 
       } else if (cat === "digestion") {
         patterns.push({
           id: `post_dose_${cat}_day2`,
-          description: `Digestive issues tend to persist for 2 days after your dose`,
+          description: `Digestion tends to stay unsettled for 2 days after your dose`,
           confidence: confidence as PatternConfidence,
           dataPoints: day2.sampleSize,
           lastSeen: today,
@@ -181,7 +181,7 @@ function findSignificantPostDoseDrops(postDose: PostDosePattern[], rollingAvgs: 
       } else if (!patterns.find(p => p.id === `post_dose_${cat}_day1`)) {
         patterns.push({
           id: `post_dose_${cat}_day2`,
-          description: `Your ${categoryLabels[cat]} tends to dip around 2 days after your dose`,
+          description: `Your ${categoryLabels[cat]} tends to be lower around 2 days after your dose`,
           confidence: confidence as PatternConfidence,
           dataPoints: day2.sampleSize,
           lastSeen: today,
@@ -194,7 +194,7 @@ function findSignificantPostDoseDrops(postDose: PostDosePattern[], rollingAvgs: 
       if (cat !== "nausea" && cat !== "digestion") {
         patterns.push({
           id: `dose_day_boost_${cat}`,
-          description: `Your ${categoryLabels[cat]} tends to be better on dose day`,
+          description: `Your ${categoryLabels[cat]} is typically stronger on dose day`,
           confidence: confidence as PatternConfidence,
           dataPoints: day0.sampleSize,
           lastSeen: today,
@@ -235,7 +235,7 @@ function detectBehavioralPatterns(
   if (nauseaAppPairs >= 5 && (nauseaLowAppLow + nauseaGoodAppGood) / nauseaAppPairs >= 0.6) {
     patterns.push({
       id: "nausea_appetite_link",
-      description: "Your appetite tends to track closely with your nausea levels",
+      description: "Appetite is steadier on lower nausea days",
       confidence: nauseaAppPairs >= 10 ? "high" : "medium",
       dataPoints: nauseaAppPairs,
       lastSeen: today,
@@ -256,7 +256,7 @@ function detectBehavioralPatterns(
   if (digEnergyPairs >= 5 && (digestionLowEnergyLow + digestionGoodEnergyGood) / digEnergyPairs >= 0.6) {
     patterns.push({
       id: "digestion_energy_link",
-      description: "Your energy tends to track closely with your digestion",
+      description: "Energy tends to improve when digestion stays settled",
       confidence: digEnergyPairs >= 10 ? "high" : "medium",
       dataPoints: digEnergyPairs,
       lastSeen: today,
@@ -278,7 +278,7 @@ function detectBehavioralPatterns(
     if (nauseaDays >= 3 && nauseaDigBothBad >= 2 && nauseaDigBothBad / nauseaDays >= 0.5) {
       patterns.push({
         id: "nausea_digestion_co_occur",
-        description: "Nausea and digestive issues tend to appear together",
+        description: "Nausea and digestion symptoms often appear together for you",
         confidence: nauseaDays >= 5 ? "high" : "medium",
         dataPoints: nauseaDays,
         lastSeen: today,
@@ -299,25 +299,57 @@ function detectBehavioralPatterns(
   if (lowEnergyDays >= 3 && lowEnergyNextDayBetter >= 2) {
     patterns.push({
       id: "energy_bounce_back",
-      description: "Your energy tends to bounce back the day after a low energy day",
+      description: "Energy typically rebounds within 24 hours of a low day",
       confidence: lowEnergyDays >= 5 ? "high" : "medium",
       dataPoints: lowEnergyDays,
       lastSeen: today,
     });
   }
 
-  const last7Completions = completionHistory.slice(-7);
-  if (last7Completions.length >= 5) {
-    const avgRate = last7Completions.reduce((s, r) => s + r.completionRate, 0) / last7Completions.length;
-    if (avgRate >= 70) {
-      patterns.push({
-        id: "strong_consistency",
-        description: "You have been consistently following your plan this week",
-        confidence: "high",
-        dataPoints: last7Completions.length,
-        lastSeen: today,
-      });
-    }
+  // Low-intake days followed by lower energy the next day
+  let lowAppLowEnergyNext = 0;
+  let lowAppDays = 0;
+  for (let i = 0; i < history.length - 1; i++) {
+    const aToday = scoreInput("appetite", history[i]);
+    if (aToday > 2 || aToday === 0) continue;
+    lowAppDays++;
+    const eTomorrow = scoreInput("energy", history[i + 1]);
+    if (eTomorrow === 0) continue;
+    if (eTomorrow <= 2) lowAppLowEnergyNext++;
+  }
+  if (lowAppDays >= 3 && lowAppLowEnergyNext / lowAppDays >= 0.5) {
+    patterns.push({
+      id: "low_appetite_energy_lag",
+      description: "Lower intake days are often followed by lower energy the next day",
+      confidence: lowAppDays >= 5 ? "medium" : "low",
+      dataPoints: lowAppDays,
+      lastSeen: today,
+    });
+  }
+
+  // Symptom stabilization — difficult days are followed by improvement within 24h
+  let highSymptomDays = 0;
+  let highSymptomBetterNext = 0;
+  for (let i = 0; i < history.length - 1; i++) {
+    const nToday = scoreInput("nausea", history[i]);
+    const aToday = scoreInput("appetite", history[i]);
+    const isDifficult = (nToday > 0 && nToday <= 2) || (aToday > 0 && aToday <= 2);
+    if (!isDifficult) continue;
+    highSymptomDays++;
+    const nNext = scoreInput("nausea", history[i + 1]);
+    const aNext = scoreInput("appetite", history[i + 1]);
+    const nauseaBetter = nNext === 0 || nNext > nToday;
+    const appBetter = aNext === 0 || aNext > aToday;
+    if (nauseaBetter && appBetter) highSymptomBetterNext++;
+  }
+  if (highSymptomDays >= 4 && highSymptomBetterNext / highSymptomDays >= 0.55) {
+    patterns.push({
+      id: "symptom_stabilization",
+      description: "Symptoms typically stabilize within 24 hours after a difficult day",
+      confidence: highSymptomDays >= 6 ? "medium" : "low",
+      dataPoints: highSymptomDays,
+      lastSeen: today,
+    });
   }
 
   return patterns;
@@ -413,6 +445,18 @@ export function computeUserPatterns(
   };
 }
 
+// Priority tiers for sorting insights before the 4-item cap is applied.
+// Lower number = shown first.
+//   1. post_dose  — most specific and proprietary (treatment timing)
+//   2. correlation — behavioral signal with data backing
+//   3. trend       — directional movement over time
+//   4. pattern     — generic catch-all
+function insightPriority(type: AdaptiveInsight["type"], confidence: PatternConfidence): number {
+  const base = type === "post_dose" ? 0 : type === "correlation" ? 10 : type === "trend" ? 20 : 30;
+  const boost = confidence === "high" ? 0 : confidence === "medium" ? 1 : 2;
+  return base + boost;
+}
+
 export function generateAdaptiveInsights(patterns: UserPatterns): AdaptiveInsight[] {
   const insights: AdaptiveInsight[] = [];
 
@@ -451,17 +495,8 @@ export function generateAdaptiveInsights(patterns: UserPatterns): AdaptiveInsigh
     });
   }
 
-  // Trend insights ("steadily improving over the past two weeks") need a
-  // real sample before we make that claim. Each entry in glp1InputHistory
-  // is one day (upserted by date in AppContext), so sampleSize14d is the
-  // count of days the patient actually checked in for this category in
-  // the last 14 days. We require at least 7 days of data before any
-  // trend statement, and we phrase the timeframe based on how much data
-  // we actually have. Anything less only contributes a neutral fallback.
-  // Pilot-stage threshold: 5 days is enough to start surfacing
-  // directional patterns so early users feel value quickly. The
-  // separate "two weeks" phrasing gate (sampleSize14d >= 10) still
-  // protects us from claiming a 14-day pattern off a 5-day signal.
+  // Trend insights — require a real sample before claiming any direction.
+  // 10+ days → definitive two-week claim; 5-9 days → softer framing.
   const TREND_MIN_DAYS = 5;
   let anyTrendShown = false;
   let maxSampleSize = 0;
@@ -476,35 +511,27 @@ export function generateAdaptiveInsights(patterns: UserPatterns): AdaptiveInsigh
 
     if (hasEnoughData && directionConsistent) {
       anyTrendShown = true;
-      // Phrasing tracks how strong the evidence actually is.
-      //   * 10+ days  -> definitive: "has been steadily improving over the past two weeks"
-      //   * 5-9 days  -> soft:       "is trending toward improvement in your recent check-ins"
-      // We never claim "two weeks" or "steadily" off a 5-day signal --
-      // those words imply a level of certainty the sample size hasn't
-      // earned yet.
       const isFullWindow = rolling.sampleSize14d >= 10;
-      const labels: Record<InputCategory, string> = {
-        energy: "energy",
-        appetite: "appetite",
-        nausea: "nausea",
-        digestion: "digestion",
-      };
       let text: string;
       if (isFullWindow) {
         if (rolling.category === "nausea") {
-          text = "Nausea has been steadily improving over the past two weeks";
+          text = "Nausea has been improving steadily over the past two weeks";
         } else if (rolling.category === "digestion") {
-          text = "Digestion has been steadily settling down over the past two weeks";
+          text = "Digestion has been steadily settling over the past two weeks";
+        } else if (rolling.category === "energy") {
+          text = "Energy has been trending upward over the past two weeks";
         } else {
-          text = `Your ${labels[rolling.category]} has been steadily improving over the past two weeks`;
+          text = `Appetite has been improving steadily over the past two weeks`;
         }
       } else {
         if (rolling.category === "nausea") {
-          text = "Nausea looks like it may be easing in your recent check-ins";
+          text = "Nausea appears to be easing in recent check-ins";
         } else if (rolling.category === "digestion") {
-          text = "Digestion looks like it may be settling in your recent check-ins";
+          text = "Digestion appears to be settling in recent check-ins";
+        } else if (rolling.category === "energy") {
+          text = "Energy is trending upward in recent check-ins";
         } else {
-          text = `Your ${labels[rolling.category]} is trending toward improvement in your recent check-ins`;
+          text = "Appetite is trending toward improvement in recent check-ins";
         }
       }
       insights.push({
@@ -517,42 +544,25 @@ export function generateAdaptiveInsights(patterns: UserPatterns): AdaptiveInsigh
     }
   }
 
-  // If we have some data but nothing rises to a real trend, surface a
-  // neutral baseline statement instead of leaving the section empty (or,
-  // worse, letting an unrelated pattern carry weight it shouldn't). We
-  // only do this when the patient has clearly engaged (≥ 3 days) so the
-  // "still building" framing is honest -- a single check-in shouldn't
-  // claim a baseline either.
-  // Actionable nudge instead of a passive "tracking..." statement.
-  // Behavioral lift: users who see a clear ask ("keep logging") check
-  // in more consistently than users who see a status update.
+  // Baseline nudge when data exists but no trend is visible yet.
   if (!anyTrendShown && maxSampleSize >= 1 && maxSampleSize < TREND_MIN_DAYS) {
     const daysLeft = TREND_MIN_DAYS - maxSampleSize;
     insights.push({
       id: "trend_baseline_building",
       text: maxSampleSize >= 3
-        ? `Keep logging daily -- ${daysLeft} more day${daysLeft === 1 ? "" : "s"} unlocks your pattern view`
-        : "Keep logging daily so we can understand your pattern",
+        ? `Keep logging daily — ${daysLeft} more day${daysLeft === 1 ? "" : "s"} unlocks your pattern view`
+        : "Keep logging daily so Viva can learn your patterns",
       category: "general",
       confidence: "low",
       type: "trend",
     });
   }
 
-  for (const override of patterns.adaptiveOverrides) {
-    if (override.confidence === "low") continue;
-    if (!insights.find(i => i.text === override.reason)) {
-      insights.push({
-        id: `override_${override.ruleId}`,
-        text: override.reason,
-        category: "general",
-        confidence: override.confidence,
-        type: "pattern",
-      });
-    }
-  }
+  // Sort by clinical priority before capping — post-dose insights always
+  // surface first, then correlations, then trends.
+  insights.sort((a, b) => insightPriority(a.type, a.confidence) - insightPriority(b.type, b.confidence));
 
-  return insights.slice(0, 5);
+  return insights.slice(0, 4);
 }
 
 export function getDaysSinceLastDose(medicationLog: MedicationLogEntry[]): number | null {
