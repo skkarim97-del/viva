@@ -24,6 +24,7 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SymptomTipCard } from "@/components/SymptomTipCard";
 import { InterventionCard, deriveLiveSeverity, type InteractionPhase } from "@/components/InterventionCard";
+import { shouldInvalidateSupportState } from "@/lib/support/symptomState";
 import { BlurView } from "expo-blur";
 import {
   interventionsApi,
@@ -943,26 +944,40 @@ export default function DashboardScreen() {
   const interventionIsElevated =
     currentLiveSeverity === "moderate" || currentLiveSeverity === "severe";
 
-  // Keep a ref in sync so handleSupportDone (defined earlier via useCallback)
-  // can snapshot the live severity at the moment the user reports success.
+  // Keep the ref in sync so handleSupportDone (defined earlier via useCallback)
+  // can snapshot live severity at the moment the patient reports success.
   useEffect(() => { currentSeverityRef.current = currentLiveSeverity; }, [currentLiveSeverity]);
 
-  // Invalidate the green resolved state ONLY when symptoms materially worsen —
-  // if nausea goes from moderate (resolved) to severe, clear the pill and
-  // reset the phase so the sheet opens fresh. Improvement or stable readings
-  // are intentionally ignored so the green state persists correctly.
+  // Single invalidation gate — runs whenever severity changes while any support
+  // state is active. Covers two cases:
+  //   • Symptoms cleared to steady/none → wipe all active support (checking,
+  //     struggling, resolved) so the pill never says "Support in progress"
+  //     when there's nothing left to monitor.
+  //   • Symptoms worsened past the resolved baseline → clear the green state
+  //     so a fresh recommendation appears for the new severity.
+  // Stable or improving readings are intentionally ignored.
   useEffect(() => {
-    if (!supportResolved || resolvedSeverityRef.current === null || currentLiveSeverity === null) return;
-    const RANK: Record<string, number> = { steady: 0, mild: 1, moderate: 2, severe: 3 };
-    const resolvedRank = RANK[resolvedSeverityRef.current] ?? 0;
-    const currentRank = RANK[currentLiveSeverity] ?? 0;
-    if (currentRank > resolvedRank) {
+    if (!symptomHydrated || currentLiveSeverity === null) return;
+    const symptomsFree = currentLiveSeverity === "steady";
+    const { clearActiveBanner, clearResolved } = shouldInvalidateSupportState({
+      currentSeverity: currentLiveSeverity,
+      symptomsFree,
+      supportBannerVisible,
+      supportResolved,
+      resolvedSeverity: resolvedSeverityRef.current,
+    });
+    if (clearActiveBanner) {
+      setSupportBannerVisible(false);
+      setSupportPhase("default");
+      setSupportStruggleCount(0);
+    }
+    if (clearResolved) {
       setSupportResolved(false);
       setSupportPhase("default");
       setSupportStruggleCount(0);
       resolvedSeverityRef.current = null;
     }
-  }, [currentLiveSeverity, supportResolved]);
+  }, [currentLiveSeverity, symptomHydrated, supportBannerVisible, supportResolved]);
 
   const sendAskMessage = async (text: string) => {
     if (!text.trim() || isTyping) return;
