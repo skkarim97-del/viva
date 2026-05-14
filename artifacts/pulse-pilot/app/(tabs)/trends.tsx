@@ -76,14 +76,32 @@ export default function TrendsScreen() {
   }, [metrics, hasHealthData, availableMetricTypes]);
   const habitStats = useMemo(() => computeHabitStats(completionHistory), [completionHistory]);
   const baseInsights = useMemo(() => hasHealthData ? buildKeyInsights(metrics, habitStats, availableMetricTypes) : [], [metrics, habitStats, hasHealthData, availableMetricTypes]);
-  const keyInsights = useMemo(() => {
-    const analyticsInsights = inputAnalytics?.insights ?? [];
-    const combined = [...baseInsights];
-    for (const ai of analyticsInsights) {
-      if (!combined.includes(ai)) combined.push(ai);
+  // Merge adaptive (check-in pattern) and key (wearable/habit) insights
+  // into one deduplicated list, capped at 4. adaptiveInsights are already
+  // sorted by clinical priority (post_dose → correlation → trend) inside
+  // generateAdaptiveInsights, so we prepend them before wearable signals.
+  const mergedInsights = useMemo(() => {
+    const seen = new Set<string>();
+    const result: Array<{ id: string; text: string; type: "post_dose" | "correlation" | "trend" | "pattern" | "wearable" }> = [];
+    for (const a of adaptiveInsights) {
+      if (!seen.has(a.text)) {
+        seen.add(a.text);
+        result.push({ id: a.id, text: a.text, type: a.type });
+      }
     }
-    return combined.slice(0, 6);
-  }, [baseInsights, inputAnalytics]);
+    const analyticsInsights = inputAnalytics?.insights ?? [];
+    const supplemental = [...baseInsights];
+    for (const ai of analyticsInsights) {
+      if (!supplemental.includes(ai)) supplemental.push(ai);
+    }
+    for (const s of supplemental) {
+      if (!seen.has(s)) {
+        seen.add(s);
+        result.push({ id: `wearable_${s.slice(0, 20)}`, text: s, type: "wearable" });
+      }
+    }
+    return result.slice(0, 4);
+  }, [adaptiveInsights, baseInsights, inputAnalytics]);
   const glp1Insights = useMemo(() => hasHealthData ? buildGLP1Insights(metrics, profile.medicationProfile, medicationLog, completionHistory) : [], [metrics, profile.medicationProfile, medicationLog, completionHistory, hasHealthData]);
 
   const openDetail = (label: string) => {
@@ -227,46 +245,35 @@ export default function TrendsScreen() {
         </View>
       )}
 
-      {(adaptiveInsights.length > 0 || keyInsights.length > 0 || hasHealthData) && (
+      {(mergedInsights.length > 0 || hasHealthData) && (
         <View style={styles.sectionWrap}>
-          <Text style={[styles.sectionTitle, { color: c.foreground }]}>What We're Noticing</Text>
           <View style={[styles.patternsCard, { backgroundColor: c.card }]}>
             <View style={styles.patternsHeader}>
-              <Feather name="bar-chart-2" size={14} color={c.accent} />
+              <Feather name="activity" size={13} color={c.accent} />
               <Text style={[styles.patternsTitle, { color: c.foreground }]}>Recent patterns</Text>
             </View>
-            <Text style={[styles.patternsSubtitle, { color: c.mutedForeground }]}>
-              {hasHealthData
-                ? "Patterns from your check-ins and Apple Health"
-                : "Patterns from your recent check-ins"}
-            </Text>
-            {adaptiveInsights.length === 0 && keyInsights.length === 0 && hasHealthData && (
+            {mergedInsights.length === 0 ? (
               <View style={styles.patternRow}>
                 <Feather name="clock" size={12} color={c.mutedForeground} style={{ marginTop: 2 }} />
                 <Text style={[styles.patternRowText, { color: c.mutedForeground }]}>
-                  Keep checking in so Viva can learn your patterns.
+                  Keep checking in daily — patterns appear after a few days of data.
                 </Text>
               </View>
+            ) : (
+              mergedInsights.map((insight) => {
+                const iconName =
+                  insight.type === "post_dose" ? "clock" :
+                  insight.type === "correlation" ? "git-merge" :
+                  insight.type === "trend" ? "trending-up" :
+                  "zap";
+                return (
+                  <View key={insight.id} style={styles.patternRow}>
+                    <Feather name={iconName as any} size={11} color={c.accent} style={{ marginTop: 3 }} />
+                    <Text style={[styles.patternRowText, { color: c.foreground }]}>{insight.text}</Text>
+                  </View>
+                );
+              })
             )}
-            {adaptiveInsights.slice(0, 3).map((insight) => (
-              <View key={insight.id} style={styles.patternRow}>
-                <Feather
-                  name={insight.type === "post_dose" ? "clock" : insight.type === "correlation" ? "link" : insight.type === "trend" ? "trending-up" : "zap"}
-                  size={12}
-                  color={c.accent}
-                  style={{ marginTop: 2 }}
-                />
-                <Text style={[styles.patternRowText, { color: c.mutedForeground }]}>{insight.text}</Text>
-              </View>
-            ))}
-            {keyInsights
-              .filter((k) => !adaptiveInsights.some((a) => a.text === k))
-              .map((insight, i) => (
-                <View key={`ki-${i}`} style={styles.patternRow}>
-                  <Feather name="zap" size={12} color={c.accent} style={{ marginTop: 2 }} />
-                  <Text style={[styles.patternRowText, { color: c.mutedForeground }]}>{insight}</Text>
-                </View>
-              ))}
           </View>
         </View>
       )}
@@ -721,35 +728,40 @@ const styles = StyleSheet.create({
   },
   patternsCard: {
     borderRadius: 20,
-    padding: 16,
-    gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 16,
+    gap: 8,
   },
   patternsHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 7,
+    marginBottom: 2,
   },
   patternsTitle: {
-    fontSize: 15,
+    fontSize: 13,
     fontFamily: "Montserrat_600SemiBold",
-    letterSpacing: -0.2,
+    letterSpacing: 0.1,
   },
   patternsSubtitle: {
     fontSize: 12,
     lineHeight: 16,
     fontFamily: "Montserrat_500Medium",
-    marginBottom: 4,
+    marginBottom: 2,
   },
   patternRow: {
     flexDirection: "row",
-    gap: 8,
+    gap: 9,
     alignItems: "flex-start",
+    paddingVertical: 3,
   },
   patternRowText: {
     fontSize: 13,
     fontFamily: "Montserrat_400Regular",
     lineHeight: 19,
     flex: 1,
+    letterSpacing: -0.1,
   },
   glp1InsightCard: {
     flexDirection: "row",
