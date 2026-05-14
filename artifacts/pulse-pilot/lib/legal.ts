@@ -14,7 +14,7 @@ export const LEGAL = {
     "Viva supports your care between visits and helps your care team understand how you're doing.",
 
   EMERGENCY_NOTICE:
-    "Not for emergencies. If symptoms are severe or urgent, call 911 or seek emergency care.",
+    "Not for emergencies. If symptoms are severe or urgent, contact your care team or seek prompt medical attention.",
 
   DATA_SIGNAL_NOTICE:
     "Health signal data may be incomplete, delayed or unavailable.",

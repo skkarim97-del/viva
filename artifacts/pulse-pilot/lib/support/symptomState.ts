@@ -60,9 +60,9 @@ export interface CheckinSnapshot {
 export function getSymptomSignature(c: CheckinSnapshot): string {
   const parts: string[] = [];
   if (c.nausea && c.nausea !== "none") parts.push(`nausea:${c.nausea}`);
-  if (c.appetite && c.appetite !== "good") parts.push(`appetite:${c.appetite}`);
-  if (c.energy && c.energy !== "good") parts.push(`energy:${c.energy}`);
-  if (c.digestion && c.digestion !== "normal") parts.push(`digestion:${c.digestion}`);
+  if (c.appetite === "low" || c.appetite === "very_low") parts.push(`appetite:${c.appetite}`);
+  if (c.energy === "tired" || c.energy === "depleted") parts.push(`energy:${c.energy}`);
+  if (c.digestion && c.digestion !== "fine") parts.push(`digestion:${c.digestion}`);
   if (c.bowel === "no") parts.push("bowel:no");
   return parts.join("|");
 }

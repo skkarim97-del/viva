@@ -364,7 +364,7 @@ function buildObservations(data: AnalyticsSummary): Obs[] {
         level: "warn",
         text: `Intervention engagement is ${pctStr(pilot.interventions.pctEngaged)} — patients are receiving Viva's suggestions but mostly not acting on them.`,
       });
-    } else if (pilot.interventions.pctAutoResolved >= 0.5) {
+    } else if (pilot.interventions.triggered >= 10 && pilot.interventions.pctAutoResolved >= 0.5) {
       obs.push({
         level: "ok",
         text: `${pctStr(pilot.interventions.pctAutoResolved)} of interventions auto-resolved without escalation — Viva is handling most issues at the app layer.`,
