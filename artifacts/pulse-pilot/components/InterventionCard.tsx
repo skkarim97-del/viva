@@ -1579,7 +1579,7 @@ export function InterventionCard({
               <Feather name="refresh-cw" size={11} color="#6B8AB5" />
               <Text style={styles.heroPanelLabel}>Adjusted step</Text>
             </View>
-            <Text style={[styles.heroBody, { color: navy }]} numberOfLines={4}>
+            <Text style={[styles.heroBody, { color: navy }]}>
               {alternateContent.body}
             </Text>
           </View>
@@ -1612,7 +1612,7 @@ export function InterventionCard({
 
       {/* Subtitle — one short supporting sentence */}
       {primaryContent.helper.trim().length > 0 && (
-        <Text style={styles.cardSubtitle} numberOfLines={2}>
+        <Text style={styles.cardSubtitle}>
           {primaryContent.helper}
         </Text>
       )}
@@ -1627,7 +1627,7 @@ export function InterventionCard({
           />
           <Text style={styles.heroPanelLabel}>Recommended now</Text>
         </View>
-        <Text style={[styles.heroBody, { color: navy }]} numberOfLines={3}>
+        <Text style={[styles.heroBody, { color: navy }]}>
           {primaryContent.body}
         </Text>
       </View>
