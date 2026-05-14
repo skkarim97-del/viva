@@ -258,12 +258,12 @@ export default function DashboardScreen() {
   //   0 = not started  1 = first step tried → show adjusted step
   //   2+ = both steps tried → surface care-team escalation
   const [supportStruggleCount, setSupportStruggleCount] = useState(0);
-  // Persistent "resolved" state — pill stays green until symptoms change.
+  // Persistent "resolved" state — pill stays green until symptoms worsen.
   const [supportResolved, setSupportResolved] = useState(false);
-  // Tracks symptom signature at the moment of resolution so we can
-  // detect when inputs materially change and clear the green state.
-  const currentSympSigRef = useRef("");
-  const resolvedAtSigRef = useRef<string | null>(null);
+  // Tracks live severity at resolution time so we can distinguish worsening
+  // (→ invalidate) from improvement or stable symptoms (→ keep green).
+  const currentSeverityRef = useRef<string | null>(null);
+  const resolvedSeverityRef = useRef<string | null>(null);
 
   // Wraps setSupportPhase with side effects: auto-dismiss the sheet
   // when the patient starts a support step (checking phase) and hide
@@ -283,10 +283,10 @@ export default function DashboardScreen() {
   }, [closeSupportSheet]);
 
   // Fires when the card reaches "better" (resolved). Closes the sheet,
-  // shows the persistent green pill, and captures the current symptom
-  // signature so the green state can self-clear if inputs change later.
+  // shows the persistent green pill, and snapshots the current live severity
+  // so we can later detect if symptoms worsen past that baseline.
   const handleSupportDone = React.useCallback(() => {
-    resolvedAtSigRef.current = currentSympSigRef.current;
+    resolvedSeverityRef.current = currentSeverityRef.current;
     closeSupportSheet();
     setSupportPhase("better");
     setSupportBannerVisible(false);
@@ -487,16 +487,6 @@ export default function DashboardScreen() {
   const symptomSignature = `${glp1Energy ?? ""}|${appetite ?? ""}|${nausea ?? ""}|${digestion ?? ""}|${bowelMovementToday ?? ""}`;
   const hasMinSymptomData = !!(glp1Energy && nausea);
 
-  // Keep the ref in sync so handleSupportDone can snapshot the current sig.
-  useEffect(() => { currentSympSigRef.current = symptomSignature; }, [symptomSignature]);
-  // Clear green resolved pill when the patient changes any symptom input.
-  useEffect(() => {
-    if (!supportResolved || resolvedAtSigRef.current === null) return;
-    if (symptomSignature !== resolvedAtSigRef.current) {
-      setSupportResolved(false);
-      resolvedAtSigRef.current = null;
-    }
-  }, [symptomSignature, supportResolved]);
 
   const lastSavedSignatureRef = useRef<string | null>(null);
   useEffect(() => {
@@ -952,6 +942,27 @@ export default function DashboardScreen() {
     : null;
   const interventionIsElevated =
     currentLiveSeverity === "moderate" || currentLiveSeverity === "severe";
+
+  // Keep a ref in sync so handleSupportDone (defined earlier via useCallback)
+  // can snapshot the live severity at the moment the user reports success.
+  useEffect(() => { currentSeverityRef.current = currentLiveSeverity; }, [currentLiveSeverity]);
+
+  // Invalidate the green resolved state ONLY when symptoms materially worsen —
+  // if nausea goes from moderate (resolved) to severe, clear the pill and
+  // reset the phase so the sheet opens fresh. Improvement or stable readings
+  // are intentionally ignored so the green state persists correctly.
+  useEffect(() => {
+    if (!supportResolved || resolvedSeverityRef.current === null || currentLiveSeverity === null) return;
+    const RANK: Record<string, number> = { steady: 0, mild: 1, moderate: 2, severe: 3 };
+    const resolvedRank = RANK[resolvedSeverityRef.current] ?? 0;
+    const currentRank = RANK[currentLiveSeverity] ?? 0;
+    if (currentRank > resolvedRank) {
+      setSupportResolved(false);
+      setSupportPhase("default");
+      setSupportStruggleCount(0);
+      resolvedSeverityRef.current = null;
+    }
+  }, [currentLiveSeverity, supportResolved]);
 
   const sendAskMessage = async (text: string) => {
     if (!text.trim() || isTyping) return;
