@@ -186,7 +186,7 @@ export const INTERVENTION_TEMPLATES: ReadonlyArray<InterventionTemplate> = [
     whatWeNoticed:
       "Your hydration has been below your usual level for 2 days.",
     recommendation:
-      "Sip water or an electrolyte drink steadily over the next 2 hours \u2014 small sips every 10 minutes is easier than gulping a bottle at once.",
+      "Sip water or an electrolyte drink steadily over the next 2 hours. Small sips every 10 minutes are easier to keep down than gulping a bottle at once.",
     followUpQuestion:
       "Tell us if your energy or symptoms feel better afterward.",
     escalationRecommended: false,

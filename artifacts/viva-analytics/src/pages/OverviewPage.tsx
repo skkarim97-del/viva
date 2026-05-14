@@ -342,12 +342,12 @@ function buildObservations(data: AnalyticsSummary): Obs[] {
     if (op.patients.pctCompletingCheckins < 0.2) {
       obs.push({
         level: "warn",
-        text: `Only ${pctStr(op.patients.pctCompletingCheckins)} of activated patients are completing check-ins — onboarding or engagement issue likely.`,
+        text: `Only ${pctStr(op.patients.pctCompletingCheckins)} of activated patients are completing check-ins. May indicate an onboarding or engagement issue.`,
       });
     } else if (op.patients.pctCompletingCheckins >= 0.7) {
       obs.push({
         level: "ok",
-        text: `${pctStr(op.patients.pctCompletingCheckins)} of activated patients are completing check-ins — strong engagement baseline.`,
+        text: `${pctStr(op.patients.pctCompletingCheckins)} of activated patients are completing check-ins. Strong engagement baseline.`,
       });
     } else {
       obs.push({
@@ -362,12 +362,12 @@ function buildObservations(data: AnalyticsSummary): Obs[] {
     if (pilot.interventions.pctEngaged < 0.3) {
       obs.push({
         level: "warn",
-        text: `Intervention engagement is ${pctStr(pilot.interventions.pctEngaged)} — patients are receiving Viva's suggestions but mostly not acting on them.`,
+        text: `Intervention engagement is ${pctStr(pilot.interventions.pctEngaged)}. Patients are receiving Viva suggestions but mostly not acting on them.`,
       });
     } else if (pilot.interventions.triggered >= 10 && pilot.interventions.pctAutoResolved >= 0.5) {
       obs.push({
         level: "ok",
-        text: `${pctStr(pilot.interventions.pctAutoResolved)} of interventions auto-resolved without escalation — Viva is handling most issues at the app layer.`,
+        text: `${pctStr(pilot.interventions.pctAutoResolved)} of interventions auto-resolved without escalation. Viva is handling most issues at the app layer.`,
       });
     }
   }
@@ -377,12 +377,12 @@ function buildObservations(data: AnalyticsSummary): Obs[] {
     if (pilot.provider.pctReviewed < 0.5) {
       obs.push({
         level: "warn",
-        text: `Only ${pctStr(pilot.provider.pctReviewed)} of escalations reviewed by a doctor — more than half are pending provider response.`,
+        text: `Only ${pctStr(pilot.provider.pctReviewed)} of escalations reviewed by a doctor. More than half are pending provider response.`,
       });
     } else if (pilot.provider.pctActedOn >= 0.7) {
       obs.push({
         level: "ok",
-        text: `Providers acted on ${pctStr(pilot.provider.pctActedOn)} of escalations — the care loop is closing well.`,
+        text: `Providers acted on ${pctStr(pilot.provider.pctActedOn)} of escalations. The care loop is closing well.`,
       });
     }
   } else if (esc && esc.open > 5) {
@@ -406,7 +406,7 @@ function buildObservations(data: AnalyticsSummary): Obs[] {
         if (adherencePct < 0.4) {
           obs.push({
             level: "warn",
-            text: `Plan adherence is ${pctStr(adherencePct)} — patients are skipping most care plan items.`,
+            text: `Plan adherence is ${pctStr(adherencePct)}. Patients are skipping most care plan items.`,
           });
         } else {
           obs.push({
@@ -426,7 +426,7 @@ function buildObservations(data: AnalyticsSummary): Obs[] {
         : null;
     obs.push({
       level: "warn",
-      text: `${ts.disengagement.inactive12d} patients${pct ? ` (${pctStr(pct)})` : ""} haven't checked in for 12+ days — outreach recommended.`,
+      text: `${ts.disengagement.inactive12d} patients${pct ? ` (${pctStr(pct)})` : ""} haven't checked in for 12+ days. Outreach recommended.`,
     });
   }
 
@@ -435,12 +435,12 @@ function buildObservations(data: AnalyticsSummary): Obs[] {
     if (op.patients.pctAppleHealthConnected < 0.2) {
       obs.push({
         level: "info",
-        text: `${pctStr(op.patients.pctAppleHealthConnected)} of patients have Apple Health connected — wearable data coverage is limited.`,
+        text: `${pctStr(op.patients.pctAppleHealthConnected)} of patients have Apple Health connected. Wearable data coverage is limited.`,
       });
     } else if (op.patients.pctAppleHealthConnected >= 0.5) {
       obs.push({
         level: "info",
-        text: `${pctStr(op.patients.pctAppleHealthConnected)} of patients have Apple Health connected — good wearable data coverage.`,
+        text: `${pctStr(op.patients.pctAppleHealthConnected)} of patients have Apple Health connected. Good wearable data coverage.`,
       });
     }
   }
@@ -453,7 +453,7 @@ function VivaPulse({ data }: { data: AnalyticsSummary }) {
   if (observations.length === 0) return null;
   return (
     <>
-      <SectionHead hint="Synthesised from pilot data — not a clinical assessment">
+      <SectionHead hint="Synthesised from pilot data, not a clinical assessment">
         What Viva is noticing
       </SectionHead>
       <Card>

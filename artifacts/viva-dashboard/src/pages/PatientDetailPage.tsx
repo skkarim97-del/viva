@@ -588,7 +588,7 @@ function VivaFlagsDetail({
           : "";
     const escCtx =
       !trendCtx && flag.escalationReasons.length > 0
-        ? ` — ${flag.escalationReasons[0].toLowerCase()}`
+        ? `: ${flag.escalationReasons[0].toLowerCase()}`
         : "";
 
     if (flag.persistence === "worsening") {

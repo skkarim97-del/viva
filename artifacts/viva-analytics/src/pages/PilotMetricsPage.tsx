@@ -756,8 +756,7 @@ function RulesNote({ pilot, isEmpty }: { pilot: PilotBlock; isEmpty: boolean }) 
         </li>
         {isEmpty ? (
           <li>
-            <strong>Note:</strong> the cohort was empty for this window —
-            all KPIs read zero by definition.
+            <strong>Note:</strong> the cohort was empty for this window. All KPIs read zero by definition.
           </li>
         ) : null}
       </ul>

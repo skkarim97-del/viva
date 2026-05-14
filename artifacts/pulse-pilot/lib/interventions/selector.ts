@@ -108,7 +108,7 @@ function buildExplainWhy(
 ): string | null {
   if (mode === "adjusted") {
     // Always explain strategy shift after a failed round
-    return "Viva switched strategies after the previous step didn't help — trying a different approach.";
+    return "Viva switched to a different strategy after the previous step didn't help.";
   }
 
   // Initial selection: explain if a non-obvious context signal drove the pick
