@@ -9,12 +9,20 @@ export type InterventionSurface = "Today" | "WeeklyPlan" | "Coach";
 
 // Stable type catalog matching INTERVENTION_TYPES in the shared db
 // schema. Same tuple intent.
+//
+// Symptom-related distinction:
+//   "symptom_monitoring" — the daily plan's primary focus is symptom
+//     relief (plan-level signal; one row per day per patient).
+//   "symptom_tip"        — a passive SymptomTip insight card was
+//     rendered on the Today tab (Today-surface only; separate from the
+//     Manage symptoms active intervention flow in InterventionCard).
 export type InterventionType =
   | "hydration"
   | "protein_fueling"
   | "light_movement"
   | "recovery_rest"
   | "symptom_monitoring"
+  | "symptom_tip"
   | "clinician_escalation"
   | "dose_day_caution"
   | "adherence_checkin";
@@ -25,17 +33,14 @@ export interface InterventionLogInput {
   title: string;
   rationale?: string | null;
   state: DailyTreatmentState;
-  // Structured plan action enrichment — optional, caller provides when available
+  // Structured plan action enrichment — optional, caller provides when available.
+  // Tracks the plan recommendation lifecycle: what was shown, what was chosen,
+  // and whether the patient modified the recommendation.
+  // Symptom burden at plan time is already captured in treatmentStateSnapshot.symptomBurden.
   optionId?: string | null;            // e.g. "fuel_balanced" — the specific option shown
   recommendedOptionId?: string | null; // what the engine recommended for this slot
   selectedOptionId?: string | null;    // what the patient chose (null = used recommended)
   wasModified?: boolean;               // true when patient deviated from recommended
-  symptomContext?: {                   // symptom snapshot at the moment of recommendation
-    nausea: string | null;
-    appetite: string | null;
-    energy: string | null;
-    digestion: string | null;
-  } | null;
 }
 
 interface QueuedEvent {
@@ -48,12 +53,6 @@ interface QueuedEvent {
   recommendedOptionId: string | null;
   selectedOptionId: string | null;
   wasModified: boolean;
-  symptomContext: {
-    nausea: string | null;
-    appetite: string | null;
-    energy: string | null;
-    digestion: string | null;
-  } | null;
   treatmentStateSnapshot: {
     primaryFocus: string;
     escalationNeed: "none" | "monitor" | "clinician";
@@ -227,7 +226,6 @@ export function logIntervention(input: InterventionLogInput): void {
       recommendedOptionId: input.recommendedOptionId ?? null,
       selectedOptionId: input.selectedOptionId ?? null,
       wasModified: input.wasModified ?? false,
-      symptomContext: input.symptomContext ?? null,
       ...snap,
     });
 
