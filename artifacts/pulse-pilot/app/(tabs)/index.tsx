@@ -2546,16 +2546,17 @@ export default function DashboardScreen() {
           <Text style={styles.supportBannerTitle} numberOfLines={1} ellipsizeMode="tail">
             {supportPillText}
           </Text>
-          <Feather
-            name={supportPillState === "green" ? "x" : "chevron-up"}
-            size={14}
-            color={
-              supportPillState === "purple" ? "#7B5EA7"
-              : supportPillState === "orange" ? "#B87333"
-              : supportPillState === "green" ? "#2D9E6A"
-              : "#5A82B0"
-            }
-          />
+          {supportPillState !== "green" && (
+            <Feather
+              name="chevron-up"
+              size={14}
+              color={
+                supportPillState === "purple" ? "#7B5EA7"
+                : supportPillState === "orange" ? "#B87333"
+                : "#5A82B0"
+              }
+            />
+          )}
         </Pressable>
       )}
     </KeyboardAvoidingView>
