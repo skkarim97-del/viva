@@ -34,6 +34,7 @@ import {
 import WeightLogModal from "@/components/WeightLogModal";
 import { sessionApi } from "@/lib/api/sessionClient";
 import { logIntervention, type InterventionType } from "@/lib/intervention/logger";
+import { logEvent } from "@/lib/analytics/client";
 import { logCareEventDeduped, logCareEventImmediate } from "@/lib/care-events/client";
 import { useApp } from "@/context/AppContext";
 import { type SymptomKind } from "@/lib/symptomTips";
@@ -1582,6 +1583,22 @@ export default function DashboardScreen() {
           <Text style={[styles.sectionSubtitle, { color: c.mutedForeground }]}>
             Small actions that support progress
           </Text>
+          {(nausea === "moderate" || nausea === "severe" || glp1Energy === "depleted" || digestion === "diarrhea" || digestion === "constipated") && (
+            <View style={[styles.symptomAwareBanner, { backgroundColor: c.warning + "12", borderColor: c.warning + "30" }]}>
+              <Feather name="info" size={11} color={c.warning} />
+              <Text style={[styles.symptomAwareBannerText, { color: c.warning }]}>
+                {nausea === "severe"
+                  ? "Adjusted for severe nausea — rest and hydration prioritized."
+                  : nausea === "moderate"
+                    ? "Lightened for nausea — gentler movement and smaller meals."
+                    : digestion === "diarrhea"
+                      ? "Adjusted for digestion — hydration and bland foods emphasized."
+                      : digestion === "constipated"
+                        ? "Adjusted for constipation — hydration and movement emphasized."
+                        : "Adjusted for low energy — rest and recovery prioritized."}
+              </Text>
+            </View>
+          )}
           {planActions.map((action) => {
             const meta = ACTION_META[action.category];
 
@@ -1593,6 +1610,9 @@ export default function DashboardScreen() {
                 <Pressable
                   onPress={() => {
                     haptic();
+                    if (!action.completed) {
+                      void logEvent("plan_item_completed", { category: action.category, title: action.text });
+                    }
                     toggleAction(action.id);
                   }}
                   style={({ pressed }) => [
@@ -1609,6 +1629,7 @@ export default function DashboardScreen() {
                 <Pressable
                   onPress={() => {
                     haptic();
+                    void logEvent("plan_item_opened", { category: action.category, title: action.text });
                     setEditingAction(action.category);
                   }}
                   style={({ pressed }) => [
@@ -1655,7 +1676,12 @@ export default function DashboardScreen() {
 
         {dailyPlan?.whyThisPlan?.length > 0 && (
           <Pressable
-            onPress={() => { haptic(); setShowWhyPlan(!showWhyPlan); }}
+            onPress={() => {
+              haptic();
+              const opening = !showWhyPlan;
+              if (opening) void logEvent("why_plan_opened", { dailyState: dailyPlan.dailyState, dataTier: dailyPlan.dataTier });
+              setShowWhyPlan(opening);
+            }}
             style={[styles.whyPlanCard, { backgroundColor: c.card }]}
           >
             <View style={styles.whyPlanHeader}>
@@ -1873,17 +1899,21 @@ export default function DashboardScreen() {
             </View>
             <Text style={[styles.emptyHealthTitle, { color: c.foreground }]}>Connect Apple Health</Text>
             <Text style={[styles.emptyHealthDesc, { color: c.mutedForeground }]}>
-              Unlock more personalized support with sleep, steps and heart rate.
+              Viva uses your sleep, steps, and heart rate to adapt your daily plan. Without it, recommendations rely on check-ins only.
             </Text>
             <Pressable
-              onPress={() => { haptic(); router.push("/(tabs)/settings"); }}
+              onPress={() => {
+                haptic();
+                void logEvent("apple_health_connect_clicked", { source: "today_tab" });
+                router.push("/(tabs)/settings");
+              }}
               style={({ pressed }) => [styles.emptyHealthBtn, { backgroundColor: c.accent, opacity: pressed ? 0.85 : 1 }]}
             >
               <Feather name="settings" size={13} color="#FFFFFF" />
-              <Text style={styles.emptyHealthBtnText}>Open Settings</Text>
+              <Text style={styles.emptyHealthBtnText}>Connect in Settings</Text>
             </Pressable>
             <Text style={[styles.emptyHealthNote, { color: c.mutedForeground }]}>
-              Using daily check-ins for your plan
+              Check-ins are active. Health data makes plans more precise.
             </Text>
           </View>
         )}
@@ -2773,6 +2803,22 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     fontFamily: "Montserrat_500Medium",
     marginBottom: 10,
+  },
+  symptomAwareBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 8,
+  },
+  symptomAwareBannerText: {
+    fontSize: 12,
+    fontFamily: "Montserrat_500Medium",
+    lineHeight: 17,
+    flex: 1,
   },
   dayProgress: {
     fontSize: 13,

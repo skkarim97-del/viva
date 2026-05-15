@@ -1295,8 +1295,13 @@ export function InterventionCard({
   useEffect(() => {
     if (viewLoggedRef.current === intervention.id) return;
     viewLoggedRef.current = intervention.id;
-    safeLog("intervention_plan_viewed");
-  }, [intervention.id]);
+    safeLog("intervention_viewed", {
+      interventionId: intervention.id,
+      triggerType: intervention.triggerType,
+      severityTier: liveSeverity,
+      symptomTarget: primary?.category ?? null,
+    });
+  }, [intervention.id, intervention.triggerType, liveSeverity, primary]);
 
   // Content derivation
   const sections = useMemo(
@@ -1474,10 +1479,13 @@ export function InterventionCard({
     if (intervention.status === "escalated") return;
     if (escalateFiredRef.current) return;
     escalateFiredRef.current = true;
-    safeLog("care_team_escalation_requested", {
+    safeLog("intervention_escalated", {
       strategyType: selections?.initial.entry.strategyType ?? null,
       failedStrategyTypes: failedStrategyTypes,
       severityTier: liveSeverity,
+      symptomTarget: primary?.category ?? null,
+      phase,
+      struggleCount,
     });
     try {
       if (intervention.status === "shown" && !acceptFiredRef.current) {
@@ -1497,12 +1505,14 @@ export function InterventionCard({
   const handleFeedbackBetter = useCallback(async () => {
     tap();
     setEngagedPhase("better");
-    safeLog("intervention_feedback_better", {
+    safeLog("intervention_helped", {
       strategyType: failedStrategyTypes.length > 0
         ? selections?.adjusted.entry.strategyType ?? null
         : selections?.initial.entry.strategyType ?? null,
       wasInitialOrAdjusted: failedStrategyTypes.length > 0 ? "adjusted" : "initial",
       severityTier: liveSeverity,
+      symptomTarget: primary?.category ?? null,
+      struggleCount,
     });
     try {
       await onFeedback(intervention.id, "better");
@@ -1525,10 +1535,11 @@ export function InterventionCard({
       );
       setLastEntryId(selections.initial.entry.id);
     }
-    safeLog("intervention_feedback_no_change", {
+    safeLog("intervention_still_struggling", {
       strategyType: selections?.initial.entry.strategyType ?? null,
       symptomTarget: primary?.category ?? null,
       severityTier: liveSeverity,
+      struggleRound: newCount,
     });
   }, [setEngagedPhase, struggleCount, onStruggleCountChange, selections, primary, liveSeverity]);
 
@@ -1689,6 +1700,17 @@ export function InterventionCard({
             >
               <Text style={styles.primaryBtnText}>Try adjusted support</Text>
             </Pressable>
+            {status !== "escalated" && (
+              <Pressable
+                style={({ pressed }) => [styles.careTeamLink, { opacity: pressed ? 0.7 : 1 }]}
+                onPress={() => void handleAskCareTeam()}
+                accessibilityRole="button"
+                accessibilityLabel="Ask care team instead"
+              >
+                <Feather name="message-circle" size={12} color={warning} style={{ marginRight: 5 }} />
+                <Text style={[styles.careTeamLinkText, { color: warning }]}>Or ask your care team to review</Text>
+              </Pressable>
+            )}
             <Text style={[styles.guardrail, { color: mutedForeground }]}>
               Viva supports between-visit care. If symptoms feel severe or urgent,
               contact your care team or seek prompt medical attention.
@@ -1792,12 +1814,21 @@ export function InterventionCard({
         </Text>
       )}
 
-      {/* Explainability — why this strategy was selected. One sentence,
-          natural language. Hidden when context is obvious. */}
-      {selections?.initial.explainWhy && (
-        <Text style={[styles.explainWhy, { color: mutedForeground }]}>
-          {selections.initial.explainWhy}
-        </Text>
+      {/* "What we noticed" — natural-language signal summary. Replaces
+          chips with a readable sentence so the card explains itself
+          rather than labelling signals the patient has to interpret. */}
+      {contextChips.length > 0 && (
+        <View style={styles.noticedSection}>
+          <Text style={styles.chipsSectionLabel}>WHAT VIVA NOTICED</Text>
+          <Text style={[styles.noticedText, { color: mutedForeground }]}>
+            {contextParagraph}
+          </Text>
+          {selections?.initial.explainWhy && (
+            <Text style={[styles.noticedStrategyHint, { color: mutedForeground }]}>
+              {selections.initial.explainWhy}
+            </Text>
+          )}
+        </View>
       )}
 
       {/* Hero action panel — blue-ice surface, prominent */}
@@ -1815,20 +1846,6 @@ export function InterventionCard({
         </Text>
       </View>
 
-      {/* Context chips — compact signal row */}
-      {contextChips.length > 0 && (
-        <View style={styles.chipsSection}>
-          <Text style={styles.chipsSectionLabel}>WHAT VIVA NOTICED</Text>
-          <View style={styles.chipsRow}>
-            {contextChips.map((chip) => (
-              <View key={chip} style={styles.contextChip}>
-                <Text style={styles.contextChipText}>{chip}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      )}
-
       {/* Primary CTA */}
       <Pressable
         style={({ pressed }) => [
@@ -1841,6 +1858,20 @@ export function InterventionCard({
       >
         <Text style={styles.primaryBtnText}>Start support</Text>
       </Pressable>
+
+      {/* Secondary "Ask care team" CTA — visible for moderate/severe symptoms
+          so escalation feels immediately available, not buried in a flow. */}
+      {(liveSeverity === "moderate" || liveSeverity === "severe") && status !== "escalated" && (
+        <Pressable
+          style={({ pressed }) => [styles.careTeamSecondaryBtn, { opacity: pressed ? 0.7 : 1 }]}
+          onPress={() => void handleAskCareTeam()}
+          accessibilityRole="button"
+          accessibilityLabel="Ask care team"
+        >
+          <Feather name="message-circle" size={12} color={warning} />
+          <Text style={[styles.careTeamSecondaryBtnText, { color: warning }]}>Ask care team</Text>
+        </Pressable>
+      )}
 
       {status === "escalated" && (
         <View style={styles.escalatedNotice}>
@@ -2019,9 +2050,10 @@ const styles = StyleSheet.create({
   },
   // Escalation — amber underline link, secondary to navy CTA
   careTeamLink: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 20,
+    marginTop: 16,
     paddingVertical: 10,
   },
   careTeamLinkText: {
@@ -2192,6 +2224,37 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     fontStyle: "italic",
     opacity: 0.8,
+  },
+  noticedSection: {
+    gap: 6,
+    marginBottom: 16,
+  },
+  noticedText: {
+    fontSize: 13,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 19,
+    color: CARD_MUTED,
+  },
+  noticedStrategyHint: {
+    fontSize: 11,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 16,
+    color: CARD_MUTED,
+    fontStyle: "italic",
+    opacity: 0.75,
+  },
+  careTeamSecondaryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 14,
+    paddingVertical: 10,
+  },
+  careTeamSecondaryBtnText: {
+    fontSize: 13,
+    fontFamily: "Montserrat_600SemiBold",
+    letterSpacing: 0.1,
   },
 });
 
