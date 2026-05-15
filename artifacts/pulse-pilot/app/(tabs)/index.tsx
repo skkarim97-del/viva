@@ -36,7 +36,7 @@ import { sessionApi } from "@/lib/api/sessionClient";
 import { logIntervention, type InterventionType } from "@/lib/intervention/logger";
 import { logEvent } from "@/lib/analytics/client";
 import { buildPatientContext } from "@/lib/intelligence/patientContext";
-import { buildPlanLearningLine } from "@/lib/intelligence/learningCopy";
+import { buildPlanBannerLine } from "@/lib/intelligence/learningCopy";
 import { logCareEventDeduped, logCareEventImmediate } from "@/lib/care-events/client";
 import { useApp } from "@/context/AppContext";
 import { type SymptomKind } from "@/lib/symptomTips";
@@ -1126,8 +1126,8 @@ export default function DashboardScreen() {
   );
 
   const planLearningLine = React.useMemo(
-    () => buildPlanLearningLine(patientCtx),
-    [patientCtx],
+    () => buildPlanBannerLine(patientCtx, (dailyPlan.dailyState as "recover" | "maintain" | "build" | "push") ?? null),
+    [patientCtx, dailyPlan.dailyState],
   );
 
   // Fallback to lastInterventionRef when supportResolved so the sheet can
