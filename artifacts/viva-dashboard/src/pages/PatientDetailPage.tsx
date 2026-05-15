@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { logEvent as logAnalytics } from "@/lib/analytics";
+import { EscalationNotice, PatientInsightsNotice } from "@/components/LegalNotice";
 import {
   api,
   type CareEvent,
@@ -155,7 +156,6 @@ interface IntelligenceInputs {
   followUpPending: boolean;
   lastEscalationAt: string | null;
   recentLowMood: boolean;
-  recentNegativeTrend: boolean;
 }
 
 interface Intelligence {
@@ -279,7 +279,8 @@ function computeIntelligence(i: IntelligenceInputs): Intelligence {
 
   if (issueType === "combined") {
     if (topFlag && i.silentDays !== null && i.silentDays >= 3) {
-      summary = `Patient reported ${symptomDir} ${symptomName} and then stopped checking in.`;
+      const dur = topFlag.daysObserved > 1 ? ` (${topFlag.daysObserved}d)` : "";
+      summary = `Patient reported ${symptomDir} ${symptomName}${dur} and then stopped checking in.`;
       nextAction = `Contact patient and review ${symptomName} severity together.`;
     } else if (topFlag && i.escalationOpen) {
       summary = `Patient flagged ${symptomDir} ${symptomName} and requested clinician review.`;
@@ -293,7 +294,8 @@ function computeIntelligence(i: IntelligenceInputs): Intelligence {
     }
   } else if (issueType === "clinical") {
     if (topFlag && topFlag.persistence === "worsening") {
-      summary = `Patient is reporting worsening ${symptomName} and may need treatment support.`;
+      const dur = topFlag.daysObserved > 1 ? ` over the past ${topFlag.daysObserved} days` : "";
+      summary = `Patient is reporting worsening ${symptomName}${dur} and may need treatment support.`;
       nextAction = `Review ${symptomName} severity and treatment tolerance.`;
     } else if (topFlag && topFlag.severity === "severe") {
       summary = `Patient is reporting severe ${symptomName}; clinician review is recommended.`;
@@ -354,14 +356,33 @@ function PatientSummaryCard({
   patient,
   weight,
   risk,
+  hasAnyCheckin,
 }: {
   intel: Intelligence;
   patient: PatientDetail;
   weight: PatientWeightSummary | undefined;
   risk: Risk | null;
+  hasAnyCheckin: boolean;
 }) {
   const style = PRIORITY_STYLE[intel.priority];
   const issueStyle = ISSUE_STYLE[intel.issueType];
+  const retentionRisk = (() => {
+    if (risk?.band === "high" || intel.priority === "review_now") return { label: "Elevated", color: "#B5251D" };
+    if (risk?.band === "medium" || intel.priority === "follow_up_today") return { label: "Moderate", color: "#9A5B00" };
+    if (intel.priority === "monitor" || risk?.band === "low") return { label: "Low", color: "#0B6FAA" };
+    return { label: "Stable", color: "#1E8E3E" };
+  })();
+  const escalation = intel.reasons.includes("Patient requested review")
+    ? { label: "Open", color: "#9A5B00" }
+    : intel.reasons.includes("Follow-up pending")
+      ? { label: "Follow-up pending", color: "#7A4A00" }
+      : { label: "None", color: "#5A6478" };
+  const confidence = (() => {
+    if (!hasAnyCheckin) return { label: "Partial", color: "#5A6478" };
+    if (risk !== null && !!weight?.latest) return { label: "High", color: "#1E8E3E" };
+    if (risk !== null || !!weight?.latest) return { label: "Moderate", color: "#0B6FAA" };
+    return { label: "Partial", color: "#5A6478" };
+  })();
   return (
     <div className="bg-card rounded-[20px] p-5 sm:p-6">
       {/* --- Identity row -------------------------------------------
@@ -435,15 +456,11 @@ function PatientSummaryCard({
         </div>
       </div>
 
-      {/* --- Care summary block -------------------------------------
-          Eyebrow + issue-type chip, then the headline sentence and
-          the recommended next action. Sits inside the same card as
-          the identity row, separated only by a hairline so the top
-          reads as one cohesive intelligence block. */}
+      {/* --- Viva Summary block */}
       <div className="mt-5 pt-5 border-t border-border">
         <div className="flex items-center gap-3 flex-wrap">
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-            Care summary
+            Viva Summary
           </div>
           <div
             className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] uppercase tracking-wider font-semibold whitespace-nowrap"
@@ -452,6 +469,21 @@ function PatientSummaryCard({
           >
             {ISSUE_LABEL[intel.issueType]}
           </div>
+        </div>
+        <div className="flex flex-wrap gap-1.5 mt-2.5">
+          {[
+            { key: "retention", label: "Retention risk", chip: retentionRisk },
+            { key: "escalation", label: "Escalation", chip: escalation },
+            { key: "confidence", label: "Confidence", chip: confidence },
+          ].map(({ key, label, chip }) => (
+            <span
+              key={key}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-medium bg-background border border-border"
+            >
+              <span className="text-muted-foreground">{label}:</span>
+              <span className="font-semibold" style={{ color: chip.color }}>{chip.label}</span>
+            </span>
+          ))}
         </div>
         <p className="font-display text-[17px] sm:text-[18px] font-semibold text-foreground leading-snug mt-3">
           {intel.summary}
@@ -522,6 +554,101 @@ function PatientSummaryCard({
         </div>
       )}
     </div>
+  );
+}
+
+function VivaFlagsDetail({
+  symptomFlags,
+  silentDays,
+  escalationOpen,
+  escalationCount,
+  recentLowMood,
+  weight,
+}: {
+  symptomFlags: SymptomFlag[];
+  silentDays: number | null;
+  escalationOpen: boolean;
+  escalationCount: number;
+  recentLowMood: boolean;
+  weight: PatientWeightSummary | undefined;
+}) {
+  const bullets: string[] = [];
+
+  for (const flag of symptomFlags) {
+    const sym = SYMPTOM_LABEL[flag.symptom];
+    const sev = SEVERITY_LABEL[flag.severity]; // "Mild", "Moderate", "Severe"
+    const dur = flag.daysObserved > 1 ? ` over ${flag.daysObserved} days` : "";
+    // Surface patient-reported trajectory when available; fall back to
+    // server-computed escalation reason for specificity.
+    const trendCtx =
+      flag.trendResponse === "better"
+        ? "; patient reports recent improvement"
+        : flag.trendResponse === "worse"
+          ? "; patient reports it is getting worse"
+          : "";
+    const escCtx =
+      !trendCtx && flag.escalationReasons.length > 0
+        ? `: ${flag.escalationReasons[0].toLowerCase()}`
+        : "";
+
+    if (flag.persistence === "worsening") {
+      bullets.push(`${sev} ${sym.toLowerCase()} has been worsening${dur}${trendCtx}${escCtx}.`);
+    } else if (flag.persistence === "persistent") {
+      bullets.push(`${sev} ${sym.toLowerCase()} has been persistent${dur}${trendCtx}${escCtx}.`);
+    } else if (flag.severity === "severe") {
+      bullets.push(`Patient reported severe ${sym.toLowerCase()}${trendCtx}${escCtx}.`);
+    } else if (flag.suggestFollowup) {
+      bullets.push(`${sym} may warrant follow-up${escCtx}.`);
+    }
+  }
+
+  if (silentDays !== null && silentDays >= 3) {
+    if (silentDays >= 7) {
+      bullets.push(`No check-in logged in the last ${silentDays} days.`);
+    } else {
+      bullets.push(`Check-in frequency has slowed over the last ${silentDays} days.`);
+    }
+  }
+
+  // Show current open escalation OR a pattern of repeated requests.
+  // Avoid a raw lifetime count without time context — misleading on older patients.
+  if (escalationOpen) {
+    bullets.push("Patient has an open review request pending clinician response.");
+  } else if (escalationCount >= 2) {
+    bullets.push("Patient has requested clinical review more than once.");
+  }
+
+  if (recentLowMood) {
+    bullets.push("Most recent check-in indicated low mood or declining wellbeing.");
+  }
+
+  if (weight?.trend === "down" && weight.prior && weight.latest) {
+    const lbs = Math.abs(Math.round(weight.latest.weightLbs - weight.prior.weightLbs));
+    if (lbs > 0) bullets.push(`Weight has decreased by ${lbs} lbs since last measurement.`);
+  } else if (weight?.trend === "up" && weight.prior && weight.latest) {
+    const lbs = Math.abs(Math.round(weight.latest.weightLbs - weight.prior.weightLbs));
+    if (lbs > 0) bullets.push(`Weight has increased by ${lbs} lbs since last measurement.`);
+  }
+
+  if (bullets.length === 0) return null;
+
+  return (
+    <section className="bg-card rounded-[20px] p-6">
+      <SectionTitle>Why Viva flagged this patient</SectionTitle>
+      <ul className="space-y-2.5">
+        {bullets.map((b, i) => (
+          <li key={i} className="flex items-start gap-3 text-sm text-foreground">
+            <span
+              aria-hidden
+              className="mt-[5px] inline-block w-1.5 h-1.5 rounded-full shrink-0"
+              style={{ backgroundColor: "#38B6FF" }}
+            />
+            <span className="font-medium leading-snug">{b}</span>
+          </li>
+        ))}
+      </ul>
+      <PatientInsightsNotice className="mt-4" />
+    </section>
   );
 }
 
@@ -672,7 +799,6 @@ export function PatientDetailPage({ id }: { id: number }) {
     followUpPending: !!care.data?.followUpPending,
     lastEscalationAt: care.data?.lastEscalationAt ?? null,
     recentLowMood,
-    recentNegativeTrend: false,
   });
 
   return (
@@ -695,8 +821,16 @@ export function PatientDetailPage({ id }: { id: number }) {
         patient={p}
         weight={weight.data}
         risk={risk.data ?? null}
+        hasAnyCheckin={!!checkins.data && checkins.data.length > 0}
       />
-
+      <VivaFlagsDetail
+        symptomFlags={risk.data?.symptomFlags ?? []}
+        silentDays={silentDays}
+        escalationOpen={!!care.data?.escalationOpen}
+        escalationCount={care.data?.events.filter((e) => e.type === "escalation_requested").length ?? 0}
+        recentLowMood={recentLowMood}
+        weight={weight.data}
+      />
 
       {/* Escalation banner. Renders amber + CTA when the patient has
           requested care-team review and no doctor_reviewed event has
@@ -795,7 +929,7 @@ export function PatientDetailPage({ id }: { id: number }) {
           if (r === "same") return { tone: "neutral" as const, label: "No change after Viva's suggestion" };
           if (r === "worse") return { tone: "alert" as const, label: "Felt worse after Viva's suggestion" };
           if (r === "didnt_try") return { tone: "neutral" as const, label: "Didn't try Viva's suggestion" };
-          if (latestIntervention.status === "shown") return { tone: "neutral" as const, label: "Suggestion shown — no feedback yet" };
+          if (latestIntervention.status === "shown") return { tone: "neutral" as const, label: "Suggestion shown, no feedback yet" };
           return null;
         })();
 
@@ -908,6 +1042,7 @@ export function PatientDetailPage({ id }: { id: number }) {
             <div className="pl-8 text-[11px] italic opacity-80">
               Suggested next step: review today's symptoms and reach out via your usual channel.
             </div>
+            <EscalationNotice className="pl-8 mt-2 not-italic" />
           </div>
         );
       })()}
@@ -1116,6 +1251,7 @@ export function PatientDetailPage({ id }: { id: number }) {
       {risk.data && risk.data.symptomFlags.length > 0 && (
         <section className="bg-card rounded-[20px] p-6">
           <SectionTitle>Symptom flags</SectionTitle>
+          <PatientInsightsNotice className="mb-4" />
           <ul className="space-y-3">
             {risk.data.symptomFlags.map((f) => {
               const sev = SEVERITY_STYLE[f.severity];
@@ -1392,7 +1528,7 @@ export function PatientDetailPage({ id }: { id: number }) {
           least one row to show. */}
       {interventions.data && interventions.data.interventions.length > 0 && (
         <RecentInterventionsCard
-          interventions={interventions.data.interventions.slice(0, 8)}
+          interventions={interventions.data.interventions}
         />
       )}
 
@@ -1443,31 +1579,47 @@ export function PatientDetailPage({ id }: { id: number }) {
 }
 
 // ---- RecentInterventionsCard ----------------------------------------------
-// Phase 4 surface for the AI-personalized micro-intervention loop. Renders
-// a compact list of the most recent interventions for this patient, with
-// the trigger on the left, a short summary in the middle, and the
-// patient's response on the right. Status badges follow the same color
-// system used by the worklist buckets:
-//   patient_requested -> orange (matches "Patient requested review")
-//   worse             -> red    (signal for "patient told us it's worse")
-//   high/urgent       -> amber  (clinically elevated)
-//   accepted/done     -> blue   (positive engagement)
-//   neutral           -> gray
-//
-// The card is read-only -- doctors take action through the existing
-// notes / treatment-status / mark-reviewed controls; this card just
-// gives them the AI context.
+
+function interventionPatternInsight(ivs: ClinicIntervention[]): string | null {
+  const withFeedback = ivs.filter(
+    (iv) => iv.feedbackResult !== null && iv.feedbackResult !== undefined,
+  );
+  if (withFeedback.length < 3) return null;
+  const betterCount = withFeedback.filter((iv) => iv.feedbackResult === "better").length;
+  const worseCount = withFeedback.filter((iv) => iv.feedbackResult === "worse").length;
+  const didntTryCount = withFeedback.filter((iv) => iv.feedbackResult === "didnt_try").length;
+  const total = withFeedback.length;
+  if (betterCount / total >= 0.6) {
+    return "Patient tends to act on Viva suggestions and reports improvement.";
+  }
+  if (worseCount / total >= 0.5) {
+    return "Patient has consistently reported worsening after recent suggestions.";
+  }
+  if (betterCount > 0 && worseCount > 0) {
+    return "Patient response has been mixed across recent suggestions.";
+  }
+  if (betterCount === 0 && worseCount === 0) {
+    // Distinguish: didn't engage vs engaged but no improvement
+    if (didntTryCount > total / 2) {
+      return "Patient has not been acting on most of Viva's recent suggestions.";
+    }
+    return "Patient has tried suggestions but reports no noticeable change yet.";
+  }
+  return null;
+}
 
 function RecentInterventionsCard({
   interventions,
 }: {
   interventions: ClinicIntervention[];
 }) {
+  const patternInsight = interventionPatternInsight(interventions);
+  const visible = interventions.slice(0, 8);
   return (
     <section className="bg-card rounded-[20px] p-6">
       <SectionTitle>Recent interventions</SectionTitle>
       <ul className="space-y-3">
-        {interventions.map((iv) => {
+        {visible.map((iv) => {
           const tone = interventionTone(iv);
           return (
             <li
@@ -1515,6 +1667,20 @@ function RecentInterventionsCard({
           );
         })}
       </ul>
+      {patternInsight && (
+        <div
+          className="mt-4 pt-3 border-t border-border text-sm font-medium"
+          style={{ color: "#0B6FAA" }}
+        >
+          <span
+            className="text-[10px] uppercase tracking-wider font-semibold mr-2"
+            style={{ color: "#6B7280" }}
+          >
+            Pattern:
+          </span>
+          {patternInsight}
+        </div>
+      )}
     </section>
   );
 }

@@ -64,20 +64,44 @@ function buildSparkPoints(data: number[], width: number, height: number): string
 
 export default function TrendsScreen() {
   const c = useColors();
-  const { insights, metrics, completionHistory, weeklyConsistency, weeklyDaysCompleted, streakDays, todayCompletionRate, dailyPlan, profile, medicationLog, inputAnalytics, hasHealthData, availableMetricTypes } = useApp();
+  const { insights, metrics, completionHistory, weeklyConsistency, weeklyDaysCompleted, streakDays, todayCompletionRate, dailyPlan, profile, medicationLog, inputAnalytics, hasHealthData, availableMetricTypes, adaptiveInsights } = useApp();
 
-  const correlations = useMemo(() => hasHealthData ? buildCorrelations(metrics) : [], [metrics, hasHealthData]);
-  const patterns = useMemo(() => hasHealthData ? detectPatterns(metrics, availableMetricTypes) : [], [metrics, hasHealthData, availableMetricTypes]);
+  const correlations = useMemo(() => {
+    if (!hasHealthData) return [];
+    try { return buildCorrelations(metrics); } catch { return []; }
+  }, [metrics, hasHealthData]);
+  const patterns = useMemo(() => {
+    if (!hasHealthData) return [];
+    try { return detectPatterns(metrics, availableMetricTypes); } catch { return []; }
+  }, [metrics, hasHealthData, availableMetricTypes]);
   const habitStats = useMemo(() => computeHabitStats(completionHistory), [completionHistory]);
   const baseInsights = useMemo(() => hasHealthData ? buildKeyInsights(metrics, habitStats, availableMetricTypes) : [], [metrics, habitStats, hasHealthData, availableMetricTypes]);
-  const keyInsights = useMemo(() => {
-    const analyticsInsights = inputAnalytics?.insights ?? [];
-    const combined = [...baseInsights];
-    for (const ai of analyticsInsights) {
-      if (!combined.includes(ai)) combined.push(ai);
+  // Merge adaptive (check-in pattern) and key (wearable/habit) insights
+  // into one deduplicated list, capped at 4. adaptiveInsights are already
+  // sorted by clinical priority (post_dose → correlation → trend) inside
+  // generateAdaptiveInsights, so we prepend them before wearable signals.
+  const mergedInsights = useMemo(() => {
+    const seen = new Set<string>();
+    const result: Array<{ id: string; text: string; type: "post_dose" | "correlation" | "trend" | "pattern" | "wearable" }> = [];
+    for (const a of adaptiveInsights) {
+      if (!seen.has(a.text)) {
+        seen.add(a.text);
+        result.push({ id: a.id, text: a.text, type: a.type });
+      }
     }
-    return combined.slice(0, 6);
-  }, [baseInsights, inputAnalytics]);
+    const analyticsInsights = inputAnalytics?.insights ?? [];
+    const supplemental = [...baseInsights];
+    for (const ai of analyticsInsights) {
+      if (!supplemental.includes(ai)) supplemental.push(ai);
+    }
+    for (const s of supplemental) {
+      if (!seen.has(s)) {
+        seen.add(s);
+        result.push({ id: `wearable_${s.slice(0, 20)}`, text: s, type: "wearable" });
+      }
+    }
+    return result.slice(0, 4);
+  }, [adaptiveInsights, baseInsights, inputAnalytics]);
   const glp1Insights = useMemo(() => hasHealthData ? buildGLP1Insights(metrics, profile.medicationProfile, medicationLog, completionHistory) : [], [metrics, profile.medicationProfile, medicationLog, completionHistory, hasHealthData]);
 
   const openDetail = (label: string) => {
@@ -149,10 +173,9 @@ export default function TrendsScreen() {
       showsVerticalScrollIndicator={false}
     >
       <ScreenHeader />
-      <Text style={[styles.title, { color: c.foreground }]}>Trends</Text>
 
       {insights && (
-        <View style={[styles.summaryCard, { backgroundColor: c.card }]}>
+        <View style={[styles.summaryCard, { backgroundColor: c.card, marginTop: 18 }]}>
           <Text style={[styles.summaryHeader, { color: c.foreground }]}>How You're Doing</Text>
           {insights.weekSummary.split("\n\n").map((line, i) => (
             <Text key={i} style={[styles.summaryText, { color: c.foreground }]}>{line}</Text>
@@ -164,7 +187,7 @@ export default function TrendsScreen() {
       )}
 
       {profile.medicationProfile && (
-        <View style={[styles.medSection, { backgroundColor: c.card }]}>
+        <View style={[styles.medSection, { backgroundColor: c.card, ...(!insights && { marginTop: 18 }) }]}>
           <View style={styles.medSectionHeader}>
             <Feather name="package" size={16} color={c.accent} />
             <Text style={[styles.medSectionTitle, { color: c.foreground }]}>Medication</Text>
@@ -221,15 +244,36 @@ export default function TrendsScreen() {
         </View>
       )}
 
-      {keyInsights.length > 0 && (
+      {(mergedInsights.length > 0 || hasHealthData) && (
         <View style={styles.sectionWrap}>
-          <Text style={[styles.sectionTitle, { color: c.foreground }]}>What We're Noticing</Text>
-          {keyInsights.map((insight, i) => (
-            <View key={i} style={[styles.insightCard, { backgroundColor: c.card }]}>
-              <Feather name="zap" size={13} color={c.accent} />
-              <Text style={[styles.insightText, { color: c.foreground }]}>{insight}</Text>
+          <View style={[styles.patternsCard, { backgroundColor: c.card }]}>
+            <View style={styles.patternsHeader}>
+              <Feather name="activity" size={13} color={c.accent} />
+              <Text style={[styles.patternsTitle, { color: c.foreground }]}>Recent patterns</Text>
             </View>
-          ))}
+            {mergedInsights.length === 0 ? (
+              <View style={styles.patternRow}>
+                <Feather name="clock" size={12} color={c.mutedForeground} style={{ marginTop: 2 }} />
+                <Text style={[styles.patternRowText, { color: c.mutedForeground }]}>
+                  Keep checking in daily — patterns appear after a few days of data.
+                </Text>
+              </View>
+            ) : (
+              mergedInsights.map((insight) => {
+                const iconName =
+                  insight.type === "post_dose" ? "clock" :
+                  insight.type === "correlation" ? "git-merge" :
+                  insight.type === "trend" ? "trending-up" :
+                  "zap";
+                return (
+                  <View key={insight.id} style={styles.patternRow}>
+                    <Feather name={iconName as any} size={11} color={c.accent} style={{ marginTop: 3 }} />
+                    <Text style={[styles.patternRowText, { color: c.foreground }]}>{insight.text}</Text>
+                  </View>
+                );
+              })
+            )}
+          </View>
         </View>
       )}
 
@@ -680,6 +724,43 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Montserrat_500Medium",
     textTransform: "capitalize",
+  },
+  patternsCard: {
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 16,
+    gap: 8,
+  },
+  patternsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginBottom: 2,
+  },
+  patternsTitle: {
+    fontSize: 13,
+    fontFamily: "Montserrat_600SemiBold",
+    letterSpacing: 0.1,
+  },
+  patternsSubtitle: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: "Montserrat_500Medium",
+    marginBottom: 2,
+  },
+  patternRow: {
+    flexDirection: "row",
+    gap: 9,
+    alignItems: "flex-start",
+    paddingVertical: 3,
+  },
+  patternRowText: {
+    fontSize: 13,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 19,
+    flex: 1,
+    letterSpacing: -0.1,
   },
   glp1InsightCard: {
     flexDirection: "row",

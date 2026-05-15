@@ -1,6 +1,7 @@
 import type { AnalyticsSummary } from "@/lib/types";
 import { pctStr } from "@/lib/format";
 import { STOP_REASON_DISPLAY } from "@/lib/types";
+import { RetentionNotice } from "@/components/LegalNotice";
 import {
   Card,
   Chip,
@@ -303,6 +304,7 @@ export function RetentionPage({ data }: { data: AnalyticsSummary }) {
           timing on a patient, the breakdowns above will populate.
         </Empty>
       )}
+      <RetentionNotice className="mt-2" />
     </>
   );
 }

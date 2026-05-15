@@ -135,9 +135,8 @@ export default function PlanScreen() {
         showsVerticalScrollIndicator={false}
       >
         <ScreenHeader />
-        <Text style={[styles.title, { color: c.foreground }]}>Your Week</Text>
 
-        <View style={[styles.summaryCard, { backgroundColor: c.card }]}>
+        <View style={[styles.summaryCard, { backgroundColor: c.card, marginTop: 18 }]}>
           <Text style={[styles.summaryHeader, { color: c.foreground }]}>This Week</Text>
           {weeklyPlan.weekSummary.split("\n\n").map((line, i) => (
             <Text key={i} style={[styles.summaryText, { color: c.foreground }, i > 0 && { marginTop: 10 }]}>{line}</Text>
@@ -333,7 +332,7 @@ export default function PlanScreen() {
       <Modal visible={!!editingDay && !!editingCategory} animationType="slide" transparent>
         <Pressable style={styles.modalOverlay} onPress={() => { setEditingDay(null); setEditingCategory(null); }}>
           <Pressable
-            style={[styles.modalSheet, { backgroundColor: c.card, paddingBottom: Math.max(insets.bottom, 24) }]}
+            style={[styles.modalSheet, { backgroundColor: c.card }]}
             onPress={(e) => e.stopPropagation()}
           >
             {editingCategory && editingDay && (() => {
@@ -344,67 +343,73 @@ export default function PlanScreen() {
               return (
                 <>
                   <View style={styles.modalHandle} />
-                  <View style={styles.modalHeaderRow}>
-                    <View style={[styles.modalIconWrap, { backgroundColor: meta.color + "12" }]}>
-                      <Feather name={meta.icon} size={18} color={meta.color} />
+                  <ScrollView
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                    contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 28) }}
+                  >
+                    <View style={styles.modalHeaderRow}>
+                      <View style={[styles.modalIconWrap, { backgroundColor: meta.color + "12" }]}>
+                        <Feather name={meta.icon} size={18} color={meta.color} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.modalTitle, { color: c.foreground }]}>
+                          {editingDay.dayOfWeek}: {meta.label}
+                        </Text>
+                        <Text style={[styles.modalSubtitle, { color: c.mutedForeground }]}>Choose one for the day</Text>
+                      </View>
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.modalTitle, { color: c.foreground }]}>
-                        {editingDay.dayOfWeek}: {meta.label}
-                      </Text>
-                      <Text style={[styles.modalSubtitle, { color: c.mutedForeground }]}>Choose one for the day</Text>
-                    </View>
-                  </View>
-                  <View style={styles.optionsGrid}>
-                    {options.map((option) => {
-                      const isSelected = currentAction?.chosen === option.title;
-                      const isRecommended = currentAction?.recommended === option.title;
-                      return (
-                        <Pressable
-                          key={option.id}
-                          onPress={() => selectOption(option.title)}
-                          style={({ pressed }) => [
-                            styles.optionChip,
-                            {
-                              borderColor: isSelected ? meta.color + "40" : c.border + "30",
-                              backgroundColor: isSelected ? meta.color + "10" : c.background,
-                              opacity: pressed ? 0.85 : 1,
-                            },
-                          ]}
-                        >
-                          <View style={styles.optionContent}>
-                            <View style={styles.optionTitleRow}>
-                              <Text style={[
-                                styles.optionText,
-                                { color: isSelected ? meta.color : c.foreground },
-                                isSelected && { fontFamily: "Montserrat_600SemiBold" },
-                              ]}>
-                                {option.title}
-                              </Text>
-                              {isSelected && <Feather name="check-circle" size={18} color={meta.color} />}
-                            </View>
-                            <Text style={[styles.optionSubtitle, { color: c.mutedForeground }]}>{option.subtitle}</Text>
-                            {isRecommended && !isSelected && (
-                              <View style={[styles.recBadge, { backgroundColor: c.success + "14" }]}>
-                                <Feather name="zap" size={10} color={c.success} />
-                                <Text style={[styles.recBadgeText, { color: c.success }]}>Recommended</Text>
+                    <View style={styles.optionsGrid}>
+                      {options.map((option) => {
+                        const isSelected = currentAction?.chosen === option.title;
+                        const isRecommended = currentAction?.recommended === option.title;
+                        return (
+                          <Pressable
+                            key={option.id}
+                            onPress={() => selectOption(option.title)}
+                            style={({ pressed }) => [
+                              styles.optionChip,
+                              {
+                                borderColor: isSelected ? meta.color + "40" : c.border + "30",
+                                backgroundColor: isSelected ? meta.color + "10" : c.background,
+                                opacity: pressed ? 0.85 : 1,
+                              },
+                            ]}
+                          >
+                            <View style={styles.optionContent}>
+                              <View style={styles.optionTitleRow}>
+                                <Text style={[
+                                  styles.optionText,
+                                  { color: isSelected ? meta.color : c.foreground },
+                                  isSelected && { fontFamily: "Montserrat_600SemiBold" },
+                                ]}>
+                                  {option.title}
+                                </Text>
+                                {isSelected && <Feather name="check-circle" size={18} color={meta.color} />}
                               </View>
-                            )}
-                          </View>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                  {selectedOption?.supportText && selectedOption.supportText.length > 0 && (
-                    <View style={styles.supportSection}>
-                      {selectedOption.supportText.map((tip, i) => (
-                        <View key={i} style={styles.supportRow}>
-                          <Feather name="info" size={11} color={c.mutedForeground} />
-                          <Text style={[styles.supportTip, { color: c.mutedForeground }]}>{tip}</Text>
-                        </View>
-                      ))}
+                              <Text style={[styles.optionSubtitle, { color: c.mutedForeground }]}>{option.subtitle}</Text>
+                              {isRecommended && !isSelected && (
+                                <View style={[styles.recBadge, { backgroundColor: c.success + "14" }]}>
+                                  <Feather name="zap" size={10} color={c.success} />
+                                  <Text style={[styles.recBadgeText, { color: c.success }]}>Recommended</Text>
+                                </View>
+                              )}
+                            </View>
+                          </Pressable>
+                        );
+                      })}
                     </View>
-                  )}
+                    {selectedOption?.supportText && selectedOption.supportText.length > 0 && (
+                      <View style={styles.supportSection}>
+                        {selectedOption.supportText.map((tip, i) => (
+                          <View key={i} style={styles.supportRow}>
+                            <Feather name="info" size={11} color={c.mutedForeground} />
+                            <Text style={[styles.supportTip, { color: c.mutedForeground }]}>{tip}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </ScrollView>
                 </>
               );
             })()}

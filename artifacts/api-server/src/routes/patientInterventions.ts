@@ -22,6 +22,8 @@ import {
   patientInterventionsTable,
   careEventsTable,
   analyticsEventsTable,
+  patientsTable,
+  usersTable,
   PATIENT_INTERVENTION_TRIGGER_TYPES,
   PATIENT_INTERVENTION_FEEDBACK_RESULTS,
   type PatientIntervention,
@@ -37,6 +39,28 @@ import {
   generatePersonalizedIntervention,
   type InterventionAnalyticsEvent,
 } from "../lib/interventionEngine";
+import { isInterventionAiModeEnabled } from "../lib/interventionEngine/safeMode";
+import { sendEscalationEmail } from "../lib/emailSafe";
+
+// Look up the assigned doctor's email for a given patient userId.
+// Returns undefined if the patient has no assigned doctor or the
+// query fails — callers treat undefined as "do not notify".
+async function lookupDoctorEmail(
+  patientUserId: number,
+): Promise<string | undefined> {
+  try {
+    const rows = await db
+      .select({ email: usersTable.email })
+      .from(patientsTable)
+      .innerJoin(usersTable, eq(usersTable.id, patientsTable.doctorId))
+      .where(eq(patientsTable.userId, patientUserId))
+      .limit(1);
+    return rows[0]?.email ?? undefined;
+  } catch (err) {
+    logger.warn({ err, patientUserId }, "lookupDoctorEmail: query failed");
+    return undefined;
+  }
+}
 
 const router: Router = Router();
 
@@ -60,6 +84,18 @@ router.use(
 // -----------------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------------
+
+// contextSummary is internal engine state (PHI-bearing patient context
+// used to generate the recommendation). It is never a patient-readable
+// field and must not appear in any API response. Strip it here at the
+// boundary rather than at every individual call site so future routes
+// can't forget.
+type ClientIntervention = Omit<PatientIntervention, "contextSummary">;
+
+function toClientIntervention(row: PatientIntervention): ClientIntervention {
+  const { contextSummary: _cs, ...rest } = row;
+  return rest;
+}
 
 // Fire-and-forget analytics insert. Never block the response on it,
 // never let an analytics outage surface to the patient. Mirrors the
@@ -233,7 +269,7 @@ router.post("/generate", async (req, res: Response) => {
         return;
       }
       if (lockedActive) {
-        res.json({ intervention: lockedActive });
+        res.json({ intervention: toClientIntervention(lockedActive) });
         return;
       }
       res.json({ intervention: null, reason: "no_trigger_or_active" });
@@ -255,7 +291,7 @@ router.post("/generate", async (req, res: Response) => {
           symptomType: generated.insertRow.symptomType,
           severity: generated.insertRow.severity,
           riskLevel: generated.insertRow.riskLevel,
-          contextSummary: generated.insertRow.contextSummary,
+          contextSummary: isInterventionAiModeEnabled() ? generated.insertRow.contextSummary : {},
           deidentifiedAiPayload: generated.insertRow.deidentifiedAiPayload,
           whatWeNoticed: generated.insertRow.whatWeNoticed,
           recommendation: generated.insertRow.recommendation,
@@ -298,7 +334,7 @@ router.post("/generate", async (req, res: Response) => {
           "intervention_auto_resolved_symptoms_changed",
         );
       } else {
-        res.json({ intervention: lockedActive });
+        res.json({ intervention: toClientIntervention(lockedActive) });
         return;
       }
     }
@@ -331,7 +367,14 @@ router.post("/generate", async (req, res: Response) => {
       }
       const [inserted] = await db
         .insert(patientInterventionsTable)
-        .values(generated.insertRow)
+        .values({
+          ...generated.insertRow,
+          // Safe mode: contextSummary holds PHI-bearing engine state. In
+          // fallback mode (no AI calls) there is no reason to persist it.
+          // The supersede logic above already read what it needed from
+          // the in-memory copy before this write.
+          contextSummary: isInterventionAiModeEnabled() ? generated.insertRow.contextSummary : {},
+        })
         .returning();
       row = inserted;
     }
@@ -390,7 +433,7 @@ router.post("/generate", async (req, res: Response) => {
       live_updated: liveUpdated,
     });
 
-    res.status(liveUpdated ? 200 : 201).json({ intervention: row });
+    res.status(liveUpdated ? 200 : 201).json({ intervention: toClientIntervention(row) });
   } catch (err) {
     logger.error({ err, userId }, "intervention_generate_failed");
     res.status(500).json({ error: "generate_failed" });
@@ -422,7 +465,7 @@ router.get("/active", async (req, res: Response) => {
       )
       .orderBy(desc(patientInterventionsTable.createdAt))
       .limit(10);
-    res.json({ interventions: rows });
+    res.json({ interventions: rows.map(toClientIntervention) });
   } catch (err) {
     logger.error({ err, userId }, "intervention_active_failed");
     res.status(500).json({ error: "list_failed" });
@@ -468,7 +511,7 @@ router.post("/:id/accept", async (req, res: Response) => {
     intervention_id: id,
     trigger_type: existing.triggerType,
   });
-  res.json({ intervention: updated });
+  res.json({ intervention: toClientIntervention(updated) });
 });
 
 // -----------------------------------------------------------------
@@ -513,7 +556,7 @@ router.post("/:id/dismiss", async (req, res: Response) => {
     intervention_id: id,
     reason: parsed.data.reason,
   });
-  res.json({ intervention: updated });
+  res.json({ intervention: toClientIntervention(updated) });
 });
 
 // -----------------------------------------------------------------
@@ -647,13 +690,18 @@ router.post("/:id/feedback", async (req, res: Response) => {
     analyticsEvents.push("intervention_resolved");
   } else if (feedbackResult === "worse") {
     analyticsEvents.push("intervention_escalated");
+    // Fire-and-forget: notify the assigned doctor. Runs after res.json()
+    // so a slow or failing email never delays the patient response.
+    lookupDoctorEmail(userId).then((email) => {
+      if (email) void sendEscalationEmail(email);
+    });
   }
   fireAnalytics(userId, analyticsEvents, {
     intervention_id: id,
     feedback_result: feedbackResult,
   });
 
-  res.json({ intervention: updated });
+  res.json({ intervention: toClientIntervention(updated) });
 });
 
 // -----------------------------------------------------------------
@@ -713,10 +761,16 @@ router.post("/:id/escalate", async (req, res: Response) => {
       );
     });
 
+  // Fire-and-forget: notify the assigned doctor. Runs after res.json()
+  // so email latency is invisible to the patient.
+  lookupDoctorEmail(userId).then((email) => {
+    if (email) void sendEscalationEmail(email);
+  });
+
   fireAnalytics(userId, ["intervention_escalated"], {
     intervention_id: id,
   });
-  res.json({ intervention: updated });
+  res.json({ intervention: toClientIntervention(updated) });
 });
 
 // Reference unused import to avoid linter noise; sql may be used later

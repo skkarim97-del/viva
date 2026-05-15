@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Logo } from "@/components/Logo";
+import { LEGAL } from "@/lib/legal";
 
 /**
  * App shell. Sidebar lives on the left, top header on the right.
@@ -188,6 +189,13 @@ export function Shell({
         <main className="flex-1 px-5 md:px-8 py-6 max-w-[1400px] w-full">
           {children}
         </main>
+        <footer className="px-5 md:px-8 pb-8 max-w-[1400px] w-full">
+          <div className="border-t border-border pt-4">
+            <p className="text-[11px] text-muted-foreground/70 leading-relaxed">
+              {LEGAL.ANALYTICS_GLOBAL}
+            </p>
+          </div>
+        </footer>
       </div>
     </div>
   );

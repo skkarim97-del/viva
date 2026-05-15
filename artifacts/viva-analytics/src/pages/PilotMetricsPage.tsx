@@ -7,6 +7,7 @@ import type {
 } from "@/lib/types";
 import { pctStr, fmtTime } from "@/lib/format";
 import { KEY_STORAGE } from "@/lib/api";
+import { PilotMetricsNotice } from "@/components/LegalNotice";
 import {
   usePilotSnapshotsList,
   usePilotSnapshotDetail,
@@ -128,7 +129,7 @@ function LiveView({ pilot }: { pilot: PilotBlock | undefined }) {
       <Card>
         <Empty>
           Pilot metrics are temporarily unavailable. The rest of the
-          dashboard is still up — try refreshing in a minute.
+          dashboard is still up. Try refreshing in a minute.
         </Empty>
       </Card>
     );
@@ -550,6 +551,7 @@ function PilotSections({ pilot }: { pilot: PilotBlock }) {
       <InterventionSection pilot={pilot} />
       <ProviderSection pilot={pilot} />
       <RulesNote pilot={pilot} isEmpty={isEmpty} />
+      <PilotMetricsNotice className="mt-2" />
     </>
   );
 }
@@ -704,10 +706,12 @@ function RulesNote({ pilot, isEmpty }: { pilot: PilotBlock; isEmpty: boolean }) 
   const r = pilot.rules;
   return (
     <Card>
-      <div className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-        How these are computed
-      </div>
-      <ul className="text-[12px] text-muted-foreground space-y-1.5 leading-relaxed">
+      <details>
+      <summary className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer select-none list-none flex items-center gap-1.5">
+        <span>How these are computed</span>
+        <span aria-hidden className="opacity-50">▸</span>
+      </summary>
+      <ul className="text-[12px] text-muted-foreground space-y-1.5 leading-relaxed mt-3">
         <li>
           <strong>Cohort:</strong> patients activated on or before the window
           end date.{" "}
@@ -742,7 +746,7 @@ function RulesNote({ pilot, isEmpty }: { pilot: PilotBlock; isEmpty: boolean }) 
           <strong>Reviewed:</strong> {r.reviewedDefinition.replace(/_/g, " ")}.
         </li>
         <li>
-          <strong>Acted on:</strong> {r.actedOnDefinition.replace(/_/g, " ")} — doctor_reviewed alone does NOT count.
+          <strong>Acted on:</strong> {r.actedOnDefinition.replace(/_/g, " ")}. Note: doctor_reviewed alone does not qualify.
         </li>
         <li>
           <strong>External readout:</strong> a future external endpoint will
@@ -752,11 +756,11 @@ function RulesNote({ pilot, isEmpty }: { pilot: PilotBlock; isEmpty: boolean }) 
         </li>
         {isEmpty ? (
           <li>
-            <strong>Note:</strong> the cohort was empty for this window —
-            all KPIs read zero by definition.
+            <strong>Note:</strong> the cohort was empty for this window. All KPIs read zero by definition.
           </li>
         ) : null}
       </ul>
+      </details>
     </Card>
   );
 }

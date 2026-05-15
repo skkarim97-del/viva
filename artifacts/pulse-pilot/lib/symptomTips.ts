@@ -109,78 +109,60 @@ export function deriveSymptomTips(input: SymptomInputs): SymptomTip[] {
   const tips: SymptomTip[] = [];
 
   // ----- Nausea -----------------------------------------------------
-  // Any non-"none" nausea today triggers the tip. Tone scales with
-  // severity but we deliberately do NOT alarm the patient -- the
-  // doctor-side escalation is what handles severe persistent cases.
   if (input.nausea && input.nausea !== "none") {
     const factors: string[] = [];
     if (lowHydration(input.hydration)) factors.push("Low hydration");
-    if (input.appetite === "very_low") factors.push("Long fasting window");
+    if (input.appetite === "very_low") factors.push("Low appetite");
     const severe = input.nausea === "severe";
+    const moderate = input.nausea === "moderate";
     tips.push({
       symptom: "nausea",
-      severity: severe ? 3 : input.nausea === "moderate" ? 2 : 1,
-      title: severe ? "Settle your stomach" : "Ease your nausea",
+      severity: severe ? 3 : moderate ? 2 : 1,
+      title: severe ? "Pause food and sip slowly" : "Sip first, then 2–3 bites",
       urgency: severe
-        ? "Do this in the next 15 minutes to settle your stomach."
-        : "Try this in the next few minutes to feel better faster.",
+        ? "Do this for the next 15 minutes to give your stomach time to settle."
+        : "Try this in the next 10 minutes to stop nausea from building.",
       cta: severe
-        ? "Sip about ½ cup of water and have one bland snack over the next 10-15 minutes."
-        : "Sip about ½ cup of water slowly over the next 10-15 minutes.",
+        ? "Stop solid food for now. Take slow sips of water, Pedialyte, or ginger tea, a few sips every 2 minutes, for 15 minutes."
+        : "Take 5 slow sips of water or ginger tea right now. Wait 10 minutes, then try 2–3 small bites.",
       example: severe
-        ? "(example: plain crackers, dry toast, banana, or rice)"
-        : "(example: still water, room-temperature water, or weak ginger tea)",
+        ? "(after fluids settle: crackers, toast, banana, or rice)"
+        : "(example: crackers, toast, Greek yogurt, or a banana)",
       ctaLabel: "Done",
-      ctaCompleted: severe ? "Logged. Nice work." : "Logged. Nice work.",
+      ctaCompleted: "Logged. Nice work.",
       followupSummary: severe
-        ? "Water + a bland snack over 10-15 min"
-        : "Sipping water over 10-15 min",
+        ? "Fluids first, sips every 2 min for 15 min"
+        : "5 sips of water, then 2–3 bites",
       factors,
     });
   }
 
   // ----- Constipation -----------------------------------------------
-  // Subjective signal (digestion === "constipated") OR an explicit
-  // "no bowel movement today" check is enough for the same-day tip.
-  // The server still owns the "3+ day streak" escalation.
   if (
     input.digestion === "constipated" ||
     input.bowelMovementToday === false
   ) {
     const factors: string[] = [];
     if (lowHydration(input.hydration)) factors.push("Low hydration");
-    // Plan-aware CTA. Constipation guidance is movement-based, so it
-    // has to respect the day's plan or it'll directly contradict the
-    // headline ("full rest day" + "walk 10 minutes now"). We keep
-    // urgency intact and only step the action down to the lightest
-    // coherent variant for each plan band.
     const plan = input.planActivity ?? "normal_activity";
     const cta =
       plan === "full_rest"
-        ? "Stand up and stretch gently for about 2 minutes."
+        ? "Drink 6–8 oz of warm water or ginger tea right now. Then do 2 minutes of slow abdominal breathing: in for 4 counts, out for 6."
         : plan === "light_activity"
-        ? "Take a gentle 5 minute walk in the next hour."
-        : "Take a 10 minute walk in the next hour.";
+        ? "Drink 6–8 oz of warm water or ginger tea right now. Then take a slow 5-minute walk around the room or outside."
+        : "Drink 6–8 oz of warm water or ginger tea right now. Then take a slow 5-minute walk around the room or outside.";
     const example =
       plan === "full_rest"
-        ? "(example: shoulder rolls, gentle side bends, or a slow walk around the room)"
-        : "(example: a loop around the block, a hallway at work, or pacing during a phone call)";
+        ? "(warm water, ginger tea, or peppermint tea)"
+        : "(warm water, ginger tea, or peppermint tea; then a loop around the block or a hallway)";
     const urgency =
       plan === "full_rest"
-        ? "Gentle movement is enough today -- it can still help things move."
-        : plan === "light_activity"
-        ? "Do this within the next hour at an easy, comfortable pace."
-        : "Do this within the next hour to help things move.";
+        ? "Do this now. Warm fluids and breathing can help even without movement."
+        : "Do this within the next 15 minutes to help things move.";
     tips.push({
       symptom: "constipation",
-      // Subjective "feels constipated" is treated as moderate;
-      // a missed bowel movement alone (with no subjective signal)
-      // is a milder, earlier signal.
-      severity:
-        input.digestion === "constipated"
-          ? 2
-          : 1,
-      title: "Get things moving",
+      severity: input.digestion === "constipated" ? 2 : 1,
+      title: "Warm drink + movement",
       urgency,
       cta,
       example,
@@ -188,10 +170,8 @@ export function deriveSymptomTips(input: SymptomInputs): SymptomTip[] {
       ctaCompleted: "Logged. Nice work.",
       followupSummary:
         plan === "full_rest"
-          ? "A 2 min gentle stretch"
-          : plan === "light_activity"
-          ? "A gentle 5 min walk"
-          : "A 10 min walk",
+          ? "Warm fluids + 2 min abdominal breathing"
+          : "Warm fluids + 5-min walk",
       factors,
     });
   }
@@ -199,20 +179,23 @@ export function deriveSymptomTips(input: SymptomInputs): SymptomTip[] {
   // ----- Low appetite -----------------------------------------------
   if (input.appetite === "low" || input.appetite === "very_low") {
     const factors: string[] = [];
-    if (input.nausea && input.nausea !== "none") {
-      factors.push("Co-occurring nausea");
-    }
+    if (input.nausea && input.nausea !== "none") factors.push("Co-occurring nausea");
     if (lowHydration(input.hydration)) factors.push("Low hydration");
+    const veryLow = input.appetite === "very_low";
     tips.push({
       symptom: "low_appetite",
-      severity: input.appetite === "very_low" ? 2 : 1,
-      title: "Steady your appetite",
-      urgency: "Do this in the next 15 minutes to support your energy.",
-      cta: "Eat about ½ cup of a protein-rich food in the next 15 minutes.",
-      example: "(example: ½ cup yogurt, 1 hard-boiled egg, a small handful of nuts, or a protein shake)",
+      severity: veryLow ? 2 : 1,
+      title: veryLow ? "Sip a smoothie for 10 minutes" : "Try 2–3 bites of protein now",
+      urgency: "Do this in the next 10–15 minutes to keep nutrition coming in.",
+      cta: veryLow
+        ? "Make or order a simple smoothie with protein. Sip it slowly for 10–15 minutes. No pressure to finish it."
+        : "Eat 2–3 bites of a protein-rich food right now. Stop and wait 10 minutes before eating more.",
+      example: veryLow
+        ? "(example: Greek yogurt + banana blend, or a protein shake)"
+        : "(example: Greek yogurt, tofu, 1 hard-boiled egg, or cottage cheese)",
       ctaLabel: "Done",
       ctaCompleted: "Logged. Nice work.",
-      followupSummary: "Half a cup of protein in 15 min",
+      followupSummary: veryLow ? "Smoothie sipped over 10–15 min" : "2–3 bites of protein, then a pause",
       factors,
     });
   }

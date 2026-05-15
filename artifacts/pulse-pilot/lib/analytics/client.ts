@@ -163,7 +163,11 @@ async function touchLastActive(): Promise<void> {
   }
 }
 
-async function postEvent(eventName: string, sessionId: string): Promise<void> {
+async function postEvent(
+  eventName: string,
+  sessionId: string,
+  payload?: Record<string, unknown>,
+): Promise<void> {
   try {
     const token = await sessionApi.getStoredToken();
     if (!token) return; // anonymous launches don't have a user id yet
@@ -180,6 +184,7 @@ async function postEvent(eventName: string, sessionId: string): Promise<void> {
             sessionId,
             platform: platform(),
             timezone: timezone(),
+            ...(payload ? { payload } : {}),
           },
         ],
       }),
@@ -190,10 +195,13 @@ async function postEvent(eventName: string, sessionId: string): Promise<void> {
 }
 
 /**
- * Log a single analytics event. Resolves to nothing -- callers
- * deliberately don't await; this is fire-and-forget.
+ * Log a single analytics event with optional structured payload.
+ * Resolves to nothing -- callers deliberately don't await; fire-and-forget.
  */
-export async function logEvent(eventName: string): Promise<void> {
+export async function logEvent(
+  eventName: string,
+  payload?: Record<string, unknown>,
+): Promise<void> {
   const sid = await ensureSession();
-  void postEvent(eventName, sid);
+  void postEvent(eventName, sid, payload);
 }

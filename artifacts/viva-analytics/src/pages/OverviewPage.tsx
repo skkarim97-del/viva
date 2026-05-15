@@ -9,12 +9,6 @@ import {
   StatCard,
 } from "@/components/primitives";
 
-/**
- * Overview = the page someone hits when they want to know "how is the
- * product doing today?" without committing to a deep-dive. Shows the
- * 6 numbers that matter most + one row of jump-off cards into the
- * specialised sections.
- */
 export function OverviewPage({ data }: { data: AnalyticsSummary }) {
   const op = data.operating;
   const ts = data.treatmentStatus;
@@ -34,18 +28,47 @@ export function OverviewPage({ data }: { data: AnalyticsSummary }) {
         }
       />
 
-      {/* PRIMARY -- the four numbers a pilot operator should read
-          first. Plus total panel for context (so the others aren't
-          read in a vacuum). */}
-      <SectionHead hint="Across the whole panel — the numbers to read first">
+      {/* PIPELINE HEALTH -- compact dot strip answering "is data
+          flowing?" before any numbers are read. Six stages: activation,
+          check-ins, interventions, feedback, escalations, provider reviews. */}
+      <DataHealthStrip data={data} />
+
+      {/* VIVA PULSE -- synthesised observations from available data.
+          Surfaces the 2-4 most operationally relevant signals so the
+          operator doesn't have to infer them from raw numbers. */}
+      <VivaPulse data={data} />
+
+      {/* PRIMARY -- eight numbers covering both the engagement funnel
+          and the clinical response loop. Expanded from five to answer
+          "are patients engaging?", "are interventions firing?", and
+          "are escalations being addressed?" in one glance. */}
+      <SectionHead hint="Across the whole panel, the numbers to read first">
         Primary metrics · pilot health
       </SectionHead>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
         <StatCard
           label="Weekly active patients"
           value={op?.patients.wau ?? "—"}
           sub={op ? `${op.patients.activated} activated` : "Last 7 days"}
           accent="#34C759"
+        />
+        <StatCard
+          label="Check-in completion"
+          value={op ? pctStr(op.patients.pctCompletingCheckins) : "—"}
+          sub={
+            op
+              ? `${op.patients.completingCheckins} of ${op.patients.activated} activated`
+              : undefined
+          }
+          accent={
+            op
+              ? op.patients.pctCompletingCheckins >= 0.6
+                ? "#34C759"
+                : op.patients.pctCompletingCheckins >= 0.35
+                  ? "#FF9500"
+                  : "#FF3B30"
+              : "#38B6FF"
+          }
         />
         <StatCard
           label="Doctors active 7d"
@@ -62,6 +85,36 @@ export function OverviewPage({ data }: { data: AnalyticsSummary }) {
               : undefined
           }
           accent="#34C759"
+        />
+        <StatCard
+          label="Interventions triggered"
+          value={data.pilot?.interventions.triggered ?? "—"}
+          sub={
+            data.pilot
+              ? `${pctStr(data.pilot.interventions.pctEngaged)} engaged`
+              : "Last 30 days"
+          }
+          accent={
+            data.pilot
+              ? data.pilot.interventions.pctEngaged >= 0.5
+                ? "#34C759"
+                : "#FF9500"
+              : "#38B6FF"
+          }
+        />
+        <StatCard
+          label="Escalations open"
+          value={data.openEscalations?.open ?? "—"}
+          sub={
+            data.openEscalations
+              ? `${data.openEscalations.reviewedLast7d} reviewed last 7d`
+              : undefined
+          }
+          accent={
+            data.openEscalations && data.openEscalations.open > 0
+              ? "#FF9500"
+              : "#34C759"
+          }
         />
         <StatCard
           label="Patients reviewed (30d)"
@@ -116,7 +169,7 @@ export function OverviewPage({ data }: { data: AnalyticsSummary }) {
         <JumpCard
           to="/patients"
           label="Drill-down"
-          desc="Patient and doctor tables — exactly the rows that produced the rollups above."
+          desc="Patient and doctor tables: exactly the rows that produced the rollups above."
         />
       </div>
 
@@ -140,6 +193,288 @@ export function OverviewPage({ data }: { data: AnalyticsSummary }) {
     </>
   );
 }
+
+// ---- DataHealthStrip -----------------------------------------------
+// One dot per pipeline stage. Green = data flowing normally. Orange =
+// data present but below expected threshold. Grey = no events yet (not
+// necessarily broken — pilot may just be early). Distinguishes "no data
+// yet" from "possible issue" so the operator knows whether to debug or
+// just wait.
+
+type PipelineStatus = "ok" | "warn" | "no_data";
+
+interface PipelineIndicator {
+  label: string;
+  status: PipelineStatus;
+  detail: string;
+}
+
+const STATUS_COLOR: Record<PipelineStatus, string> = {
+  ok: "#34C759",
+  warn: "#FF9500",
+  no_data: "#8B95A5",
+};
+
+function buildPipeline(data: AnalyticsSummary): PipelineIndicator[] {
+  const op = data.operating;
+  const pilot = data.pilot;
+  const esc = data.openEscalations;
+  const indicators: PipelineIndicator[] = [];
+
+  // 1. Activation
+  if (!op) {
+    indicators.push({ label: "Activation", status: "no_data", detail: "no operating data" });
+  } else if (op.patients.activated === 0) {
+    indicators.push({ label: "Activation", status: "no_data", detail: "0 patients activated" });
+  } else {
+    indicators.push({ label: "Activation", status: "ok", detail: `${op.patients.activated} activated` });
+  }
+
+  // 2. Check-ins
+  if (!op) {
+    indicators.push({ label: "Check-ins", status: "no_data", detail: "no operating data" });
+  } else if (op.patients.completingCheckins === 0) {
+    indicators.push({ label: "Check-ins", status: "no_data", detail: "0 completing" });
+  } else if (op.patients.pctCompletingCheckins < 0.2) {
+    indicators.push({ label: "Check-ins", status: "warn", detail: `${pctStr(op.patients.pctCompletingCheckins)} completing` });
+  } else {
+    indicators.push({ label: "Check-ins", status: "ok", detail: `${pctStr(op.patients.pctCompletingCheckins)} completing` });
+  }
+
+  // 3. Interventions
+  if (!pilot) {
+    indicators.push({ label: "Interventions", status: "no_data", detail: "pilot metrics unavailable" });
+  } else if (pilot.interventions.triggered === 0) {
+    indicators.push({ label: "Interventions", status: "no_data", detail: "0 triggered" });
+  } else {
+    indicators.push({ label: "Interventions", status: "ok", detail: `${pilot.interventions.triggered} triggered` });
+  }
+
+  // 4. Patient feedback / engagement
+  if (!pilot) {
+    indicators.push({ label: "Feedback", status: "no_data", detail: "pilot metrics unavailable" });
+  } else if (pilot.interventions.triggered === 0) {
+    indicators.push({ label: "Feedback", status: "no_data", detail: "no interventions yet" });
+  } else if (pilot.interventions.pctEngaged < 0.1) {
+    indicators.push({ label: "Feedback", status: "warn", detail: `${pctStr(pilot.interventions.pctEngaged)} engagement rate` });
+  } else {
+    indicators.push({ label: "Feedback", status: "ok", detail: `${pctStr(pilot.interventions.pctEngaged)} engaged` });
+  }
+
+  // 5. Escalations
+  if (!esc) {
+    indicators.push({ label: "Escalations", status: "no_data", detail: "no escalation data" });
+  } else {
+    // High open count isn't a data issue — just surfaces the number.
+    const status: PipelineStatus = esc.open > 10 ? "warn" : "ok";
+    indicators.push({ label: "Escalations", status, detail: `${esc.open} open` });
+  }
+
+  // 6. Provider reviews
+  if (!pilot) {
+    indicators.push({ label: "Provider reviews", status: "no_data", detail: "pilot metrics unavailable" });
+  } else if (pilot.provider.patientsEscalated === 0) {
+    indicators.push({ label: "Provider reviews", status: "no_data", detail: "no escalations yet" });
+  } else if (pilot.provider.pctReviewed < 0.4) {
+    indicators.push({ label: "Provider reviews", status: "warn", detail: `${pctStr(pilot.provider.pctReviewed)} reviewed` });
+  } else {
+    indicators.push({ label: "Provider reviews", status: "ok", detail: `${pctStr(pilot.provider.pctReviewed)} reviewed` });
+  }
+
+  return indicators;
+}
+
+function DataHealthStrip({ data }: { data: AnalyticsSummary }) {
+  const indicators = buildPipeline(data);
+  return (
+    <>
+      <SectionHead hint="Is data flowing through all six pipeline stages?">
+        Data flow · pipeline health
+      </SectionHead>
+      <Card className="py-3">
+        <div className="flex flex-wrap gap-x-6 gap-y-2.5">
+          {indicators.map((ind) => (
+            <div key={ind.label} className="flex items-center gap-1.5 text-[12px]">
+              <span
+                aria-hidden
+                className="inline-block w-2 h-2 rounded-full shrink-0"
+                style={{ backgroundColor: STATUS_COLOR[ind.status] }}
+              />
+              <span className="font-semibold text-foreground">{ind.label}</span>
+              <span className="text-muted-foreground">{ind.detail}</span>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </>
+  );
+}
+
+// ---- VivaPulse -----------------------------------------------------
+// Synthesised observations, up to 4. Each is grounded in a specific
+// metric so the operator can click through to the relevant section.
+// Deliberately conservative: only fires if the signal is meaningful
+// enough to act on or useful enough to surface.
+
+type ObsLevel = "ok" | "warn" | "info";
+
+interface Obs {
+  level: ObsLevel;
+  text: string;
+}
+
+const OBS_DOT: Record<ObsLevel, string> = {
+  ok: "#34C759",
+  warn: "#FF9500",
+  info: "#38B6FF",
+};
+
+function buildObservations(data: AnalyticsSummary): Obs[] {
+  const obs: Obs[] = [];
+  const op = data.operating;
+  const pilot = data.pilot;
+  const ts = data.treatmentStatus;
+  const esc = data.openEscalations;
+  const plan = data.planAdherence;
+
+  // Check-in completion
+  if (op && op.patients.activated > 0) {
+    if (op.patients.pctCompletingCheckins < 0.2) {
+      obs.push({
+        level: "warn",
+        text: `Only ${pctStr(op.patients.pctCompletingCheckins)} of activated patients are completing check-ins. May indicate an onboarding or engagement issue.`,
+      });
+    } else if (op.patients.pctCompletingCheckins >= 0.7) {
+      obs.push({
+        level: "ok",
+        text: `${pctStr(op.patients.pctCompletingCheckins)} of activated patients are completing check-ins. Strong engagement baseline.`,
+      });
+    } else {
+      obs.push({
+        level: "info",
+        text: `${pctStr(op.patients.pctCompletingCheckins)} check-in completion. Stable, with room to improve.`,
+      });
+    }
+  }
+
+  // Intervention engagement and auto-resolution
+  if (pilot && pilot.interventions.triggered > 0) {
+    if (pilot.interventions.pctEngaged < 0.3) {
+      obs.push({
+        level: "warn",
+        text: `Intervention engagement is ${pctStr(pilot.interventions.pctEngaged)}. Patients are receiving Viva suggestions but mostly not acting on them.`,
+      });
+    } else if (pilot.interventions.triggered >= 10 && pilot.interventions.pctAutoResolved >= 0.5) {
+      obs.push({
+        level: "ok",
+        text: `${pctStr(pilot.interventions.pctAutoResolved)} of interventions auto-resolved without escalation. Viva is handling most issues at the app layer.`,
+      });
+    }
+  }
+
+  // Escalation review rate
+  if (pilot && pilot.provider.patientsEscalated > 0) {
+    if (pilot.provider.pctReviewed < 0.5) {
+      obs.push({
+        level: "warn",
+        text: `Only ${pctStr(pilot.provider.pctReviewed)} of escalations reviewed by a doctor. More than half are pending provider response.`,
+      });
+    } else if (pilot.provider.pctActedOn >= 0.7) {
+      obs.push({
+        level: "ok",
+        text: `Providers acted on ${pctStr(pilot.provider.pctActedOn)} of escalations. The care loop is closing well.`,
+      });
+    }
+  } else if (esc && esc.open > 5) {
+    obs.push({
+      level: "warn",
+      text: `${esc.open} escalations are currently open. Check provider review queue.`,
+    });
+  }
+
+  // Plan adherence
+  if (obs.length < 4) {
+    if (plan === null) {
+      obs.push({
+        level: "info",
+        text: "No plan activity events received yet. Plan adherence tracking will activate once patients interact with care plans.",
+      });
+    } else if (plan && plan.totalPatientsWithPlanItems > 0) {
+      const denom = plan.itemsCompleted + plan.itemsSkipped;
+      const adherencePct = denom > 0 ? plan.itemsCompleted / denom : null;
+      if (adherencePct !== null) {
+        if (adherencePct < 0.4) {
+          obs.push({
+            level: "warn",
+            text: `Plan adherence is ${pctStr(adherencePct)}. Patients are skipping most care plan items.`,
+          });
+        } else {
+          obs.push({
+            level: "info",
+            text: `Plan adherence is ${pctStr(adherencePct)} across ${plan.totalPatientsWithPlanItems} patients with care plans.`,
+          });
+        }
+      }
+    }
+  }
+
+  // Disengagement (fallback filler if still below 2)
+  if (obs.length < 2 && ts?.disengagement && ts.disengagement.inactive12d > 0) {
+    const pct =
+      ts.disengagement.considered > 0
+        ? ts.disengagement.inactive12d / ts.disengagement.considered
+        : null;
+    obs.push({
+      level: "warn",
+      text: `${ts.disengagement.inactive12d} patients${pct ? ` (${pctStr(pct)})` : ""} haven't checked in for 12+ days. Outreach recommended.`,
+    });
+  }
+
+  // Wearable coverage (informational filler)
+  if (obs.length < 3 && op && op.patients.activated > 0) {
+    if (op.patients.pctAppleHealthConnected < 0.2) {
+      obs.push({
+        level: "info",
+        text: `${pctStr(op.patients.pctAppleHealthConnected)} of patients have Apple Health connected. Wearable data coverage is limited.`,
+      });
+    } else if (op.patients.pctAppleHealthConnected >= 0.5) {
+      obs.push({
+        level: "info",
+        text: `${pctStr(op.patients.pctAppleHealthConnected)} of patients have Apple Health connected. Good wearable data coverage.`,
+      });
+    }
+  }
+
+  return obs.slice(0, 4);
+}
+
+function VivaPulse({ data }: { data: AnalyticsSummary }) {
+  const observations = buildObservations(data);
+  if (observations.length === 0) return null;
+  return (
+    <>
+      <SectionHead hint="Synthesised from pilot data, not a clinical assessment">
+        What Viva is noticing
+      </SectionHead>
+      <Card>
+        <ul className="space-y-2.5">
+          {observations.map((obs, i) => (
+            <li key={i} className="flex items-start gap-2.5 text-[13px]">
+              <span
+                aria-hidden
+                className="inline-block w-2 h-2 rounded-full mt-[3px] shrink-0"
+                style={{ backgroundColor: OBS_DOT[obs.level] }}
+              />
+              <span className="text-foreground leading-snug">{obs.text}</span>
+            </li>
+          ))}
+        </ul>
+      </Card>
+    </>
+  );
+}
+
+// ---- shared helpers ------------------------------------------------
 
 function JumpCard({
   to,

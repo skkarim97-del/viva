@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -95,18 +95,48 @@ export function PatientsPage() {
   const needsReview = useQuery({
     queryKey: ["needs-review-ids"],
     queryFn: api.needsReviewIds,
-    // Poll on a 30s cadence so a doctor sitting on the worklist
-    // sees a new "Patient requested review" pill appear within
-    // half a minute of the patient tapping the CTA, without
-    // requiring a manual refresh. Cheap query (returns just ids).
-    staleTime: 30_000,
-    refetchInterval: 30_000,
+    // Poll every 10s so a new "Patient requested review" badge appears
+    // within seconds of the patient tapping the CTA. Cheap query
+    // (returns just an id array).
+    staleTime: 10_000,
+    refetchInterval: 10_000,
     refetchOnWindowFocus: true,
   });
   const needsReviewSet = useMemo(
     () => new Set(needsReview.data?.ids ?? []),
     [needsReview.data],
   );
+
+  // Browser Notification API: alert the doctor when new escalations
+  // arrive while they are on another tab. Fires on any count increase;
+  // skips the first render (prev === null) so mount doesn't notify.
+  // Uses tag:"viva-escalation" + renotify:true so rapid bursts collapse
+  // into one banner rather than stacking.
+  const prevNeedsReviewCountRef = useRef<number | null>(null);
+  useEffect(() => {
+    const currentCount = needsReview.data?.ids.length ?? 0;
+    const prev = prevNeedsReviewCountRef.current;
+    prevNeedsReviewCountRef.current = currentCount;
+    if (prev === null || currentCount <= prev) return;
+    const newCount = currentCount - prev;
+    const fire = () => {
+      new Notification("Patient requested review", {
+        body:
+          newCount === 1
+            ? "A patient has requested clinician review."
+            : `${newCount} patients have requested clinician review.`,
+        tag: "viva-escalation",
+      });
+    };
+    if (typeof Notification === "undefined") return;
+    if (Notification.permission === "granted") {
+      fire();
+    } else if (Notification.permission !== "denied") {
+      void Notification.requestPermission().then((p) => {
+        if (p === "granted") fire();
+      });
+    }
+  }, [needsReview.data]);
 
   // Phase 4 intervention worklist. Returns the flat list of active
   // interventions (shown / accepted / pending_feedback / escalated)
@@ -116,8 +146,8 @@ export function PatientsPage() {
   const interventionsWorklist = useQuery({
     queryKey: ["clinic-interventions-worklist"],
     queryFn: api.clinicInterventionsWorklist,
-    staleTime: 30_000,
-    refetchInterval: 30_000,
+    staleTime: 10_000,
+    refetchInterval: 10_000,
     refetchOnWindowFocus: true,
   });
   const interventionBuckets = useMemo(() => {
@@ -578,6 +608,10 @@ export function PatientsPage() {
  * badges, signals, or check-in summaries -- there's no data to score.
  * Doctors get a copy/resend control so they can nudge the patient.
  */
+// Invite token TTL in days — must stay in sync with
+// artifacts/api-server/src/lib/inviteTokens.ts INVITE_TOKEN_TTL_DAYS.
+const INVITE_TTL_DAYS = 14;
+
 function PendingCard({ p }: { p: PatientRow }) {
   const qc = useQueryClient();
   const [link, setLink] = useState<string | null>(
@@ -611,7 +645,7 @@ function PendingCard({ p }: { p: PatientRow }) {
   async function copySms() {
     if (!link) return;
     const firstName = (p.name || "").trim().split(/\s+/)[0] || "there";
-    const body = `Hi ${firstName}, your clinician invited you to viva. Set up your account here: ${link}`;
+    const body = `Hi ${firstName}, your clinician invited you to Viva. Set up your account here: ${link}`;
     try {
       await navigator.clipboard.writeText(body);
       setSmsCopied(true);
@@ -627,7 +661,7 @@ function PendingCard({ p }: { p: PatientRow }) {
   // to open the app, so the controls below the divider differ too.
   const isInvited = p.status === "invited";
   const subtitle = isInvited
-    ? "Awaiting account activation. Resend the link if needed."
+    ? "Awaiting account activation. Send the invite link to get them started."
     : "Connected. Awaiting first check-in.";
   // Stale-invite nudge: shows once the invite is 48h old and still
   // unclaimed. Renders the precise age so doctors can prioritise the
@@ -640,6 +674,23 @@ function PendingCard({ p }: { p: PatientRow }) {
       : inviteAge >= 48
         ? `Sent ${Math.floor(inviteAge / 24)}d ago`
         : `Sent ${inviteAge}h ago`;
+
+  // Expiry indicator: compute days remaining from the 14-day TTL.
+  // Shows a warning chip when ≤3 days remain so the doctor knows to
+  // resend before the patient loses access to the link.
+  const daysRemaining =
+    inviteAge !== null
+      ? Math.max(0, INVITE_TTL_DAYS - Math.floor(inviteAge / 24))
+      : null;
+  const showExpiryWarning =
+    isInvited && daysRemaining !== null && daysRemaining <= 3;
+  const expiryLabel =
+    daysRemaining === 0
+      ? "Expires today. Resend now."
+      : daysRemaining === 1
+        ? "Expires tomorrow. Resend if needed."
+        : `Expires in ${daysRemaining} days`;
+
   return (
     <div className="bg-card rounded-[20px] p-5 opacity-95">
       <div className="flex items-start justify-between gap-4">
@@ -665,7 +716,7 @@ function PendingCard({ p }: { p: PatientRow }) {
           Pending
         </span>
       </div>
-      {showStale && (
+      {showStale && !showExpiryWarning && (
         <div
           className="mt-3 rounded-lg px-3 py-2 text-xs font-semibold flex items-center gap-2"
           style={{ color: "#B8650A", backgroundColor: "rgba(255,149,0,0.10)" }}
@@ -673,7 +724,28 @@ function PendingCard({ p }: { p: PatientRow }) {
           aria-label="Invite has not been activated for 48 hours or more"
         >
           <span aria-hidden>⏳</span>
-          <span>Not activated yet · {staleLabel} · nudge the patient</span>
+          <span>Not activated yet · {staleLabel} · send the link again if needed</span>
+        </div>
+      )}
+      {showExpiryWarning && (
+        <div
+          className="mt-3 rounded-lg px-3 py-2 text-xs font-semibold flex items-center gap-2"
+          style={{ color: "#991B1B", backgroundColor: "rgba(239,68,68,0.08)" }}
+          role="alert"
+          aria-label="Invite link is expiring soon"
+        >
+          <span aria-hidden>⚠️</span>
+          <span>{expiryLabel} · use Resend to issue a fresh link</span>
+        </div>
+      )}
+      {resend.isError && (
+        <div
+          className="mt-3 rounded-lg px-3 py-2 text-xs font-semibold flex items-center gap-2"
+          style={{ color: "#991B1B", backgroundColor: "rgba(239,68,68,0.08)" }}
+          role="alert"
+        >
+          <span aria-hidden>⚠️</span>
+          <span>Failed to resend. Please try again.</span>
         </div>
       )}
       {isInvited && (
@@ -682,29 +754,32 @@ function PendingCard({ p }: { p: PatientRow }) {
             readOnly
             value={link ?? "Generating..."}
             onFocus={(e) => e.currentTarget.select()}
+            title="Invite link: click to select all, then copy"
             className="flex-1 px-3 py-2 rounded-lg bg-background text-foreground text-xs font-mono focus:outline-none focus:ring-2 focus:ring-accent"
           />
           <button
             type="button"
             onClick={copy}
             disabled={!link}
+            title="Copy the invite link to your clipboard"
             className="px-3 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 disabled:opacity-60"
           >
-            {copied ? "Copied" : "Copy link"}
+            {copied ? "✓ Copied" : "Copy link"}
           </button>
           <button
             type="button"
             onClick={copySms}
             disabled={!link}
+            title="Copy a ready-to-send SMS message including the invite link"
             className="px-3 py-2 rounded-lg bg-background text-foreground text-xs font-semibold hover:opacity-80 disabled:opacity-60"
-            title="Copy a ready-to-send SMS body with the activation link"
           >
-            {smsCopied ? "Copied" : "Copy SMS"}
+            {smsCopied ? "✓ Copied" : "Copy SMS"}
           </button>
           <button
             type="button"
             onClick={() => resend.mutate()}
             disabled={resend.isPending}
+            title="Issue a new invite link with a fresh 14-day expiry and invalidate the old one"
             className="px-3 py-2 rounded-lg bg-background text-foreground text-xs font-semibold hover:opacity-80 disabled:opacity-60"
           >
             {resend.isPending ? "..." : "Resend"}

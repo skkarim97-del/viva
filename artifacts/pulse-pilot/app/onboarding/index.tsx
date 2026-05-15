@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useApp } from "@/context/AppContext";
 import { Logo } from "@/components/Logo";
+import { DataSignalNotice } from "@/components/LegalNotice";
 import { useColors } from "@/hooks/useColors";
 import type { HealthGoal, SideEffectType, MedicationProfile } from "@/types";
 import {
@@ -122,6 +123,12 @@ export default function OnboardingScreen() {
   const [strengthTraining, setStrengthTraining] = useState<"yes" | "sometimes" | "no" | null>(null);
 
   const [activityLevel, setActivityLevel] = useState<"inactive" | "light" | "moderate" | "very_active" | null>(null);
+
+  // Pre-prompt gate for the integrations step. When false (default) we
+  // show the explanation card before triggering the OS permission dialog.
+  // Prevents patients from seeing the native HealthKit sheet cold with
+  // no context, which causes high denial rates.
+  const [healthPrePromptPassed, setHealthPrePromptPassed] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
@@ -307,6 +314,7 @@ export default function OnboardingScreen() {
 
   const ctaText = step === "welcome" ? "Get Started"
     : step === "summary" ? "Start Your Plan"
+    : step === "integrations" && !healthPrePromptPassed ? "Set up later"
     : step === "integrations" ? "Continue"
     : step === "telehealth" ? (telehealthPlatform ? "Continue" : "Skip")
     : "Continue";
@@ -844,7 +852,43 @@ export default function OnboardingScreen() {
             </View>
           )}
 
-          {step === "integrations" && (
+          {step === "integrations" && !healthPrePromptPassed && (
+            <View style={styles.section}>
+              <Text style={[styles.stepTitle, { color: c.foreground }]}>Connect Apple Health</Text>
+              <Text style={[styles.stepSub, { color: c.mutedForeground }]}>
+                Apple Health helps Viva better understand changes in sleep, activity, and recovery between visits.
+              </Text>
+              <View style={[styles.healthPrePromptCard, { backgroundColor: c.card }]}>
+                <Text style={[styles.healthPrePromptBody, { color: c.mutedForeground }]}>
+                  This gives your care team better visibility into patterns that may impact your treatment experience and helps Viva provide more personalized support.
+                </Text>
+                <Text style={[styles.healthPrePromptOptional, { color: c.mutedForeground }]}>
+                  Apple Health is optional, but recommended for the best experience.
+                </Text>
+                <DataSignalNotice style={{ marginTop: 8 }} />
+              </View>
+              <Pressable
+                style={[styles.healthConnectBtn, { backgroundColor: c.accent }]}
+                onPress={() => {
+                  haptic();
+                  setHealthPrePromptPassed(true);
+                  // Trigger the OS HealthKit permission dialog. The result
+                  // is handled asynchronously in AppContext — we advance to
+                  // the next step immediately so the OS sheet appears over
+                  // the summary screen rather than the pre-prompt.
+                  toggleIntegration("apple_health");
+                  next();
+                }}
+              >
+                <Text style={[styles.healthConnectBtnLabel, { color: "#fff" }]}>Continue with Apple Health</Text>
+              </Pressable>
+              <Pressable onPress={next} style={styles.skipBtn}>
+                <Text style={[styles.skipText, { color: c.mutedForeground }]}>Set up later</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {step === "integrations" && healthPrePromptPassed && (
             <View style={styles.section}>
               <Text style={[styles.stepTitle, { color: c.foreground }]}>Connect Apple Health</Text>
               <Text style={[styles.stepSub, { color: c.mutedForeground }]}>
@@ -1005,6 +1049,11 @@ const styles = StyleSheet.create({
   integrationIcon: { width: 42, height: 42, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   skipBtn: { alignSelf: "center", paddingVertical: 8, marginTop: 4 },
   skipText: { fontSize: 14, fontFamily: "Montserrat_500Medium" },
+  healthPrePromptCard: { borderRadius: 16, padding: 18, marginBottom: 20 },
+  healthPrePromptBody: { fontSize: 15, fontFamily: "Montserrat_400Regular", lineHeight: 23, marginBottom: 12 },
+  healthPrePromptOptional: { fontSize: 13, fontFamily: "Montserrat_500Medium", lineHeight: 19, opacity: 0.8 },
+  healthConnectBtn: { borderRadius: 14, paddingVertical: 16, alignItems: "center", marginBottom: 12 },
+  healthConnectBtnLabel: { fontSize: 16, fontFamily: "Montserrat_700Bold" },
   summarySection: { alignItems: "center", gap: 16, paddingTop: 40 },
   summaryIconWrap: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center" },
   summaryTitle: { fontSize: 28, fontFamily: "Montserrat_700Bold", letterSpacing: -0.3 },

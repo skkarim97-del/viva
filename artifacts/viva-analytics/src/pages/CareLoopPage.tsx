@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AnalyticsGlobalNotice } from "@/components/LegalNotice";
 import {
   CartesianGrid,
   ComposedChart,
@@ -235,15 +236,22 @@ export function CareLoopPage() {
 
       <SectionHead>Diagnostic · how these are computed</SectionHead>
       <Card>
-        <ul className="space-y-2 text-sm text-muted-foreground">
-          {Object.entries(d.notes).map(([k, v]) => (
-            <li key={k}>
-              <span className="font-semibold text-foreground">{k}: </span>
-              {v}
-            </li>
-          ))}
-        </ul>
+        <details>
+          <summary className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer select-none list-none flex items-center gap-1.5">
+            <span>Show methodology notes</span>
+            <span aria-hidden className="opacity-50">▸</span>
+          </summary>
+          <ul className="space-y-2 text-sm text-muted-foreground mt-3">
+            {Object.entries(d.notes).map(([k, v]) => (
+              <li key={k}>
+                <span className="font-semibold text-foreground">{k}: </span>
+                {v}
+              </li>
+            ))}
+          </ul>
+        </details>
       </Card>
+      <AnalyticsGlobalNotice className="mt-2" />
     </>
   );
 }

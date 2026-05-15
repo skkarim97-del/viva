@@ -15,6 +15,7 @@ import {
   Modal,
   Animated,
   Alert,
+  Dimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -22,7 +23,9 @@ import { InputRow } from "@/components/InputRow";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SymptomTipCard } from "@/components/SymptomTipCard";
-import { InterventionCard } from "@/components/InterventionCard";
+import { InterventionCard, deriveLiveSeverity, type InteractionPhase } from "@/components/InterventionCard";
+import { shouldInvalidateSupportState } from "@/lib/support/symptomState";
+import { BlurView } from "expo-blur";
 import {
   interventionsApi,
   type PatientIntervention,
@@ -176,11 +179,133 @@ export default function DashboardScreen() {
     bowelMovementToday, setBowelMovementToday,
     glp1Energy, setGlp1Energy,
     medicationLog, logMedicationDose, removeMedicationDose,
-    adaptiveInsights,
     hasHealthData,
     availableMetricTypes,
+    glp1InputHistory,
   } = useApp();
+
+  const symptomCounts = React.useMemo(() => {
+    if (glp1InputHistory.length === 0) return null;
+    const last7 = glp1InputHistory.slice(-7);
+    return {
+      nausea7d: last7.filter(d => d.nausea === "mild" || d.nausea === "moderate" || d.nausea === "severe").length,
+      lowAppetite7d: last7.filter(d => d.appetite === "low" || d.appetite === "very_low").length,
+      lowEnergy7d: last7.filter(d => d.energy === "tired" || d.energy === "depleted").length,
+      constipation7d: last7.filter(d => d.digestion === "constipated" || d.bowelMovementToday === false).length,
+    };
+  }, [glp1InputHistory]);
+
+  // Focused support mode: dim surrounding cards when the support sheet is
+  // open AND the intervention card is in an active engagement phase.
+  // Gated on supportSheetOpen so the pill-minimized state never dims content.
+  const [interventionEngaged, setInterventionEngaged] = useState(false);
+  const surroundingOpacity = useRef(new Animated.Value(1)).current;
+
+  // Support sheet — compact trigger card in Today tab, full card in a
+  // native-feeling bottom sheet. The sheet slides in from below the
+  // fold; the backdrop fades behind it. Phase is persisted here so the
+  // InterventionCard doesn't reset if the sheet is briefly closed.
+  const [supportSheetOpen, setSupportSheetOpen] = useState(false);
+
+  // Dim effect declared after supportSheetOpen so both values are in scope.
+  useEffect(() => {
+    Animated.timing(surroundingOpacity, {
+      toValue: interventionEngaged && supportSheetOpen ? 0.55 : 1,
+      duration: 450,
+      useNativeDriver: Platform.OS !== "web",
+    }).start();
+  }, [interventionEngaged, supportSheetOpen, surroundingOpacity]);
+  const [supportPhase, setSupportPhase] = useState<InteractionPhase>("default");
+  const windowHeight = Dimensions.get("window").height;
+  const sheetAnim = useRef(new Animated.Value(windowHeight)).current;
+  const backdropAnim = useRef(new Animated.Value(0)).current;
+
+  const openSupportSheet = React.useCallback(() => {
+    setSupportSheetOpen(true);
+    Animated.parallel([
+      // Snappy upward spring — mirrors native iOS modal presentation
+      Animated.spring(sheetAnim, {
+        toValue: 0,
+        tension: 72,
+        friction: 13,
+        useNativeDriver: true,
+      }),
+      Animated.timing(backdropAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [sheetAnim, backdropAnim]);
+
+  const closeSupportSheet = React.useCallback(() => {
+    // Clear surrounding-content dimming immediately when the sheet closes —
+    // the patient should be able to use the app normally with just the pill.
+    setInterventionEngaged(false);
+    Animated.parallel([
+      Animated.spring(sheetAnim, {
+        toValue: windowHeight,
+        tension: 90,
+        friction: 14,
+        useNativeDriver: true,
+      }),
+      Animated.timing(backdropAnim, {
+        toValue: 0,
+        duration: 160,
+        useNativeDriver: true,
+      }),
+    ]).start(() => setSupportSheetOpen(false));
+  }, [sheetAnim, backdropAnim, windowHeight]);
+
+  // Persistent mini-banner shown while support is active but the full
+  // sheet is dismissed, so the patient can keep using the app.
+  const [supportBannerVisible, setSupportBannerVisible] = useState(false);
+  // How many times the patient has indicated "still struggling" across
+  // the current intervention cycle. Drives the two-loop flow:
+  //   0 = not started  1 = first step tried → show adjusted step
+  //   2+ = both steps tried → surface care-team escalation
+  const [supportStruggleCount, setSupportStruggleCount] = useState(0);
+  // Persistent "resolved" state — pill stays green until symptoms worsen.
+  const [supportResolved, setSupportResolved] = useState(false);
+  // Tracks live severity at resolution time so we can distinguish worsening
+  // (→ invalidate) from improvement or stable symptoms (→ keep green).
+  const currentSeverityRef = useRef<string | null>(null);
+  const resolvedSeverityRef = useRef<string | null>(null);
+
+  // Wraps setSupportPhase with side effects: auto-dismiss the sheet
+  // when the patient starts a support step (checking phase) and hide
+  // the banner when support resolves back to default.
+  const handleSupportPhaseChange = React.useCallback((phase: InteractionPhase) => {
+    setSupportPhase(phase);
+    if (phase === "checking" || phase === "struggling") {
+      // Minimize the sheet into the ambient pill so the patient can keep
+      // using the app. Pill colour signals current state (purple = active,
+      // orange = not helped / adjusted step ready).
+      closeSupportSheet();
+      setSupportBannerVisible(true);
+    } else if (phase === "default") {
+      setSupportBannerVisible(false);
+      setSupportStruggleCount(0);
+    }
+  }, [closeSupportSheet]);
+
+  // Fires when the card reaches "better" (resolved). Closes the sheet,
+  // shows the persistent green pill, and snapshots the current live severity
+  // so we can later detect if symptoms worsen past that baseline.
+  const handleSupportDone = React.useCallback(() => {
+    resolvedSeverityRef.current = currentSeverityRef.current;
+    closeSupportSheet();
+    setSupportPhase("better");
+    setSupportBannerVisible(false);
+    setSupportStruggleCount(0);
+    setSupportResolved(true);
+  }, [closeSupportSheet]);
+
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
+  // Standard tab bar heights: 49pt iOS, 56dp Android. The sheet and its
+  // backdrop stop here so the navigation chrome stays fully visible.
+  const TAB_BAR_HEIGHT = Platform.select({ ios: 49, android: 56, web: 84, default: 52 }) ?? 52;
+  const sheetBottomOffset = insets.bottom + TAB_BAR_HEIGHT;
 
   // ----- AI-personalized micro-intervention loop (Phase 3) -----
   // The personalized card REPLACES the legacy SymptomTipCard layer
@@ -368,6 +493,8 @@ export default function DashboardScreen() {
   // diverging from that snapshot trigger the auto-save chain.
   const symptomSignature = `${glp1Energy ?? ""}|${appetite ?? ""}|${nausea ?? ""}|${digestion ?? ""}|${bowelMovementToday ?? ""}`;
   const hasMinSymptomData = !!(glp1Energy && nausea);
+
+
   const lastSavedSignatureRef = useRef<string | null>(null);
   useEffect(() => {
     if (!activeLoaded) return;
@@ -657,7 +784,7 @@ export default function DashboardScreen() {
     for (const tip of symptomTips) {
       logIntervention({
         surface: "Today",
-        interventionType: "symptom_monitoring",
+        interventionType: "symptom_tip",
         title: tip.title,
         rationale: tip.symptom,
         state: dailyState,
@@ -807,6 +934,56 @@ export default function DashboardScreen() {
   const selectGlp1Energy = (e: NonNullable<EnergyDaily>) => {
     setGlp1Energy(glp1Energy === e ? null : e);
   };
+
+  // Severity-based card positioning: elevated/moderate/severe → pinned
+  // above check-in inputs; mild/steady/null → rendered below so calmer
+  // states don't visually compete with the check-in prompt itself.
+  const currentLiveSeverity = symptomHydrated
+    ? deriveLiveSeverity({
+        nausea,
+        appetite,
+        energy: glp1Energy,
+        digestion,
+        bowel: bowelSelectedKey,
+      })
+    : null;
+  const interventionIsElevated =
+    currentLiveSeverity === "moderate" || currentLiveSeverity === "severe";
+
+  // Keep the ref in sync so handleSupportDone (defined earlier via useCallback)
+  // can snapshot live severity at the moment the patient reports success.
+  useEffect(() => { currentSeverityRef.current = currentLiveSeverity; }, [currentLiveSeverity]);
+
+  // Single invalidation gate — runs whenever severity changes while any support
+  // state is active. Covers two cases:
+  //   • Symptoms cleared to steady/none → wipe all active support (checking,
+  //     struggling, resolved) so the pill never says "Support in progress"
+  //     when there's nothing left to monitor.
+  //   • Symptoms worsened past the resolved baseline → clear the green state
+  //     so a fresh recommendation appears for the new severity.
+  // Stable or improving readings are intentionally ignored.
+  useEffect(() => {
+    if (!symptomHydrated || currentLiveSeverity === null) return;
+    const symptomsFree = currentLiveSeverity === "steady";
+    const { clearActiveBanner, clearResolved } = shouldInvalidateSupportState({
+      currentSeverity: currentLiveSeverity,
+      symptomsFree,
+      supportBannerVisible,
+      supportResolved,
+      resolvedSeverity: resolvedSeverityRef.current,
+    });
+    if (clearActiveBanner) {
+      setSupportBannerVisible(false);
+      setSupportPhase("default");
+      setSupportStruggleCount(0);
+    }
+    if (clearResolved) {
+      setSupportResolved(false);
+      setSupportPhase("default");
+      setSupportStruggleCount(0);
+      resolvedSeverityRef.current = null;
+    }
+  }, [currentLiveSeverity, symptomHydrated, supportBannerVisible, supportResolved]);
 
   const sendAskMessage = async (text: string) => {
     if (!text.trim() || isTyping) return;
@@ -1013,7 +1190,7 @@ export default function DashboardScreen() {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={0}>
       <ScrollView
         style={[styles.container, { backgroundColor: c.background }]}
-        contentContainerStyle={[styles.content, { paddingTop: 0, paddingBottom: bottomPad + 100 }]}
+        contentContainerStyle={[styles.content, { paddingTop: 0, paddingBottom: sheetBottomOffset + 68 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -1021,6 +1198,7 @@ export default function DashboardScreen() {
 
         <Text style={[styles.tagline, { color: c.mutedForeground }]}>{greetingText}</Text>
 
+        <Animated.View style={{ opacity: surroundingOpacity }}>
         <View style={[styles.statusCard, { backgroundColor: c.card }]}>
           {streakDays > 0 && (
             <View style={styles.streakRow}>
@@ -1069,6 +1247,7 @@ export default function DashboardScreen() {
             </View>
           )}
         </View>
+        </Animated.View>
 
         {/* The standalone "Request review" / "Heads up" care-team CTA
             that used to live here has been removed. The intervention
@@ -1081,51 +1260,6 @@ export default function DashboardScreen() {
             kept in the component so we can re-surface this CTA
             elsewhere later without rewiring. */}
 
-        {/* AI-personalized micro-interventions ("Symptom support").
-            Positioned directly under the top status card so the
-            patient sees what to DO immediately after seeing what
-            Viva NOTICED. This is the headline value of the Today
-            tab, so it sits above Treatment / insights / check-in /
-            Plan. Renders only once the patient has met the minimum
-            check-in (energy + nausea, see hasMinSymptomData) and an
-            active intervention exists; the fallback slot lower in
-            the screen handles the unusual no-min-data case. */}
-        {activeInterventions.length > 0 && hasMinSymptomData && (
-          <View style={{ marginBottom: 12, gap: 14 }}>
-            {activeInterventions.map((iv) => (
-              <InterventionCard
-                key={iv.id}
-                intervention={iv}
-                navy={c.foreground}
-                accent={c.accent}
-                cardBg={c.card}
-                background={c.background}
-                mutedForeground={c.mutedForeground}
-                warning={c.warning}
-                hasHealthData={hasHealthData}
-                doseContext={
-                  dailyState
-                    ? {
-                        position: dailyState.doseDayPosition,
-                        recentTitration: dailyState.recentTitration,
-                      }
-                    : null
-                }
-                liveCheckin={symptomHydrated ? {
-                  nausea,
-                  appetite,
-                  energy: glp1Energy,
-                  digestion,
-                  bowel: bowelSelectedKey,
-                } : null}
-                onAccept={onInterventionAccept}
-                onDismiss={onInterventionDismiss}
-                onFeedback={onInterventionFeedback}
-                onEscalate={onInterventionEscalate}
-              />
-            ))}
-          </View>
-        )}
 
         {profile.medicationProfile && (() => {
           const mp = profile.medicationProfile!;
@@ -1320,55 +1454,6 @@ export default function DashboardScreen() {
           );
         })()}
 
-        {(adaptiveInsights.length > 0 || hasHealthData) && (
-          <View style={[styles.insightsCard, { backgroundColor: c.card }]}>
-            <View style={styles.insightsHeader}>
-              <Feather name="bar-chart-2" size={14} color={c.accent} />
-              <Text style={[styles.insightsTitle, { color: c.foreground }]}>Recent patterns</Text>
-            </View>
-            {/* Subtitle reflects the actual signal mix. We only mention
-                Apple Health when the patient has it connected, so the
-                section never overclaims its data sources. The thesis
-                stays clear: check-ins + wearable data → personalized
-                support. */}
-            <Text style={[styles.sectionSubtitle, { color: c.mutedForeground }]}>
-              {hasHealthData
-                ? "Patterns from your check-ins and Apple Health"
-                : "Patterns from your recent check-ins"}
-            </Text>
-            {/* Learning-state copy. Shown when Apple Health is
-                connected but the engine has not yet found a stable
-                pattern -- without this, the section would simply
-                disappear and feel broken to a newly-connected user.
-                Check-in-only patients keep the original behavior of
-                hiding the section entirely until insights exist. */}
-            {adaptiveInsights.length === 0 && hasHealthData && (
-              <View style={styles.insightRow}>
-                <Feather
-                  name="clock"
-                  size={12}
-                  color={c.mutedForeground}
-                  style={{ marginTop: 2 }}
-                />
-                <Text style={[styles.insightText, { color: c.mutedForeground }]}>
-                  Keep checking in so Viva can learn your patterns.
-                </Text>
-              </View>
-            )}
-            {adaptiveInsights.slice(0, 3).map((insight) => (
-              <View key={insight.id} style={styles.insightRow}>
-                <Feather
-                  name={insight.type === "post_dose" ? "clock" : insight.type === "correlation" ? "link" : insight.type === "trend" ? "trending-up" : "zap"}
-                  size={12}
-                  color={c.accent}
-                  style={{ marginTop: 2 }}
-                />
-                <Text style={[styles.insightText, { color: c.mutedForeground }]}>{insight.text}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-
         {lastCompletionFeedback && (
           <Animated.View style={[styles.feedbackToast, { backgroundColor: c.success + "14", opacity: feedbackOpacity }]}>
             <Feather name="check-circle" size={14} color={c.success} />
@@ -1484,47 +1569,6 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* Fallback intervention slot. Only used when an intervention
-            has been generated WITHOUT the patient having met the min
-            check-in threshold (an unusual but possible state, e.g. a
-            persisted/legacy active row from a prior session). In the
-            normal flow the card above this comment renders instead. */}
-        {activeInterventions.length > 0 && !hasMinSymptomData && (
-          <View style={{ marginTop: 8, marginBottom: 20, gap: 14 }}>
-            {activeInterventions.map((iv) => (
-              <InterventionCard
-                key={iv.id}
-                intervention={iv}
-                navy={c.foreground}
-                accent={c.accent}
-                cardBg={c.card}
-                background={c.background}
-                mutedForeground={c.mutedForeground}
-                warning={c.warning}
-                hasHealthData={hasHealthData}
-                doseContext={
-                  dailyState
-                    ? {
-                        position: dailyState.doseDayPosition,
-                        recentTitration: dailyState.recentTitration,
-                      }
-                    : null
-                }
-                liveCheckin={symptomHydrated ? {
-                  nausea,
-                  appetite,
-                  energy: glp1Energy,
-                  digestion,
-                  bowel: bowelSelectedKey,
-                } : null}
-                onAccept={onInterventionAccept}
-                onDismiss={onInterventionDismiss}
-                onFeedback={onInterventionFeedback}
-                onEscalate={onInterventionEscalate}
-              />
-            ))}
-          </View>
-        )}
 
         {/* Pilot empty-state. The legacy SymptomTipCard fallback has
             been removed from the Today tab so the patient never sees
@@ -1553,6 +1597,7 @@ export default function DashboardScreen() {
           </View>
         )}
 
+        <Animated.View style={{ opacity: surroundingOpacity }}>
         <View style={[styles.dayCard, { backgroundColor: c.card }]}>
           <View style={styles.dayHeader}>
             <View style={styles.dayTitleRow}>
@@ -1659,9 +1704,19 @@ export default function DashboardScreen() {
                     ]}>
                       {action.text}
                     </Text>
-                    {action.reason && !action.completed && (
-                      <Text style={[styles.actionReason, { color: c.mutedForeground }]}>{action.reason}</Text>
-                    )}
+                    {(() => {
+                      const sub = CATEGORY_OPTIONS[action.category as keyof typeof CATEGORY_OPTIONS]
+                        ?.find((o) => o.title === action.text)?.subtitle;
+                      if (!sub) return null;
+                      return (
+                        <Text
+                          style={[styles.actionSubtitle, { color: c.mutedForeground, opacity: action.completed ? 0.5 : 1 }]}
+                          numberOfLines={2}
+                        >
+                          {sub}
+                        </Text>
+                      );
+                    })()}
                   </View>
                   <Feather name="chevron-right" size={14} color={c.mutedForeground + "40"} />
                 </Pressable>
@@ -1669,6 +1724,7 @@ export default function DashboardScreen() {
             );
           })}
         </View>
+        </Animated.View>
 
         {dailyPlan?.whyThisPlan?.length > 0 && (
           <Pressable
@@ -1846,7 +1902,7 @@ export default function DashboardScreen() {
             />
             <Text style={[styles.checkInDoneText, { color: c.mutedForeground }]}>
               {checkinSyncStatus === "failed"
-                ? "Saved on this device — we'll sync when you're back online"
+                ? "Saved on this device. We'll sync when you're back online"
                 : checkinSyncStatus === "pending"
                 ? "Reflection saved · syncing…"
                 : "Reflection saved"}
@@ -1933,7 +1989,7 @@ export default function DashboardScreen() {
         onRequestClose={() => setEditingAction(null)}
       >
         <Pressable style={styles.modalOverlay} onPress={() => setEditingAction(null)}>
-          <Pressable style={[styles.modalSheet, { backgroundColor: c.card, paddingBottom: Math.max(bottomPad, 24) }]} onPress={(e) => e.stopPropagation()}>
+          <Pressable style={[styles.modalSheet, { backgroundColor: c.card }]} onPress={(e) => e.stopPropagation()}>
             {editingAction && (() => {
               const meta = ACTION_META[editingAction];
               const options = CATEGORY_OPTIONS[editingAction];
@@ -1945,72 +2001,78 @@ export default function DashboardScreen() {
                   <View style={styles.modalHandle}>
                     <View style={[styles.handleBar, { backgroundColor: c.border }]} />
                   </View>
-                  <View style={styles.modalHeader}>
-                    <View style={[styles.modalIconWrap, { backgroundColor: meta.color + "12" }]}>
-                      <Feather name={meta.icon} size={18} color={meta.color} />
+                  <ScrollView
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                    contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 28) }}
+                  >
+                    <View style={styles.modalHeader}>
+                      <View style={[styles.modalIconWrap, { backgroundColor: meta.color + "12" }]}>
+                        <Feather name={meta.icon} size={18} color={meta.color} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.modalTitle, { color: c.foreground }]}>{meta.label}</Text>
+                        <Text style={[styles.modalInstruction, { color: c.mutedForeground }]}>Choose one for today</Text>
+                      </View>
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.modalTitle, { color: c.foreground }]}>{meta.label}</Text>
-                      <Text style={[styles.modalInstruction, { color: c.mutedForeground }]}>Choose one for today</Text>
-                    </View>
-                  </View>
-                  <View style={styles.modalOptions}>
-                    {options.map((option) => {
-                      const isSelected = currentAction?.text === option.title;
-                      const isBestMatch = option.title === currentAction?.recommended;
-                      return (
-                        <Pressable
-                          key={option.id}
-                          onPress={() => {
-                            haptic();
-                            if (currentAction) {
-                              editAction(currentAction.id, option.title);
-                            }
-                            setEditingAction(null);
-                          }}
-                          style={({ pressed }) => [
-                            styles.modalOption,
-                            {
-                              backgroundColor: isSelected ? meta.color + "10" : c.background,
-                              borderColor: isSelected ? meta.color + "40" : c.border + "30",
-                              opacity: pressed ? 0.85 : 1,
-                            },
-                          ]}
-                        >
-                          <View style={styles.modalOptionContent}>
-                            <View style={styles.modalOptionTitleRow}>
-                              <Text style={[
-                                styles.modalOptionText,
-                                { color: isSelected ? meta.color : c.foreground },
-                                isSelected && { fontFamily: "Montserrat_600SemiBold" },
-                              ]}>{option.title}</Text>
-                              {isSelected && <Feather name="check-circle" size={18} color={meta.color} />}
-                            </View>
-                            <Text style={[styles.modalOptionSubtitle, { color: c.mutedForeground }]}>{option.subtitle}</Text>
-                            {isBestMatch && !isSelected && (
-                              <View style={[styles.recommendedBadge, { backgroundColor: c.success + "14" }]}>
-                                <Feather name="zap" size={10} color={c.success} />
-                                <Text style={[styles.recommendedText, { color: c.success }]}>Best match today</Text>
+                    <View style={styles.modalOptions}>
+                      {options.map((option) => {
+                        const isSelected = currentAction?.text === option.title;
+                        const isBestMatch = option.title === currentAction?.recommended;
+                        return (
+                          <Pressable
+                            key={option.id}
+                            onPress={() => {
+                              haptic();
+                              if (currentAction) {
+                                editAction(currentAction.id, option.title);
+                              }
+                              setEditingAction(null);
+                            }}
+                            style={({ pressed }) => [
+                              styles.modalOption,
+                              {
+                                backgroundColor: isSelected ? meta.color + "10" : c.background,
+                                borderColor: isSelected ? meta.color + "40" : c.border + "30",
+                                opacity: pressed ? 0.85 : 1,
+                              },
+                            ]}
+                          >
+                            <View style={styles.modalOptionContent}>
+                              <View style={styles.modalOptionTitleRow}>
+                                <Text style={[
+                                  styles.modalOptionText,
+                                  { color: isSelected ? meta.color : c.foreground },
+                                  isSelected && { fontFamily: "Montserrat_600SemiBold" },
+                                ]}>{option.title}</Text>
+                                {isSelected && <Feather name="check-circle" size={18} color={meta.color} />}
                               </View>
-                            )}
-                            {isBestMatch && isSelected && currentAction?.reason && (
-                              <Text style={[styles.modalOptionReason, { color: c.mutedForeground }]}>{currentAction.reason}</Text>
-                            )}
-                          </View>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                  {selectedOption?.supportText && selectedOption.supportText.length > 0 && (
-                    <View style={styles.supportSection}>
-                      {selectedOption.supportText.map((tip, i) => (
-                        <View key={i} style={styles.supportRow}>
-                          <Feather name="info" size={11} color={c.mutedForeground} />
-                          <Text style={[styles.supportText, { color: c.mutedForeground }]}>{tip}</Text>
-                        </View>
-                      ))}
+                              <Text style={[styles.modalOptionSubtitle, { color: c.mutedForeground }]}>{option.subtitle}</Text>
+                              {isBestMatch && !isSelected && (
+                                <View style={[styles.recommendedBadge, { backgroundColor: c.success + "14" }]}>
+                                  <Feather name="zap" size={10} color={c.success} />
+                                  <Text style={[styles.recommendedText, { color: c.success }]}>Best match today</Text>
+                                </View>
+                              )}
+                              {isBestMatch && isSelected && currentAction?.reason && (
+                                <Text style={[styles.modalOptionReason, { color: c.mutedForeground }]}>{currentAction.reason}</Text>
+                              )}
+                            </View>
+                          </Pressable>
+                        );
+                      })}
                     </View>
-                  )}
+                    {selectedOption?.supportText && selectedOption.supportText.length > 0 && (
+                      <View style={styles.supportSection}>
+                        {selectedOption.supportText.map((tip, i) => (
+                          <View key={i} style={styles.supportRow}>
+                            <Feather name="info" size={11} color={c.mutedForeground} />
+                            <Text style={[styles.supportText, { color: c.mutedForeground }]}>{tip}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </ScrollView>
                 </>
               );
             })()}
@@ -2511,6 +2573,105 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 24,
   },
+  // Support sheet
+  backdropDark: {
+    backgroundColor: "rgba(4,8,20,0.60)",
+  },
+  supportSheet: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "#F3F7FC",
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    ...Platform.select({
+      web: { boxShadow: "0 -8px 48px rgba(4,8,20,0.32)" },
+      default: {
+        shadowColor: "#040814",
+        shadowOffset: { width: 0, height: -6 },
+        shadowOpacity: 0.30,
+        shadowRadius: 32,
+        elevation: 28,
+      },
+    }),
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(100,130,170,0.30)",
+    alignSelf: "center",
+    marginBottom: 8,
+  },
+  supportBanner: {
+    position: "absolute",
+    left: 20,
+    right: 20,
+    backgroundColor: "#F3F8FF",
+    borderRadius: 50,
+    paddingVertical: 17,
+    paddingHorizontal: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#C4D9F4",
+    ...Platform.select({
+      web: { boxShadow: "0 4px 24px rgba(61,124,201,0.14)" },
+      default: {
+        shadowColor: "#3D7CC9",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.14,
+        shadowRadius: 20,
+        elevation: 10,
+      },
+    }),
+  },
+  // Semantic pill colour variants — backgrounds, borders, and glow match
+  // each state hue; dots and chevron carry the full hue so the pill stays calm.
+  supportBannerPurple: {
+    backgroundColor: "#F4F0FF",
+    borderColor: "#C8B5F5",
+    ...Platform.select({
+      web: { boxShadow: "0 4px 24px rgba(123,94,167,0.12)" },
+      default: { shadowColor: "#7B5EA7", shadowOpacity: 0.12 },
+    }),
+  },
+  supportBannerOrange: {
+    backgroundColor: "#FFF8F0",
+    borderColor: "#F5C770",
+    ...Platform.select({
+      web: { boxShadow: "0 4px 24px rgba(217,119,6,0.10)" },
+      default: { shadowColor: "#D97706", shadowOpacity: 0.10 },
+    }),
+  },
+  supportBannerGreen: {
+    backgroundColor: "#F0FBF5",
+    borderColor: "#8ED4AE",
+    ...Platform.select({
+      web: { boxShadow: "0 4px 24px rgba(45,158,106,0.12)" },
+      default: { shadowColor: "#2D9E6A", shadowOpacity: 0.12 },
+    }),
+  },
+  supportBannerDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#3D7CC9",
+  },
+  supportBannerDotPurple: { backgroundColor: "#7B5EA7" },
+  supportBannerDotOrange: { backgroundColor: "#D97706" },
+  supportBannerDotGreen:  { backgroundColor: "#2D9E6A" },
+  supportBannerTitle: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: "Montserrat_600SemiBold",
+    color: "#142240",
+    letterSpacing: 0.1,
+  },
 
   tagline: {
     fontSize: 16,
@@ -2756,12 +2917,11 @@ const styles = StyleSheet.create({
     fontFamily: "Montserrat_400Regular",
     lineHeight: 20,
   },
-  actionReason: {
+  actionSubtitle: {
     fontSize: 12,
     fontFamily: "Montserrat_400Regular",
     lineHeight: 16,
-    marginTop: 2,
-    opacity: 0.7,
+    marginTop: 1,
   },
 
   checkInButton: {
@@ -3067,9 +3227,8 @@ const styles = StyleSheet.create({
   modalSheet: {
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    paddingBottom: 40,
     paddingHorizontal: 24,
-    maxHeight: "60%",
+    maxHeight: "70%",
   },
   modalHandle: {
     alignItems: "center",
