@@ -1161,7 +1161,7 @@ export default function DashboardScreen() {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={0}>
       <ScrollView
         style={[styles.container, { backgroundColor: c.background }]}
-        contentContainerStyle={[styles.content, { paddingTop: 0, paddingBottom: bottomPad + 100 }]}
+        contentContainerStyle={[styles.content, { paddingTop: 0, paddingBottom: sheetBottomOffset + 68 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
