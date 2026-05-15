@@ -37,6 +37,16 @@ export function buildPlanLearningLine(
     return SAFETY_FOOTER;
   }
 
+  // Recent dose change with active symptoms — prioritize this over everything else.
+  if (medication.doseChangedRecently && symptoms.overallBurden !== "none") {
+    return "Viva is weighting today's symptoms more carefully because your dose was recently updated.";
+  }
+
+  // High dose + GI symptoms.
+  if (medication.doseTier === "high" && symptoms.hasElevatedGI) {
+    return "Today's plan is adjusted for your current dose context and GI symptoms.";
+  }
+
   // Dose-day nausea pattern.
   if (medication.recentTitration === false && trends.doseDayPatternLikely && symptoms.nausea !== null && symptoms.nausea !== "none") {
     return "Nausea tends to peak shortly after your dose — today's plan is adjusted accordingly.";
@@ -115,6 +125,10 @@ export function buildInterventionWhyLine(
     return SAFETY_FOOTER;
   }
 
+  if (medication.doseChangedRecently) {
+    return "Recent dose changes can make symptoms more noticeable — this step uses gentle support.";
+  }
+
   if (trends.doseDayPatternLikely && medication.daysSinceDose !== null && medication.daysSinceDose <= 2) {
     return "This intervention is timed to your typical post-dose pattern.";
   }
@@ -177,7 +191,12 @@ export function buildWeekSummaryLearningLine(
     return "Sleep and activity data are informing this week's plan.";
   }
 
-  // Recent titration context.
+  // Recent dose change (settings-tracked) takes precedence over recentTitration flag.
+  if (medication.doseChangedRecently) {
+    return "You're adjusting to a recent dose change — this week's plan accounts for that.";
+  }
+
+  // Older recentTitration flag (set during onboarding).
   if (medication.recentTitration) {
     return "You're adjusting to a new dose — this week's plan is calibrated for that transition.";
   }

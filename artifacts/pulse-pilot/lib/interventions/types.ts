@@ -77,6 +77,9 @@ export interface LibraryContext {
   lastEntryId: string | null;
   failedStrategyTypes: StrategyType[];
   successfulStrategyTypes: StrategyType[];
+  // Dose context — influences scoring and explainability copy
+  doseTier: "low" | "mid" | "high" | null;
+  recentDoseChange: boolean;
 }
 
 export interface SelectionResult {

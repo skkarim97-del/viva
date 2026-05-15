@@ -182,6 +182,16 @@ export default function SettingsScreen() {
       const genericName = dbInfo?.genericName ?? existing?.genericName ?? "unknown";
       const indication = dbInfo?.indication ?? existing?.indication ?? "weight loss";
 
+      // Detect whether the dose or brand actually changed so we can set
+      // recentTitration and record the previous dose for intelligence context.
+      const treatmentChanged =
+        existing != null &&
+        (existing.medicationBrand !== brandKey ||
+          existing.doseValue !== medDraft.doseValue ||
+          existing.doseUnit !== medDraft.doseUnit ||
+          existing.frequency !== medDraft.frequency);
+      const todayStr = new Date().toISOString().split("T")[0]!;
+
       const next: MedicationProfile = {
         medicationBrand: brandKey,
         genericName,
@@ -190,14 +200,16 @@ export default function SettingsScreen() {
         doseUnit: medDraft.doseUnit,
         frequency: medDraft.frequency,
         timeOnMedicationBucket: existing?.timeOnMedicationBucket ?? "less_30_days",
-        recentTitration: existing?.recentTitration ?? false,
-        weekOnCurrentDose: existing?.weekOnCurrentDose,
+        // Mark recent titration when dose/brand changed; preserve existing flag otherwise.
+        recentTitration: treatmentChanged ? true : (existing?.recentTitration ?? false),
+        weekOnCurrentDose: treatmentChanged ? 0 : (existing?.weekOnCurrentDose),
         startDate: existing?.startDate ?? null,
         lastInjectionDate: existing?.lastInjectionDate ?? null,
-        previousDoseValue: existing?.previousDoseValue ?? null,
-        previousDoseUnit: existing?.previousDoseUnit ?? null,
-        previousFrequency: existing?.previousFrequency ?? null,
-        doseChangeDate: existing?.doseChangeDate ?? null,
+        // Snapshot previous dose so intelligence layer can surface dose-change context.
+        previousDoseValue: treatmentChanged ? (existing?.doseValue ?? null) : (existing?.previousDoseValue ?? null),
+        previousDoseUnit: treatmentChanged ? (existing?.doseUnit ?? null) : (existing?.previousDoseUnit ?? null),
+        previousFrequency: treatmentChanged ? (existing?.frequency ?? null) : (existing?.previousFrequency ?? null),
+        doseChangeDate: treatmentChanged ? todayStr : (existing?.doseChangeDate ?? null),
         telehealthPlatform: existing?.telehealthPlatform ?? null,
         plannedDoseDay: medDraft.frequency === "weekly" ? medDraft.plannedDoseDay : null,
       };

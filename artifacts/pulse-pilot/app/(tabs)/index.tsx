@@ -345,6 +345,12 @@ export default function DashboardScreen() {
   // All network calls are best-effort -- a failure must never block
   // the rest of the Today screen from rendering.
   const [activeInterventions, setActiveInterventions] = useState<PatientIntervention[]>([]);
+  // Remembers the last visible intervention so the support sheet can reopen
+  // in the "better" phase after the server drops feedback_collected rows.
+  const lastInterventionRef = useRef<PatientIntervention | null>(null);
+  useEffect(() => {
+    if (activeInterventions[0]) lastInterventionRef.current = activeInterventions[0];
+  }, [activeInterventions]);
 
   // Cold-start symptom hydration: when this tab mounts and the local
   // sliders are still null (fresh browser session, e.g. the Replit
@@ -1123,6 +1129,10 @@ export default function DashboardScreen() {
     () => buildPlanLearningLine(patientCtx),
     [patientCtx],
   );
+
+  // Fallback to lastInterventionRef when supportResolved so the sheet can
+  // reopen in the "better" phase even after /active drops the completed row.
+  const sheetIntervention = activeInterventions[0] ?? (supportResolved ? lastInterventionRef.current : null);
 
   const symptomShortLabel = React.useMemo((): string => {
     const ch = liveCheckinForTrigger;
@@ -2462,7 +2472,7 @@ export default function DashboardScreen() {
 
       {/* Sheet — rendered only while open so InterventionCard mounts
           fresh (initialPhase carries forward the last-known phase). */}
-      {supportSheetOpen && activeInterventions[0] && (
+      {supportSheetOpen && sheetIntervention && (
         <Animated.View
           style={[
             styles.supportSheet,
@@ -2483,8 +2493,8 @@ export default function DashboardScreen() {
             contentContainerStyle={{ paddingBottom: 32 }}
           >
             <InterventionCard
-              key={activeInterventions[0].id}
-              intervention={activeInterventions[0]}
+              key={sheetIntervention.id}
+              intervention={sheetIntervention}
               navy={c.foreground}
               accent={c.accent}
               cardBg={c.card}
@@ -2531,9 +2541,7 @@ export default function DashboardScreen() {
             supportPillState === "green" && styles.supportBannerGreen,
             { bottom: sheetBottomOffset + 8 },
           ]}
-          onPress={supportPillState === "green"
-            ? () => setSupportResolved(false)
-            : openSupportSheet}
+          onPress={openSupportSheet}
           accessibilityRole="button"
           accessibilityLabel={supportPillText}
         >

@@ -29,6 +29,8 @@ export type EngagementState = "active" | "moderate" | "dropping";
 export type PlanPriority = 1 | 2 | 3 | 4 | 5 | 6;
 export type DataConfidence = "high" | "moderate" | "low";
 
+export type TreatmentStage = "early" | "ramping" | "established" | "unknown";
+
 export interface MedicationCtx {
   medicationName: string | null;
   currentDose: string | null;
@@ -39,6 +41,11 @@ export interface MedicationCtx {
   recentTitration: boolean;
   isNewToMedication: boolean;
   frequency: "weekly" | "daily" | null;
+  // Dose-change intelligence
+  doseChangedRecently: boolean;     // doseChangeDate within 14 days
+  daysSinceDoseChange: number | null;
+  previousDose: string | null;      // formatted prior dose string, if available
+  treatmentStage: TreatmentStage;
 }
 
 export interface SymptomCtx {
@@ -308,6 +315,7 @@ function computePlanPriority(
   symptoms: SymptomCtx,
   trends: TrendCtx,
   dataConfidence: DataConfidence,
+  medication: Pick<MedicationCtx, "doseChangedRecently" | "doseTier">,
 ): PlanPriority {
   if (
     symptoms.overallBurden === "severe" ||
@@ -315,6 +323,12 @@ function computePlanPriority(
   )
     return 1;
   if (symptoms.hasElevatedGI) return 2;
+  // Recent dose change with any active symptoms → treat as priority-3 minimum
+  // so intervention and copy pathways acknowledge the dose context.
+  if (medication.doseChangedRecently && symptoms.overallBurden !== "none") {
+    if (symptoms.overallBurden === "high") return 2;
+    return 3;
+  }
   if (symptoms.hasLowIntake) return 3;
   if (symptoms.hasLowEnergy) return 4;
   if (dataConfidence === "low") return 6;
@@ -406,6 +420,29 @@ export function buildPatientContext(
     if (taken.length > 0) doseDay = taken[0]!.date;
   }
 
+  // ---- Dose-change context ----------------------------------------
+  const doseChangeDate = medicationProfile?.doseChangeDate ?? null;
+  let daysSinceDoseChange: number | null = null;
+  if (doseChangeDate) {
+    const todayMs = new Date().setHours(0, 0, 0, 0);
+    const changeMs = new Date(doseChangeDate).setHours(0, 0, 0, 0);
+    daysSinceDoseChange = Math.max(0, Math.round((todayMs - changeMs) / 86400000));
+  }
+  const doseChangedRecently = daysSinceDoseChange !== null && daysSinceDoseChange <= 14;
+
+  const previousDose =
+    medicationProfile?.previousDoseValue != null
+      ? `${medicationProfile.previousDoseValue} ${medicationProfile.previousDoseUnit ?? "mg"}`
+      : null;
+
+  const treatmentStage: TreatmentStage = (() => {
+    const bucket = medicationProfile?.timeOnMedicationBucket;
+    if (!bucket) return "unknown";
+    if (bucket === "less_30_days") return "early";
+    if (bucket === "30_60_days" || bucket === "60_90_days") return "ramping";
+    return "established";
+  })();
+
   const medication: MedicationCtx = {
     medicationName: medicationProfile?.medicationBrand ?? null,
     currentDose: medicationProfile
@@ -419,6 +456,10 @@ export function buildPatientContext(
     isNewToMedication:
       medicationProfile?.timeOnMedicationBucket === "less_30_days",
     frequency,
+    doseChangedRecently,
+    daysSinceDoseChange,
+    previousDose,
+    treatmentStage,
   };
 
   // ---- Symptom context (today's check-in) -------------------------
@@ -553,7 +594,7 @@ export function buildPatientContext(
     last7.length >= 4 ? "high" : last7.length >= 2 ? "moderate" : "low";
 
   // ---- Plan priority ----------------------------------------------
-  const planPriority = computePlanPriority(symptoms, trends, dataConfidence);
+  const planPriority = computePlanPriority(symptoms, trends, dataConfidence, medication);
 
   // ---- Reason signals (structured tags, no PHI) -------------------
   const reasonSignals: string[] = [];
@@ -564,6 +605,10 @@ export function buildPatientContext(
     reasonSignals.push(`energy_${energy}`);
   if (digestion && digestion !== "fine") reasonSignals.push(`digestion_${digestion}`);
   if (medication.recentTitration) reasonSignals.push("recent_titration");
+  if (medication.doseChangedRecently) reasonSignals.push("dose_changed_recently");
+  if (medication.doseTier === "high") reasonSignals.push("high_dose_context");
+  if (medication.treatmentStage === "early") reasonSignals.push("treatment_early_stage");
+  if (medication.treatmentStage === "established") reasonSignals.push("treatment_established");
   if (medication.isNewToMedication) reasonSignals.push("new_to_medication");
   if (daysSinceDose !== null && daysSinceDose <= 2)
     reasonSignals.push("within_dose_window");
