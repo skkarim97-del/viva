@@ -1343,6 +1343,8 @@ export function InterventionCard({
       interventionId: intervention.id,
       lastEntryId,
       failedStrategyTypes,
+      doseTier: patientContext?.medication.doseTier ?? null,
+      recentDoseChange: patientContext?.medication.doseChangedRecently ?? false,
     });
     const initial = selectIntervention(ctx, "initial");
     // For adjusted: suppress the initial strategy and mark initial entry as last
@@ -1364,6 +1366,8 @@ export function InterventionCard({
     doseContext,
     lastEntryId,
     failedStrategyTypes,
+    patientContext?.medication.doseTier,
+    patientContext?.medication.doseChangedRecently,
   ]);
 
   const primaryContent = useMemo<RecContent>(() => {

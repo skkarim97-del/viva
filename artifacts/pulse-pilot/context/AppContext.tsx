@@ -1086,7 +1086,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [metricsRef, completionHistory, metrics, glp1Energy, appetite, nausea, digestion, glp1InputHistory, computeRisk, recomputeAnalytics, profile.medicationProfile, medicationLog, checkInHistory]);
 
-  const regenerateFromGlp1 = useCallback(() => {
+  // medProfileOverride lets callers (notably updateProfile) pass the freshly
+  // saved MedicationProfile directly so the regeneration doesn't read the
+  // stale closure value before React processes the setProfile state update.
+  const regenerateFromGlp1 = useCallback((medProfileOverride?: MedicationProfile | null) => {
+    const medProfile = medProfileOverride !== undefined ? (medProfileOverride ?? undefined) : profile.medicationProfile;
     if (metricsRef) {
       const todayDate = new Date().toISOString().split("T")[0];
       const currentGlp1: GLP1DailyInputs = {
@@ -1096,11 +1100,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         nausea,
         digestion,
       };
-      computeRisk(metrics, glp1InputHistory, completionHistory, profile.medicationProfile);
-      const freshPatterns = recomputeAnalytics(glp1InputHistory, profile.medicationProfile, medicationLog, completionHistory);
+      computeRisk(metrics, glp1InputHistory, completionHistory, medProfile);
+      const freshPatterns = recomputeAnalytics(glp1InputHistory, medProfile, medicationLog, completionHistory);
 
       const currentMental2 = checkInHistory.find(c => c.date === todayDate)?.mentalState ?? undefined;
-      const newPlan = generateDailyPlan(metricsRef, { feeling, energy, stress, hydration, trainingIntent }, completionHistory, metrics, currentGlp1, profile.medicationProfile, medicationLog, freshPatterns ?? undefined, currentMental2, hasHealthData, availableMetricTypes);
+      const newPlan = generateDailyPlan(metricsRef, { feeling, energy, stress, hydration, trainingIntent }, completionHistory, metrics, currentGlp1, medProfile, medicationLog, freshPatterns ?? undefined, currentMental2, hasHealthData, availableMetricTypes);
       const todayCompletion = completionHistory.find(r => r.date === todayDate);
       if (todayCompletion) {
         for (const a of newPlan.actions) {
@@ -1113,7 +1117,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       setDailyPlan(newPlan);
 
-      recomputeAdaptation(glp1InputHistory, checkInHistory, metrics, profile.medicationProfile, medicationLog);
+      recomputeAdaptation(glp1InputHistory, checkInHistory, metrics, medProfile, medicationLog);
     }
   }, [metricsRef, feeling, energy, stress, hydration, trainingIntent, completionHistory, metrics, glp1Energy, appetite, nausea, digestion, glp1InputHistory, computeRisk, recomputeAnalytics, profile.medicationProfile, medicationLog, checkInHistory, recomputeAdaptation]);
 
@@ -1507,7 +1511,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return updated;
     });
     if (updates.medicationProfile) {
-      setTimeout(regenerateFromGlp1, 0);
+      // Pass the new profile directly to avoid reading stale closure state
+      // before React processes the setProfile update.
+      const nextMedProfile = updates.medicationProfile;
+      setTimeout(() => regenerateFromGlp1(nextMedProfile), 0);
     }
   }, [regenerateFromGlp1]);
 

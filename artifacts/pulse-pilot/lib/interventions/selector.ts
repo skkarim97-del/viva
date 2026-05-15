@@ -86,6 +86,12 @@ function scoreEntry(entry: LibraryEntry, ctx: LibraryContext): number {
   // just de-prioritized — another signal may override the penalty)
   if (entry.foodRelated && ctx.hasLowAppetite) s -= 1;
 
+  // Dose-context scoring: prefer low-burden and hydration-first after a
+  // dose change or at high dose tier. Uses cautious phrasing in copy.
+  if (entry.behavioralBurden === "low" && ctx.recentDoseChange) s += 1;
+  if (entry.hydrationRelated && ctx.doseTier === "high" && ctx.primarySymptom === "nausea") s += 1;
+  if (entry.escalationPrevention && ctx.doseTier === "high" && ctx.severityTier === "severe") s += 1;
+
   return s;
 }
 
@@ -132,6 +138,14 @@ function buildExplainWhy(
   }
   if (entry.postDoseRelevant && ctx.postDose) {
     return "Viva adjusted support for the post-dose window, when symptoms often peak.";
+  }
+
+  if (ctx.recentDoseChange) {
+    return "Viva is weighting today's symptoms more carefully after your recent dose change.";
+  }
+
+  if (ctx.doseTier === "high" && entry.behavioralBurden === "low") {
+    return "Your current dose context makes gentle support a better first step.";
   }
 
   return null;
@@ -208,6 +222,8 @@ export function buildLibraryContext(opts: {
   lastEntryId: string | null;
   failedStrategyTypes: StrategyType[];
   successfulStrategyTypes?: StrategyType[];
+  doseTier?: "low" | "mid" | "high" | null;
+  recentDoseChange?: boolean;
 }): LibraryContext {
   const day = Math.floor(Date.now() / 86_400_000);
   return {
@@ -224,6 +240,8 @@ export function buildLibraryContext(opts: {
     lastEntryId: opts.lastEntryId,
     failedStrategyTypes: opts.failedStrategyTypes,
     successfulStrategyTypes: opts.successfulStrategyTypes ?? [],
+    doseTier: opts.doseTier ?? null,
+    recentDoseChange: opts.recentDoseChange ?? false,
   };
 }
 
