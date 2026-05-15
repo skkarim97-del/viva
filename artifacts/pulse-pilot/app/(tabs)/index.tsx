@@ -1631,9 +1631,19 @@ export default function DashboardScreen() {
                     ]}>
                       {action.text}
                     </Text>
-                    {action.reason && !action.completed && (
-                      <Text style={[styles.actionReason, { color: c.mutedForeground }]}>{action.reason}</Text>
-                    )}
+                    {(() => {
+                      const sub = CATEGORY_OPTIONS[action.category as keyof typeof CATEGORY_OPTIONS]
+                        ?.find((o) => o.title === action.text)?.subtitle;
+                      if (!sub) return null;
+                      return (
+                        <Text
+                          style={[styles.actionSubtitle, { color: c.mutedForeground, opacity: action.completed ? 0.5 : 1 }]}
+                          numberOfLines={2}
+                        >
+                          {sub}
+                        </Text>
+                      );
+                    })()}
                   </View>
                   <Feather name="chevron-right" size={14} color={c.mutedForeground + "40"} />
                 </Pressable>
@@ -2807,12 +2817,11 @@ const styles = StyleSheet.create({
     fontFamily: "Montserrat_400Regular",
     lineHeight: 20,
   },
-  actionReason: {
+  actionSubtitle: {
     fontSize: 12,
     fontFamily: "Montserrat_400Regular",
     lineHeight: 16,
-    marginTop: 2,
-    opacity: 0.7,
+    marginTop: 1,
   },
 
   checkInButton: {
