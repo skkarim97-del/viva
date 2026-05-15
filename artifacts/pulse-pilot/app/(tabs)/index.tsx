@@ -2441,7 +2441,7 @@ export default function DashboardScreen() {
           </Text>
           <Feather
             name={supportPillState === "green" ? "x" : "chevron-up"}
-            size={13}
+            size={14}
             color={
               supportPillState === "purple" ? "#7B5EA7"
               : supportPillState === "orange" ? "#B87333"
@@ -2502,8 +2502,8 @@ const styles = StyleSheet.create({
     right: 20,
     backgroundColor: "#F3F8FF",
     borderRadius: 50,
-    paddingVertical: 15,
-    paddingHorizontal: 18,
+    paddingVertical: 17,
+    paddingHorizontal: 20,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
@@ -2547,9 +2547,9 @@ const styles = StyleSheet.create({
     }),
   },
   supportBannerDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: "#3D7CC9",
   },
   supportBannerDotPurple: { backgroundColor: "#7B5EA7" },
@@ -2557,7 +2557,7 @@ const styles = StyleSheet.create({
   supportBannerDotGreen:  { backgroundColor: "#2D9E6A" },
   supportBannerTitle: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: "Montserrat_600SemiBold",
     color: "#142240",
     letterSpacing: 0.1,
