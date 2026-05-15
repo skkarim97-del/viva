@@ -156,6 +156,25 @@ const TONE_COLOR: Record<StatusChip["tone"], (c: ReturnType<typeof useColors>) =
   muted: (c) => c.mutedForeground,
 };
 
+const GI_OVERRIDES: Partial<Record<ActionCategory, { title: string; subtitle: string }>> = {
+  move: {
+    title: "Gentle walk",
+    subtitle: "5–10 min after food if tolerated.",
+  },
+  fuel: {
+    title: "Small bland meals",
+    subtitle: "Crackers, toast, rice or soup in small portions.",
+  },
+  hydrate: {
+    title: "Slow fluids",
+    subtitle: "Small sips every few minutes. Avoid large amounts at once.",
+  },
+  recover: {
+    title: "Lower intensity",
+    subtitle: "Keep today light while symptoms settle.",
+  },
+};
+
 export default function DashboardScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
@@ -1619,33 +1638,11 @@ export default function DashboardScreen() {
               </Text>
             </View>
           )}
-          {(() => {
-            // When nausea or GI symptoms are elevated, override plan item
-            // titles and subtitles with GI-specific copy. The underlying
-            // plan data is unchanged; this is a display-layer adaptation
-            // so the patient sees actionable, symptom-aware language.
-            const isGiElevated =
-              nausea === "moderate" || nausea === "severe" ||
-              digestion === "diarrhea" || digestion === "constipated";
-            const GI_OVERRIDES: Partial<Record<ActionCategory, { title: string; subtitle: string }>> = {
-              move: {
-                title: "Gentle walk",
-                subtitle: "5–10 min after food if tolerated.",
-              },
-              fuel: {
-                title: "Small bland meals",
-                subtitle: "Crackers, toast, rice or soup in small portions.",
-              },
-              hydrate: {
-                title: "Slow fluids",
-                subtitle: "Small sips every few minutes. Avoid large amounts at once.",
-              },
-              recover: {
-                title: "Lower intensity",
-                subtitle: "Keep today light while symptoms settle.",
-              },
-            };
-
+          {planActions.map((action) => {
+            const meta = ACTION_META[action.category];
+            const giOverride = patientCtx.symptoms.hasElevatedGI ? GI_OVERRIDES[action.category as ActionCategory] : undefined;
+            const displayTitle = giOverride?.title ?? action.text;
+            const displaySubtitle = giOverride?.subtitle;
             return (
               <View key={action.id} style={[
                 styles.actionRow,
@@ -1702,10 +1699,10 @@ export default function DashboardScreen() {
                         opacity: action.completed ? 0.6 : 1,
                       },
                     ]}>
-                      {action.text}
+                      {displayTitle}
                     </Text>
                     {(() => {
-                      const sub = CATEGORY_OPTIONS[action.category as keyof typeof CATEGORY_OPTIONS]
+                      const sub = displaySubtitle ?? CATEGORY_OPTIONS[action.category as keyof typeof CATEGORY_OPTIONS]
                         ?.find((o) => o.title === action.text)?.subtitle;
                       if (!sub) return null;
                       return (
@@ -2922,6 +2919,22 @@ const styles = StyleSheet.create({
     fontFamily: "Montserrat_400Regular",
     lineHeight: 16,
     marginTop: 1,
+  },
+  symptomAwareBanner: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+  symptomAwareBannerText: {
+    fontSize: 12,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 17,
+    flex: 1,
   },
 
   checkInButton: {
