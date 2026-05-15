@@ -225,7 +225,7 @@ export default function TrendsScreen() {
             {profile.medicationProfile.recentTitration && (
               <View style={[styles.medStatItem, { backgroundColor: "#FF950010" }]}>
                 <Text style={[styles.medStatValue, { color: "#FF9500" }]}>Yes</Text>
-                <Text style={[styles.medStatLabel, { color: "#FF9500" }]}>titrated</Text>
+                <Text style={[styles.medStatLabel, { color: "#FF9500" }]}>dose changed</Text>
               </View>
             )}
           </View>

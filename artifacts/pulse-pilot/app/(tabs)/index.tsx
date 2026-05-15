@@ -1343,7 +1343,7 @@ export default function DashboardScreen() {
                 </View>
                 {mp.recentTitration && (
                   <View style={[styles.titrationBadge, { backgroundColor: "#FF950018" }]}>
-                    <Text style={[styles.titrationText, { color: "#FF9500" }]}>Titrated</Text>
+                    <Text style={[styles.titrationText, { color: "#FF9500" }]}>New dose</Text>
                   </View>
                 )}
               </View>
