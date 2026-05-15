@@ -89,6 +89,8 @@ import {
 } from "@/lib/api/interventionsClient";
 import type { DoseDayPosition } from "@/lib/engine/dailyState";
 import { logEvent } from "@/lib/analytics/client";
+import { buildInterventionWhyLine } from "@/lib/intelligence/learningCopy";
+import type { PatientIntelligenceContext } from "@/lib/intelligence/patientContext";
 import {
   selectIntervention,
   buildLibraryContext,
@@ -1113,6 +1115,10 @@ interface InterventionCardProps {
   wearableContext?: WearableContext | null;
   // Live snapshot of the patient's current check-in selections.
   liveCheckin?: LiveCheckin | null;
+  // Shared patient intelligence context. When provided, enriches the
+  // "Why Viva suggested this" section and analytics payloads with
+  // structured reason signals and plan priority.
+  patientContext?: PatientIntelligenceContext | null;
   // Called when the card's interaction phase changes. Parent uses this
   // to dim surrounding content when the card is in active focus.
   onEngaged?: (engaged: boolean) => void;
@@ -1194,6 +1200,7 @@ export function InterventionCard({
   symptomCounts = null,
   wearableContext = null,
   liveCheckin = null,
+  patientContext = null,
   onEngaged,
   initialPhase,
   onPhaseChange,
@@ -1295,8 +1302,15 @@ export function InterventionCard({
   useEffect(() => {
     if (viewLoggedRef.current === intervention.id) return;
     viewLoggedRef.current = intervention.id;
-    safeLog("intervention_plan_viewed");
-  }, [intervention.id]);
+    safeLog("intervention_viewed", {
+      interventionId: intervention.id,
+      triggerType: intervention.triggerType,
+      severityTier: liveSeverity,
+      symptomTarget: primary?.category ?? null,
+      planPriority,
+      reason_signals: reasonSignals,
+    });
+  }, [intervention.id, intervention.triggerType, liveSeverity, primary]);
 
   // Content derivation
   const sections = useMemo(
@@ -1447,6 +1461,15 @@ export function InterventionCard({
     [liveCheckin, doseContext, symptomCounts],
   );
 
+  const interventionWhyLine = useMemo(
+    () => (patientContext ? buildInterventionWhyLine(patientContext) : null),
+    [patientContext],
+  );
+
+  // Convenience: structured tags for analytics payloads. No PHI.
+  const reasonSignals = patientContext?.reasonSignals ?? [];
+  const planPriority = patientContext?.planPriority ?? null;
+
   // Swipe card background interpolates: orange (left) → white (center) → green (right)
   // Handlers
   const handleCommit = useCallback(async () => {
@@ -1458,6 +1481,8 @@ export function InterventionCard({
       severityTier: liveSeverity,
       wasInitialOrAdjusted: "initial",
       interventionEntryId: selections?.initial.entry.id ?? null,
+      planPriority,
+      reason_signals: reasonSignals,
     });
     if (!acceptFiredRef.current) {
       acceptFiredRef.current = true;
@@ -1474,10 +1499,15 @@ export function InterventionCard({
     if (intervention.status === "escalated") return;
     if (escalateFiredRef.current) return;
     escalateFiredRef.current = true;
-    safeLog("care_team_escalation_requested", {
+    safeLog("intervention_escalated", {
       strategyType: selections?.initial.entry.strategyType ?? null,
       failedStrategyTypes: failedStrategyTypes,
       severityTier: liveSeverity,
+      symptomTarget: primary?.category ?? null,
+      phase,
+      struggleCount,
+      planPriority,
+      reason_signals: reasonSignals,
     });
     try {
       if (intervention.status === "shown" && !acceptFiredRef.current) {
@@ -1497,12 +1527,16 @@ export function InterventionCard({
   const handleFeedbackBetter = useCallback(async () => {
     tap();
     setEngagedPhase("better");
-    safeLog("intervention_feedback_better", {
+    safeLog("intervention_helped", {
       strategyType: failedStrategyTypes.length > 0
         ? selections?.adjusted.entry.strategyType ?? null
         : selections?.initial.entry.strategyType ?? null,
       wasInitialOrAdjusted: failedStrategyTypes.length > 0 ? "adjusted" : "initial",
       severityTier: liveSeverity,
+      symptomTarget: primary?.category ?? null,
+      struggleCount,
+      planPriority,
+      reason_signals: reasonSignals,
     });
     try {
       await onFeedback(intervention.id, "better");
@@ -1525,10 +1559,13 @@ export function InterventionCard({
       );
       setLastEntryId(selections.initial.entry.id);
     }
-    safeLog("intervention_feedback_no_change", {
+    safeLog("intervention_still_struggling", {
       strategyType: selections?.initial.entry.strategyType ?? null,
       symptomTarget: primary?.category ?? null,
       severityTier: liveSeverity,
+      struggleRound: newCount,
+      planPriority,
+      reason_signals: reasonSignals,
     });
   }, [setEngagedPhase, struggleCount, onStruggleCountChange, selections, primary, liveSeverity]);
 
@@ -1689,6 +1726,17 @@ export function InterventionCard({
             >
               <Text style={styles.primaryBtnText}>Try adjusted support</Text>
             </Pressable>
+            {status !== "escalated" && (
+              <Pressable
+                style={({ pressed }) => [styles.careTeamLink, { opacity: pressed ? 0.7 : 1 }]}
+                onPress={() => void handleAskCareTeam()}
+                accessibilityRole="button"
+                accessibilityLabel="Ask care team instead"
+              >
+                <Feather name="message-circle" size={12} color={warning} style={{ marginRight: 5 }} />
+                <Text style={[styles.careTeamLinkText, { color: warning }]}>Or ask your care team to review</Text>
+              </Pressable>
+            )}
             <Text style={[styles.guardrail, { color: mutedForeground }]}>
               Viva supports between-visit care. If symptoms feel severe or urgent,
               contact your care team or seek prompt medical attention.
@@ -1792,12 +1840,26 @@ export function InterventionCard({
         </Text>
       )}
 
-      {/* Explainability — why this strategy was selected. One sentence,
-          natural language. Hidden when context is obvious. */}
-      {selections?.initial.explainWhy && (
-        <Text style={[styles.explainWhy, { color: mutedForeground }]}>
-          {selections.initial.explainWhy}
-        </Text>
+      {/* "Why Viva suggested this" — natural-language signal summary.
+          Shows as a readable sentence so the card explains itself
+          based on the patient's check-in signals. */}
+      {contextChips.length > 0 && (
+        <View style={styles.noticedSection}>
+          <Text style={styles.chipsSectionLabel}>WHY VIVA SUGGESTED THIS</Text>
+          <Text style={[styles.noticedText, { color: mutedForeground }]}>
+            {contextParagraph}
+          </Text>
+          {interventionWhyLine && (
+            <Text style={[styles.noticedStrategyHint, { color: mutedForeground }]}>
+              {interventionWhyLine}
+            </Text>
+          )}
+          {selections?.initial.explainWhy && !interventionWhyLine && (
+            <Text style={[styles.noticedStrategyHint, { color: mutedForeground }]}>
+              {selections.initial.explainWhy}
+            </Text>
+          )}
+        </View>
       )}
 
       {/* Hero action panel — blue-ice surface, prominent */}
@@ -1815,20 +1877,6 @@ export function InterventionCard({
         </Text>
       </View>
 
-      {/* Context chips — compact signal row */}
-      {contextChips.length > 0 && (
-        <View style={styles.chipsSection}>
-          <Text style={styles.chipsSectionLabel}>WHAT VIVA NOTICED</Text>
-          <View style={styles.chipsRow}>
-            {contextChips.map((chip) => (
-              <View key={chip} style={styles.contextChip}>
-                <Text style={styles.contextChipText}>{chip}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      )}
-
       {/* Primary CTA */}
       <Pressable
         style={({ pressed }) => [
@@ -1841,6 +1889,21 @@ export function InterventionCard({
       >
         <Text style={styles.primaryBtnText}>Start support</Text>
       </Pressable>
+
+      {/* Secondary "Ask care team" CTA — visible for moderate/severe symptoms
+          OR when planPriority ≤ 2 (severe/GI burden) so escalation is
+          immediately available, not buried in a feedback flow. */}
+      {(liveSeverity === "moderate" || liveSeverity === "severe" || (planPriority !== null && planPriority <= 2)) && status !== "escalated" && (
+        <Pressable
+          style={({ pressed }) => [styles.careTeamSecondaryBtn, { opacity: pressed ? 0.7 : 1 }]}
+          onPress={() => void handleAskCareTeam()}
+          accessibilityRole="button"
+          accessibilityLabel="Ask care team"
+        >
+          <Feather name="message-circle" size={12} color={warning} />
+          <Text style={[styles.careTeamSecondaryBtnText, { color: warning }]}>Ask care team</Text>
+        </Pressable>
+      )}
 
       {status === "escalated" && (
         <View style={styles.escalatedNotice}>
@@ -2019,9 +2082,10 @@ const styles = StyleSheet.create({
   },
   // Escalation — amber underline link, secondary to navy CTA
   careTeamLink: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 20,
+    marginTop: 16,
     paddingVertical: 10,
   },
   careTeamLinkText: {
@@ -2192,6 +2256,37 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     fontStyle: "italic",
     opacity: 0.8,
+  },
+  noticedSection: {
+    gap: 6,
+    marginBottom: 16,
+  },
+  noticedText: {
+    fontSize: 13,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 19,
+    color: CARD_MUTED,
+  },
+  noticedStrategyHint: {
+    fontSize: 11,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 16,
+    color: CARD_MUTED,
+    fontStyle: "italic",
+    opacity: 0.75,
+  },
+  careTeamSecondaryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 14,
+    paddingVertical: 10,
+  },
+  careTeamSecondaryBtnText: {
+    fontSize: 13,
+    fontFamily: "Montserrat_600SemiBold",
+    letterSpacing: 0.1,
   },
 });
 

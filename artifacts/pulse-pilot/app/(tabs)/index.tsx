@@ -34,6 +34,9 @@ import {
 import WeightLogModal from "@/components/WeightLogModal";
 import { sessionApi } from "@/lib/api/sessionClient";
 import { logIntervention, type InterventionType } from "@/lib/intervention/logger";
+import { logEvent } from "@/lib/analytics/client";
+import { buildPatientContext } from "@/lib/intelligence/patientContext";
+import { buildPlanLearningLine } from "@/lib/intelligence/learningCopy";
 import { logCareEventDeduped, logCareEventImmediate } from "@/lib/care-events/client";
 import { useApp } from "@/context/AppContext";
 import { type SymptomKind } from "@/lib/symptomTips";
@@ -1076,6 +1079,32 @@ export default function DashboardScreen() {
     ? { nausea, appetite, energy: glp1Energy, digestion, bowel: bowelSelectedKey }
     : null;
 
+  const patientCtx = React.useMemo(
+    () =>
+      buildPatientContext({
+        glp1History: glp1InputHistory,
+        medicationProfile: profile.medicationProfile ?? undefined,
+        medicationLog,
+        completionHistory,
+        todayCheckin: liveCheckinForTrigger
+          ? {
+              nausea: liveCheckinForTrigger.nausea ?? undefined,
+              appetite: liveCheckinForTrigger.appetite ?? undefined,
+              energy: liveCheckinForTrigger.energy ?? undefined,
+              digestion: liveCheckinForTrigger.digestion ?? undefined,
+            }
+          : null,
+        hasHealthData,
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [glp1InputHistory, profile.medicationProfile, medicationLog, completionHistory, liveCheckinForTrigger, hasHealthData],
+  );
+
+  const planLearningLine = React.useMemo(
+    () => buildPlanLearningLine(patientCtx),
+    [patientCtx],
+  );
+
   const symptomShortLabel = React.useMemo((): string => {
     const ch = liveCheckinForTrigger;
     if (ch?.nausea === "severe" || ch?.nausea === "moderate" || ch?.nausea === "mild") return "nausea";
@@ -1582,8 +1611,40 @@ export default function DashboardScreen() {
           <Text style={[styles.sectionSubtitle, { color: c.mutedForeground }]}>
             Small actions that support progress
           </Text>
-          {planActions.map((action) => {
-            const meta = ACTION_META[action.category];
+          {planLearningLine && (
+            <View style={[styles.symptomAwareBanner, { backgroundColor: c.warning + "12", borderColor: c.warning + "30" }]}>
+              <Feather name="info" size={11} color={c.warning} />
+              <Text style={[styles.symptomAwareBannerText, { color: c.warning }]}>
+                {planLearningLine}
+              </Text>
+            </View>
+          )}
+          {(() => {
+            // When nausea or GI symptoms are elevated, override plan item
+            // titles and subtitles with GI-specific copy. The underlying
+            // plan data is unchanged; this is a display-layer adaptation
+            // so the patient sees actionable, symptom-aware language.
+            const isGiElevated =
+              nausea === "moderate" || nausea === "severe" ||
+              digestion === "diarrhea" || digestion === "constipated";
+            const GI_OVERRIDES: Partial<Record<ActionCategory, { title: string; subtitle: string }>> = {
+              move: {
+                title: "Gentle walk",
+                subtitle: "5–10 min after food if tolerated.",
+              },
+              fuel: {
+                title: "Small bland meals",
+                subtitle: "Crackers, toast, rice or soup in small portions.",
+              },
+              hydrate: {
+                title: "Slow fluids",
+                subtitle: "Small sips every few minutes. Avoid large amounts at once.",
+              },
+              recover: {
+                title: "Lower intensity",
+                subtitle: "Keep today light while symptoms settle.",
+              },
+            };
 
             return (
               <View key={action.id} style={[
@@ -1593,6 +1654,13 @@ export default function DashboardScreen() {
                 <Pressable
                   onPress={() => {
                     haptic();
+                    if (!action.completed) {
+                      void logEvent("plan_item_completed", {
+                        category: action.category,
+                        planPriority: patientCtx.planPriority,
+                        reason_signals: patientCtx.reasonSignals,
+                      });
+                    }
                     toggleAction(action.id);
                   }}
                   style={({ pressed }) => [
@@ -1609,6 +1677,11 @@ export default function DashboardScreen() {
                 <Pressable
                   onPress={() => {
                     haptic();
+                    void logEvent("plan_item_opened", {
+                      category: action.category,
+                      planPriority: patientCtx.planPriority,
+                      reason_signals: patientCtx.reasonSignals,
+                    });
                     setEditingAction(action.category);
                   }}
                   style={({ pressed }) => [
@@ -1655,7 +1728,19 @@ export default function DashboardScreen() {
 
         {dailyPlan?.whyThisPlan?.length > 0 && (
           <Pressable
-            onPress={() => { haptic(); setShowWhyPlan(!showWhyPlan); }}
+            onPress={() => {
+              haptic();
+              const opening = !showWhyPlan;
+              if (opening) {
+                void logEvent("why_plan_opened", {
+                  dailyState: dailyPlan.dailyState,
+                  dataTier: dailyPlan.dataTier,
+                  planPriority: patientCtx.planPriority,
+                  reason_signals: patientCtx.reasonSignals,
+                });
+              }
+              setShowWhyPlan(opening);
+            }}
             style={[styles.whyPlanCard, { backgroundColor: c.card }]}
           >
             <View style={styles.whyPlanHeader}>
@@ -1876,7 +1961,15 @@ export default function DashboardScreen() {
               Unlock more personalized support with sleep, steps and heart rate.
             </Text>
             <Pressable
-              onPress={() => { haptic(); router.push("/(tabs)/settings"); }}
+              onPress={() => {
+                haptic();
+                void logEvent("apple_health_connect_clicked", {
+                  source: "today_tab",
+                  planPriority: patientCtx.planPriority,
+                  reason_signals: patientCtx.reasonSignals,
+                });
+                router.push("/(tabs)/settings");
+              }}
               style={({ pressed }) => [styles.emptyHealthBtn, { backgroundColor: c.accent, opacity: pressed ? 0.85 : 1 }]}
             >
               <Feather name="settings" size={13} color="#FFFFFF" />
@@ -2419,6 +2512,7 @@ export default function DashboardScreen() {
               symptomCounts={symptomCounts}
               wearableContext={wearableContextForCard}
               liveCheckin={liveCheckinForTrigger}
+              patientContext={patientCtx}
               onEngaged={setInterventionEngaged}
               onAccept={onInterventionAccept}
               onDismiss={onInterventionDismiss}
