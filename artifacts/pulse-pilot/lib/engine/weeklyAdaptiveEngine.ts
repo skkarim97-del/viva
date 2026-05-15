@@ -247,32 +247,32 @@ function adaptiveWeekSummary(severity: InternalSeverity, drivers: string[], orig
 
   if (severity === "red") {
     if (drivers.includes("titration_peak_window")) {
-      return "Your dose just changed. The first few days are often the hardest. This week focuses entirely on comfort, hydration, and rest. You will ease back into your routine once your body settles.";
+      return "Your dose just changed, and the first few days are often the most intense. This week focuses on rest, hydration, and easy meals. You'll ease back into your regular routine once your body settles.";
     }
     if (drivers.includes("recent_titration")) {
-      return "Your dose recently changed, and your body is adapting. This week focuses on rest, hydration, and easy nutrition. Strength sessions are paused so you can settle in. You will build back up once things stabilize.";
+      return "Your body is still adjusting to the dose change. This week keeps things lighter — rest, steady hydration, and easy-to-digest meals take priority. Strength work resumes once things stabilize.";
     }
     if (drivers.includes("multi_day_difficulty")) {
-      return "The last few days have been harder. This week is lighter to let your body recover. Hydration, gentle movement, and protein-first meals are the priorities. You are not falling behind. This is part of the process.";
+      return "The last few days have been tougher. This week is scaled back to give your body room to recover. Hydration, gentle movement, and protein-first meals are the focus — this is part of the process, not a setback.";
     }
-    return "This week is adjusted for extra support. Rest, hydration, and comfortable meals come first. Activity is scaled way back. You will ramp up when your body is ready.";
+    return "This week prioritizes rest, hydration, and comfortable meals. Activity is dialed back so your body can recover. You'll ramp back up when ready.";
   }
 
   if (severity === "orange") {
     if (drivers.includes("nausea") || drivers.includes("digestion_issues")) {
-      return "Side effects are more noticeable this week. The plan dials down intensity and focuses on comfortable movement, hydration, and easy-to-digest meals. Protein remains important but portion sizes are flexible.";
+      return "GI side effects are more noticeable this week, so the plan reduces intensity and leans into hydration, gentle movement, and easy-to-digest meals. Protein stays important — smaller, frequent portions are fine.";
     }
     if (drivers.includes("mental_burnout") || drivers.includes("mental_low")) {
-      return "This week keeps things lighter to give you some breathing room. Walks replace heavier sessions, and the focus is on consistency over intensity. Small wins add up.";
+      return "This week is intentionally lighter to give you breathing room. Walks replace heavier sessions, and consistency takes priority over intensity. Small, steady steps compound.";
     }
-    return "This week is slightly adjusted based on how things have been going. Movement is gentler, nutrition stays protein-focused, and there is more room for rest. You are still making progress.";
+    return "This week builds in more recovery room. Movement is gentler, protein and hydration targets stay consistent, and rest is part of the plan. You're still moving forward.";
   }
 
   if (drivers.includes("sleep_low") || drivers.includes("sleep_moderate")) {
-    return originalSummary + " Sleep has been shorter recently, so recovery gets a bit more attention this week.";
+    return "This week stays on track with a bit more recovery emphasis — sleep has been shorter recently. Movement days are slightly lighter, while protein and hydration targets stay the same.";
   }
   if (drivers.includes("consecutive_difficulty")) {
-    return originalSummary + " A couple of days were tougher, so the plan has a small buffer built in.";
+    return "This week keeps the same structure with a small buffer built in for the last couple of harder days. Protein and hydration targets stay consistent, and the rhythm stays manageable.";
   }
   return originalSummary;
 }

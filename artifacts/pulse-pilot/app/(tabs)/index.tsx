@@ -781,7 +781,7 @@ export default function DashboardScreen() {
     for (const tip of symptomTips) {
       logIntervention({
         surface: "Today",
-        interventionType: "symptom_monitoring",
+        interventionType: "symptom_tip",
         title: tip.title,
         rationale: tip.symptom,
         state: dailyState,
