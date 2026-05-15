@@ -1896,7 +1896,7 @@ export default function DashboardScreen() {
         onRequestClose={() => setEditingAction(null)}
       >
         <Pressable style={styles.modalOverlay} onPress={() => setEditingAction(null)}>
-          <Pressable style={[styles.modalSheet, { backgroundColor: c.card, paddingBottom: Math.max(bottomPad, 24) }]} onPress={(e) => e.stopPropagation()}>
+          <Pressable style={[styles.modalSheet, { backgroundColor: c.card }]} onPress={(e) => e.stopPropagation()}>
             {editingAction && (() => {
               const meta = ACTION_META[editingAction];
               const options = CATEGORY_OPTIONS[editingAction];
@@ -1908,72 +1908,78 @@ export default function DashboardScreen() {
                   <View style={styles.modalHandle}>
                     <View style={[styles.handleBar, { backgroundColor: c.border }]} />
                   </View>
-                  <View style={styles.modalHeader}>
-                    <View style={[styles.modalIconWrap, { backgroundColor: meta.color + "12" }]}>
-                      <Feather name={meta.icon} size={18} color={meta.color} />
+                  <ScrollView
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                    contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 28) }}
+                  >
+                    <View style={styles.modalHeader}>
+                      <View style={[styles.modalIconWrap, { backgroundColor: meta.color + "12" }]}>
+                        <Feather name={meta.icon} size={18} color={meta.color} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.modalTitle, { color: c.foreground }]}>{meta.label}</Text>
+                        <Text style={[styles.modalInstruction, { color: c.mutedForeground }]}>Choose one for today</Text>
+                      </View>
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.modalTitle, { color: c.foreground }]}>{meta.label}</Text>
-                      <Text style={[styles.modalInstruction, { color: c.mutedForeground }]}>Choose one for today</Text>
-                    </View>
-                  </View>
-                  <View style={styles.modalOptions}>
-                    {options.map((option) => {
-                      const isSelected = currentAction?.text === option.title;
-                      const isBestMatch = option.title === currentAction?.recommended;
-                      return (
-                        <Pressable
-                          key={option.id}
-                          onPress={() => {
-                            haptic();
-                            if (currentAction) {
-                              editAction(currentAction.id, option.title);
-                            }
-                            setEditingAction(null);
-                          }}
-                          style={({ pressed }) => [
-                            styles.modalOption,
-                            {
-                              backgroundColor: isSelected ? meta.color + "10" : c.background,
-                              borderColor: isSelected ? meta.color + "40" : c.border + "30",
-                              opacity: pressed ? 0.85 : 1,
-                            },
-                          ]}
-                        >
-                          <View style={styles.modalOptionContent}>
-                            <View style={styles.modalOptionTitleRow}>
-                              <Text style={[
-                                styles.modalOptionText,
-                                { color: isSelected ? meta.color : c.foreground },
-                                isSelected && { fontFamily: "Montserrat_600SemiBold" },
-                              ]}>{option.title}</Text>
-                              {isSelected && <Feather name="check-circle" size={18} color={meta.color} />}
-                            </View>
-                            <Text style={[styles.modalOptionSubtitle, { color: c.mutedForeground }]}>{option.subtitle}</Text>
-                            {isBestMatch && !isSelected && (
-                              <View style={[styles.recommendedBadge, { backgroundColor: c.success + "14" }]}>
-                                <Feather name="zap" size={10} color={c.success} />
-                                <Text style={[styles.recommendedText, { color: c.success }]}>Best match today</Text>
+                    <View style={styles.modalOptions}>
+                      {options.map((option) => {
+                        const isSelected = currentAction?.text === option.title;
+                        const isBestMatch = option.title === currentAction?.recommended;
+                        return (
+                          <Pressable
+                            key={option.id}
+                            onPress={() => {
+                              haptic();
+                              if (currentAction) {
+                                editAction(currentAction.id, option.title);
+                              }
+                              setEditingAction(null);
+                            }}
+                            style={({ pressed }) => [
+                              styles.modalOption,
+                              {
+                                backgroundColor: isSelected ? meta.color + "10" : c.background,
+                                borderColor: isSelected ? meta.color + "40" : c.border + "30",
+                                opacity: pressed ? 0.85 : 1,
+                              },
+                            ]}
+                          >
+                            <View style={styles.modalOptionContent}>
+                              <View style={styles.modalOptionTitleRow}>
+                                <Text style={[
+                                  styles.modalOptionText,
+                                  { color: isSelected ? meta.color : c.foreground },
+                                  isSelected && { fontFamily: "Montserrat_600SemiBold" },
+                                ]}>{option.title}</Text>
+                                {isSelected && <Feather name="check-circle" size={18} color={meta.color} />}
                               </View>
-                            )}
-                            {isBestMatch && isSelected && currentAction?.reason && (
-                              <Text style={[styles.modalOptionReason, { color: c.mutedForeground }]}>{currentAction.reason}</Text>
-                            )}
-                          </View>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                  {selectedOption?.supportText && selectedOption.supportText.length > 0 && (
-                    <View style={styles.supportSection}>
-                      {selectedOption.supportText.map((tip, i) => (
-                        <View key={i} style={styles.supportRow}>
-                          <Feather name="info" size={11} color={c.mutedForeground} />
-                          <Text style={[styles.supportText, { color: c.mutedForeground }]}>{tip}</Text>
-                        </View>
-                      ))}
+                              <Text style={[styles.modalOptionSubtitle, { color: c.mutedForeground }]}>{option.subtitle}</Text>
+                              {isBestMatch && !isSelected && (
+                                <View style={[styles.recommendedBadge, { backgroundColor: c.success + "14" }]}>
+                                  <Feather name="zap" size={10} color={c.success} />
+                                  <Text style={[styles.recommendedText, { color: c.success }]}>Best match today</Text>
+                                </View>
+                              )}
+                              {isBestMatch && isSelected && currentAction?.reason && (
+                                <Text style={[styles.modalOptionReason, { color: c.mutedForeground }]}>{currentAction.reason}</Text>
+                              )}
+                            </View>
+                          </Pressable>
+                        );
+                      })}
                     </View>
-                  )}
+                    {selectedOption?.supportText && selectedOption.supportText.length > 0 && (
+                      <View style={styles.supportSection}>
+                        {selectedOption.supportText.map((tip, i) => (
+                          <View key={i} style={styles.supportRow}>
+                            <Feather name="info" size={11} color={c.mutedForeground} />
+                            <Text style={[styles.supportText, { color: c.mutedForeground }]}>{tip}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </ScrollView>
                 </>
               );
             })()}
@@ -3127,9 +3133,8 @@ const styles = StyleSheet.create({
   modalSheet: {
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    paddingBottom: 40,
     paddingHorizontal: 24,
-    maxHeight: "60%",
+    maxHeight: "70%",
   },
   modalHandle: {
     alignItems: "center",
