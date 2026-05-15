@@ -74,31 +74,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
-  Easing,
-  LayoutAnimation,
   Platform,
   Pressable,
   StyleSheet,
   Text,
-  UIManager,
   View,
 } from "react-native";
-
-// Enable LayoutAnimation on Android. iOS has it on by default; web is a
-// no-op. We only need this once per JS runtime.
-if (
-  Platform.OS === "android" &&
-  UIManager.setLayoutAnimationEnabledExperimental
-) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-
 import {
   type FeedbackResult,
   type PatientIntervention,
+  type InterventionTriggerType,
 } from "@/lib/api/interventionsClient";
 import type { DoseDayPosition } from "@/lib/engine/dailyState";
 import { logEvent } from "@/lib/analytics/client";
@@ -230,155 +217,183 @@ const RECOMMENDATIONS: Record<RecCategory, { variants: RecContent[] }> = {
   nausea: {
     variants: [
       {
-        title: "Settle nausea, then refuel slowly",
-        body: "Take 5 small sips of water now, wait 10 minutes, then try 3 to 5 bites of yogurt, tofu, soup or a smoothie.",
+        // Primary: fluids first \u2192 then 2-3 bites
+        title: "Sip first, then try 2\u20133 bites",
+        body: "Take 5 slow sips of water or ginger tea right now. Wait 10 minutes. Then try 2\u20133 bites of Greek yogurt, crackers, toast, or a banana.",
         helper:
-          "Letting fluids settle first calms the stomach before you reintroduce food, which is gentler than eating into active nausea.",
+          "Fluids settle the stomach first; small bland bites after are easier to tolerate than eating into active nausea.",
       },
       {
-        title: "Hydrate slowly first",
-        body: "Sip water or an electrolyte drink for 20 minutes \u2014 small sips every minute or two \u2014 before trying any solid food.",
+        // Alternate (adjusted step): pivot to fresh air + repositioning
+        title: "Step outside for 3 minutes",
+        body: "Go near fresh air or open a window. Sit upright and breathe slowly for 3 minutes. Then take 3\u20134 slow sips of water or ginger tea.",
         helper:
-          "Steady fluids first can settle the stomach so the next bite is less likely to trigger more nausea.",
+          "Fresh air and an upright position can ease nausea quickly before you try any food or drink.",
       },
       {
-        title: "Switch to something gentler",
-        body: "Try crackers, ginger tea or a few spoonfuls of soup. Pause for a few minutes if nausea increases.",
+        // Variant 3: pause food, timed sip protocol
+        title: "Pause food, sip every 2 minutes",
+        body: "Stop solid food for 15 minutes. Sip water, Pedialyte, or peppermint tea, a few sips every 2\u20133 minutes. After 15 minutes, try one bite of toast or a cracker.",
         helper:
-          "Plain, low-odor foods are usually easier to keep down than a full meal when nausea is active.",
+          "Timed small sips are easier to keep down than a full glass when nausea is active.",
       },
       {
-        title: "Rest 10 minutes, then a small bite",
-        body: "Sit upright in a quiet spot for 10 minutes, then try one bite of bland protein like yogurt or tofu.",
-        helper: "A short pause before food can reduce the urge to skip the meal entirely.",
+        // Variant 4: cold fluids change
+        title: "Try cold or chilled fluids",
+        body: "Try ice chips or a chilled electrolyte drink like Pedialyte or LMNT. Take 3\u20134 sips every 5 minutes for 20 minutes.",
+        helper:
+          "Cold, plain fluids are often gentler when warm drinks or food are making nausea feel worse.",
       },
     ],
   },
   appetite: {
     variants: [
       {
-        title: "Small fuel + steady fluids",
-        body: "Try a few bites of protein now (yogurt, tofu, soup or a smoothie), then sip water or electrolytes over the next hour.",
+        // Primary: micro-portion protein
+        title: "2\u20133 bites of protein, then pause",
+        body: "Eat 2\u20133 bites of Greek yogurt, tofu, eggs, or cottage cheese right now. Stop there. Wait 10 minutes, then check how your stomach feels before eating more.",
         helper:
-          "Small portions are easier when appetite is low, and steady fluids help keep low intake from turning into low energy later.",
+          "Micro-portions keep nutrition coming in without overwhelming a low appetite.",
       },
       {
-        title: "Half a meal beats a skipped one",
-        body: "Aim for a half-portion of your usual meal in the next 30 minutes. Stop when you feel full \u2014 you can come back to it later.",
-        helper: "A partial meal preserves more nutrition than waiting until appetite returns on its own.",
+        // Alternate (adjusted step): pivot to liquid nutrition
+        title: "Sip a smoothie instead of eating",
+        body: "Make or order a simple smoothie with protein: Greek yogurt, cottage cheese, or protein powder. Sip it slowly over 10\u201315 minutes.",
+        helper:
+          "Liquid protein is easier to take in when chewing or strong flavors feel like too much.",
       },
       {
-        title: "Drink your protein",
-        body: "Try a smoothie or protein shake instead of a full meal. Sip it slowly over 20 to 30 minutes.",
-        helper: "Liquid calories are usually easier to take in when chewing or strong flavors feel like too much.",
+        // Variant 3: bland starch + protein
+        title: "Crackers or toast with protein",
+        body: "Try 3\u20134 crackers or a slice of toast with a small amount of Greek yogurt or soft tofu. Pause 10 minutes before deciding if you want more.",
+        helper:
+          "Bland starch paired with a small protein often goes down easier than a full meal when appetite is low.",
       },
       {
-        title: "Bland and low-friction",
-        body: "Try toast, rice, oatmeal or crackers with a small protein on the side. Skip greasy or strongly flavored foods today.",
-        helper: "Bland foods are less likely to worsen nausea or push appetite even lower.",
+        // Variant 4: ultra-slow timed pacing
+        title: "One bite every 5 minutes",
+        body: "Set a 20-minute timer. Every 5 minutes, eat one small bite of a familiar food: Greek yogurt, banana, crackers, or soup. Stop when the timer runs out.",
+        helper:
+          "Ultra-slow pacing takes pressure off the stomach and often leads to more total intake than forcing a full meal.",
       },
     ],
   },
   energy: {
     variants: [
       {
-        title: "Refuel with protein in the next 30 minutes",
-        body: "Pair a small protein with a carb \u2014 yogurt with fruit, soup with tofu, or a smoothie \u2014 then rest for 10 minutes.",
-        helper: "Protein plus a carb steadies blood sugar more reliably than carbs alone, which often crash energy again.",
+        // Primary: hydrate + short movement
+        title: "Drink water, then take a 3-minute walk",
+        body: "Drink 8 oz of water or an electrolyte drink (Pedialyte, LMNT, or water with a pinch of salt) right now. Then take a slow 3-minute walk around the room or outside.",
+        helper:
+          "Even mild dehydration intensifies fatigue. A short walk after fluids often shifts energy noticeably.",
       },
       {
-        title: "Pace today, push tomorrow",
-        body: "Plan a rest block in the next 2 hours and add protein to your next meal. Save bigger tasks for tomorrow.",
-        helper: "Pacing keeps your energy steadier across the day instead of spiking and crashing.",
+        // Alternate (adjusted step): pivot to environment reset + one task
+        title: "Sit near bright light for 5 minutes",
+        body: "Move near a window or bright light. Sit upright for 5 minutes. Then pick one small, low-effort task and do just that one thing.",
+        helper:
+          "Natural or bright light can reset alertness quickly without requiring physical movement.",
       },
       {
-        title: "Sip + sit + small snack",
-        body: "Take small sips of water, sit or lie down for 10 minutes, then try a small protein-plus-carb snack if you feel ready.",
-        helper: "Low intake and dehydration deepen fatigue, so fluids first usually helps before food does.",
+        // Variant 3: intentional rest
+        title: "10-minute low-stimulation reset",
+        body: "Sit or lie down in a quiet spot for 10 minutes. No phone. Breathe slowly. Then reassess whether energy feels steadier before deciding what to do next.",
+        helper:
+          "A short intentional rest often restores more energy than pushing through on low reserves.",
       },
       {
-        title: "Add protein to your next meal",
-        body: "Pair your next bite with a protein source (Greek yogurt, eggs, beans or a smoothie with protein powder).",
-        helper: "Protein steadies energy more reliably than carbs alone.",
+        // Variant 4: protein + carb refuel
+        title: "Refuel with protein and a carb",
+        body: "Eat a small protein-and-carb combo right now: Greek yogurt with a banana, eggs on toast, or soup with tofu. Rest for 10 minutes after.",
+        helper:
+          "Protein paired with a carb stabilizes blood sugar more reliably than either one alone.",
       },
     ],
   },
   constipation: {
     variants: [
       {
-        title: "Walk + water in the next hour",
-        body: "Take a 10-minute walk after your next meal and finish a full glass of water with it.",
-        helper: "Movement and fluids together stimulate digestion better than either one alone.",
+        // Primary: warm fluids + 5-min walk
+        title: "Warm drink, then a 5-minute walk",
+        body: "Drink 6\u20138 oz of warm water, ginger tea, or peppermint tea right now. Then take a slow 5-minute walk around the room or outside.",
+        helper:
+          "Warm fluids relax the gut; even light movement stimulates digestion in a way rest doesn\u2019t.",
       },
       {
-        title: "Steady fluids over the afternoon",
-        body: "Sip warm water, tea or broth every 20 minutes for the next few hours.",
-        helper: "Warm fluids help relax the gut and keep stool softer than cold water alone.",
+        // Alternate (adjusted step): pivot to breathing + posture
+        title: "2 minutes of slow abdominal breathing",
+        body: "Sit upright. Breathe in slowly for 4 counts, then out for 6 counts. Repeat for 2 minutes. Follow with a slow 5-minute walk and 8 oz of water.",
+        helper:
+          "Deep abdominal breathing can stimulate bowel movement by activating the parasympathetic system.",
       },
       {
-        title: "Add fiber gradually",
-        body: "Add a small fiber boost to your next meal \u2014 berries, chia, beans or vegetables \u2014 and finish a glass of water with it.",
-        helper: "Fiber moves things along when paired with steady fluids; adding too much at once can backfire and cause bloating.",
+        // Variant 3: hydration + upright posture
+        title: "8 oz of warm water, stay upright for 10 minutes",
+        body: "Drink 8 oz of warm water right now. Stay sitting upright and avoid lying down for at least 10 minutes, then reassess discomfort.",
+        helper:
+          "Staying upright after fluids lets gravity support digestion and reduces discomfort.",
       },
       {
-        title: "Gentle bowel-support combo",
-        body: "Pair a short walk with warm fluids and a fiber-rich snack. Keep the changes small to avoid bloating.",
-        helper: "Gradual changes are less likely to swap constipation for bloating.",
+        // Variant 4: movement-first
+        title: "Take a slow 5-minute walk now",
+        body: "Stand up and take a slow, relaxed 5-minute walk outside or around the room. Drink 8 oz of water before or after.",
+        helper:
+          "Movement is one of the most reliable short-term tools for stimulating a sluggish digestive system.",
       },
     ],
   },
   hydration: {
     variants: [
       {
-        title: "Small sips every 10 minutes for the next hour",
-        body: "Take a few sips of water or an electrolyte drink every 10 minutes for the next hour. Small and steady is easier than a big glass.",
-        helper: "Steady sips absorb better and feel gentler on your stomach than drinking a lot at once.",
+        // Primary: timed sip protocol
+        title: "4\u20135 sips every 5 minutes for 30 minutes",
+        body: "Take 4\u20135 sips of water or an electrolyte drink (Pedialyte, LMNT, or water with a pinch of salt) right now. Repeat every 5 minutes for the next 30 minutes.",
+        helper:
+          "Steady timed sips absorb more efficiently and are easier to keep down than drinking a large amount at once.",
       },
       {
-        title: "Switch to something gentler",
-        body: "If plain water feels hard, try an electrolyte drink, diluted juice, warm tea or broth instead.",
-        helper: "A different flavor or temperature can make fluids easier to keep down when water feels off.",
+        // Alternate (adjusted step): pivot to electrolyte type change
+        title: "Switch to an electrolyte drink",
+        body: "Try Pedialyte, LMNT, Liquid I.V., or water with a pinch of salt and a squeeze of lemon. Take small sips every 5 minutes.",
+        helper:
+          "If plain water isn\u2019t working, electrolytes give more efficient rehydration and are often easier to tolerate.",
       },
       {
-        title: "Pair fluids with a bland snack",
-        body: "Sip water alongside a few crackers, a piece of toast or a small piece of fruit over the next 20 minutes.",
-        helper: "A small bland snack can settle the stomach while you rehydrate.",
+        // Variant 3: warm fluids
+        title: "Try warm fluids instead",
+        body: "Sip warm water, ginger tea, or peppermint tea. Take a few small sips every 3\u20135 minutes for the next 20 minutes.",
+        helper:
+          "A temperature change often makes fluids easier to tolerate when cold water feels off.",
       },
       {
-        title: "Cool fluids if warm feels off",
-        body: "Try ice chips, a chilled electrolyte drink or cold tea instead. Small sips, every few minutes.",
-        helper: "The temperature that feels best is the one you\u2019ll actually keep drinking.",
+        // Variant 4: cold/ice fluids
+        title: "Ice chips or chilled electrolyte drink",
+        body: "Try ice chips or a chilled electrolyte drink like Pedialyte or Liquid I.V. Take small amounts every 3\u20135 minutes for 20 minutes.",
+        helper:
+          "Cold, small amounts are sometimes easier to tolerate when warm fluids or nausea make drinking hard.",
       },
     ],
   },
   other: {
     variants: [
       {
-        title: "Pick one small action in the next 15 minutes",
-        body: "Choose one of: a few sips of water, a few bites of a familiar food, or a 5-minute rest in a quiet spot.",
-        helper: "One small, finishable action is more useful right now than trying to fix everything at once.",
+        // Primary: pick one action
+        title: "Pick one action and do it now",
+        body: "Choose ONE: take 4\u20135 sips of water, eat 2\u20133 bites of a familiar food (Greek yogurt, crackers, or a banana), or sit quietly for 5 minutes with slow breathing.",
+        helper:
+          "One small, completable action is more useful than trying to address everything at once.",
       },
       {
-        title: "Lower the bar even further",
-        body: "Try the smallest version: a single sip of fluid, one minute of slow breathing, or sitting somewhere comfortable for 5 minutes.",
-        helper: "When everything feels like too much, the smallest possible step is the one most likely to actually happen.",
+        // Alternate (adjusted step): lowest possible bar
+        title: "Take one sip, then check in",
+        body: "Take a single sip of water or an electrolyte drink. Wait 2 minutes. Take another sip. Repeat until you\u2019ve taken 10 sips. That\u2019s enough for now.",
+        helper:
+          "When everything feels like too much, the smallest possible step is the one most likely to actually happen.",
       },
     ],
   },
 };
 
-// Patient-friendly noun for each category, used in the
-// "More support for today" subtitle, e.g. "2 more supports for
-// appetite and digestion". Distinct from NOTICED_PHRASE which uses
-// symptom-style language like "low appetite" / "nausea".
-const CATEGORY_NOUN: Record<RecCategory, string> = {
-  nausea: "nausea",
-  appetite: "appetite",
-  energy: "energy",
-  constipation: "digestion",
-  hydration: "hydration",
-  other: "support",
-};
 
 // Stable per-category salt so different categories don't all land on
 // the same variant index for the same intervention id on the same day.
@@ -410,29 +425,6 @@ function pickVariants(
   return { primary: variants[primaryIdx]!, alternate: variants[alternateIdx]! };
 }
 
-// Plain-language fragment used to compose the "What we noticed"
-// sentence. Joined with commas + "and" before the last item.
-const NOTICED_PHRASE: Record<RecCategory, string> = {
-  nausea: "nausea",
-  appetite: "low appetite",
-  energy: "low energy",
-  constipation: "constipation",
-  hydration: "low hydration",
-  other: "some symptoms",
-};
-
-// Short clinical reasoning appended to "What we noticed" when there
-// is more than one symptom -- explains in one phrase WHY the primary
-// category is starting first.
-const REASON_FOR_PRIMARY: Record<RecCategory, string> = {
-  nausea: "because it can make eating and hydration harder",
-  appetite:
-    "because keeping protein steady can support your energy and recovery",
-  energy: "because small, supportive steps can help your energy through the day",
-  constipation: "because addressing it early helps prevent it from worsening",
-  hydration: "because steady hydration can make most other symptoms easier",
-  other: "",
-};
 
 // Per-row state machine. Each row drives its own progression.
 type SectionStatus =
@@ -509,27 +501,12 @@ function joinList(items: string[]): string {
 }
 
 // =====================================================================
-// Visual tokens. Light, fixed surface so contrast stays correct in
-// dark mode (the theme's `cardBg`/`navy` would produce light-on-light).
+// Visual tokens (fixed light surface — works correctly in dark mode)
 // =====================================================================
-const FEATURED_TINT = "#E8F1FB";
-const FEATURED_BORDER = "#BFD7F0";
-const STEADY_TINT = "#EAF6EE";
-const STEADY_BORDER = "#BFE0CB";
-const FEATURED_BADGE_BG = "#DCE9F7";
-const FEATURED_BADGE_FG = "#1F4F8A";
-const FEATURED_TEXT = "#142240";
-const FEATURED_MUTED = "#5A6A82";
-// Primary action card surface (white, soft shadow) reads as the most
-// important next step without screaming.
-const PRIMARY_SURFACE = "#FFFFFF";
-const PRIMARY_BORDER = "#7FB0E8";
-// Secondary row: compact, muted; less surface area = less clutter.
-const SECONDARY_SURFACE = "#F5F8FC";
-const SECONDARY_BORDER = "#D5E1F0";
-const START_HERE_BG = "#1F4F8A";
-const START_HERE_FG = "#FFFFFF";
 const SUCCESS_FG = "#1F8A3F";
+const CARD_TEXT = "#142240";
+const CARD_MUTED = "#6B7FA3";
+const CARD_BORDER = "#E2E8F0";
 
 // Live check-in snapshot used to drive severity-aware adaptations.
 // All fields are nullable so the card can render before the patient
@@ -659,105 +636,110 @@ function nauseaCopy(
 ): RecContent {
   if (level === "severe") {
     return {
-      title: "Settle nausea before food",
+      title: "Pause food: sip fluids for 15 minutes",
       body:
-        "Start with small sips of water for 10 minutes. Only try a few bites of bland food (toast, crackers, yogurt or tofu) if nausea eases. Pause if it gets worse.",
+        "Stop solid food for now. Take slow sips of water, Pedialyte, or ginger tea, a few sips every 2 minutes, for the next 15 minutes. If nausea eases, try 2\u20133 bites of crackers, toast, or a banana.",
       helper:
-        "If nausea is hard to manage, getting worse, or you can\u2019t keep fluids down, ask your care team to review.",
+        "If nausea is getting worse or you can\u2019t keep fluids down, contact your care team.",
     };
   }
   if (level === "moderate") {
-    return {
-      title: "Settle nausea without skipping food",
-      body: withLowAppetite
-        ? "Try a few bites of bland protein (yogurt, tofu, soup or a smoothie), then sip water slowly over the next 20 minutes."
-        : "Try a small bland snack (yogurt, tofu, soup or a smoothie) and sip water slowly over the next 20 minutes.",
-      helper:
-        "Small bland portions are easier on the stomach while keeping protein and fluids in.",
-    };
+    return withLowAppetite
+      ? {
+          title: "Sip first, then try 2\u20133 bites of protein",
+          body: "Take 5 slow sips of water or ginger tea now. Wait 10 minutes. Then try 2\u20133 bites of Greek yogurt, tofu, or cottage cheese.",
+          helper:
+            "Fluids settle the stomach first; small protein bites after are easier to keep down than eating into active nausea.",
+        }
+      : {
+          title: "Sip first, then 2\u20133 small bites",
+          body: "Take 5 slow sips of water or ginger tea now. Wait 10 minutes. Then try 2\u20133 bites of crackers, toast, Greek yogurt, or a banana.",
+          helper:
+            "Letting fluids settle first gives the stomach time to calm before food arrives.",
+        };
   }
   return {
-    title: "Stay ahead of nausea",
-    body: "Keep portions small today and sip water steadily between bites instead of drinking a lot at once.",
-    helper: "Small, preventive steps can keep mild nausea from building later in the day.",
+    title: "Keep it small and spaced",
+    body: "Take 3\u20134 slow sips of water now. Wait 5 minutes, then try 2\u20133 small bites of crackers or toast. Repeat every 15 minutes if you need more.",
+    helper: "Small, spaced bites prevent mild nausea from building into something harder to manage.",
   };
 }
 
 function appetiteCopy(hasNausea: boolean): RecContent {
   if (hasNausea) {
     return {
-      title: "Eat small and bland",
+      title: "Try 2\u20133 bites of bland food",
       body:
-        "Try a few bites of toast, crackers, rice or oatmeal with a small protein on the side. Skip greasy or strongly flavored foods today.",
+        "Eat 2\u20133 bites of crackers, toast, rice, or a banana right now. Wait 10 minutes before trying anything else. Skip greasy or strongly flavored foods for now.",
       helper:
-        "Bland, low-friction foods are easier when nausea is also present.",
+        "When nausea and low appetite overlap, the smallest bland portion keeps nutrition coming in without making nausea worse.",
     };
   }
   return {
-    title: "Small fuel + steady fluids",
+    title: "2\u20133 bites of protein, then pause",
     body:
-      "Try a few bites of protein now (yogurt, tofu, soup or a smoothie), then sip water or electrolytes over the next hour.",
+      "Eat 2\u20133 bites of Greek yogurt, tofu, eggs, or cottage cheese right now. Stop there. Wait 10 minutes, then check how your stomach feels before eating more.",
     helper:
-      "Small portions are easier when appetite is low, and steady fluids help keep low intake from turning into low energy later.",
+      "Micro-portions of protein keep nutrition coming in without overwhelming a low appetite.",
   };
 }
 
 function constipationCopy(): RecContent {
   return {
-    title: "Walk + water + a fiber bite",
+    title: "Warm drink, then a 5-minute walk",
     body:
-      "Sip warm fluids over the next few hours, add a fiber-rich food (berries, chia, beans or vegetables) to your next meal, and take a short walk if you feel up for it.",
+      "Drink 6\u20138 oz of warm water, ginger tea, or peppermint tea right now. Then take a slow 5-minute walk around the room or outside.",
     helper:
-      "Movement, fluids and fiber together work better for constipation than any one of them alone.",
+      "Warm fluids relax the gut; even light movement stimulates digestion in a way rest doesn\u2019t.",
   };
 }
 
 function bloatingCopy(): RecContent {
   return {
-    title: "Smaller portions + a short walk",
+    title: "Take a 5-minute walk now",
     body:
-      "Try smaller portions for the rest of today and a 5- to 10-minute walk after eating. Skip carbonated drinks and heavily seasoned foods.",
+      "Stand up and take a slow 5-minute walk around the room or outside right now. Avoid carbonated drinks and heavily seasoned food for the next few hours.",
     helper:
-      "Gentle movement and smaller meals usually help bloating more than adding fiber does.",
+      "Gentle movement releases trapped gas more effectively than rest does.",
   };
 }
 
 function diarrheaCopy(): RecContent {
   return {
-    title: "Steady fluids + bland foods",
+    title: "Small sips every 5 minutes for 30 minutes",
     body:
-      "Sip water or an electrolyte drink slowly over the next hour and stick to bland foods like rice, toast or bananas. Skip greasy or high-fiber foods today.",
+      "Take 4\u20135 slow sips of water or an electrolyte drink (Pedialyte, LMNT, or Liquid I.V.) every 5 minutes for the next 30 minutes. Stick to bland foods: rice, toast, or bananas.",
     helper:
-      "Steady fluids replace what\u2019s being lost; bland foods are easier on an irritated gut.",
+      "Steady sips replace fluids without overwhelming the gut; bland foods reduce irritation.",
   };
 }
 
 function energyCopy(level: "tired" | "depleted"): RecContent {
   if (level === "depleted") {
     return {
-      title: "Sip + sit + small snack",
+      title: "Fluids first, then a small refuel",
       body:
-        "Take small sips of water, sit or lie down for 10 minutes, then try a small protein-plus-carb snack if you feel ready.",
+        "Drink 8 oz of water or an electrolyte drink (Pedialyte, LMNT, or water with a pinch of salt) right now. Sit or lie down for 10 minutes. Then try a small protein-and-carb snack: Greek yogurt with a banana, eggs on toast, or soup with tofu.",
       helper:
-        "Low intake and dehydration deepen fatigue, so fluids and a small refuel together help most.",
+        "Low hydration amplifies fatigue. Fluids first helps the refuel land better.",
     };
   }
   return {
-    title: "Pace today, push tomorrow",
+    title: "Drink water, then take a 3-minute walk",
     body:
-      "Plan a rest block in the next few hours and pair your next meal with a protein source. Save bigger tasks for tomorrow.",
+      "Drink 8 oz of water now. Then take a slow 3-minute walk around the room or outside. Come back and check if energy feels steadier.",
     helper:
-      "Pacing keeps your energy steadier across the day instead of spiking and crashing.",
+      "Even a very short walk after fluids often shifts tired energy more than rest does.",
   };
 }
 
 function hydrationCopy(): RecContent {
   return {
-    title: "Small sips every 10 minutes for the next hour",
+    title: "4\u20135 sips every 5 minutes for 30 minutes",
     body:
-      "Take a few sips of water or an electrolyte drink every 10 minutes for the next hour. If plain water feels hard, try warm tea or broth.",
+      "Take 4\u20135 sips of water or an electrolyte drink (Pedialyte, LMNT, or water with a pinch of salt) right now. Repeat every 5 minutes for the next 30 minutes.",
     helper:
-      "Steady sips absorb better and feel gentler on the stomach than a big glass at once.",
+      "Steady timed sips absorb more efficiently and are easier to keep down than drinking a large amount at once.",
   };
 }
 
@@ -918,6 +900,185 @@ export function deriveLivePlan(
   };
 }
 
+// Short, clean card title derived from live check-in signal or server trigger.
+// Uses the same category vocabulary as the rest of the card copy.
+// No em dashes, no chatbot-style observations.
+function buildInsightTitle(
+  livePlan: LivePlan | null,
+  liveSeverity: LiveSeverity | null,
+  triggerType: InterventionTriggerType,
+): string {
+  if (livePlan) {
+    const kind = livePlan.primaryConcern;
+    if (kind === "nausea-severe" || kind === "nausea-moderate" || kind === "nausea-mild")
+      return "Nausea support for today";
+    if (kind === "constipation" || kind === "diarrhea" || kind === "bloating")
+      return "Digestion support for today";
+    if (kind === "appetite-very-low" || kind === "appetite-low")
+      return "Appetite support for today";
+    if (kind === "energy-depleted" || kind === "energy-tired")
+      return "Energy support for today";
+    if (kind === "hydration")
+      return "Hydration support for today";
+  }
+  if (liveSeverity === "severe" || liveSeverity === "moderate" || liveSeverity === "mild")
+    return "Recovery support for today";
+  switch (triggerType) {
+    case "nausea": return "Nausea support for today";
+    case "constipation": return "Digestion support for today";
+    case "low_energy": return "Energy support for today";
+    case "low_hydration": return "Hydration support for today";
+    case "low_food_intake": return "Appetite support for today";
+    case "missed_checkin": return "Getting back on track";
+    case "rapid_weight_change": return "Weight change noticed";
+    case "worsening_symptom": return "Symptom support for today";
+    case "repeated_symptom": return "Symptom support for today";
+    case "patient_requested_review": return "Support requested";
+    default: return "Today's support";
+  }
+}
+
+// =====================================================================
+// Wearable + signal context paragraph
+// =====================================================================
+export interface WearableContext {
+  steps?: number | null;
+  sleepHours?: number | null;
+  restingHR?: number | null;
+  activeCalories?: number | null;
+}
+
+function buildContextParagraph(
+  liveCheckin: LiveCheckin | null | undefined,
+  doseContext: {
+    position: DoseDayPosition | null | undefined;
+    recentTitration?: boolean;
+    daysSinceLastDose?: number | null;
+  } | null | undefined,
+  symptomCounts?: {
+    nausea7d: number;
+    lowAppetite7d: number;
+    lowEnergy7d: number;
+    constipation7d: number;
+  } | null,
+  wearableContext?: WearableContext | null,
+): string {
+  const parts: string[] = [];
+  const n7 = symptomCounts?.nausea7d ?? 0;
+  const a7 = symptomCounts?.lowAppetite7d ?? 0;
+  const c7 = symptomCounts?.constipation7d ?? 0;
+
+  if (liveCheckin?.nausea === "severe") {
+    parts.push(n7 >= 3 ? `nausea is elevated today (${n7} of the past 7 days)` : "nausea is elevated today");
+  } else if (liveCheckin?.nausea === "moderate") {
+    parts.push(n7 >= 3 ? `nausea is present today (${n7} of the past 7 days)` : "nausea is present today");
+  } else if (liveCheckin?.nausea === "mild") {
+    parts.push("mild nausea today");
+  } else if (n7 >= 3) {
+    parts.push(`nausea has been present for ${n7} of the past 7 days`);
+  }
+
+  if (liveCheckin?.appetite === "very_low") {
+    parts.push(a7 >= 3 ? "appetite is very low, lower for most of this week" : "appetite is very low today");
+  } else if (liveCheckin?.appetite === "low") {
+    parts.push("appetite is lower than usual");
+  } else if (a7 >= 3) {
+    parts.push("appetite has been lower for most of this week");
+  }
+
+  if (liveCheckin?.digestion === "constipated" || liveCheckin?.bowel === "no") {
+    parts.push(c7 >= 3 ? `constipation is recurring (${c7} of 7 days this week)` : "digestion is sluggish today");
+  } else if (c7 >= 4) {
+    parts.push("constipation has been recurring this week");
+  }
+
+  if (liveCheckin?.energy === "depleted") parts.push("energy is very low today");
+  else if (liveCheckin?.energy === "tired") parts.push("energy is lower than usual");
+
+  const days = doseContext?.daysSinceLastDose;
+  const pos = doseContext?.position;
+  if (days === 1 || pos === "day_1_post") {
+    parts.push("you're one day after your dose, when side effects often peak");
+  } else if (days === 2 || pos === "day_2_post") {
+    parts.push("you're two days after your dose");
+  } else if (days === 3 || pos === "day_3_post") {
+    parts.push("three days after your dose");
+  } else if (days === 0 || pos === "dose_day") {
+    parts.push("today is your dose day");
+  }
+  if (doseContext?.recentTitration) {
+    parts.push("your dose was recently increased, which can intensify early side effects");
+  }
+
+  if (wearableContext?.sleepHours != null && wearableContext.sleepHours > 0 && wearableContext.sleepHours < 6) {
+    parts.push(`sleep was shorter than usual last night (${wearableContext.sleepHours.toFixed(1)} hrs)`);
+  }
+  if (wearableContext?.steps != null && wearableContext.steps > 0 && wearableContext.steps < 3000) {
+    parts.push("your step count is lower than usual today");
+  }
+
+  if (parts.length === 0) return "Your check-in and treatment history shaped this recommendation.";
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+  if (parts.length === 1) return cap(parts[0]!) + ".";
+  const [first, ...rest] = parts;
+  if (rest.length === 1) return `${cap(first!)} and ${rest[0]}.`;
+  return `${cap(first!)}, ${rest.slice(0, -1).join(", ")}, and ${rest[rest.length - 1]}.`;
+}
+
+export function buildContextChips(
+  liveCheckin: LiveCheckin | null | undefined,
+  doseContext: {
+    position: DoseDayPosition | null | undefined;
+    recentTitration?: boolean;
+    daysSinceLastDose?: number | null;
+  } | null | undefined,
+  symptomCounts?: {
+    nausea7d: number;
+    lowAppetite7d: number;
+    lowEnergy7d: number;
+    constipation7d: number;
+  } | null,
+): string[] {
+  const chips: string[] = [];
+  const n7 = symptomCounts?.nausea7d ?? 0;
+  const a7 = symptomCounts?.lowAppetite7d ?? 0;
+
+  if (liveCheckin?.nausea === "severe" || liveCheckin?.nausea === "moderate") {
+    chips.push("Nausea elevated today");
+  } else if (liveCheckin?.nausea === "mild") {
+    chips.push("Mild nausea today");
+  } else if (n7 >= 3) {
+    chips.push("Nausea recurring");
+  }
+
+  if (liveCheckin?.appetite === "very_low" || liveCheckin?.appetite === "low") {
+    chips.push(a7 >= 3 ? "Appetite lower this week" : "Appetite lower today");
+  } else if (a7 >= 3) {
+    chips.push("Appetite lower this week");
+  }
+
+  if (liveCheckin?.energy === "depleted") {
+    chips.push("Energy very low");
+  } else if (liveCheckin?.energy === "tired") {
+    chips.push("Energy lower today");
+  }
+
+  if (liveCheckin?.digestion === "constipated" || liveCheckin?.bowel === "no") {
+    chips.push("Digestion sluggish");
+  }
+
+  const days = doseContext?.daysSinceLastDose;
+  const pos = doseContext?.position;
+  if (days === 1 || pos === "day_1_post") chips.push("1 day after dose");
+  else if (days === 2 || pos === "day_2_post") chips.push("2 days after dose");
+  else if (days === 3 || pos === "day_3_post") chips.push("3 days after dose");
+  else if (days === 0 || pos === "dose_day") chips.push("Dose day");
+
+  if (doseContext?.recentTitration && chips.length < 3) chips.push("Dose increased");
+
+  return chips.slice(0, 3);
+}
+
 interface InterventionCardProps {
   intervention: PatientIntervention;
   navy: string;
@@ -940,16 +1101,42 @@ interface InterventionCardProps {
   doseContext?: {
     position: DoseDayPosition | null | undefined;
     recentTitration?: boolean;
+    daysSinceLastDose?: number | null;
   } | null;
+  // 7-day symptom frequency counts computed from glp1InputHistory.
+  symptomCounts?: {
+    nausea7d: number;
+    lowAppetite7d: number;
+    lowEnergy7d: number;
+    constipation7d: number;
+  } | null;
+  // Wearable signals (steps, sleep, HR) from HealthKit / Apple Health.
+  // Used by buildContextParagraph to weave in objective context naturally.
+  wearableContext?: WearableContext | null;
   // Live snapshot of the patient's current check-in selections.
-  // When provided, the card derives a severity tier and adapts:
-  // severe states surface a care-team CTA; mild states soften copy;
-  // an all-good state swaps to a maintenance layout entirely.
   liveCheckin?: LiveCheckin | null;
-
   // Shared patient intelligence context. When provided, enriches the
-  // "Why Viva suggested this" section with a learning-oriented line.
+  // "Why Viva suggested this" section and analytics payloads with
+  // structured reason signals and plan priority.
   patientContext?: PatientIntelligenceContext | null;
+  // Called when the card's interaction phase changes. Parent uses this
+  // to dim surrounding content when the card is in active focus.
+  onEngaged?: (engaged: boolean) => void;
+  // Phase to initialise the card at (used when the parent persists
+  // phase across sheet open/close cycles).
+  initialPhase?: InteractionPhase;
+  // Fires whenever the interaction phase changes (mirrors internal state
+  // upward so the parent can persist it across remounts).
+  onPhaseChange?: (phase: InteractionPhase) => void;
+  // Fires ~1.5 s after the card enters the "better" resolution state,
+  // giving the parent a signal to close the support sheet.
+  onDone?: () => void;
+  // How many times the patient has indicated they are still struggling.
+  // Persisted in the parent across sheet open/close cycles.
+  // 0 = haven't tried yet  1 = first step tried + still struggling
+  // 2+ = both steps tried  → escalation surfaces as primary action
+  initialStruggleCount?: number;
+  onStruggleCountChange?: (count: number) => void;
 
   onAccept: (id: number) => Promise<void>;
   onDismiss: (id: number) => Promise<void>;
@@ -982,27 +1169,36 @@ function categoryIcon(
   }
 }
 
-function safeLog(name: string): void {
+function safeLog(name: string, payload?: Record<string, unknown>): void {
   try {
-    void logEvent(name);
+    void logEvent(name, payload);
   } catch {
     /* analytics is fire-and-forget */
   }
 }
 
+export type InteractionPhase = "default" | "checking" | "feedback" | "better" | "struggling";
+
+function tap(): void {
+  try {
+    Haptics.selectionAsync();
+  } catch {
+    /* best-effort */
+  }
+}
+
 export function InterventionCard({
   intervention,
-  // Theme `navy` / `mutedForeground` / `background` are intentionally
-  // shadowed because the featured card uses a fixed light blue
-  // surface in BOTH light and dark mode.
   navy: _themeNavy,
-  accent,
+  accent: _accent,
   cardBg: _cardBg,
   background: _themeBackground,
   mutedForeground: _themeMuted,
   warning,
-  hasHealthData = false,
+  hasHealthData: _hasHealthData,
   doseContext = null,
+  symptomCounts = null,
+  wearableContext = null,
   liveCheckin = null,
   patientContext = null,
   onEngaged,
@@ -1012,36 +1208,111 @@ export function InterventionCard({
   initialStruggleCount,
   onStruggleCountChange,
   onAccept,
-  onDismiss,
+  onDismiss: _onDismiss,
   onFeedback,
-  onEscalate,
+  onEscalate: _onEscalate,
 }: InterventionCardProps) {
-  // Severity is recomputed every render off the (cheap) prop. No
-  // need for useMemo -- the cost is trivial and React's diff handles
-  // the rerender efficiently.
+  const navy = CARD_TEXT;
+  const mutedForeground = CARD_MUTED;
+
   const liveSeverity = deriveLiveSeverity(liveCheckin);
-  // Pure derivation off the live check-in. Recomputes within React's
-  // normal render cycle whenever a chip in the check-in row changes,
-  // so the displayed title / body / supports adapt within the spec's
-  // 1-2s budget without any /generate round-trip.
   const livePlan = useMemo(
     () => deriveLivePlan(liveCheckin, liveSeverity),
     [liveCheckin, liveSeverity],
   );
-  const navy = FEATURED_TEXT;
-  const mutedForeground = FEATURED_MUTED;
-  const background = FEATURED_BORDER;
-  const [busy, setBusy] = useState<
-    null | "accept" | "dismiss" | "feedback" | "escalate"
-  >(null);
 
-  const status = intervention.status;
-  const icon = useMemo(
-    () => categoryIcon(intervention.recommendationCategory),
-    [intervention.recommendationCategory],
+  const [phase, setPhase] = useState<InteractionPhase>(initialPhase ?? "default");
+  const [struggleCount, setStruggleCount] = useState(initialStruggleCount ?? 0);
+  // Adaptive intervention layer — tracks which strategies have been tried
+  // in this session so the selector can rotate to a meaningfully different
+  // approach on the adjusted step instead of cycling within the same category.
+  const [failedStrategyTypes, setFailedStrategyTypes] = useState<StrategyType[]>([]);
+  const [lastEntryId, setLastEntryId] = useState<string | null>(null);
+
+  const setEngagedPhase = useCallback(
+    (next: InteractionPhase) => {
+      setPhase(next);
+      onPhaseChange?.(next);
+      if (next === "default" || next === "better") {
+        onEngaged?.(false);
+      } else {
+        onEngaged?.(true);
+      }
+    },
+    [onEngaged, onPhaseChange],
   );
 
-  // -- Section parsing + sorting ------------------------------------
+  // Spring entrance animation — all hooks must precede any early return
+  const enter = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.spring(enter, {
+      toValue: 1,
+      tension: 65,
+      friction: 11,
+      useNativeDriver: Platform.OS !== "web",
+    }).start();
+  }, [enter]);
+
+  // Slow pulse on the clock icon while support is in progress
+  const clockPulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (phase !== "checking") return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(clockPulse, {
+          toValue: 0.3,
+          duration: 900,
+          useNativeDriver: Platform.OS !== "web",
+        }),
+        Animated.timing(clockPulse, {
+          toValue: 1,
+          duration: 900,
+          useNativeDriver: Platform.OS !== "web",
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [phase, clockPulse]);
+
+  // Notify parent to close the sheet ~1.5 s after support completes.
+  useEffect(() => {
+    if (phase !== "better") return;
+    const t = setTimeout(() => onDone?.(), 1500);
+    return () => clearTimeout(t);
+  }, [phase, onDone]);
+  const animatedStyle = {
+    opacity: enter,
+    transform: [
+      {
+        translateY: enter.interpolate({
+          inputRange: [0, 1],
+          outputRange: [14, 0],
+        }),
+      },
+    ],
+  };
+
+
+  // Backend call guards
+  const acceptFiredRef = useRef(false);
+  const escalateFiredRef = useRef(false);
+  const viewLoggedRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (viewLoggedRef.current === intervention.id) return;
+    viewLoggedRef.current = intervention.id;
+    safeLog("intervention_viewed", {
+      interventionId: intervention.id,
+      triggerType: intervention.triggerType,
+      severityTier: liveSeverity,
+      symptomTarget: primary?.category ?? null,
+      planPriority,
+      reason_signals: reasonSignals,
+    });
+  }, [intervention.id, intervention.triggerType, liveSeverity, primary]);
+
+  // Content derivation
   const sections = useMemo(
     () => parseRecommendationSections(intervention.recommendation),
     [intervention.recommendation],
@@ -1074,14 +1345,6 @@ export function InterventionCard({
     intervention.severity,
   ]);
 
-  // When the patient's live check-in produces a derivable plan, swap
-  // the server-built rows for a client-derived set whose title, body
-  // and category mix react to the chip selectors. The server-built
-  // rows still drive intervention id, status, accept / feedback wiring
-  // and persistence -- only the displayed copy + ordering change.
-  // Synthesized keys are namespaced ("live:<id>:<cat>:<i>") so they
-  // never collide with the server section keys; AsyncStorage will
-  // simply hold a parallel set of entries for any user-touched rows.
   const displayRows = useMemo(() => {
     if (!livePlan) return orderedRows;
     return livePlan.rows.map((r, i) => ({
@@ -1093,9 +1356,6 @@ export function InterventionCard({
     }));
   }, [livePlan, orderedRows, intervention.id]);
 
-  // Lookup table from synthesized row key -> override RecContent.
-  // Passed through PrimaryActionCard / SecondaryActionRow so they can
-  // bypass pickVariants and render the matrix-derived title/body/helper.
   const liveOverrides = useMemo<Record<string, RecContent>>(() => {
     if (!livePlan) return {};
     const m: Record<string, RecContent> = {};
@@ -1105,130 +1365,110 @@ export function InterventionCard({
     return m;
   }, [livePlan, intervention.id]);
 
-  // -- Per-row local state ------------------------------------------
-  const [sectionStatus, setSectionStatus] = useState<
-    Record<string, SectionStatus>
-  >({});
-  const [sectionAlt, setSectionAlt] = useState<Record<string, boolean>>({});
-  // Per-row "Check again later" flag. When true for a key, the row's
-  // no_change branch collapses from the two-button "try again before
-  // escalating" panel down to a quiet ack with a Change-response
-  // link. Memory-only -- a fresh app launch resurfaces the panel.
-  const [noChangeAck, setNoChangeAck] = useState<Record<string, boolean>>({});
-  // Whether the "More support for today" section is expanded. The
-  // spec asks for it to be COLLAPSED by default so the patient sees
-  // exactly one next step on first open.
-  const [secondaryExpanded, setSecondaryExpanded] = useState(false);
+  const primary = displayRows[0];
 
-  // Race-safety for AsyncStorage:
-  //   (a) Hydration race -- multiGet may resolve AFTER a user tap.
-  //       Hydration only fills keys the user hasn't touched.
-  //   (b) Rapid-tap write race -- writes are serialized per key via
-  //       a promise chain so the LAST tap's value is always what
-  //       ends up persisted.
-  const touchedKeysRef = useRef<Set<string>>(new Set());
-  const writeChainRef = useRef<Record<string, Promise<unknown>>>({});
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const pairs = await AsyncStorage.multiGet(sectionKeys);
-        if (cancelled) return;
-        setSectionStatus((prev) => {
-          const next = { ...prev };
-          for (const [k, v] of pairs) {
-            if (touchedKeysRef.current.has(k)) continue;
-            if (k in next) continue;
-            const coerced = coercePersistedStatus(v);
-            if (coerced != null) next[k] = coerced;
-          }
-          return next;
-        });
-      } catch {
-        /* best-effort */
-      }
-    })();
-    return () => {
-      cancelled = true;
+  // Adaptive selection — compute initial + adjusted in one pass so the
+  // adjusted result can guarantee it differs from the initial strategy.
+  const selections = useMemo<{
+    initial: SelectionResult;
+    adjusted: SelectionResult;
+  } | null>(() => {
+    if (!primary || !liveSeverity || liveSeverity === "steady") return null;
+    const symptomTarget = categoryToSymptomTarget(primary.category);
+    const severityTier = liveSeverityToTier(liveSeverity);
+    const ctx = buildLibraryContext({
+      primarySymptom: symptomTarget,
+      severityTier,
+      hasSevereNausea: liveCheckin?.nausea === "severe",
+      hasLowAppetite:
+        liveCheckin?.appetite === "low" || liveCheckin?.appetite === "very_low",
+      hasVeryLowAppetite: liveCheckin?.appetite === "very_low",
+      postDose:
+        doseContext?.position === "dose_day" ||
+        doseContext?.position === "day_1_post" ||
+        doseContext?.position === "day_2_post",
+      interventionId: intervention.id,
+      lastEntryId,
+      failedStrategyTypes,
+    });
+    const initial = selectIntervention(ctx, "initial");
+    // For adjusted: suppress the initial strategy and mark initial entry as last
+    const adjustedCtx = {
+      ...ctx,
+      lastEntryId: initial.entry.id,
+      failedStrategyTypes: [
+        ...failedStrategyTypes,
+        initial.entry.strategyType,
+      ],
     };
-  }, [sectionKeys]);
+    const adjusted = selectIntervention(adjustedCtx, "adjusted");
+    return { initial, adjusted };
+  }, [
+    primary,
+    liveSeverity,
+    liveCheckin,
+    intervention.id,
+    doseContext,
+    lastEntryId,
+    failedStrategyTypes,
+  ]);
 
-  // Tracks whether we've already issued the server `accept` call for
-  // this card during this session. First commit transitions the
-  // intervention server-side from "shown" -> "pending_feedback".
-  const acceptFiredRef = useRef(false);
-  // Card-level "fired worse to server" tracker. Independent of the
-  // per-row state machine.
-  const escalateFiredRef = useRef(false);
-  // Fire `intervention_plan_viewed` once per intervention id.
-  const viewLoggedRef = useRef<number | null>(null);
-  useEffect(() => {
-    if (viewLoggedRef.current === intervention.id) return;
-    viewLoggedRef.current = intervention.id;
-    safeLog("intervention_plan_viewed");
-  }, [intervention.id]);
+  const primaryContent = useMemo<RecContent>(() => {
+    // Library selection wins when available — richer metadata and strategy-aware
+    if (selections) return selections.initial.entry.copy;
+    // No live plan + no library selection → fall back to server recommendation
+    if (!primary) {
+      return {
+        title: buildInsightTitle(livePlan, liveSeverity, intervention.triggerType),
+        body: intervention.recommendation,
+        helper: "",
+      };
+    }
+    // Live override from deriveLivePlan (covers the multi-row display path)
+    const override = liveOverrides[primary.key];
+    if (override) return override;
+    const picked = pickVariants(primary.category, intervention.id);
+    if (primary.category === "other") {
+      return { ...picked.primary, body: primary.section.body || picked.primary.body };
+    }
+    return picked.primary;
+  }, [
+    selections,
+    primary,
+    liveOverrides,
+    intervention.id,
+    intervention.recommendation,
+    livePlan,
+    liveSeverity,
+    intervention.triggerType,
+  ]);
 
-  const setRowStatus = useCallback(
-    async (key: string, value: SectionStatus | null) => {
-      // Mark the key as user-touched so a late hydration won't
-      // clobber it with the persisted snapshot.
-      touchedKeysRef.current.add(key);
-      // Apply in-memory state immediately.
-      setSectionStatus((prev) => {
-        const next = { ...prev };
-        if (value == null) delete next[key];
-        else next[key] = value;
-        return next;
-      });
-      // Serialize the persistence write behind any prior in-flight
-      // write on the same key so out-of-order setItem awaits don't
-      // leave stale data on disk.
-      const prior = writeChainRef.current[key] ?? Promise.resolve();
-      const next = prior
-        .catch(() => undefined)
-        .then(async () => {
-          try {
-            if (value == null) await AsyncStorage.removeItem(key);
-            else await AsyncStorage.setItem(key, value);
-          } catch {
-            /* best-effort persistence */
-          }
-        });
-      writeChainRef.current[key] = next;
-      await next;
-    },
-    [],
+  const alternateContent = useMemo<RecContent>(() => {
+    // Adjusted library selection → cross-strategy (different strategyType)
+    if (selections) return selections.adjusted.entry.copy;
+    if (!primary) return primaryContent;
+    const picked = pickVariants(primary.category, intervention.id);
+    return picked.alternate;
+  }, [selections, primary, primaryContent, intervention.id]);
+
+  const contextParagraph = useMemo(
+    () => buildContextParagraph(liveCheckin, doseContext, symptomCounts, wearableContext),
+    [liveCheckin, doseContext, symptomCounts, wearableContext],
   );
 
-  // Subtle entrance animation. Declared BEFORE any conditional early
-  // return so the hook count stays stable when status transitions.
-  const enter = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.timing(enter, {
-      toValue: 1,
-      duration: 320,
-      delay: 60,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: Platform.OS !== "web",
-    }).start();
-  }, [enter]);
-  const animatedStyle = {
-    opacity: enter,
-    transform: [
-      {
-        translateY: enter.interpolate({
-          inputRange: [0, 1],
-          outputRange: [12, 0],
-        }),
-      },
-    ],
-  };
+  const contextChips = useMemo(
+    () => buildContextChips(liveCheckin, doseContext, symptomCounts),
+    [liveCheckin, doseContext, symptomCounts],
+  );
 
   const interventionWhyLine = useMemo(
     () => (patientContext ? buildInterventionWhyLine(patientContext) : null),
     [patientContext],
   );
+
+  // Convenience: structured tags for analytics payloads. No PHI.
+  const reasonSignals = patientContext?.reasonSignals ?? [];
+  const planPriority = patientContext?.planPriority ?? null;
 
   // Swipe card background interpolates: orange (left) → white (center) → green (right)
   // Handlers
@@ -1241,582 +1481,373 @@ export function InterventionCard({
       severityTier: liveSeverity,
       wasInitialOrAdjusted: "initial",
       interventionEntryId: selections?.initial.entry.id ?? null,
+      planPriority,
+      reason_signals: reasonSignals,
     });
     if (!acceptFiredRef.current) {
       acceptFiredRef.current = true;
       try {
         await onAccept(intervention.id);
       } catch {
-        // If the call FAILS and the server is still "shown", clear
-        // the guard so a later commit (or the worse-panel pre-accept
-        // path) can retry.
-        if (intervention.status === "shown") {
-          acceptFiredRef.current = false;
+        if (intervention.status === "shown") acceptFiredRef.current = false;
+      }
+    }
+  }, [intervention.id, intervention.status, onAccept, setEngagedPhase]);
+
+  const handleAskCareTeam = useCallback(async () => {
+    tap();
+    if (intervention.status === "escalated") return;
+    if (escalateFiredRef.current) return;
+    escalateFiredRef.current = true;
+    safeLog("intervention_escalated", {
+      strategyType: selections?.initial.entry.strategyType ?? null,
+      failedStrategyTypes: failedStrategyTypes,
+      severityTier: liveSeverity,
+      symptomTarget: primary?.category ?? null,
+      phase,
+      struggleCount,
+      planPriority,
+      reason_signals: reasonSignals,
+    });
+    try {
+      if (intervention.status === "shown" && !acceptFiredRef.current) {
+        acceptFiredRef.current = true;
+        try {
+          await onAccept(intervention.id);
+        } catch {
+          if (intervention.status === "shown") acceptFiredRef.current = false;
         }
       }
-    },
-    [setRowStatus, intervention.id, intervention.status, onAccept],
-  );
-
-  const handleRowOutcome = useCallback(
-    (
-      key: string,
-      outcome: "better" | "no_change" | "worse" | "didnt_try",
-    ) => {
-      void setRowStatus(key, outcome);
-      if (outcome === "better") safeLog("intervention_feedback_better");
-      else if (outcome === "no_change") safeLog("intervention_feedback_no_change");
-      else if (outcome === "didnt_try") safeLog("intervention_feedback_didnt_try");
-      else safeLog("intervention_feedback_worse");
-    },
-    [setRowStatus],
-  );
-
-  const handleRowReset = useCallback(
-    (key: string) => {
-      void setRowStatus(key, null);
-      // Clear the "check again later" ack so the patient gets the
-      // full no_change panel again next time they go through the
-      // outcome flow.
-      setNoChangeAck((prev) => {
-        if (!prev[key]) return prev;
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-    },
-    [setRowStatus],
-  );
-
-  const handleRowDismissNoChange = useCallback((key: string) => {
-    safeLog("intervention_check_again_later");
-    setNoChangeAck((prev) => ({ ...prev, [key]: true }));
-  }, []);
-
-  const handleRowToggleAlternate = useCallback(
-    (key: string) => {
-      setSectionAlt((prev) => {
-        const wasShowing = !!prev[key];
-        if (!wasShowing) safeLog("intervention_alternative_requested");
-        return { ...prev, [key]: !wasShowing };
-      });
-      // Reset the row to default so the patient can tap "I'll try
-      // this" on the alternate copy. Also clear the no_change ack
-      // since we're effectively starting a fresh attempt.
-      void setRowStatus(key, null);
-      setNoChangeAck((prev) => {
-        if (!prev[key]) return prev;
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-    },
-    [setRowStatus],
-  );
-
-  const handleRowAskCareTeam = useCallback(
-    async (_key: string) => {
-      if (intervention.status === "escalated") return;
-      if (escalateFiredRef.current) return;
-      escalateFiredRef.current = true;
-      safeLog("care_team_escalation_requested");
-      try {
-        // /feedback's status guard requires accepted/pending_feedback.
-        // If the card is still "shown", pre-accept first so the
-        // /feedback below doesn't 409. Gate on acceptFiredRef so a
-        // race with an in-flight handleRowCommit doesn't double-fire
-        // /accept (the server is idempotent on repeat-accept of a
-        // pending_feedback row, but we'd rather not depend on that).
-        if (
-          intervention.status === "shown" &&
-          !acceptFiredRef.current
-        ) {
-          acceptFiredRef.current = true;
-          try {
-            await onAccept(intervention.id);
-          } catch {
-            // Pre-accept failed and prop status is still "shown",
-            // meaning a later commit (or another escalate retry)
-            // should be allowed to call /accept again. Clear the
-            // guard so we don't permanently strand the card.
-            if (intervention.status === "shown") {
-              acceptFiredRef.current = false;
-            }
-          }
-        }
-        await onFeedback(intervention.id, "worse");
-      } catch {
-        escalateFiredRef.current = false;
-      }
-    },
-    [intervention.id, intervention.status, onAccept, onFeedback],
-  );
-
-  // "What we noticed" -- short plain-language sentence built from the
-  // categories present in this intervention. Falls back to the
-  // server's text only when we couldn't resolve any rows.
-  // NOTE: declared BEFORE any conditional early return so the hook
-  // count stays stable across renders (status transitions to
-  // resolved/expired/dismissed return null below).
-  const noticedSentence = useMemo(() => {
-    if (orderedRows.length === 0) {
-      return (intervention.whatWeNoticed ?? "").trim();
+      await onFeedback(intervention.id, "worse");
+    } catch {
+      escalateFiredRef.current = false;
     }
-    // De-dupe categories (a category should only appear once in the
-    // sentence even if the synthesizer surfaced two rows for it).
-    const phrases: string[] = [];
-    const seen = new Set<RecCategory>();
-    for (const r of orderedRows) {
-      if (seen.has(r.category)) continue;
-      seen.add(r.category);
-      phrases.push(NOTICED_PHRASE[r.category]);
-    }
-    let sentence = `You reported ${joinList(phrases)} today.`;
-    // When more than one symptom is present, briefly explain WHY
-    // we're starting with the chosen primary. This makes the order
-    // feel intentional ("nausea first because it can make eating
-    // harder") instead of arbitrary.
-    const primaryCat = orderedRows[0]!.category;
-    const reason = REASON_FOR_PRIMARY[primaryCat];
-    const primaryPhrase = NOTICED_PHRASE[primaryCat];
-    if (phrases.length > 1 && reason.length > 0) {
-      sentence += ` We'll start with ${primaryPhrase} ${reason}.`;
-    }
-    return sentence;
-  }, [orderedRows, intervention.whatWeNoticed]);
+  }, [intervention.id, intervention.status, onAccept, onFeedback]);
 
-  // Reference unused legacy props/state so TS stays quiet.
-  void onDismiss;
-  void onEscalate;
-  void busy;
-  void setBusy;
+  const handleFeedbackBetter = useCallback(async () => {
+    tap();
+    setEngagedPhase("better");
+    safeLog("intervention_helped", {
+      strategyType: failedStrategyTypes.length > 0
+        ? selections?.adjusted.entry.strategyType ?? null
+        : selections?.initial.entry.strategyType ?? null,
+      wasInitialOrAdjusted: failedStrategyTypes.length > 0 ? "adjusted" : "initial",
+      severityTier: liveSeverity,
+      symptomTarget: primary?.category ?? null,
+      struggleCount,
+      planPriority,
+      reason_signals: reasonSignals,
+    });
+    try {
+      await onFeedback(intervention.id, "better");
+    } catch {
+      /* best-effort */
+    }
+  }, [intervention.id, onFeedback, setEngagedPhase]);
 
+  const handleFeedbackStruggling = useCallback(() => {
+    tap();
+    const newCount = struggleCount + 1;
+    setStruggleCount(newCount);
+    onStruggleCountChange?.(newCount);
+    setEngagedPhase("struggling");
+    // Record the strategy that failed so adjusted selection avoids it
+    if (selections?.initial) {
+      const failedStrategy = selections.initial.entry.strategyType;
+      setFailedStrategyTypes((prev) =>
+        prev.includes(failedStrategy) ? prev : [...prev, failedStrategy],
+      );
+      setLastEntryId(selections.initial.entry.id);
+    }
+    safeLog("intervention_still_struggling", {
+      strategyType: selections?.initial.entry.strategyType ?? null,
+      symptomTarget: primary?.category ?? null,
+      severityTier: liveSeverity,
+      struggleRound: newCount,
+      planPriority,
+      reason_signals: reasonSignals,
+    });
+  }, [setEngagedPhase, struggleCount, onStruggleCountChange, selections, primary, liveSeverity]);
+
+  // Sends the patient into a second checking loop with the alternate step.
+  const handleTryAdjusted = useCallback(() => {
+    tap();
+    safeLog("intervention_adjusted_started", {
+      adjustedStrategyType: selections?.adjusted.entry.strategyType ?? null,
+      failedStrategyType: selections?.initial.entry.strategyType ?? null,
+      wasInitialOrAdjusted: "adjusted",
+      severityTier: liveSeverity,
+    });
+    setEngagedPhase("checking");
+  }, [setEngagedPhase]);
+
+  const status = intervention.status;
+  // In the new phase UX there is no per-row "worse" outcome — escalation is
+  // always offered in the struggling phase and for severe live severity.
+  const offerEscalationInStruggling = shouldOfferEscalation(
+    primary?.category ?? "other",
+    "worse",
+  );
+  const pillLabel =
+    status === "escalated"
+      ? "Review requested"
+      : liveSeverity === "severe" || liveSeverity === "moderate"
+        ? "Extra support today"
+        : liveSeverity === "mild"
+          ? "Stay ahead"
+          : "Symptom support";
+
+  // -- Early returns (all hooks declared above) --
   if (status === "resolved" || status === "expired" || status === "dismissed") {
     return null;
   }
 
-  // Steady-mode swap: when the live check-in reads as all-good,
-  // collapse the symptom-rescue UI to a calm maintenance card
-  // instead of leaving stale heavier rows on screen. We render this
-  // even when status === "escalated" -- the prior wording ("don't
-  // appear to downgrade an active care-team flag") was leaving
-  // outdated severe-state recommendations visible after the patient
-  // improved, which is the opposite of clinically safe. Instead, in
-  // the escalated branch we (a) keep the warning-toned "Review
-  // requested" badge so the request history stays visible, (b)
-  // explicitly tell the patient their latest check-in looks better,
-  // and (c) reassure them that the care team can still see today's
-  // symptoms and support history. The on-server escalation row is
-  // never erased -- the visible card just stops misleading them.
+  // Steady state: calm maintenance card
   if (liveSeverity === "steady") {
     const isEscalated = status === "escalated";
     const accentColor = isEscalated ? warning : SUCCESS_FG;
-    const badgeLabel = isEscalated ? "Review requested" : "Stable today";
-    const badgeIcon: keyof typeof Feather.glyphMap = isEscalated
-      ? "check-circle"
-      : "check";
-    const cardTitle = isEscalated
+    const steadyTitle = isEscalated
       ? "Latest check-in looks better"
       : "Your symptoms look steady";
-    const cardSubtitle = isEscalated
-      ? "Your symptoms have eased since the review request."
-      : "No major symptoms surfaced in today's check-in.";
-    const cardBody = isEscalated
-      ? "Your care team can still see today's symptoms and support history. Keep checking in -- we'll let them know if anything changes."
+    const steadyBody = isEscalated
+      ? "Your symptoms have eased since the review request. Your care team can still see today's symptoms and support history."
       : "Keep hydration, protein and routine consistent. Viva will adjust support if symptoms change.";
     return (
-      <Animated.View
-        style={[
-          styles.card,
-          styles.cardFeatured,
-          {
-            backgroundColor: STEADY_TINT,
-            borderColor: STEADY_BORDER,
-          },
-          animatedStyle,
-        ]}
-      >
-        <View style={styles.headerRow}>
-          <View
-            style={[styles.iconWrap, { backgroundColor: accentColor + "1F" }]}
-          >
-            <Feather name="check-circle" size={18} color={accentColor} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <View style={styles.badgeRow}>
-              <View
-                style={[
-                  styles.badge,
-                  { backgroundColor: accentColor + "1A" },
-                ]}
-              >
-                <Feather name={badgeIcon} size={10} color={accentColor} />
-                <Text style={[styles.badgeText, { color: accentColor }]}>
-                  {badgeLabel}
-                </Text>
-              </View>
-            </View>
-            {!isEscalated && (
-              <Text
-                style={[
-                  styles.sectionLabel,
-                  { color: mutedForeground, marginBottom: 2 },
-                ]}
-              >
-                Symptom management
-              </Text>
-            )}
-            <Text style={[styles.title, { color: navy }]}>{cardTitle}</Text>
-            <Text style={[styles.subtitle, { color: mutedForeground }]}>
-              {cardSubtitle}
-            </Text>
-          </View>
+      <Animated.View style={[styles.card, animatedStyle]}>
+        <View style={styles.supportPill}>
+          <Feather
+            name="check-circle"
+            size={11}
+            color={accentColor}
+            style={{ marginRight: 4 }}
+          />
+          <Text style={[styles.supportPillText, { color: accentColor }]}>
+            {isEscalated ? "Review requested" : "Stable today"}
+          </Text>
         </View>
+        <Text style={[styles.cardTitle, { color: navy }]}>{steadyTitle}</Text>
+        <Text style={[styles.sectionBody, { color: mutedForeground }]}>
+          {steadyBody}
+        </Text>
+      </Animated.View>
+    );
+  }
 
-        <Text style={[styles.steadyBody, { color: navy }]}>{cardBody}</Text>
+  const cardTitle = buildInsightTitle(livePlan, liveSeverity, intervention.triggerType);
 
-        {/* Maintenance chips are check-in-focused, not symptom-focused,
-            so they read correctly in both the plain steady and the
-            "improved after escalation" branches. */}
-        <View style={styles.signalChipsRow}>
-          {["Hydration", "Protein", "Routine"].map((label) => (
-            <View
-              key={label}
-              style={[
-                styles.supportChip,
-                {
-                  backgroundColor: accentColor + "14",
-                  borderColor: accentColor + "33",
-                },
-              ]}
-            >
-              <Text
-                style={[styles.supportChipText, { color: accentColor }]}
-              >
-                {label}
-              </Text>
-            </View>
-          ))}
+  // == Better: quiet resolved state ==
+  if (phase === "better") {
+    return (
+      <Animated.View style={[styles.card, animatedStyle]}>
+        <View style={styles.resolvedContainer}>
+          <Feather name="check-circle" size={20} color={SUCCESS_FG} />
+          <Text style={[styles.sectionBody, { textAlign: "center", color: navy }]}>
+            Support completed.{"\n"}We'll keep monitoring.
+          </Text>
         </View>
       </Animated.View>
     );
   }
 
-  // -- Derived view-model -------------------------------------------
-  const primary = displayRows[0];
-  const secondaries = displayRows.slice(1);
-
-  // Badge label/tone reflects the most urgent signal we currently
-  // know about. Escalated state always wins. We deliberately do NOT
-  // repeat the high-level severity wording ("Heavier today") here:
-  // that lives in the top status banner so the page only says it
-  // once. The badge instead characterizes the *response* level, so
-  // it stays complementary to the banner: banner says "what we
-  // noticed", badge says "how we're supporting you". This card
-  // stays visually linked to the banner through its amber accent
-  // (useWarningTone) and the care-team CTA below.
-  const badgeLabel =
-    status === "escalated"
-      ? "Review may help"
-      : liveSeverity === "severe"
-        ? "Extra support today"
-        : liveSeverity === "moderate"
-          ? "Support today"
-          : liveSeverity === "mild"
-            ? "Stay ahead"
-            : "Steady today";
-  const useWarningTone =
-    status === "escalated" || liveSeverity === "severe";
-
-  // Patient-friendly nouns for the symptoms we're targeting today.
-  // Used by both the top "Today:" signal chip and the "More support"
-  // mini-chips. We always exclude the primary category from the
-  // secondary list so a category never appears twice.
-  const allCategoryNouns: string[] = [];
-  {
-    const seen = new Set<RecCategory>();
-    for (const r of displayRows) {
-      if (seen.has(r.category)) continue;
-      seen.add(r.category);
-      allCategoryNouns.push(CATEGORY_NOUN[r.category]);
-    }
-  }
-  const secondaryCategoryNouns: string[] = [];
-  {
-    const seen = new Set<RecCategory>();
-    if (primary) seen.add(primary.category);
-    for (const r of secondaries) {
-      if (seen.has(r.category)) continue;
-      seen.add(r.category);
-      secondaryCategoryNouns.push(CATEGORY_NOUN[r.category]);
-    }
-  }
-  // Cap the "Today:" chip label at three nouns so it never wraps.
-  // Anything beyond three is conveyed by "More support" chips below.
-  const todayChipLabel =
-    allCategoryNouns.length > 0
-      ? `Today: ${joinList(allCategoryNouns.slice(0, 3))}`
-      : null;
-
-  // The verbose "What we noticed" sentence is now superseded by the
-  // signal chips. Keep the useMemo result reachable so the var isn't
-  // marked as dead, but it's no longer rendered.
-  void noticedSentence;
-
-  return (
-    <Animated.View
-      style={[
-        styles.card,
-        styles.cardFeatured,
-        {
-          backgroundColor: FEATURED_TINT,
-          // Outer border stays the calm featured-blue regardless of
-          // severity. The severe state still reads clearly via the
-          // "Heavier today" badge + signal chip + the explicit
-          // care-team CTA below; flooding the whole card edge with
-          // orange made the page feel alarming and competed with
-          // the in-card escalation button.
-          borderColor: FEATURED_BORDER,
-        },
-        animatedStyle,
-      ]}
-    >
-      {/* -- Header ------------------------------------------------- */}
-      <View style={styles.headerRow}>
-        <View style={[styles.iconWrap, { backgroundColor: accent + "22" }]}>
-          <Feather name={icon} size={18} color={accent} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <View style={styles.badgeRow}>
-            <View
-              style={[
-                styles.badge,
-                {
-                  backgroundColor: useWarningTone
-                    ? warning + "22"
-                    : FEATURED_BADGE_BG,
-                },
-              ]}
-            >
-              <Feather
-                name={useWarningTone ? "alert-circle" : "star"}
-                size={10}
-                color={useWarningTone ? warning : FEATURED_BADGE_FG}
-              />
-              <Text
-                style={[
-                  styles.badgeText,
-                  { color: useWarningTone ? warning : FEATURED_BADGE_FG },
-                ]}
-              >
-                {badgeLabel}
-              </Text>
-            </View>
-          </View>
-          <Text style={[styles.title, { color: navy }]}>
-            Symptom support
-          </Text>
-          {/* Subtitle names the actual inputs feeding the support so
-              the patient understands this is personalized -- not a
-              generic tip. We only mention Apple Health when it is
-              connected; otherwise we stay strictly on the check-in
-              so we never imply biometric data we do not have. */}
-          <Text style={[styles.subtitle, { color: mutedForeground }]}>
-            {hasHealthData
-              ? "Personalized support based on today's check-in and Apple Health trends"
-              : "Personalized support based on today's check-in"}
-          </Text>
-          {/* The dev-only "[debug] concern=... sev=... supports=..."
-              probe that used to live here was rendering visibly in
-              the patient UI on certain builds. Removed entirely;
-              if we need a similar diagnostic again, log it via
-              console in dev rather than rendering it on the card.
-              `livePlan` is still consumed below for the actual
-              displayed plan, so removing this render is a no-op
-              for the rest of the component. */}
-        </View>
-      </View>
-
-      {/* -- Signal summary chips ----------------------------------
-            Compact, data-driven row that replaces the long "What we
-            noticed" sentence. Goal: communicate "this is built from
-            your real data" in under a second of glance time. */}
-      {/* The data-source fallback chip ("Apple Health" / "Recent
-          symptoms") always renders, so the row is always non-empty
-          while we have at least the patient's own check-in. */}
-      <View style={styles.signalChipsRow}>
-          {todayChipLabel && (
-            <View
-              style={[
-                styles.signalChip,
-                {
-                  backgroundColor: accent + "14",
-                  borderColor: accent + "33",
-                },
-              ]}
-            >
-              <Feather name="activity" size={11} color={accent} />
-              <Text
-                style={[styles.signalChipText, { color: accent }]}
-                numberOfLines={1}
-              >
-                {todayChipLabel}
-              </Text>
-            </View>
-          )}
-          {hasHealthData ? (
-            <View
-              style={[
-                styles.signalChip,
-                {
-                  backgroundColor: "rgba(31, 79, 138, 0.06)",
-                  borderColor: "rgba(31, 79, 138, 0.12)",
-                },
-              ]}
-            >
-              <Feather name="heart" size={11} color={navy} />
-              <Text
-                style={[styles.signalChipText, { color: navy }]}
-                numberOfLines={1}
-              >
-                Apple Health
-              </Text>
-            </View>
-          ) : (
-            <View
-              style={[
-                styles.signalChip,
-                {
-                  backgroundColor: "rgba(31, 79, 138, 0.06)",
-                  borderColor: "rgba(31, 79, 138, 0.12)",
-                },
-              ]}
-            >
-              <Feather name="clipboard" size={11} color={navy} />
-              <Text
-                style={[styles.signalChipText, { color: navy }]}
-                numberOfLines={1}
-              >
-                Recent symptoms
-              </Text>
-            </View>
-          )}
-          {/* Dose-timing provenance chip. Only renders when the day
-              sits in a post-dose window AND symptoms are at least
-              moderate, so it appears precisely when dose timing is
-              the most likely contributor. This is *provenance*, not
-              advice -- the engine already biases the recommendation
-              toward gentler hydration/fueling on these days; the
-              chip just makes that intelligence visible. */}
-          {doseContext &&
-            (doseContext.position === "dose_day" ||
-              doseContext.position === "day_1_post" ||
-              doseContext.position === "day_2_post") &&
-            (liveSeverity === "moderate" || liveSeverity === "severe") && (
-              <View
-                style={[
-                  styles.signalChip,
-                  {
-                    backgroundColor: warning + "14",
-                    borderColor: warning + "33",
-                  },
-                ]}
-              >
-                <Feather name="clock" size={11} color={warning} />
-                <Text
-                  style={[styles.signalChipText, { color: warning }]}
-                  numberOfLines={1}
-                >
-                  Around dose timing
-                </Text>
-              </View>
-            )}
-          {/* The "Heavier today" severity chip used to live here, but
-              the top status banner already announces that state.
-              Repeating it inside Symptom support made the page feel
-              alarming and over-labeled. The amber-toned badge above
-              and the care-team CTA below carry the same signal
-              visually without saying it twice.
-              The mild-severity "Stay ahead today" chip was also
-              removed -- it duplicated the "Stay ahead" badge a few
-              pixels above it. */}
-        </View>
-
-        {/* Connect-Apple-Health invitation. Only renders when the
-            patient has not connected Apple Health, so we never
-            pretend biometric signals are in the mix when they are
-            not. The line stays small and informational -- this is
-            an invitation to deepen personalization, not an error
-            state or a CTA button. */}
-        {!hasHealthData && (
-          <Text
-            style={[
-              styles.healthHint,
-              { color: mutedForeground },
-            ]}
-            numberOfLines={2}
+  // == Feedback phase: two-button response ==
+  if (phase === "feedback") {
+    return (
+      <Animated.View style={[styles.card, animatedStyle]}>
+        <Text style={[styles.feedbackPrompt, { color: navy }]}>
+          How are you feeling now?
+        </Text>
+        <Text style={[styles.feedbackSub, { color: mutedForeground }]}>
+          Let us know and we'll adapt your support.
+        </Text>
+        <View style={styles.feedbackBtnRow}>
+          <Pressable
+            style={({ pressed }) => [styles.feedbackBtnStruggling, { opacity: pressed ? 0.8 : 1 }]}
+            onPress={handleFeedbackStruggling}
+            accessibilityRole="button"
+            accessibilityLabel="Still struggling"
           >
-            Connect Apple Health to personalize support with sleep, steps and activity trends.
+            <Feather name="refresh-cw" size={14} color="#B45309" />
+            <Text style={[styles.feedbackBtnText, { color: "#B45309" }]}>Still struggling</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.feedbackBtnHelped, { opacity: pressed ? 0.8 : 1 }]}
+            onPress={() => void handleFeedbackBetter()}
+            accessibilityRole="button"
+            accessibilityLabel="Helped"
+          >
+            <Feather name="check" size={14} color="#166534" />
+            <Text style={[styles.feedbackBtnText, { color: "#166534" }]}>Helped</Text>
+          </Pressable>
+        </View>
+      </Animated.View>
+    );
+  }
+
+  // == Struggling phase ==
+  // Round 1 (struggleCount === 1): adjusted step + "Try adjusted support"
+  // Round 2+ (struggleCount >= 2): care-team escalation as the primary action
+  if (phase === "struggling") {
+    const isEscalationRound = struggleCount >= 2;
+    return (
+      <Animated.View style={[styles.card, animatedStyle]}>
+        <View style={styles.supportPill}>
+          <Text style={styles.supportPillText}>{pillLabel}</Text>
+        </View>
+        <Text style={[styles.cardTitle, { color: navy }]}>
+          {isEscalationRound ? "Let's get you more support" : "Let's try something adjusted"}
+        </Text>
+
+        {!isEscalationRound && (
+          <Text style={styles.adaptiveHint}>
+            {selections?.adjusted.explainWhy ??
+              "Adjusting your support based on your feedback."}
           </Text>
         )}
 
-      {/* -- Primary action ---------------------------------------- */}
-      {primary && (
-        <PrimaryActionCard
-          category={primary.category}
-          interventionId={intervention.id}
-          originalBody={primary.section.body}
-          liveOverride={liveOverrides[primary.key] ?? null}
-          showingAlternate={!!sectionAlt[primary.key]}
-          status={sectionStatus[primary.key] ?? null}
-          noChangeDismissed={!!noChangeAck[primary.key]}
-          navy={navy}
-          mutedForeground={mutedForeground}
-          border={background}
-          accent={accent}
-          warning={warning}
-          onCommit={() => handleRowCommit(primary.key)}
-          onToggleAlternate={() => handleRowToggleAlternate(primary.key)}
-          onOutcome={(outcome) => handleRowOutcome(primary.key, outcome)}
-          onReset={() => handleRowReset(primary.key)}
-          onDismissNoChange={() => handleRowDismissNoChange(primary.key)}
-          onAskCareTeam={() => handleRowAskCareTeam(primary.key)}
-        />
+        {!isEscalationRound ? (
+          <>
+            <View style={styles.heroPanel}>
+              <View style={styles.heroPanelHeader}>
+                <Feather name="refresh-cw" size={11} color="#6B8AB5" />
+                <Text style={styles.heroPanelLabel}>Adjusted step</Text>
+              </View>
+              <Text style={[styles.heroBody, { color: navy }]}>
+                {alternateContent.body}
+              </Text>
+            </View>
+            {alternateContent.helper.trim().length > 0 && (
+              <Text style={styles.cardSubtitle}>{alternateContent.helper}</Text>
+            )}
+            <Pressable
+              style={({ pressed }) => [styles.primaryBtn, { opacity: pressed ? 0.82 : 1 }]}
+              onPress={handleTryAdjusted}
+              accessibilityRole="button"
+              accessibilityLabel="Try adjusted support"
+            >
+              <Text style={styles.primaryBtnText}>Try adjusted support</Text>
+            </Pressable>
+            {status !== "escalated" && (
+              <Pressable
+                style={({ pressed }) => [styles.careTeamLink, { opacity: pressed ? 0.7 : 1 }]}
+                onPress={() => void handleAskCareTeam()}
+                accessibilityRole="button"
+                accessibilityLabel="Ask care team instead"
+              >
+                <Feather name="message-circle" size={12} color={warning} style={{ marginRight: 5 }} />
+                <Text style={[styles.careTeamLinkText, { color: warning }]}>Or ask your care team to review</Text>
+              </Pressable>
+            )}
+            <Text style={[styles.guardrail, { color: mutedForeground }]}>
+              Viva supports between-visit care. If symptoms feel severe or urgent,
+              contact your care team or seek prompt medical attention.
+            </Text>
+          </>
+        ) : (
+          <>
+            <Text style={[styles.sectionBody, { color: mutedForeground, textAlign: "center" }]}>
+              You've tried two steps and are still struggling. It may be time for your care team to step in.
+            </Text>
+            {status !== "escalated" ? (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.careTeamEscalateBtn,
+                  { backgroundColor: warning, opacity: pressed ? 0.82 : 1 },
+                ]}
+                onPress={() => void handleAskCareTeam()}
+                accessibilityRole="button"
+                accessibilityLabel="Ask my care team to review"
+              >
+                <Feather name="message-circle" size={15} color="#FFFFFF" />
+                <Text style={styles.careTeamEscalateBtnText}>Ask my care team to review</Text>
+              </Pressable>
+            ) : (
+              <View style={[styles.resolvedContainer, { marginTop: 12 }]}>
+                <Feather name="check-circle" size={14} color={warning} />
+                <Text style={[styles.sectionBody, { color: warning, fontSize: 12, flexShrink: 1 }]}>
+                  Review requested. Your care team can see today's symptoms.
+                </Text>
+              </View>
+            )}
+            <Text style={[styles.guardrail, { color: mutedForeground }]}>
+              Viva supports between-visit care. If symptoms feel severe or urgent,
+              contact your care team or seek prompt medical attention.
+            </Text>
+          </>
+        )}
+      </Animated.View>
+    );
+  }
+
+  // == Checking phase ==
+  if (phase === "checking") {
+    const isRound2 = struggleCount >= 1;
+    return (
+      <Animated.View style={[styles.card, animatedStyle]}>
+        <View style={styles.supportPill}>
+          <Text style={styles.supportPillText}>{pillLabel}</Text>
+        </View>
+        <Text style={[styles.cardTitle, { color: navy }]}>{cardTitle}</Text>
+        {isRound2 && (
+          <View style={styles.heroPanel}>
+            <View style={styles.heroPanelHeader}>
+              <Feather name="refresh-cw" size={11} color="#6B8AB5" />
+              <Text style={styles.heroPanelLabel}>Adjusted step</Text>
+            </View>
+            <Text style={[styles.heroBody, { color: navy }]}>
+              {alternateContent.body}
+            </Text>
+          </View>
+        )}
+        <View style={styles.checkingContainer}>
+          <View style={styles.checkingStatusModule}>
+            <Animated.View style={{ opacity: clockPulse }}>
+              <Feather name="clock" size={15} color="#1F4F8A" />
+            </Animated.View>
+            <Text style={styles.checkingStatusText}>Support in progress</Text>
+          </View>
+          <Text style={[styles.sectionBody, { textAlign: "center", color: mutedForeground }]}>
+            {isRound2
+              ? "Adjusted support is active. Check back in when you're ready."
+              : "Try the step above, then check back in."}
+          </Text>
+          <Pressable
+            style={styles.checkingCheckInBtn}
+            onPress={() => setEngagedPhase("feedback")}
+            accessibilityRole="button"
+          >
+            <Text style={styles.primaryBtnText}>Check in now</Text>
+          </Pressable>
+        </View>
+      </Animated.View>
+    );
+  }
+
+  // == Default phase ==
+  return (
+    <Animated.View style={[styles.card, animatedStyle]}>
+      {/* Pill */}
+      <View style={styles.supportPill}>
+        <Text style={styles.supportPillText}>{pillLabel}</Text>
+      </View>
+
+      {/* Title — specific clinical headline */}
+      <Text style={[styles.cardTitle, { color: navy }]}>{cardTitle}</Text>
+
+      {/* Subtitle — one short supporting sentence */}
+      {primaryContent.helper.trim().length > 0 && (
+        <Text style={styles.cardSubtitle}>
+          {primaryContent.helper}
+        </Text>
       )}
 
-      {/* -- Severe-mode escalation shortcut ----------------------- */}
-      {/* Patient self-reported severe symptoms. We surface a       */}
-      {/* prominent care-team CTA so the option isn't buried in     */}
-      {/* the worse-feedback panel. Still requires an explicit tap  */}
-      {/* -- no auto-escalation -- which preserves the worse-only   */}
-      {/* guardrail (multiple buttons may fire onFeedback("worse"), */}
-      {/* what matters is the patient initiates it).                */}
-      {liveSeverity === "severe" && status !== "escalated" && (
-        <Pressable
-          onPress={async () => {
-            tap();
-            // Route through handleRowAskCareTeam so we get the
-            // shared pre-accept (server /feedback requires status
-            // accepted|pending_feedback -- without this, a card
-            // still in "shown" state would 409 silently) and the
-            // escalateFiredRef duplicate-tap guard. The key isn't
-            // read inside the handler so a card-level sentinel is
-            // fine; we use one that can't collide with any row key.
-            await handleRowAskCareTeam("__card_severe_cta__");
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Ask my care team to review"
-          style={({ pressed }) => [
-            styles.severeCta,
-            {
-              backgroundColor: warning,
-              opacity: pressed ? 0.85 : 1,
-            },
-          ]}
-        >
-          <Feather name="message-circle" size={14} color="#FFFFFF" />
-          <Text style={styles.severeCtaText}>
-            Ask my care team to review
+      {/* "Why Viva suggested this" — natural-language signal summary.
+          Shows as a readable sentence so the card explains itself
+          based on the patient's check-in signals. */}
+      {contextChips.length > 0 && (
+        <View style={styles.noticedSection}>
+          <Text style={styles.chipsSectionLabel}>WHY VIVA SUGGESTED THIS</Text>
+          <Text style={[styles.noticedText, { color: mutedForeground }]}>
+            {contextParagraph}
           </Text>
           {interventionWhyLine && (
             <Text style={[styles.noticedStrategyHint, { color: mutedForeground }]}>
@@ -1831,1094 +1862,431 @@ export function InterventionCard({
         </View>
       )}
 
-      {/* Patient-facing success state for the escalation flow.
-          Renders whenever the intervention has transitioned to
-          "escalated" -- whether the patient got there via the
-          severe-state top CTA, the worse-panel "Ask my care team"
-          button, or the auto-escalate-on-worse path. The copy
-          confirms what the provider can see (today's symptoms +
-          support history) so the patient knows the request landed
-          with useful context, not into a void. */}
+      {/* Hero action panel — blue-ice surface, prominent */}
+      <View style={styles.heroPanel}>
+        <View style={styles.heroPanelHeader}>
+          <Feather
+            name={categoryIcon(intervention.recommendationCategory)}
+            size={13}
+            color="#6B8AB5"
+          />
+          <Text style={styles.heroPanelLabel}>Recommended now</Text>
+        </View>
+        <Text style={[styles.heroBody, { color: navy }]}>
+          {primaryContent.body}
+        </Text>
+      </View>
+
+      {/* Primary CTA */}
+      <Pressable
+        style={({ pressed }) => [
+          styles.primaryBtn,
+          { opacity: pressed ? 0.82 : 1 },
+        ]}
+        onPress={() => void handleCommit()}
+        accessibilityRole="button"
+        accessibilityLabel="Start support"
+      >
+        <Text style={styles.primaryBtnText}>Start support</Text>
+      </Pressable>
+
+      {/* Secondary "Ask care team" CTA — visible for moderate/severe symptoms
+          OR when planPriority ≤ 2 (severe/GI burden) so escalation is
+          immediately available, not buried in a feedback flow. */}
+      {(liveSeverity === "moderate" || liveSeverity === "severe" || (planPriority !== null && planPriority <= 2)) && status !== "escalated" && (
+        <Pressable
+          style={({ pressed }) => [styles.careTeamSecondaryBtn, { opacity: pressed ? 0.7 : 1 }]}
+          onPress={() => void handleAskCareTeam()}
+          accessibilityRole="button"
+          accessibilityLabel="Ask care team"
+        >
+          <Feather name="message-circle" size={12} color={warning} />
+          <Text style={[styles.careTeamSecondaryBtnText, { color: warning }]}>Ask care team</Text>
+        </Pressable>
+      )}
+
       {status === "escalated" && (
-        <View style={styles.escalatedRow}>
-          <Feather name="check-circle" size={14} color={warning} />
-          <Text style={[styles.escalatedText, { color: warning }]}>
-            Review requested. Your care team can see today&apos;s
-            symptoms and support history.
+        <View style={styles.escalatedNotice}>
+          <Feather name="check-circle" size={12} color={warning} />
+          <Text style={[styles.escalatedNoticeText, { color: warning }]}>
+            Review requested. Your care team has been notified.
           </Text>
         </View>
       )}
 
-      {/* -- Subtle clinical guardrail footer ---------------------- */}
+      {/* Guardrail */}
       <Text style={[styles.guardrail, { color: mutedForeground }]}>
-        Viva supports between-visit care. If symptoms feel severe or
-        urgent, contact your care team or seek medical help.
+        Viva supports between-visit care. If symptoms feel severe or urgent,
+        contact your care team or seek prompt medical attention.
       </Text>
     </Animated.View>
   );
 }
 
-// =====================================================================
-// PrimaryActionCard -- the prominent "Start here" card.
-// =====================================================================
-interface ActionRowProps {
-  category: RecCategory;
-  // Stable id of the parent intervention. Used by pickVariants() to
-  // deterministically rotate which variant of the recommendation we
-  // show for this category, so the same patient doesn't see the
-  // identical "snack" suggestion every day.
-  interventionId: number;
-  // Server-provided body. Only used as a fallback for the "other"
-  // category where we don't have a canned clinical micro-protocol.
-  // For the five known symptom categories, the body comes from the
-  // picked variant in RECOMMENDATIONS[category].variants.
-  originalBody: string;
-  showingAlternate: boolean;
-  status: SectionStatus | null;
-  // Legacy: used to live with a 2-button no_change panel. The current
-  // UX collapses no_change to a single ack so this prop is no longer
-  // read, but it's kept on the interface to keep call sites stable.
-  noChangeDismissed: boolean;
-  navy: string;
-  mutedForeground: string;
-  border: string;
-  accent: string;
-  warning: string;
-  onCommit: () => void;
-  onToggleAlternate: () => void;
-  onOutcome: (
-    outcome: "better" | "no_change" | "worse" | "didnt_try",
-  ) => void;
-  onReset: () => void;
-  // Legacy: see noChangeDismissed above.
-  onDismissNoChange: () => void;
-  onAskCareTeam: () => void;
-  // When the parent has derived a live plan from the patient's check-in
-  // selectors, it passes the override here. Present -> bypass
-  // pickVariants / showingAlternate and render this copy directly.
-  // Absent -> fall back to the server-driven RECOMMENDATIONS variant.
-  liveOverride?: RecContent | null;
-}
-
-function tap(): void {
-  try {
-    Haptics.selectionAsync();
-  } catch {
-    /* best-effort */
-  }
-}
-
-function PrimaryActionCard({
-  category,
-  interventionId,
-  originalBody,
-  showingAlternate,
-  status,
-  noChangeDismissed: _noChangeDismissed,
-  navy,
-  mutedForeground,
-  border,
-  accent,
-  warning,
-  onCommit,
-  onToggleAlternate,
-  onOutcome,
-  onReset,
-  onDismissNoChange: _onDismissNoChange,
-  onAskCareTeam,
-  liveOverride,
-}: ActionRowProps) {
-  const picked = useMemo(
-    () => pickVariants(category, interventionId),
-    [category, interventionId],
-  );
-  // When the parent derived a live plan from the check-in selectors,
-  // its copy is the DEFAULT we render -- symptom-tuned title/body/
-  // helper for this category. But if the patient taps "Another
-  // option", they're explicitly asking to see a different safe
-  // recommendation, so we honor that by falling back to the canned
-  // pickVariants alternate from the same category. Without this
-  // override, "Another option" was a no-op whenever a livePlan was
-  // active (i.e. nearly always for a real symptom check-in) -- the
-  // sectionAlt flag flipped, the button label said "Back", but the
-  // visible copy never changed.
-  const variant: RecContent = showingAlternate
-    ? picked.alternate
-    : (liveOverride ?? picked.primary);
-  const title = variant.title;
-  const helper = variant.helper;
-  // For "other" we don't have category-specific clinical copy, so fall
-  // back to the server's body when not showing the alternate. Known
-  // categories always use the canned clinical micro-protocol.
-  const body =
-    !showingAlternate && liveOverride
-      ? liveOverride.body
-      : category === "other" && !showingAlternate
-        ? originalBody || variant.body
-        : variant.body;
-  const titleA11y = title.toLowerCase();
-  const offerEscalation = shouldOfferEscalation(category, status);
-
-  return (
-    <View
-      style={[
-        styles.primaryCard,
-        { borderColor: PRIMARY_BORDER, backgroundColor: PRIMARY_SURFACE },
-      ]}
-    >
-      <View style={styles.startHerePillRow}>
-        <View style={[styles.startHerePill, { backgroundColor: START_HERE_BG }]}>
-          <Feather name="zap" size={10} color={START_HERE_FG} />
-          <Text style={[styles.startHerePillText, { color: START_HERE_FG }]}>
-            Start here
-          </Text>
-        </View>
-      </View>
-
-      <Text style={[styles.primaryTitle, { color: navy }]}>{title}</Text>
-      <Text style={[styles.primaryBody, { color: navy }]}>{body}</Text>
-
-      {/* "Why this helps" -- only on the default state. Once the
-          patient has acted, the row becomes a feedback prompt and
-          we keep the surface uncluttered. The labeled treatment
-          (small caps label + accent dot + helper sentence) reads as
-          a clinical justification rather than fine print. */}
-      {status == null && helper.trim().length > 0 && (
-        <View style={styles.whyRow}>
-          <View style={[styles.whyDot, { backgroundColor: accent }]} />
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.whyLabel, { color: mutedForeground }]}>
-              Why this helps
-            </Text>
-            <Text style={[styles.whyText, { color: navy }]}>{helper}</Text>
-          </View>
-        </View>
-      )}
-
-      {/* -- Default: I'll try this / Show me another option (or Back) -- */}
-      {status == null && (
-        <View style={styles.btnRow}>
-          <Pressable
-            onPress={() => {
-              tap();
-              onCommit();
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={`I will try this: ${titleA11y}`}
-            style={({ pressed }) => [
-              styles.btnPrimary,
-              {
-                borderColor: accent,
-                backgroundColor: accent,
-                opacity: pressed ? 0.8 : 1,
-              },
-            ]}
-          >
-            <Feather name="check" size={13} color="#FFFFFF" />
-            <Text style={[styles.btnText, { color: "#FFFFFF", fontFamily: "Montserrat_700Bold", fontWeight: "700" }]}>
-              I&apos;ll try this
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => {
-              tap();
-              onToggleAlternate();
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={
-              showingAlternate
-                ? `Go back to original suggestion for ${titleA11y}`
-                : `Show me another option for ${titleA11y}`
-            }
-            style={({ pressed }) => [
-              styles.btnSecondary,
-              { borderColor: border, opacity: pressed ? 0.75 : 1 },
-            ]}
-          >
-            <Text style={[styles.btnText, { color: mutedForeground, fontFamily: "Montserrat_600SemiBold", fontWeight: "600" }]}>
-              {showingAlternate ? "Back" : "Another option"}
-            </Text>
-          </Pressable>
-        </View>
-      )}
-
-      {/* -- Committed: outcome prompt ----------------------------- */}
-      {status === "committed" && (
-        <View style={styles.outcomeWrap}>
-          <Text style={[styles.outcomePrompt, { color: navy }]}>
-            Did this help?
-          </Text>
-          <View style={styles.outcomeRow}>
-            <OutcomeButton
-              label="Better"
-              icon="smile"
-              tint={SUCCESS_FG}
-              border={border}
-              onPress={() => {
-                tap();
-                onOutcome("better");
-              }}
-              accessibilityLabel={`Feeling better after ${titleA11y}`}
-            />
-            <OutcomeButton
-              label="Same"
-              icon="meh"
-              tint={mutedForeground}
-              border={border}
-              onPress={() => {
-                tap();
-                onOutcome("no_change");
-              }}
-              accessibilityLabel={`About the same after ${titleA11y}`}
-            />
-            <OutcomeButton
-              label="Worse"
-              icon="frown"
-              tint={warning}
-              border={border}
-              onPress={() => {
-                tap();
-                onOutcome("worse");
-              }}
-              accessibilityLabel={`Worse after ${titleA11y}`}
-            />
-          </View>
-        </View>
-      )}
-
-      {/* -- Better -- quiet acknowledgement ----------------------- */}
-      {status === "better" && (
-        <AcknowledgeRow
-          icon="smile"
-          tint={SUCCESS_FG}
-          text="Got it. Viva will remember this helped."
-          onReset={onReset}
-          mutedForeground={mutedForeground}
-          a11y={titleA11y}
-        />
-      )}
-
-      {/* -- Same: quiet ack. Per the redesign spec we no longer
-            front-load a "try a different step before escalating"
-            panel here -- the patient can still tap "Change response"
-            in the ack to revisit, and the escalation path lives on
-            the Worse branch. */}
-      {status === "no_change" && (
-        <AcknowledgeRow
-          icon="meh"
-          tint={mutedForeground}
-          text="Thanks. We'll adjust future recommendations."
-          onReset={onReset}
-          mutedForeground={mutedForeground}
-          a11y={titleA11y}
-        />
-      )}
-
-      {/* -- Didn't try: quiet ack so the row doesn't penalize the
-            patient for skipping. Resetting reopens the outcome
-            prompt if they later want to log a real outcome. */}
-      {status === "didnt_try" && (
-        <AcknowledgeRow
-          icon="minus-circle"
-          tint={mutedForeground}
-          text="Got it. We won't count that one."
-          onReset={onReset}
-          mutedForeground={mutedForeground}
-          a11y={titleA11y}
-        />
-      )}
-
-      {/* -- Worse: escalation panel (only path to care team) ------ */}
-      {status === "worse" && offerEscalation && (
-        <View style={styles.escalateWrap}>
-          <Text style={[styles.escalateCopy, { color: navy }]}>
-            This should be reviewed. You can ask your care team to take a
-            look.
-          </Text>
-          <View style={styles.btnRow}>
-            <Pressable
-              onPress={() => {
-                tap();
-                onToggleAlternate();
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={`Try another option for ${titleA11y}`}
-              style={({ pressed }) => [
-                styles.btnSecondary,
-                { borderColor: border, opacity: pressed ? 0.75 : 1 },
-              ]}
-            >
-              <Feather name="refresh-cw" size={12} color={mutedForeground} />
-              <Text style={[styles.btnText, { color: mutedForeground, fontFamily: "Montserrat_600SemiBold", fontWeight: "600" }]}>
-                Another option
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                tap();
-                onAskCareTeam();
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={`Ask my care team about ${titleA11y}`}
-              style={({ pressed }) => [
-                styles.btnPrimary,
-                {
-                  borderColor: warning,
-                  backgroundColor: warning,
-                  opacity: pressed ? 0.8 : 1,
-                },
-              ]}
-            >
-              <Feather name="message-circle" size={13} color="#FFFFFF" />
-              <Text style={[styles.btnText, { color: "#FFFFFF", fontFamily: "Montserrat_700Bold", fontWeight: "700" }]}>
-                Ask my care team
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-      )}
-    </View>
-  );
-}
-
-// =====================================================================
-// SecondaryActionRow -- compact row for "More support for today".
-// Same state machine, much lighter visual treatment. Sources its
-// content from the same RECOMMENDATIONS map as the primary card.
-// =====================================================================
-function SecondaryActionRow({
-  category,
-  interventionId,
-  originalBody,
-  showingAlternate,
-  status,
-  noChangeDismissed: _noChangeDismissed,
-  navy,
-  mutedForeground,
-  border,
-  accent,
-  warning,
-  onCommit,
-  onToggleAlternate,
-  onOutcome,
-  onReset,
-  onDismissNoChange: _onDismissNoChange,
-  onAskCareTeam,
-  liveOverride,
-}: ActionRowProps) {
-  const picked = useMemo(
-    () => pickVariants(category, interventionId),
-    [category, interventionId],
-  );
-  // See PrimaryActionCard for the liveOverride contract. The
-  // showingAlternate flag must be honored even when liveOverride is
-  // present, otherwise "Another option" would silently no-op on
-  // every secondary row whose category has a live tuned copy.
-  const variant: RecContent = showingAlternate
-    ? picked.alternate
-    : (liveOverride ?? picked.primary);
-  const title = variant.title;
-  const body =
-    !showingAlternate && liveOverride
-      ? liveOverride.body
-      : category === "other" && !showingAlternate
-        ? originalBody || variant.body
-        : variant.body;
-  const titleA11y = title.toLowerCase();
-  const offerEscalation = shouldOfferEscalation(category, status);
-
-  return (
-    <View
-      style={[
-        styles.secondaryRow,
-        { borderColor: SECONDARY_BORDER, backgroundColor: SECONDARY_SURFACE },
-      ]}
-    >
-      <Text style={[styles.secondaryTitle, { color: navy }]}>{title}</Text>
-      <Text style={[styles.secondaryBody, { color: mutedForeground }]}>
-        {body}
-      </Text>
-
-      {/* -- Default: single small "Try this" button --------------- */}
-      {status == null && (
-        <Pressable
-          onPress={() => {
-            tap();
-            onCommit();
-          }}
-          accessibilityRole="button"
-          accessibilityLabel={`Try this: ${titleA11y}`}
-          style={({ pressed }) => [
-            styles.smallBtn,
-            {
-              borderColor: accent,
-              backgroundColor: "#FFFFFF",
-              opacity: pressed ? 0.75 : 1,
-            },
-          ]}
-        >
-          <Feather name="check" size={12} color={accent} />
-          <Text style={[styles.smallBtnText, { color: accent }]}>
-            Try this
-          </Text>
-        </Pressable>
-      )}
-
-      {/* -- Committed: outcome prompt ----------------------------- */}
-      {status === "committed" && (
-        <View style={styles.outcomeWrap}>
-          <Text style={[styles.outcomePromptSmall, { color: navy }]}>
-            Did this help?
-          </Text>
-          <View style={styles.outcomeRow}>
-            <OutcomeButton
-              label="Better"
-              icon="smile"
-              tint={SUCCESS_FG}
-              border={border}
-              onPress={() => {
-                tap();
-                onOutcome("better");
-              }}
-              accessibilityLabel={`Feeling better after ${titleA11y}`}
-            />
-            <OutcomeButton
-              label="Same"
-              icon="meh"
-              tint={mutedForeground}
-              border={border}
-              onPress={() => {
-                tap();
-                onOutcome("no_change");
-              }}
-              accessibilityLabel={`About the same after ${titleA11y}`}
-            />
-            <OutcomeButton
-              label="Worse"
-              icon="frown"
-              tint={warning}
-              border={border}
-              onPress={() => {
-                tap();
-                onOutcome("worse");
-              }}
-              accessibilityLabel={`Worse after ${titleA11y}`}
-            />
-          </View>
-        </View>
-      )}
-
-      {status === "better" && (
-        <AcknowledgeRow
-          icon="smile"
-          tint={SUCCESS_FG}
-          text="Got it. Viva will remember this helped."
-          onReset={onReset}
-          mutedForeground={mutedForeground}
-          a11y={titleA11y}
-        />
-      )}
-
-      {status === "no_change" && (
-        <AcknowledgeRow
-          icon="meh"
-          tint={mutedForeground}
-          text="Thanks. We'll adjust future recommendations."
-          onReset={onReset}
-          mutedForeground={mutedForeground}
-          a11y={titleA11y}
-        />
-      )}
-
-      {status === "didnt_try" && (
-        <AcknowledgeRow
-          icon="minus-circle"
-          tint={mutedForeground}
-          text="Got it. We won't count that one."
-          onReset={onReset}
-          mutedForeground={mutedForeground}
-          a11y={titleA11y}
-        />
-      )}
-
-      {status === "worse" && offerEscalation && (
-        <View style={styles.escalateWrap}>
-          <Text style={[styles.escalateCopy, { color: navy }]}>
-            This should be reviewed. You can ask your care team to take a
-            look.
-          </Text>
-          <View style={styles.btnRow}>
-            <Pressable
-              onPress={() => {
-                tap();
-                onToggleAlternate();
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={`Try another option for ${titleA11y}`}
-              style={({ pressed }) => [
-                styles.btnSecondary,
-                { borderColor: border, opacity: pressed ? 0.75 : 1 },
-              ]}
-            >
-              <Feather name="refresh-cw" size={12} color={mutedForeground} />
-              <Text style={[styles.btnText, { color: mutedForeground, fontFamily: "Montserrat_600SemiBold", fontWeight: "600" }]}>
-                Another option
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                tap();
-                onAskCareTeam();
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={`Ask my care team about ${titleA11y}`}
-              style={({ pressed }) => [
-                styles.btnPrimary,
-                {
-                  borderColor: warning,
-                  backgroundColor: warning,
-                  opacity: pressed ? 0.8 : 1,
-                },
-              ]}
-            >
-              <Feather name="message-circle" size={13} color="#FFFFFF" />
-              <Text style={[styles.btnText, { color: "#FFFFFF", fontFamily: "Montserrat_700Bold", fontWeight: "700" }]}>
-                Ask my care team
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-      )}
-    </View>
-  );
-}
-
-// =====================================================================
-// Small helpers
-// =====================================================================
-interface AcknowledgeRowProps {
-  icon: keyof typeof Feather.glyphMap;
-  tint: string;
-  text: string;
-  onReset: () => void;
-  mutedForeground: string;
-  a11y: string;
-}
-
-function AcknowledgeRow({
-  icon,
-  tint,
-  text,
-  onReset,
-  mutedForeground,
-  a11y,
-}: AcknowledgeRowProps) {
-  return (
-    <View style={styles.ackRow}>
-      <View style={styles.ackTextRow}>
-        <Feather name={icon} size={13} color={tint} />
-        <Text style={[styles.ackText, { color: tint }]}>{text}</Text>
-      </View>
-      <Pressable
-        onPress={() => {
-          tap();
-          onReset();
-        }}
-        accessibilityRole="button"
-        accessibilityLabel={`Change response for ${a11y}`}
-        style={({ pressed }) => [
-          styles.changeLink,
-          { opacity: pressed ? 0.6 : 1 },
-        ]}
-      >
-        <Text style={[styles.changeLinkText, { color: mutedForeground }]}>
-          Change response
-        </Text>
-      </Pressable>
-    </View>
-  );
-}
-
-interface OutcomeButtonProps {
-  label: string;
-  icon: keyof typeof Feather.glyphMap;
-  tint: string;
-  border: string;
-  onPress: () => void;
-  accessibilityLabel: string;
-}
-
-function OutcomeButton({
-  label,
-  icon,
-  tint,
-  border,
-  onPress,
-  accessibilityLabel,
-}: OutcomeButtonProps) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      style={({ pressed }) => [
-        styles.outcomeBtn,
-        { borderColor: border, opacity: pressed ? 0.75 : 1 },
-      ]}
-    >
-      <Feather name={icon} size={13} color={tint} />
-      <Text
-        style={[styles.outcomeBtnText, { color: tint }]}
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.85}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 24,
-    padding: 20,
-    gap: 18,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 0,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 36,
+    backgroundColor: "transparent",
   },
-  // -- Signal summary chips ----------------------------------------
-  signalChipsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-  },
-  signalChip: {
+  supportPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(255,255,255,0.55)",
     borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginBottom: 10,
   },
-  signalChipText: {
-    fontSize: 11.5,
-    fontFamily: "Montserrat_600SemiBold",
-    fontWeight: "600",
-    letterSpacing: 0.1,
-  },
-  // Subtle one-line invitation that surfaces only when Apple Health
-  // is not connected. Intentionally not a button -- the card's own
-  // CTAs are reserved for symptom support; this is provenance copy.
-  healthHint: {
-    fontSize: 12,
-    fontFamily: "Montserrat_400Regular",
-    lineHeight: 16,
-    marginTop: 8,
-    opacity: 0.8,
-  },
-  // -- More support: mini category chips ---------------------------
-  supportChipsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 5,
-  },
-  steadyBody: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontFamily: "Montserrat_500Medium",
-    fontWeight: "500",
-  },
-  severeCta: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-  },
-  severeCtaText: {
-    color: "#FFFFFF",
-    fontSize: 13,
-    fontFamily: "Montserrat_600SemiBold",
-    fontWeight: "600",
-  },
-  supportChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  supportChipText: {
+  supportPillText: {
     fontSize: 11,
     fontFamily: "Montserrat_600SemiBold",
-    fontWeight: "600",
-    letterSpacing: 0.1,
+    letterSpacing: 0.2,
+    color: CARD_MUTED,
   },
-  // -- Primary card "Why this helps" --------------------------------
-  whyRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 8,
-    marginTop: 4,
-    paddingTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "rgba(31, 79, 138, 0.10)",
-  },
-  whyDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginTop: 6,
-  },
-  whyLabel: {
-    fontSize: 10,
+  cardTitle: {
+    fontSize: 23,
     fontFamily: "Montserrat_700Bold",
-    fontWeight: "700",
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
-    marginBottom: 2,
+    lineHeight: 31,
+    color: CARD_TEXT,
+    marginBottom: 12,
   },
-  whyText: {
-    fontFamily: "Montserrat_500Medium",
-    fontSize: 13,
-    fontWeight: "500",
-    lineHeight: 18,
-  },
-  cardFeatured: {
-    borderWidth: StyleSheet.hairlineWidth,
-    ...Platform.select({
-      web: {
-        boxShadow: "0 10px 32px rgba(31, 79, 138, 0.08)",
-      },
-      default: {
-        shadowColor: "#1F4F8A",
-        shadowOpacity: 0.08,
-        shadowRadius: 20,
-        shadowOffset: { width: 0, height: 8 },
-        elevation: 2,
-      },
-    }),
-  },
-  // -- Header -------------------------------------------------------
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-  },
-  iconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  badgeRow: {
-    flexDirection: "row",
-    marginBottom: 6,
-  },
-  badge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontFamily: "Montserrat_600SemiBold",
-    fontWeight: "600",
-    letterSpacing: 0.1,
-  },
-  title: {
-    fontSize: 18,
-    fontFamily: "Montserrat_700Bold",
-    fontWeight: "700",
-    lineHeight: 22,
-  },
-  subtitle: {
-    fontSize: 13,
-    fontFamily: "Montserrat_500Medium",
-    fontWeight: "500",
-    marginTop: 3,
-    lineHeight: 17,
-  },
-  // -- Sections -----------------------------------------------------
-  section: {
-    gap: 6,
-  },
-  sectionLabel: {
-    fontSize: 12,
-    fontFamily: "Montserrat_600SemiBold",
-    fontWeight: "600",
-    letterSpacing: 0.1,
-  },
-  sectionBody: {
-    fontFamily: "Montserrat_400Regular",
+  cardSubtitle: {
     fontSize: 14,
-    lineHeight: 20,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 21,
+    color: CARD_MUTED,
+    marginBottom: 16,
   },
-  // -- More support for today (collapsible secondary header) -------
-  // Less boxy: no hard border, slightly tinted surface only.
-  moreSupportHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    backgroundColor: "rgba(255, 255, 255, 0.7)",
-  },
-  moreSupportTitle: {
-    fontSize: 13,
-    fontFamily: "Montserrat_700Bold",
-    fontWeight: "700",
-  },
-  moreSupportSubtitle: {
-    fontSize: 12,
-    fontFamily: "Montserrat_500Medium",
-    fontWeight: "500",
-    marginTop: 2,
-    lineHeight: 16,
-  },
-  moreSupportMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  moreSupportCount: {
-    fontSize: 12,
-    fontFamily: "Montserrat_700Bold",
-    fontWeight: "700",
-    fontVariant: ["tabular-nums"],
-  },
-  // -- Primary action card ------------------------------------------
-  // Softer, less boxy: hairline border + subtle long-radius shadow.
-  primaryCard: {
-    borderRadius: 20,
-    borderWidth: StyleSheet.hairlineWidth,
+  // Hero action panel — white island on the tinted sheet, creates depth
+  heroPanel: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
     paddingHorizontal: 18,
     paddingVertical: 18,
     gap: 10,
-    ...Platform.select({
-      web: {
-        boxShadow: "0 4px 16px rgba(31, 79, 138, 0.06)",
-      },
-      default: {
-        shadowColor: "#1F4F8A",
-        shadowOpacity: 0.06,
-        shadowRadius: 14,
-        shadowOffset: { width: 0, height: 4 },
-        elevation: 1,
-      },
-    }),
+    marginBottom: 20,
   },
-  startHerePillRow: {
-    flexDirection: "row",
-  },
-  startHerePill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-  },
-  startHerePillText: {
-    fontSize: 11,
-    fontFamily: "Montserrat_600SemiBold",
-    fontWeight: "600",
-    letterSpacing: 0.1,
-  },
-  primaryTitle: {
-    fontSize: 19,
-    fontFamily: "Montserrat_700Bold",
-    fontWeight: "700",
-    lineHeight: 25,
-    marginTop: 2,
-  },
-  primaryBody: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontFamily: "Montserrat_400Regular",
-    fontWeight: "400",
-  },
-  helperLine: {
-    fontFamily: "Montserrat_400Regular",
-    fontSize: 12,
-    lineHeight: 16,
-    fontStyle: "italic",
-  },
-  // -- Secondary rows -----------------------------------------------
-  rowsWrap: {
-    gap: 6,
-  },
-  secondaryRow: {
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    gap: 6,
-  },
-  secondaryTitle: {
-    fontSize: 14,
-    fontFamily: "Montserrat_700Bold",
-    fontWeight: "700",
-    lineHeight: 18,
-  },
-  secondaryBody: {
-    fontFamily: "Montserrat_400Regular",
-    fontSize: 12,
-    lineHeight: 17,
-  },
-  smallBtn: {
-    alignSelf: "flex-start",
+  heroPanelHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    borderWidth: 1,
   },
-  smallBtnText: {
-    fontSize: 12,
-    fontFamily: "Montserrat_700Bold",
-    fontWeight: "700",
-  },
-  // -- Buttons (shared) --------------------------------------------
-  btnRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 2,
-  },
-  btnPrimary: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  btnSecondary: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    backgroundColor: "#FFFFFF",
-  },
-  btnText: {
+  heroPanelLabel: {
+    fontSize: 10,
     fontFamily: "Montserrat_600SemiBold",
-    fontSize: 13,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+    color: "#6B8AB5",
   },
-  // -- Outcome ------------------------------------------------------
-  outcomeWrap: {
+  heroBody: {
+    fontSize: 16,
+    fontFamily: "Montserrat_500Medium",
+    lineHeight: 24,
+    color: CARD_TEXT,
+  },
+  // Context chips row
+  chipsSection: {
     gap: 6,
-    marginTop: 2,
+    marginBottom: 2,
   },
-  outcomePrompt: {
-    fontSize: 13,
+  chipsSectionLabel: {
+    fontSize: 9,
     fontFamily: "Montserrat_600SemiBold",
-    fontWeight: "600",
+    letterSpacing: 0.7,
+    color: "#9BAABF",
   },
-  outcomePromptSmall: {
-    fontSize: 12,
-    fontFamily: "Montserrat_600SemiBold",
-    fontWeight: "600",
-  },
-  outcomeRow: {
+  chipsRow: {
     flexDirection: "row",
-    gap: 8,
+    flexWrap: "wrap",
+    gap: 5,
   },
-  outcomeBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    backgroundColor: "#FFFFFF",
+  contextChip: {
+    backgroundColor: "rgba(255,255,255,0.70)",
+    borderRadius: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
   },
-  outcomeBtnText: {
-    fontSize: 12,
-    fontFamily: "Montserrat_600SemiBold",
-    fontWeight: "600",
-  },
-  // -- Acknowledgement (better / no_change) -------------------------
-  ackRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 2,
-    gap: 8,
-  },
-  ackTextRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    flex: 1,
-  },
-  ackText: {
-    fontSize: 12,
-    fontFamily: "Montserrat_600SemiBold",
-    fontWeight: "600",
-  },
-  changeLink: {
-    paddingVertical: 2,
-  },
-  changeLinkText: {
+  contextChipText: {
     fontSize: 11,
     fontFamily: "Montserrat_500Medium",
-    fontWeight: "500",
-    textDecorationLine: "underline",
+    color: CARD_MUTED,
+    letterSpacing: 0.05,
   },
-  // -- Worse / escalation panel -------------------------------------
-  escalateWrap: {
-    gap: 8,
-    marginTop: 2,
+  // Legacy kept for supporting text in other phases
+  supportSection: {
+    gap: 4,
+    marginTop: 16,
   },
-  escalateCopy: {
+  supportMicroLabel: {
+    fontSize: 10,
     fontFamily: "Montserrat_500Medium",
-    fontSize: 13,
-    lineHeight: 18,
+    letterSpacing: 0.1,
+    color: "#9BAABF",
   },
-  // -- Card-level escalation banner ---------------------------------
-  escalatedRow: {
+  supportBody: {
+    fontSize: 13,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 19,
+    color: CARD_MUTED,
+  },
+  // Legacy shared section styles (used by struggling/feedback phases)
+  section: {
+    gap: 5,
+  },
+  sectionLabel: {
+    fontSize: 10,
+    fontFamily: "Montserrat_700Bold",
+    letterSpacing: 0.9,
+    textTransform: "uppercase",
+    color: CARD_MUTED,
+  },
+  sectionBody: {
+    fontSize: 14,
+    fontFamily: "Montserrat_500Medium",
+    lineHeight: 21,
+    color: CARD_TEXT,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: "#E8EEF5",
+    marginVertical: 16,
+  },
+  primaryBtn: {
+    backgroundColor: CARD_TEXT,
+    borderRadius: 999,
+    paddingVertical: 17,
+    alignItems: "center",
+    marginTop: 24,
+    ...Platform.select({
+      web: {
+        boxShadow: "0 3px 8px rgba(20, 34, 64, 0.18)",
+      },
+      default: {
+        shadowColor: "#142240",
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.18,
+        shadowRadius: 7,
+        elevation: 3,
+      },
+    }),
+  },
+  primaryBtnText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontFamily: "Montserrat_700Bold",
+    letterSpacing: 0.2,
+  },
+  // Escalation — amber underline link, secondary to navy CTA
+  careTeamLink: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    marginTop: 2,
+    justifyContent: "center",
+    marginTop: 16,
+    paddingVertical: 10,
   },
-  escalatedText: {
+  careTeamLinkText: {
+    fontSize: 13,
+    fontFamily: "Montserrat_500Medium",
+    color: CARD_MUTED,
+    textDecorationLine: "underline",
+  },
+  escalatedNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    marginTop: 12,
+  },
+  escalatedNoticeText: {
+    fontSize: 12,
+    fontFamily: "Montserrat_500Medium",
+    color: CARD_MUTED,
+    flexShrink: 1,
+  },
+  careTeamEscalateBtn: {
+    borderRadius: 999,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 16,
+  },
+  careTeamEscalateBtnText: {
+    fontSize: 14,
+    fontFamily: "Montserrat_700Bold",
+    color: "#FFFFFF",
+    letterSpacing: 0.1,
+  },
+  // Legacy — still used in struggling/checking phases
+  careTeamBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 12,
+    paddingVertical: 8,
+  },
+  careTeamBtnText: {
     fontSize: 13,
     fontFamily: "Montserrat_600SemiBold",
-    fontWeight: "600",
+    color: CARD_MUTED,
   },
-  // -- Clinical guardrail footer ------------------------------------
-  // Intentionally subtle: present but not visually competing with the
-  // primary action. Smaller text + Regular weight + extra top margin
-  // pushes it away from the action area, and a reduced opacity gives
-  // it a lighter visual presence than the muted-foreground color
-  // alone would.
-  guardrail: {
+  checkingContainer: {
+    alignItems: "center",
+    gap: 20,
+    paddingTop: 28,
+    paddingBottom: 8,
+  },
+  checkingStatusModule: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    backgroundColor: "#EEF3FA",
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  checkingStatusText: {
+    fontSize: 13,
+    fontFamily: "Montserrat_600SemiBold",
+    color: "#1F4F8A",
+  },
+  checkingCheckInBtn: {
+    backgroundColor: CARD_TEXT,
+    borderRadius: 999,
+    paddingVertical: 17,
+    alignItems: "center",
+    alignSelf: "stretch",
+    marginTop: 4,
+    ...Platform.select({
+      web: {
+        boxShadow: "0 3px 8px rgba(20, 34, 64, 0.18)",
+      },
+      default: {
+        shadowColor: "#142240",
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.18,
+        shadowRadius: 7,
+        elevation: 3,
+      },
+    }),
+  },
+  feedbackPrompt: {
+    fontSize: 22,
+    fontFamily: "Montserrat_700Bold",
+    textAlign: "center",
+    color: CARD_TEXT,
+    marginBottom: 8,
+  },
+  feedbackSub: {
+    fontSize: 14,
     fontFamily: "Montserrat_400Regular",
-    fontSize: 9,
-    lineHeight: 13,
-    marginTop: 14,
+    lineHeight: 20,
+    textAlign: "center",
+    marginBottom: 28,
+  },
+  feedbackBtnRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  feedbackBtnStruggling: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    backgroundColor: "#FFF8F0",
+    borderWidth: 1,
+    borderColor: "#FBD5A0",
+    borderRadius: 999,
+    paddingVertical: 16,
+  },
+  feedbackBtnHelped: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    backgroundColor: "#F0FBF4",
+    borderWidth: 1,
+    borderColor: "#BBE5CA",
+    borderRadius: 999,
+    paddingVertical: 16,
+  },
+  feedbackBtnText: {
+    fontSize: 14,
+    fontFamily: "Montserrat_700Bold",
+    letterSpacing: 0.1,
+  },
+  resolvedContainer: {
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 8,
+    flexDirection: "row",
+    justifyContent: "center",
+  },
+  adaptiveHint: {
+    fontSize: 13,
+    fontFamily: "Montserrat_500Medium",
+    lineHeight: 19,
+    color: "#8B6C14",
+    marginBottom: 6,
+    opacity: 0.85,
+  },
+  guardrail: {
+    fontSize: 11,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 16,
+    color: CARD_MUTED,
+    marginTop: 18,
     fontStyle: "italic",
     opacity: 0.65,
   },
+  explainWhy: {
+    fontSize: 11,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 16,
+    color: CARD_MUTED,
+    marginBottom: 8,
+    fontStyle: "italic",
+    opacity: 0.8,
+  },
+  noticedSection: {
+    gap: 6,
+    marginBottom: 16,
+  },
+  noticedText: {
+    fontSize: 13,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 19,
+    color: CARD_MUTED,
+  },
+  noticedStrategyHint: {
+    fontSize: 11,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 16,
+    color: CARD_MUTED,
+    fontStyle: "italic",
+    opacity: 0.75,
+  },
+  careTeamSecondaryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 14,
+    paddingVertical: 10,
+  },
+  careTeamSecondaryBtnText: {
+    fontSize: 13,
+    fontFamily: "Montserrat_600SemiBold",
+    letterSpacing: 0.1,
+  },
 });
+

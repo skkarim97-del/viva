@@ -17,6 +17,7 @@ import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
 import { CATEGORY_OPTIONS } from "@/types";
 import type { ActionCategory, WeeklyPlanDay } from "@/types";
+import { logEvent } from "@/lib/analytics/client";
 import { selectWeeklyDayView } from "@/lib/engine";
 import { logIntervention, type InterventionType } from "@/lib/intervention/logger";
 import { logCareEventDeduped } from "@/lib/care-events/client";
@@ -212,64 +213,88 @@ export default function PlanScreen() {
               )}
 
               <View style={styles.actionsGrid}>
-                {day.actions.filter(a => a.category !== "consistent").map((action) => {
-                  const meta = CATEGORY_META[action.category];
-                  return (
-                    <View
-                      key={action.category}
-                      style={[
-                        styles.actionRow,
-                        { backgroundColor: action.completed ? c.success + "0A" : "transparent" },
-                      ]}
-                    >
-                      <Pressable
-                        onPress={() => handleToggle(day.date, action.category)}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        style={({ pressed }) => [
-                          styles.actionCheck,
-                          {
-                            backgroundColor: action.completed ? c.success : "transparent",
-                            borderColor: action.completed ? c.success : c.border,
-                            opacity: pressed ? 0.7 : 1,
-                          },
+                {(() => {
+                  // GI-aware display overrides apply only on Today's row when
+                  // patientCtx shows elevated GI symptoms. Underlying plan
+                  // data is unchanged; this is a display-layer adaptation
+                  // consistent with the Today tab's plan section.
+                  const GI_OVERRIDES: Partial<Record<ActionCategory, { title: string; subtitle: string }>> = {
+                    move: { title: "Gentle walk", subtitle: "5–10 min after food if tolerated." },
+                    fuel: { title: "Small bland meals", subtitle: "Crackers, toast, rice or soup in small portions." },
+                    hydrate: { title: "Slow fluids", subtitle: "Small sips every few minutes. Avoid large amounts at once." },
+                    recover: { title: "Lower intensity", subtitle: "Keep today light while symptoms settle." },
+                  };
+                  return day.actions.filter(a => a.category !== "consistent").map((action) => {
+                    const meta = CATEGORY_META[action.category];
+                    const giOverride = (isToday && patientCtx.symptoms.hasElevatedGI)
+                      ? GI_OVERRIDES[action.category as ActionCategory]
+                      : undefined;
+                    const displayTitle = giOverride?.title ?? action.chosen;
+                    const displaySubtitle = giOverride?.subtitle
+                      ?? CATEGORY_OPTIONS[action.category]?.find((o) => o.title === action.chosen)?.subtitle;
+                    return (
+                      <View
+                        key={action.category}
+                        style={[
+                          styles.actionRow,
+                          { backgroundColor: action.completed ? c.success + "0A" : "transparent" },
                         ]}
                       >
-                        {action.completed && <Feather name="check" size={11} color="#fff" />}
-                      </Pressable>
-                      <Pressable
-                        onPress={() => openEdit(day, action.category)}
-                        style={({ pressed }) => [
-                          styles.actionBody,
-                          { opacity: pressed ? 0.7 : 1 },
-                        ]}
-                      >
-                        <View style={[styles.dayIconWrap, { backgroundColor: meta.color + "12" }]}>
-                          <Feather name={meta.icon} size={15} color={meta.color} />
-                        </View>
-                        <View style={styles.actionContent}>
-                          <Text style={[styles.actionLabel, { color: c.mutedForeground }]}>{meta.label}</Text>
-                          <Text style={[
-                            styles.actionText,
+                        <Pressable
+                          onPress={() => {
+                            if (!action.completed) {
+                              void logEvent("plan_item_completed", {
+                                category: action.category,
+                                surface: "week_tab",
+                                planPriority: patientCtx.planPriority,
+                                reason_signals: patientCtx.reasonSignals,
+                              });
+                            }
+                            handleToggle(day.date, action.category);
+                          }}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          style={({ pressed }) => [
+                            styles.actionCheck,
                             {
-                              color: action.completed ? c.mutedForeground : c.foreground,
-                              textDecorationLine: action.completed ? "line-through" : "none",
-                              opacity: action.completed ? 0.6 : 1,
+                              backgroundColor: action.completed ? c.success : "transparent",
+                              borderColor: action.completed ? c.success : c.border,
+                              opacity: pressed ? 0.7 : 1,
                             },
-                          ]} numberOfLines={1}>
-                            {action.chosen}
-                          </Text>
-                          {/* Subtitle pulled from CATEGORY_OPTIONS so the
-                              Week tab matches Today's "Your plan" copy
-                              without a parallel string table. Falls back
-                              to nothing if the chosen title isn't in the
-                              ladder (e.g. legacy plan rows from older
-                              sessions), so this is safe to add to every
-                              row. */}
-                          {(() => {
-                            const sub = CATEGORY_OPTIONS[action.category]
-                              ?.find((o) => o.title === action.chosen)?.subtitle;
-                            if (!sub) return null;
-                            return (
+                          ]}
+                        >
+                          {action.completed && <Feather name="check" size={11} color="#fff" />}
+                        </Pressable>
+                        <Pressable
+                          onPress={() => {
+                            void logEvent("plan_item_opened", {
+                              category: action.category,
+                              surface: "week_tab",
+                              planPriority: patientCtx.planPriority,
+                              reason_signals: patientCtx.reasonSignals,
+                            });
+                            openEdit(day, action.category);
+                          }}
+                          style={({ pressed }) => [
+                            styles.actionBody,
+                            { opacity: pressed ? 0.7 : 1 },
+                          ]}
+                        >
+                          <View style={[styles.dayIconWrap, { backgroundColor: meta.color + "12" }]}>
+                            <Feather name={meta.icon} size={15} color={meta.color} />
+                          </View>
+                          <View style={styles.actionContent}>
+                            <Text style={[styles.actionLabel, { color: c.mutedForeground }]}>{meta.label}</Text>
+                            <Text style={[
+                              styles.actionText,
+                              {
+                                color: action.completed ? c.mutedForeground : c.foreground,
+                                textDecorationLine: action.completed ? "line-through" : "none",
+                                opacity: action.completed ? 0.6 : 1,
+                              },
+                            ]} numberOfLines={1}>
+                              {displayTitle}
+                            </Text>
+                            {displaySubtitle && (
                               <Text
                                 style={[
                                   styles.actionSubtitle,
@@ -280,16 +305,16 @@ export default function PlanScreen() {
                                 ]}
                                 numberOfLines={2}
                               >
-                                {sub}
+                                {displaySubtitle}
                               </Text>
-                            );
-                          })()}
-                        </View>
-                        <Feather name="chevron-right" size={14} color={c.mutedForeground + "40"} />
-                      </Pressable>
-                    </View>
-                  );
-                })}
+                            )}
+                          </View>
+                          <Feather name="chevron-right" size={14} color={c.mutedForeground + "40"} />
+                        </Pressable>
+                      </View>
+                    );
+                  });
+                })()}
               </View>
             </View>
           );

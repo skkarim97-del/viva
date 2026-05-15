@@ -1609,6 +1609,13 @@ export default function DashboardScreen() {
                 <Pressable
                   onPress={() => {
                     haptic();
+                    if (!action.completed) {
+                      void logEvent("plan_item_completed", {
+                        category: action.category,
+                        planPriority: patientCtx.planPriority,
+                        reason_signals: patientCtx.reasonSignals,
+                      });
+                    }
                     toggleAction(action.id);
                   }}
                   style={({ pressed }) => [
@@ -1625,6 +1632,11 @@ export default function DashboardScreen() {
                 <Pressable
                   onPress={() => {
                     haptic();
+                    void logEvent("plan_item_opened", {
+                      category: action.category,
+                      planPriority: patientCtx.planPriority,
+                      reason_signals: patientCtx.reasonSignals,
+                    });
                     setEditingAction(action.category);
                   }}
                   style={({ pressed }) => [
@@ -1660,7 +1672,19 @@ export default function DashboardScreen() {
 
         {dailyPlan?.whyThisPlan?.length > 0 && (
           <Pressable
-            onPress={() => { haptic(); setShowWhyPlan(!showWhyPlan); }}
+            onPress={() => {
+              haptic();
+              const opening = !showWhyPlan;
+              if (opening) {
+                void logEvent("why_plan_opened", {
+                  dailyState: dailyPlan.dailyState,
+                  dataTier: dailyPlan.dataTier,
+                  planPriority: patientCtx.planPriority,
+                  reason_signals: patientCtx.reasonSignals,
+                });
+              }
+              setShowWhyPlan(opening);
+            }}
             style={[styles.whyPlanCard, { backgroundColor: c.card }]}
           >
             <View style={styles.whyPlanHeader}>
@@ -1881,7 +1905,15 @@ export default function DashboardScreen() {
               Unlock more personalized support with sleep, steps and heart rate.
             </Text>
             <Pressable
-              onPress={() => { haptic(); router.push("/(tabs)/settings"); }}
+              onPress={() => {
+                haptic();
+                void logEvent("apple_health_connect_clicked", {
+                  source: "today_tab",
+                  planPriority: patientCtx.planPriority,
+                  reason_signals: patientCtx.reasonSignals,
+                });
+                router.push("/(tabs)/settings");
+              }}
               style={({ pressed }) => [styles.emptyHealthBtn, { backgroundColor: c.accent, opacity: pressed ? 0.85 : 1 }]}
             >
               <Feather name="settings" size={13} color="#FFFFFF" />
