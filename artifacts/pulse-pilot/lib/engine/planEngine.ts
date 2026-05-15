@@ -1004,7 +1004,7 @@ export function generateDailyPlan(
     } else if (digestionSevere) {
       pool = ["Digestion management", "GI support", "Gentle nutrition"];
     } else if (medicationProfile?.recentTitration) {
-      pool = ["Titration week", "Dose adjustment", "Adaptation phase"];
+      pool = ["Adjustment week", "Dose change week", "Adaptation phase"];
     } else if (dailyState === "recover") {
       // Plan coherence guard: any path that landed in recover (stress
       // override, moderate symptoms, recovery_declining, mental burnout,
