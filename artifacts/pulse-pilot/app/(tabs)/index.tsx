@@ -1599,78 +1599,106 @@ export default function DashboardScreen() {
               </Text>
             </View>
           )}
-          {planActions.map((action) => {
-            const meta = ACTION_META[action.category];
+          {(() => {
+            // When nausea or GI symptoms are elevated, override plan item
+            // titles and subtitles with GI-specific copy. The underlying
+            // plan data is unchanged; this is a display-layer adaptation
+            // so the patient sees actionable, symptom-aware language.
+            const isGiElevated =
+              nausea === "moderate" || nausea === "severe" ||
+              digestion === "diarrhea" || digestion === "constipated";
+            const GI_OVERRIDES: Partial<Record<ActionCategory, { title: string; subtitle: string }>> = {
+              move: {
+                title: "Gentle walk",
+                subtitle: "5–10 min after food if tolerated.",
+              },
+              fuel: {
+                title: "Small bland meals",
+                subtitle: "Crackers, toast, rice or soup in small portions.",
+              },
+              hydrate: {
+                title: "Slow fluids",
+                subtitle: "Small sips every few minutes. Avoid large amounts at once.",
+              },
+              recover: {
+                title: "Lower intensity",
+                subtitle: "Keep today light while symptoms settle.",
+              },
+            };
 
-            return (
-              <View key={action.id} style={[
-                styles.actionRow,
-                { backgroundColor: action.completed ? c.success + "0A" : "transparent" },
-              ]}>
-                <Pressable
-                  onPress={() => {
-                    haptic();
-                    if (!action.completed) {
-                      void logEvent("plan_item_completed", { category: action.category, title: action.text });
-                    }
-                    toggleAction(action.id);
-                  }}
-                  style={({ pressed }) => [
-                    styles.actionCheck,
-                    {
-                      backgroundColor: action.completed ? c.success : "transparent",
-                      borderColor: action.completed ? c.success : c.border,
-                      opacity: pressed ? 0.7 : 1,
-                    },
-                  ]}
-                >
-                  {action.completed && <Feather name="check" size={11} color="#fff" />}
-                </Pressable>
-                <Pressable
-                  onPress={() => {
-                    haptic();
-                    void logEvent("plan_item_opened", { category: action.category, title: action.text });
-                    setEditingAction(action.category);
-                  }}
-                  style={({ pressed }) => [
-                    styles.actionBody,
-                    { opacity: pressed ? 0.7 : 1 },
-                  ]}
-                >
-                  <View style={[styles.dayIconWrap, { backgroundColor: meta.color + "12" }]}>
-                    <Feather name={meta.icon} size={15} color={meta.color} />
-                  </View>
-                  <View style={styles.actionContent}>
-                    <Text style={[styles.actionLabel, { color: c.mutedForeground }]}>{meta.label}</Text>
-                    <Text style={[
-                      styles.actionText,
+            return planActions.map((action) => {
+              const meta = ACTION_META[action.category];
+              const giOverride = isGiElevated ? GI_OVERRIDES[action.category as ActionCategory] : undefined;
+              const displayTitle = giOverride?.title ?? action.text;
+              const displaySubtitle = giOverride?.subtitle
+                ?? CATEGORY_OPTIONS[action.category as keyof typeof CATEGORY_OPTIONS]
+                  ?.find((o) => o.title === action.text)?.subtitle;
+
+              return (
+                <View key={action.id} style={[
+                  styles.actionRow,
+                  { backgroundColor: action.completed ? c.success + "0A" : "transparent" },
+                ]}>
+                  <Pressable
+                    onPress={() => {
+                      haptic();
+                      if (!action.completed) {
+                        void logEvent("plan_item_completed", { category: action.category, title: action.text });
+                      }
+                      toggleAction(action.id);
+                    }}
+                    style={({ pressed }) => [
+                      styles.actionCheck,
                       {
-                        color: action.completed ? c.mutedForeground : c.foreground,
-                        textDecorationLine: action.completed ? "line-through" : "none",
-                        opacity: action.completed ? 0.6 : 1,
+                        backgroundColor: action.completed ? c.success : "transparent",
+                        borderColor: action.completed ? c.success : c.border,
+                        opacity: pressed ? 0.7 : 1,
                       },
-                    ]}>
-                      {action.text}
-                    </Text>
-                    {(() => {
-                      const sub = CATEGORY_OPTIONS[action.category as keyof typeof CATEGORY_OPTIONS]
-                        ?.find((o) => o.title === action.text)?.subtitle;
-                      if (!sub) return null;
-                      return (
+                    ]}
+                  >
+                    {action.completed && <Feather name="check" size={11} color="#fff" />}
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      haptic();
+                      void logEvent("plan_item_opened", { category: action.category, title: action.text });
+                      setEditingAction(action.category);
+                    }}
+                    style={({ pressed }) => [
+                      styles.actionBody,
+                      { opacity: pressed ? 0.7 : 1 },
+                    ]}
+                  >
+                    <View style={[styles.dayIconWrap, { backgroundColor: meta.color + "12" }]}>
+                      <Feather name={meta.icon} size={15} color={meta.color} />
+                    </View>
+                    <View style={styles.actionContent}>
+                      <Text style={[styles.actionLabel, { color: c.mutedForeground }]}>{meta.label}</Text>
+                      <Text style={[
+                        styles.actionText,
+                        {
+                          color: action.completed ? c.mutedForeground : c.foreground,
+                          textDecorationLine: action.completed ? "line-through" : "none",
+                          opacity: action.completed ? 0.6 : 1,
+                        },
+                      ]}>
+                        {displayTitle}
+                      </Text>
+                      {displaySubtitle ? (
                         <Text
                           style={[styles.actionSubtitle, { color: c.mutedForeground, opacity: action.completed ? 0.5 : 1 }]}
                           numberOfLines={2}
                         >
-                          {sub}
+                          {displaySubtitle}
                         </Text>
-                      );
-                    })()}
-                  </View>
-                  <Feather name="chevron-right" size={14} color={c.mutedForeground + "40"} />
-                </Pressable>
-              </View>
-            );
-          })}
+                      ) : null}
+                    </View>
+                    <Feather name="chevron-right" size={14} color={c.mutedForeground + "40"} />
+                  </Pressable>
+                </View>
+              );
+            });
+          })()}
         </View>
         </Animated.View>
 
@@ -1899,7 +1927,7 @@ export default function DashboardScreen() {
             </View>
             <Text style={[styles.emptyHealthTitle, { color: c.foreground }]}>Connect Apple Health</Text>
             <Text style={[styles.emptyHealthDesc, { color: c.mutedForeground }]}>
-              Viva uses your sleep, steps, and heart rate to adapt your daily plan. Without it, recommendations rely on check-ins only.
+              Daily check-ins power your plan. Apple Health adds sleep, activity and recovery signals so Viva can personalize support more precisely.
             </Text>
             <Pressable
               onPress={() => {
@@ -1913,7 +1941,7 @@ export default function DashboardScreen() {
               <Text style={styles.emptyHealthBtnText}>Connect in Settings</Text>
             </Pressable>
             <Text style={[styles.emptyHealthNote, { color: c.mutedForeground }]}>
-              Check-ins are active. Health data makes plans more precise.
+              Check-ins are active. Adding Health data makes plans more precise.
             </Text>
           </View>
         )}

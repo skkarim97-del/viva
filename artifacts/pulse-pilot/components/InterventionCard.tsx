@@ -1814,12 +1814,12 @@ export function InterventionCard({
         </Text>
       )}
 
-      {/* "What we noticed" — natural-language signal summary. Replaces
-          chips with a readable sentence so the card explains itself
-          rather than labelling signals the patient has to interpret. */}
+      {/* "Why Viva suggested this" — natural-language signal summary.
+          Shows as a readable sentence so the card explains itself
+          based on the patient's check-in signals. */}
       {contextChips.length > 0 && (
         <View style={styles.noticedSection}>
-          <Text style={styles.chipsSectionLabel}>WHAT VIVA NOTICED</Text>
+          <Text style={styles.chipsSectionLabel}>WHY VIVA SUGGESTED THIS</Text>
           <Text style={[styles.noticedText, { color: mutedForeground }]}>
             {contextParagraph}
           </Text>
