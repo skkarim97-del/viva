@@ -25,6 +25,17 @@ export interface InterventionLogInput {
   title: string;
   rationale?: string | null;
   state: DailyTreatmentState;
+  // Structured plan action enrichment — optional, caller provides when available
+  optionId?: string | null;            // e.g. "fuel_balanced" — the specific option shown
+  recommendedOptionId?: string | null; // what the engine recommended for this slot
+  selectedOptionId?: string | null;    // what the patient chose (null = used recommended)
+  wasModified?: boolean;               // true when patient deviated from recommended
+  symptomContext?: {                   // symptom snapshot at the moment of recommendation
+    nausea: string | null;
+    appetite: string | null;
+    energy: string | null;
+    digestion: string | null;
+  } | null;
 }
 
 interface QueuedEvent {
@@ -33,6 +44,16 @@ interface QueuedEvent {
   interventionType: InterventionType;
   title: string;
   rationale: string | null;
+  optionId: string | null;
+  recommendedOptionId: string | null;
+  selectedOptionId: string | null;
+  wasModified: boolean;
+  symptomContext: {
+    nausea: string | null;
+    appetite: string | null;
+    energy: string | null;
+    digestion: string | null;
+  } | null;
   treatmentStateSnapshot: {
     primaryFocus: string;
     escalationNeed: "none" | "monitor" | "clinician";
@@ -202,6 +223,11 @@ export function logIntervention(input: InterventionLogInput): void {
       interventionType: input.interventionType,
       title: input.title,
       rationale: input.rationale ?? null,
+      optionId: input.optionId ?? null,
+      recommendedOptionId: input.recommendedOptionId ?? null,
+      selectedOptionId: input.selectedOptionId ?? null,
+      wasModified: input.wasModified ?? false,
+      symptomContext: input.symptomContext ?? null,
       ...snap,
     });
 
