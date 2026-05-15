@@ -1,75 +1,25 @@
-// Today-tab card that surfaces an AI-personalized micro-intervention.
+// Today-tab card surfaced inside the floating bottom sheet (index.tsx).
 //
-// Treatment-intelligence inputs the card consumes (no medical advice
-// is ever generated; these only shape provenance + tone):
-//   - liveCheckin: today's symptom selections (drives severity and
-//     adapts the title/body/supports).
-//   - hasHealthData: whether Apple Health is connected. When true,
-//     a small "Apple Health" provenance chip is rendered; when false,
-//     a one-line "Connect Apple Health" invitation appears so we
-//     never imply biometric signals we don't actually have.
-//   - doseContext: { position, recentTitration } from
-//     DailyTreatmentState. When the day sits in a post-dose window
-//     AND severity is moderate/severe we surface a small "Around
-//     dose timing" signal chip. The chip is provenance only -- the
-//     engine already biases toward gentler hydration/fueling on
-//     these days; the chip just makes that intelligence visible.
+// Interaction phases:
+//   default     -> "Start support" CTA
+//   checking    -> support in progress + "Check in now"
+//   feedback    -> "Still struggling" / "Helped" two-button response
+//   struggling  -> round 1: adjusted step + "Try adjusted support"
+//                  round 2+: care-team escalation as primary action
+//   better      -> quiet resolved state (auto-closes sheet after 1.5 s)
 //
-// Patient-facing UX (clinical micro-protocol rework):
-//   Title:    "Symptom support"
-//   Subtitle: "Based on your check-in, here's what may help today."
-//   Section:  "What we noticed"
-//             Plain-language sentence built from the symptom
-//             categories present, plus a short "we'll start with X
-//             because Y" reasoning clause when more than one symptom
-//             is present.
-//   Primary:  One prominent "Start here" action card for the
-//             highest-priority symptom, drawn from the
-//             RECOMMENDATIONS map (clinical micro-protocol with a
-//             concrete next step, e.g. "Settle nausea without
-//             skipping nutrition: try 3 to 5 bites of bland protein
-//             and small sips of water over 20-30 minutes...").
-//             Buttons: "I'll try this" / "Show me another option".
-//             "Show me another option" swaps to the category's
-//             alternate micro-protocol and flips the right button to
-//             "Back".
-//   Section:  "More support for today" -- COLLAPSED by default with
-//             a tappable header showing a count + chevron. Subtitle
-//             "Other steps that may help with appetite, energy or
-//             digestion." Expanded rows reuse the same micro-protocol
-//             content as the primary card, in compact form.
-//   Footer:   Subtle clinical guardrail copy.
+// Intelligence inputs (no LLM, no medical advice generated):
+//   - liveCheckin: today's check-in drives severity tier and copy
+//   - doseContext: post-dose window signals a "Around dose timing" chip
+//   - patientContext: shared PatientIntelligenceContext — supplies
+//     planPriority, reasonSignals, and the "Why Viva suggested this"
+//     learning copy line. No PHI is logged; only structured tags.
 //
-// Per-row state machine:
-//   default   -> "I'll try this" / "Show me another option"
-//   committed -> "How do you feel after trying it?" ->
-//                 Better / About the same / Worse
-//   better    -> "Good. Keep following your plan and check in again
-//                 if symptoms come back." (+ change-response link)
-//   no_change -> "Thanks. Let's try a different step before
-//                 escalating." -> "Show me another option" /
-//                 "Check again later". "Check again later" collapses
-//                 the panel to a quiet ack.
-//   worse     -> "Sorry that got worse. Viva can suggest another
-//                 step now or flag this for your care team." ->
-//                 "Try another option" / "Ask my care team"
-//
-// Priority ordering (see priorityRank): moderate/severe nausea ->
-// very low appetite -> constipation -> low appetite -> mild nausea ->
-// low energy -> low hydration. Reflects what most often drives GLP-1
-// discontinuation and what becomes a persistence problem if untreated.
-//
-// Server contract (preserved):
-//   - First per-row "I'll try this" tap fires onAccept ONCE per
-//     session (shown -> pending_feedback). Subsequent commits don't
-//     re-fire.
-//   - "Ask my care team" from the worse panel is the SINGLE point
-//     that calls onFeedback("worse"); the server treats that as the
-//     auto-escalation signal. Per-row Better/Same outcomes stay
-//     LOCAL so one row's Better never overwrites another row's
-//     Worse in flight.
-//   - All network calls are best-effort; errors leave the card in
-//     its current state.
+// Server contract:
+//   - onAccept fires ONCE (shown → pending_feedback). Best-effort.
+//   - onFeedback("worse") is the single escalation signal.
+//   - All network calls are best-effort; errors leave the card in its
+//     current state.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -1293,6 +1243,9 @@ export function InterventionCard({
     ],
   };
 
+  // Convenience: structured tags for analytics payloads. No PHI.
+  const reasonSignals = patientContext?.reasonSignals ?? [];
+  const planPriority = patientContext?.planPriority ?? null;
 
   // Backend call guards
   const acceptFiredRef = useRef(false);
@@ -1306,11 +1259,11 @@ export function InterventionCard({
       interventionId: intervention.id,
       triggerType: intervention.triggerType,
       severityTier: liveSeverity,
-      symptomTarget: primary?.category ?? null,
+      symptomTarget: intervention.recommendationCategory ?? null,
       planPriority,
       reason_signals: reasonSignals,
     });
-  }, [intervention.id, intervention.triggerType, liveSeverity, primary]);
+  }, [intervention.id, intervention.triggerType, intervention.recommendationCategory, liveSeverity]);
 
   // Content derivation
   const sections = useMemo(
@@ -1465,10 +1418,6 @@ export function InterventionCard({
     () => (patientContext ? buildInterventionWhyLine(patientContext) : null),
     [patientContext],
   );
-
-  // Convenience: structured tags for analytics payloads. No PHI.
-  const reasonSignals = patientContext?.reasonSignals ?? [];
-  const planPriority = patientContext?.planPriority ?? null;
 
   // Swipe card background interpolates: orange (left) → white (center) → green (right)
   // Handlers
