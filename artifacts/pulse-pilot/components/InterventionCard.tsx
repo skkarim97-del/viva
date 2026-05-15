@@ -102,6 +102,15 @@ import {
 } from "@/lib/api/interventionsClient";
 import type { DoseDayPosition } from "@/lib/engine/dailyState";
 import { logEvent } from "@/lib/analytics/client";
+import { buildInterventionWhyLine } from "@/lib/intelligence/learningCopy";
+import type { PatientIntelligenceContext } from "@/lib/intelligence/patientContext";
+import {
+  selectIntervention,
+  buildLibraryContext,
+  categoryToSymptomTarget,
+  liveSeverityToTier,
+} from "@/lib/interventions/selector";
+import type { StrategyType, SelectionResult } from "@/lib/interventions/types";
 
 // =====================================================================
 // Recommendation parsing
@@ -938,6 +947,10 @@ interface InterventionCardProps {
   // an all-good state swaps to a maintenance layout entirely.
   liveCheckin?: LiveCheckin | null;
 
+  // Shared patient intelligence context. When provided, enriches the
+  // "Why Viva suggested this" section with a learning-oriented line.
+  patientContext?: PatientIntelligenceContext | null;
+
   onAccept: (id: number) => Promise<void>;
   onDismiss: (id: number) => Promise<void>;
   onFeedback: (id: number, result: FeedbackResult) => Promise<void>;
@@ -991,6 +1004,13 @@ export function InterventionCard({
   hasHealthData = false,
   doseContext = null,
   liveCheckin = null,
+  patientContext = null,
+  onEngaged,
+  initialPhase,
+  onPhaseChange,
+  onDone,
+  initialStruggleCount,
+  onStruggleCountChange,
   onAccept,
   onDismiss,
   onFeedback,
@@ -1205,16 +1225,24 @@ export function InterventionCard({
     ],
   };
 
-  // -- Per-row action handlers --------------------------------------
-  const handleRowCommit = useCallback(
-    async (key: string) => {
-      void setRowStatus(key, "committed");
-      safeLog("intervention_started");
-      if (acceptFiredRef.current) return;
-      if (intervention.status !== "shown") {
-        acceptFiredRef.current = true;
-        return;
-      }
+  const interventionWhyLine = useMemo(
+    () => (patientContext ? buildInterventionWhyLine(patientContext) : null),
+    [patientContext],
+  );
+
+  // Swipe card background interpolates: orange (left) → white (center) → green (right)
+  // Handlers
+  const handleCommit = useCallback(async () => {
+    tap();
+    setEngagedPhase("checking");
+    safeLog("intervention_started", {
+      strategyType: selections?.initial.entry.strategyType ?? null,
+      symptomTarget: primary?.category ?? null,
+      severityTier: liveSeverity,
+      wasInitialOrAdjusted: "initial",
+      interventionEntryId: selections?.initial.entry.id ?? null,
+    });
+    if (!acceptFiredRef.current) {
       acceptFiredRef.current = true;
       try {
         await onAccept(intervention.id);
@@ -1790,111 +1818,15 @@ export function InterventionCard({
           <Text style={styles.severeCtaText}>
             Ask my care team to review
           </Text>
-        </Pressable>
-      )}
-
-      {/* -- More support for today (collapsed by default) -------- */}
-      {secondaries.length > 0 && (
-        <View style={styles.section}>
-          <Pressable
-            onPress={() => {
-              tap();
-              // Subtle expand/collapse animation. easeInEaseOut keeps
-              // the motion calm and Apple-like; we avoid spring so the
-              // section doesn't overshoot. Web is a no-op.
-              if (Platform.OS !== "web") {
-                LayoutAnimation.configureNext(
-                  LayoutAnimation.create(
-                    220,
-                    LayoutAnimation.Types.easeInEaseOut,
-                    LayoutAnimation.Properties.opacity,
-                  ),
-                );
-              }
-              setSecondaryExpanded((v) => !v);
-              if (!secondaryExpanded) safeLog("intervention_secondary_expanded");
-            }}
-            accessibilityRole="button"
-            accessibilityState={{ expanded: secondaryExpanded }}
-            accessibilityLabel={
-              secondaryExpanded
-                ? `Hide ${secondaries.length} more support options`
-                : `Show ${secondaries.length} more support options`
-            }
-            style={({ pressed }) => [
-              styles.moreSupportHeader,
-              { borderColor: background, opacity: pressed ? 0.7 : 1 },
-            ]}
-          >
-            <View style={{ flex: 1, gap: 8 }}>
-              <Text style={[styles.moreSupportTitle, { color: navy }]}>
-                More support
-              </Text>
-              {/* Mini category chips -- shows the patient at a glance
-                  WHAT the additional supports cover, not just "N more
-                  things". Tapping the row still expands. */}
-              {secondaryCategoryNouns.length > 0 && (
-                <View style={styles.supportChipsRow}>
-                  {secondaryCategoryNouns.map((noun) => (
-                    <View
-                      key={noun}
-                      style={[
-                        styles.supportChip,
-                        {
-                          backgroundColor: "rgba(31, 79, 138, 0.07)",
-                          borderColor: "rgba(31, 79, 138, 0.10)",
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[styles.supportChipText, { color: navy }]}
-                      >
-                        {noun.charAt(0).toUpperCase() + noun.slice(1)}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-            <View style={styles.moreSupportMeta}>
-              <Text
-                style={[styles.moreSupportCount, { color: mutedForeground }]}
-              >
-                {secondaries.length}
-              </Text>
-              <Feather
-                name={secondaryExpanded ? "chevron-up" : "chevron-down"}
-                size={16}
-                color={mutedForeground}
-              />
-            </View>
-          </Pressable>
-          {secondaryExpanded && (
-            <View style={styles.rowsWrap}>
-              {secondaries.map((r) => (
-                <SecondaryActionRow
-                  key={r.key}
-                  category={r.category}
-                  interventionId={intervention.id}
-                  originalBody={r.section.body}
-                  liveOverride={liveOverrides[r.key] ?? null}
-                  showingAlternate={!!sectionAlt[r.key]}
-                  status={sectionStatus[r.key] ?? null}
-                  noChangeDismissed={!!noChangeAck[r.key]}
-                  navy={navy}
-                  mutedForeground={mutedForeground}
-                  border={background}
-                  accent={accent}
-                  warning={warning}
-                  onCommit={() => handleRowCommit(r.key)}
-                  onToggleAlternate={() => handleRowToggleAlternate(r.key)}
-                  onOutcome={(outcome) => handleRowOutcome(r.key, outcome)}
-                  onReset={() => handleRowReset(r.key)}
-                  onDismissNoChange={() => handleRowDismissNoChange(r.key)}
-                  onAskCareTeam={() => handleRowAskCareTeam(r.key)}
-                />
-              ))}
-            </View>
+          {interventionWhyLine && (
+            <Text style={[styles.noticedStrategyHint, { color: mutedForeground }]}>
+              {interventionWhyLine}
+            </Text>
+          )}
+          {selections?.initial.explainWhy && !interventionWhyLine && (
+            <Text style={[styles.noticedStrategyHint, { color: mutedForeground }]}>
+              {selections.initial.explainWhy}
+            </Text>
           )}
         </View>
       )}

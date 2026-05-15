@@ -20,6 +20,8 @@ import type { ActionCategory, WeeklyPlanDay } from "@/types";
 import { selectWeeklyDayView } from "@/lib/engine";
 import { logIntervention, type InterventionType } from "@/lib/intervention/logger";
 import { logCareEventDeduped } from "@/lib/care-events/client";
+import { buildPatientContext } from "@/lib/intelligence/patientContext";
+import { buildWeekSummaryLearningLine } from "@/lib/intelligence/learningCopy";
 
 const CATEGORY_META: Record<ActionCategory, { label: string; icon: keyof typeof Feather.glyphMap; color: string }> = {
   move: { label: "Move", icon: "activity", color: "#FF6B6B" },
@@ -32,7 +34,27 @@ const CATEGORY_META: Record<ActionCategory, { label: string; icon: keyof typeof 
 export default function PlanScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
-  const { weeklyPlan, dailyState, editWeeklyAction, toggleWeeklyAction } = useApp();
+  const {
+    weeklyPlan, dailyState, editWeeklyAction, toggleWeeklyAction,
+    glp1InputHistory, completionHistory, medicationLog, profile, hasHealthData,
+  } = useApp();
+
+  const patientCtx = React.useMemo(
+    () =>
+      buildPatientContext({
+        glp1History: glp1InputHistory,
+        medicationProfile: profile.medicationProfile ?? undefined,
+        medicationLog,
+        completionHistory,
+        hasHealthData,
+      }),
+    [glp1InputHistory, profile.medicationProfile, medicationLog, completionHistory, hasHealthData],
+  );
+
+  const weekLearningLine = React.useMemo(
+    () => buildWeekSummaryLearningLine(patientCtx),
+    [patientCtx],
+  );
 
   const [editingDay, setEditingDay] = useState<WeeklyPlanDay | null>(null);
   const [editingCategory, setEditingCategory] = useState<ActionCategory | null>(null);
@@ -119,6 +141,11 @@ export default function PlanScreen() {
           {weeklyPlan.weekSummary.split("\n\n").map((line, i) => (
             <Text key={i} style={[styles.summaryText, { color: c.foreground }, i > 0 && { marginTop: 10 }]}>{line}</Text>
           ))}
+          {weekLearningLine && (
+            <Text style={[styles.summaryText, { color: c.mutedForeground, marginTop: 10, fontStyle: "italic" }]}>
+              {weekLearningLine}
+            </Text>
+          )}
         </View>
 
         {weeklyPlan.days.map((day) => {

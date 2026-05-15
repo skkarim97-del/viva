@@ -31,6 +31,9 @@ import {
 import WeightLogModal from "@/components/WeightLogModal";
 import { sessionApi } from "@/lib/api/sessionClient";
 import { logIntervention, type InterventionType } from "@/lib/intervention/logger";
+import { logEvent } from "@/lib/analytics/client";
+import { buildPatientContext } from "@/lib/intelligence/patientContext";
+import { buildPlanLearningLine } from "@/lib/intelligence/learningCopy";
 import { logCareEventDeduped, logCareEventImmediate } from "@/lib/care-events/client";
 import { useApp } from "@/context/AppContext";
 import { type SymptomKind } from "@/lib/symptomTips";
@@ -885,6 +888,80 @@ export default function DashboardScreen() {
   ];
   const metricItems = allMetricItems.filter(item => availableMetricTypes.includes(item.requiredType as any));
 
+  const wearableContextForCard = hasHealthData
+    ? {
+        steps: todayMetrics.steps,
+        sleepHours: todayMetrics.sleepDuration,
+        restingHR: typeof todayMetrics.restingHeartRate === "number" ? todayMetrics.restingHeartRate : null,
+        activeCalories: todayMetrics.activeCalories ?? null,
+      }
+    : null;
+
+  // Floating pill signals — short symptom label used in pill copy
+  const liveCheckinForTrigger = symptomHydrated
+    ? { nausea, appetite, energy: glp1Energy, digestion, bowel: bowelSelectedKey }
+    : null;
+
+  const patientCtx = React.useMemo(
+    () =>
+      buildPatientContext({
+        glp1History: glp1InputHistory,
+        medicationProfile: profile.medicationProfile ?? undefined,
+        medicationLog,
+        completionHistory,
+        todayCheckin: liveCheckinForTrigger
+          ? {
+              nausea: liveCheckinForTrigger.nausea ?? undefined,
+              appetite: liveCheckinForTrigger.appetite ?? undefined,
+              energy: liveCheckinForTrigger.energy ?? undefined,
+              digestion: liveCheckinForTrigger.digestion ?? undefined,
+            }
+          : null,
+        hasHealthData,
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [glp1InputHistory, profile.medicationProfile, medicationLog, completionHistory, liveCheckinForTrigger, hasHealthData],
+  );
+
+  const planLearningLine = React.useMemo(
+    () => buildPlanLearningLine(patientCtx),
+    [patientCtx],
+  );
+
+  const symptomShortLabel = React.useMemo((): string => {
+    const ch = liveCheckinForTrigger;
+    if (ch?.nausea === "severe" || ch?.nausea === "moderate" || ch?.nausea === "mild") return "nausea";
+    if (ch?.appetite === "very_low" || ch?.appetite === "low") return "appetite";
+    if (ch?.energy === "depleted") return "energy";
+    return "symptoms";
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nausea, appetite, glp1Energy]);
+
+  // Semantic pill state drives colour + copy for the floating pill.
+  //   blue   = intervention ready, not yet started
+  //   purple = support active / adjusted support active
+  //   orange = user reported no improvement — adjusted step or escalation ready
+  //   green  = resolved — persists until symptoms change or a new cycle starts
+  const supportPillState = React.useMemo((): "blue" | "purple" | "orange" | "green" => {
+    if (supportResolved) return "green";
+    if (!supportBannerVisible) return "blue";
+    if (supportPhase === "struggling") return "orange";
+    return "purple";
+  }, [supportResolved, supportBannerVisible, supportPhase]);
+
+  const supportPillText = React.useMemo((): string => {
+    if (supportResolved) return "Symptoms improving · Monitoring";
+    if (!supportBannerVisible) return "Manage symptoms";
+    if (supportPhase === "struggling") {
+      return supportStruggleCount >= 2
+        ? "Care team support available"
+        : "Additional support ready · Review";
+    }
+    return supportStruggleCount >= 1
+      ? "Updated support in progress"
+      : "Support in progress · Check in";
+  }, [supportResolved, supportBannerVisible, supportPhase, supportStruggleCount]);
+
   // Status chip + hero come from the central selectors. They
   // automatically degrade to a calm "Set up your day" / "Tell us how
   // today is going" prompt when sufficiency is too low for a
@@ -1489,8 +1566,40 @@ export default function DashboardScreen() {
           <Text style={[styles.sectionSubtitle, { color: c.mutedForeground }]}>
             Small actions that support progress
           </Text>
-          {planActions.map((action) => {
-            const meta = ACTION_META[action.category];
+          {planLearningLine && (
+            <View style={[styles.symptomAwareBanner, { backgroundColor: c.warning + "12", borderColor: c.warning + "30" }]}>
+              <Feather name="info" size={11} color={c.warning} />
+              <Text style={[styles.symptomAwareBannerText, { color: c.warning }]}>
+                {planLearningLine}
+              </Text>
+            </View>
+          )}
+          {(() => {
+            // When nausea or GI symptoms are elevated, override plan item
+            // titles and subtitles with GI-specific copy. The underlying
+            // plan data is unchanged; this is a display-layer adaptation
+            // so the patient sees actionable, symptom-aware language.
+            const isGiElevated =
+              nausea === "moderate" || nausea === "severe" ||
+              digestion === "diarrhea" || digestion === "constipated";
+            const GI_OVERRIDES: Partial<Record<ActionCategory, { title: string; subtitle: string }>> = {
+              move: {
+                title: "Gentle walk",
+                subtitle: "5–10 min after food if tolerated.",
+              },
+              fuel: {
+                title: "Small bland meals",
+                subtitle: "Crackers, toast, rice or soup in small portions.",
+              },
+              hydrate: {
+                title: "Slow fluids",
+                subtitle: "Small sips every few minutes. Avoid large amounts at once.",
+              },
+              recover: {
+                title: "Lower intensity",
+                subtitle: "Keep today light while symptoms settle.",
+              },
+            };
 
             return (
               <View key={action.id} style={[
@@ -2230,6 +2339,134 @@ export default function DashboardScreen() {
           updateProfileForWeightSync({ weight: w });
         }}
       />
+
+      {/* ── Support sheet ────────────────────────────────────────────
+          The backdrop and sheet are absolute siblings to the ScrollView
+          so they overlay the full tab. The InterventionCard lives inside
+          the sheet and manages its own phase state machine; we persist
+          phase here so it survives the sheet closing and reopening. */}
+
+      {/* Backdrop — always in tree, opacity animated to 0 when closed.
+          On native: BlurView gives true iOS-style dark desaturation.
+          On web: plain dark-navy translucent overlay. */}
+      <Animated.View
+        pointerEvents={supportSheetOpen ? "auto" : "none"}
+        style={[StyleSheet.absoluteFill, { bottom: sheetBottomOffset, opacity: backdropAnim }]}
+      >
+        {Platform.OS !== "web" ? (
+          <BlurView
+            intensity={22}
+            tint="dark"
+            style={StyleSheet.absoluteFill}
+          >
+            <View style={[StyleSheet.absoluteFill, styles.backdropDark]} />
+            <Pressable style={StyleSheet.absoluteFill} onPress={closeSupportSheet} />
+          </BlurView>
+        ) : (
+          <View style={[StyleSheet.absoluteFill, styles.backdropDark]}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={closeSupportSheet} />
+          </View>
+        )}
+      </Animated.View>
+
+      {/* Sheet — rendered only while open so InterventionCard mounts
+          fresh (initialPhase carries forward the last-known phase). */}
+      {supportSheetOpen && activeInterventions[0] && (
+        <Animated.View
+          style={[
+            styles.supportSheet,
+            {
+              bottom: sheetBottomOffset,
+              maxHeight: windowHeight * 0.82,
+              transform: [{ translateY: sheetAnim }],
+            },
+          ]}
+        >
+          {/* Drag handle */}
+          <View style={styles.sheetHandle} />
+
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingBottom: 32 }}
+          >
+            <InterventionCard
+              key={activeInterventions[0].id}
+              intervention={activeInterventions[0]}
+              navy={c.foreground}
+              accent={c.accent}
+              cardBg={c.card}
+              background={c.background}
+              mutedForeground={c.mutedForeground}
+              warning={c.warning}
+              hasHealthData={hasHealthData}
+              initialPhase={supportPhase}
+              onPhaseChange={handleSupportPhaseChange}
+              onDone={handleSupportDone}
+              initialStruggleCount={supportStruggleCount}
+              onStruggleCountChange={setSupportStruggleCount}
+              doseContext={
+                dailyState
+                  ? {
+                      position: dailyState.doseDayPosition,
+                      recentTitration: dailyState.recentTitration,
+                      daysSinceLastDose: dailyState.daysSinceLastDose,
+                    }
+                  : null
+              }
+              symptomCounts={symptomCounts}
+              wearableContext={wearableContextForCard}
+              liveCheckin={liveCheckinForTrigger}
+              patientContext={patientCtx}
+              onEngaged={setInterventionEngaged}
+              onAccept={onInterventionAccept}
+              onDismiss={onInterventionDismiss}
+              onFeedback={onInterventionFeedback}
+              onEscalate={onInterventionEscalate}
+            />
+          </ScrollView>
+        </Animated.View>
+      )}
+      {/* Floating support pill — ambient entry point for symptom management.
+          Shown when an intervention is ready, in progress, or recently
+          resolved. Hidden while the sheet is open. Colour signals state. */}
+      {!supportSheetOpen && (supportResolved || (activeLoaded && activeInterventions.length > 0)) && (
+        <Pressable
+          style={[
+            styles.supportBanner,
+            supportPillState === "purple" && styles.supportBannerPurple,
+            supportPillState === "orange" && styles.supportBannerOrange,
+            supportPillState === "green" && styles.supportBannerGreen,
+            { bottom: sheetBottomOffset + 8 },
+          ]}
+          onPress={supportPillState === "green"
+            ? () => setSupportResolved(false)
+            : openSupportSheet}
+          accessibilityRole="button"
+          accessibilityLabel={supportPillText}
+        >
+          <View style={[
+            styles.supportBannerDot,
+            supportPillState === "purple" && styles.supportBannerDotPurple,
+            supportPillState === "orange" && styles.supportBannerDotOrange,
+            supportPillState === "green" && styles.supportBannerDotGreen,
+          ]} />
+          <Text style={styles.supportBannerTitle} numberOfLines={1} ellipsizeMode="tail">
+            {supportPillText}
+          </Text>
+          <Feather
+            name={supportPillState === "green" ? "x" : "chevron-up"}
+            size={14}
+            color={
+              supportPillState === "purple" ? "#7B5EA7"
+              : supportPillState === "orange" ? "#B87333"
+              : supportPillState === "green" ? "#2D9E6A"
+              : "#5A82B0"
+            }
+          />
+        </Pressable>
+      )}
     </KeyboardAvoidingView>
   );
 }
