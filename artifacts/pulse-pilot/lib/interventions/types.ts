@@ -80,10 +80,17 @@ export interface LibraryContext {
   // Dose context — influences scoring and explainability copy
   doseTier: "low" | "mid" | "high" | null;
   recentDoseChange: boolean;
+  // Cross-session history signals (sourced from history.ts deriveWeights)
+  priorFailureCount7d: number;
+  priorWorseCount7d: number;
 }
 
 export interface SelectionResult {
   entry: LibraryEntry;
   /** One-sentence explainability note. Null when context is obvious. */
   explainWhy: string | null;
+  /** True when the selected strategyType had a "better" outcome in cross-session history. */
+  wasSuccessfulBefore: boolean;
+  /** True when history signals repeated failure or worsening — surface escalation. */
+  shouldEscalate: boolean;
 }

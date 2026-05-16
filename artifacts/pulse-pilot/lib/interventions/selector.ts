@@ -113,8 +113,15 @@ function buildExplainWhy(
   mode: "initial" | "adjusted",
 ): string | null {
   if (mode === "adjusted") {
-    // Always explain strategy shift after a failed round
+    if (ctx.priorWorseCount7d >= 2) {
+      return "Multiple strategies haven't helped this week — consider reaching out to your care team.";
+    }
     return "Viva switched to a different strategy after the previous step didn't help.";
+  }
+
+  // History-aware: previously successful strategy
+  if (ctx.successfulStrategyTypes.includes(entry.strategyType)) {
+    return "This approach helped before — Viva is suggesting it again based on your history.";
   }
 
   // Initial selection: explain if a non-obvious context signal drove the pick
@@ -139,11 +146,9 @@ function buildExplainWhy(
   if (entry.postDoseRelevant && ctx.postDose) {
     return "Viva adjusted support for the post-dose window, when symptoms often peak.";
   }
-
   if (ctx.recentDoseChange) {
     return "Viva is weighting today's symptoms more carefully after your recent dose change.";
   }
-
   if (ctx.doseTier === "high" && entry.behavioralBurden === "low") {
     return "Your current dose context makes gentle support a better first step.";
   }
@@ -190,7 +195,7 @@ export function selectIntervention(
   // Absolute fallback: first entry in the library (should never reach here)
   if (eligible.length === 0) {
     const fallback = LIBRARY[0]!;
-    return { entry: fallback, explainWhy: null };
+    return { entry: fallback, explainWhy: null, wasSuccessfulBefore: false, shouldEscalate: false };
   }
 
   const scored = eligible
@@ -201,7 +206,12 @@ export function selectIntervention(
   const tied = scored.filter((x) => x.s === topScore).map((x) => x.e);
   const best = pickFromTied(tied, ctx.seed);
 
-  return { entry: best, explainWhy: buildExplainWhy(best, ctx, mode) };
+  const explainWhy = buildExplainWhy(best, ctx, mode);
+  const wasSuccessfulBefore = ctx.successfulStrategyTypes.includes(best.strategyType);
+  // Escalate when 2+ "worse" outcomes in 7 days, or 3+ total failures
+  const shouldEscalate =
+    ctx.priorWorseCount7d >= 2 || ctx.priorFailureCount7d >= 3;
+  return { entry: best, explainWhy, wasSuccessfulBefore, shouldEscalate };
 }
 
 // ---------------------------------------------------------------------------
@@ -224,6 +234,8 @@ export function buildLibraryContext(opts: {
   successfulStrategyTypes?: StrategyType[];
   doseTier?: "low" | "mid" | "high" | null;
   recentDoseChange?: boolean;
+  priorFailureCount7d?: number;
+  priorWorseCount7d?: number;
 }): LibraryContext {
   const day = Math.floor(Date.now() / 86_400_000);
   return {
@@ -242,6 +254,8 @@ export function buildLibraryContext(opts: {
     successfulStrategyTypes: opts.successfulStrategyTypes ?? [],
     doseTier: opts.doseTier ?? null,
     recentDoseChange: opts.recentDoseChange ?? false,
+    priorFailureCount7d: opts.priorFailureCount7d ?? 0,
+    priorWorseCount7d: opts.priorWorseCount7d ?? 0,
   };
 }
 
