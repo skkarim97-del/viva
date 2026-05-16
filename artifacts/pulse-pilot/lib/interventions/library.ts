@@ -692,9 +692,9 @@ export const LIBRARY: LibraryEntry[] = [
     escalationPrevention: false,
     exampleContextTriggers: ["multiple symptoms", "overwhelmed", "uncertain where to start"],
     copy: {
-      title: "Pick one action and do it now",
-      body: "Choose ONE: take 4–5 sips of water, eat 2–3 bites of a familiar food (yogurt, crackers, or a banana), or sit quietly for 5 minutes with slow breathing. Just one.",
-      helper: "One small, completable action is more useful than trying to address everything at once.",
+      title: "Sit upright and breathe slowly for 5 minutes",
+      body: "Sit upright in a quiet spot. Breathe in through your nose for 4 counts, out through your mouth for 6. Repeat for 5 minutes. Then take 4–5 slow sips of water.",
+      helper: "A short quiet reset can help when multiple symptoms are competing for attention.",
     },
   },
 

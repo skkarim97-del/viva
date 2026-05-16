@@ -39,7 +39,6 @@ import {
 } from "@/lib/api/interventionsClient";
 import type { DoseDayPosition } from "@/lib/engine/dailyState";
 import { logEvent } from "@/lib/analytics/client";
-import { buildInterventionWhyLine } from "@/lib/intelligence/learningCopy";
 import type { PatientIntelligenceContext } from "@/lib/intelligence/patientContext";
 import {
   selectIntervention,
@@ -332,11 +331,10 @@ const RECOMMENDATIONS: Record<RecCategory, { variants: RecContent[] }> = {
   other: {
     variants: [
       {
-        // Primary: pick one action
-        title: "Pick one action and do it now",
-        body: "Choose ONE: take 4\u20135 sips of water, eat 2\u20133 bites of a familiar food (Greek yogurt, crackers, or a banana), or sit quietly for 5 minutes with slow breathing.",
+        title: "Sit upright and breathe slowly for 5 minutes",
+        body: "Sit upright in a quiet spot. Breathe in through your nose for 4 counts, out through your mouth for 6. Repeat for 5 minutes. Then take 4\u20135 slow sips of water.",
         helper:
-          "One small, completable action is more useful than trying to address everything at once.",
+          "A short quiet reset can help when multiple symptoms are competing for attention.",
       },
       {
         // Alternate (adjusted step): lowest possible bar
@@ -453,6 +451,54 @@ function joinList(items: string[]): string {
   if (items.length === 1) return items[0]!;
   if (items.length === 2) return `${items[0]} and ${items[1]}`;
   return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
+
+function humanSymptomName(category: RecCategory): string {
+  switch (category) {
+    case "nausea":       return "nausea";
+    case "appetite":     return "appetite issues";
+    case "energy":       return "low energy";
+    case "constipation": return "digestion issues";
+    case "hydration":    return "low hydration";
+    default:             return "these symptoms";
+  }
+}
+
+// Returns exactly one sentence surfaced above the recommendation card.
+// Priority: state-based message (escalate/repeat_success/recurring) >
+// symptom-derived phrase > null (nothing shown).
+function buildContextLine(
+  selections: { initial: SelectionResult; adjusted: SelectionResult } | null,
+  liveCheckin: LiveCheckin | null | undefined,
+  primaryCategory: RecCategory | null | undefined,
+  symptomRecurring7d: boolean,
+): string | null {
+  const symptomName = primaryCategory ? humanSymptomName(primaryCategory) : "these symptoms";
+
+  if (selections) {
+    const { state, rationale } = selections.initial;
+    if (state === "escalate") return rationale;
+    if (state === "repeat_success") {
+      return `This helped last time ${symptomName} showed up, so Viva is starting here again.`;
+    }
+    if (state === "first_line_support" && symptomRecurring7d) {
+      return "This symptom has appeared across recent check-ins, so today's support is focused and simple.";
+    }
+  }
+
+  if (!liveCheckin) return null;
+  if (liveCheckin.nausea === "severe" || liveCheckin.nausea === "moderate") {
+    return "Nausea is elevated today, so Viva is starting with a gentle first step.";
+  }
+  if (liveCheckin.nausea === "mild")     return "Mild nausea is showing up today, so Viva is starting with a gentle first step.";
+  if (liveCheckin.appetite === "very_low") return "Appetite is very low today, so Viva is starting with gentle support.";
+  if (liveCheckin.appetite === "low")      return "Appetite is lower than usual, so Viva is starting with gentle support.";
+  if (liveCheckin.energy === "depleted")   return "Energy is very low today, so Viva is starting with gentle support.";
+  if (liveCheckin.energy === "tired")      return "Energy is lower than usual, so Viva is starting with gentle support.";
+  if (liveCheckin.digestion === "constipated" || liveCheckin.bowel === "no") {
+    return "Digestion is sluggish today, so Viva is starting with gentle support.";
+  }
+  return null;
 }
 
 // =====================================================================
@@ -1334,6 +1380,17 @@ export function InterventionCard({
 
   const primary = displayRows[0];
 
+  const symptomRecurring7d = useMemo(() => {
+    if (!symptomCounts || !primary) return false;
+    switch (primary.category) {
+      case "nausea":       return symptomCounts.nausea7d >= 3;
+      case "appetite":     return symptomCounts.lowAppetite7d >= 3;
+      case "energy":       return symptomCounts.lowEnergy7d >= 3;
+      case "constipation": return symptomCounts.constipation7d >= 3;
+      default:             return false;
+    }
+  }, [symptomCounts, primary?.category]);
+
   // Adaptive selection — compute initial + adjusted in one pass so the
   // adjusted result can guarantee it differs from the initial strategy.
   const selections = useMemo<{
@@ -1343,25 +1400,12 @@ export function InterventionCard({
     if (!primary || !liveSeverity || liveSeverity === "steady") return null;
     const symptomTarget = categoryToSymptomTarget(primary.category);
     const severityTier = liveSeverityToTier(liveSeverity);
-    // Filter history by the current symptom target so a strategy that failed
-    // for nausea is not suppressed when used for a different symptom (e.g. sleep).
     const successfulFromHistory = historyWeights?.successfulBySymptom[symptomTarget] ?? [];
     const failedFromHistory = historyWeights?.failedBySymptom[symptomTarget] ?? [];
     const mergedFailedStrategies = [
       ...failedStrategyTypes,
       ...failedFromHistory.filter((s) => !failedStrategyTypes.includes(s)),
     ];
-    // True when the primary symptom appeared 3+ times in the past 7 days.
-    const symptomRecurring7d = (() => {
-      if (!symptomCounts) return false;
-      switch (primary.category) {
-        case "nausea":       return symptomCounts.nausea7d >= 3;
-        case "appetite":     return symptomCounts.lowAppetite7d >= 3;
-        case "energy":       return symptomCounts.lowEnergy7d >= 3;
-        case "constipation": return symptomCounts.constipation7d >= 3;
-        default:             return false;
-      }
-    })();
     const ctx = buildLibraryContext({
       primarySymptom: symptomTarget,
       severityTier,
@@ -1413,7 +1457,7 @@ export function InterventionCard({
     patientContext?.medication.doseChangedRecently,
     wearableContext?.sleepHours,
     historyWeights,
-    symptomCounts,
+    symptomRecurring7d,
   ]);
 
   const primaryContent = useMemo<RecContent>(() => {
@@ -1454,22 +1498,11 @@ export function InterventionCard({
     return picked.alternate;
   }, [selections, primary, primaryContent, intervention.id]);
 
-  const contextParagraph = useMemo(
-    () => buildContextParagraph(liveCheckin, doseContext, symptomCounts, wearableContext),
-    [liveCheckin, doseContext, symptomCounts, wearableContext],
+  const contextLine = useMemo(
+    () => buildContextLine(selections, liveCheckin, primary?.category, symptomRecurring7d),
+    [selections, liveCheckin, primary?.category, symptomRecurring7d],
   );
 
-  const contextChips = useMemo(
-    () => buildContextChips(liveCheckin, doseContext, symptomCounts),
-    [liveCheckin, doseContext, symptomCounts],
-  );
-
-  const interventionWhyLine = useMemo(
-    () => (patientContext ? buildInterventionWhyLine(patientContext) : null),
-    [patientContext],
-  );
-
-  // Swipe card background interpolates: orange (left) → white (center) → green (right)
   // Handlers
   const handleCommit = useCallback(async () => {
     tap();
@@ -1741,10 +1774,12 @@ export function InterventionCard({
               <Text style={[styles.heroBody, { color: navy }]}>
                 {alternateContent.body}
               </Text>
+              {alternateContent.helper.trim().length > 0 && (
+                <Text style={[styles.cardSubtitle, { marginBottom: 0, marginTop: 4 }]}>
+                  {alternateContent.helper}
+                </Text>
+              )}
             </View>
-            {alternateContent.helper.trim().length > 0 && (
-              <Text style={styles.cardSubtitle}>{alternateContent.helper}</Text>
-            )}
             <Pressable
               style={({ pressed }) => [styles.primaryBtn, { opacity: pressed ? 0.82 : 1 }]}
               onPress={handleTryAdjusted}
@@ -1857,49 +1892,17 @@ export function InterventionCard({
         <Text style={styles.supportPillText}>{pillLabel}</Text>
       </View>
 
-      {/* Title — specific clinical headline */}
+      {/* Title */}
       <Text style={[styles.cardTitle, { color: navy }]}>{cardTitle}</Text>
 
-      {/* Subtitle — one short supporting sentence */}
-      {primaryContent.helper.trim().length > 0 && (
-        <Text style={styles.cardSubtitle}>
-          {primaryContent.helper}
+      {/* One context sentence — state-based or symptom-derived */}
+      {contextLine && (
+        <Text style={[styles.cardSubtitle, { marginBottom: 20 }]}>
+          {contextLine}
         </Text>
       )}
 
-      {/* "Why Viva suggested this" — layered signal summary:
-          1. contextParagraph: today's symptoms (always present when chips show)
-          2. rationale: why this specific intervention was selected
-          3. patternInsight: pattern observation when real data supports it
-          4. interventionWhyLine: broader patient context (dose, trends) */}
-      {contextChips.length > 0 && (
-        <View style={styles.noticedSection}>
-          <Text style={styles.chipsSectionLabel}>WHY VIVA SUGGESTED THIS</Text>
-          <Text style={[styles.noticedText, { color: mutedForeground }]}>
-            {contextParagraph}
-          </Text>
-          {selections?.initial.rationale && (
-            <Text style={[styles.noticedStrategyHint, { color: mutedForeground }]}>
-              {selections.initial.rationale}
-            </Text>
-          )}
-          {selections?.initial.patternInsight && (
-            <Text style={[styles.noticedStrategyHint, { color: mutedForeground }]}>
-              {selections.initial.patternInsight}
-            </Text>
-          )}
-          {/* interventionWhyLine is suppressed when the selector is active — rationale
-              already accounts for dose-change, GI, and trend signals. Show it only
-              when there is no library selection (e.g. server-only recommendation). */}
-          {interventionWhyLine && !selections && (
-            <Text style={[styles.noticedStrategyHint, { color: mutedForeground }]}>
-              {interventionWhyLine}
-            </Text>
-          )}
-        </View>
-      )}
-
-      {/* Hero action panel — blue-ice surface, prominent */}
+      {/* Hero action panel */}
       <View style={styles.heroPanel}>
         <View style={styles.heroPanelHeader}>
           <Feather
@@ -1912,6 +1915,11 @@ export function InterventionCard({
         <Text style={[styles.heroBody, { color: navy }]}>
           {primaryContent.body}
         </Text>
+        {primaryContent.helper.trim().length > 0 && (
+          <Text style={[styles.cardSubtitle, { marginBottom: 0, marginTop: 4 }]}>
+            {primaryContent.helper}
+          </Text>
+        )}
       </View>
 
       {/* Primary CTA */}
