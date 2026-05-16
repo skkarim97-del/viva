@@ -108,9 +108,9 @@ function buildRationale(
     case "repeat_success":
       return "This approach helped before, so Viva is starting there again.";
     case "try_alternative":
-      return "Since the last approach didn't help, Viva is trying something different.";
+      return "Since the last step did not help, Viva is trying a different approach today.";
     case "escalate":
-      return "Since this hasn't improved after a few tries, your care team may be better positioned to help.";
+      return "Since this has not improved after a few tries, your care team may be better positioned to help.";
     case "first_line_support":
       if (entry.hydrationRelated && ctx.hydrationLow)
         return "Viva is starting with hydration because fluid intake appears low.";
