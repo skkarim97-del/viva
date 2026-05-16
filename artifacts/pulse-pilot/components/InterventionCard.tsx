@@ -1351,6 +1351,17 @@ export function InterventionCard({
       ...failedStrategyTypes,
       ...failedFromHistory.filter((s) => !failedStrategyTypes.includes(s)),
     ];
+    // True when the primary symptom appeared 3+ times in the past 7 days.
+    const symptomRecurring7d = (() => {
+      if (!symptomCounts) return false;
+      switch (primary.category) {
+        case "nausea":       return symptomCounts.nausea7d >= 3;
+        case "appetite":     return symptomCounts.lowAppetite7d >= 3;
+        case "energy":       return symptomCounts.lowEnergy7d >= 3;
+        case "constipation": return symptomCounts.constipation7d >= 3;
+        default:             return false;
+      }
+    })();
     const ctx = buildLibraryContext({
       primarySymptom: symptomTarget,
       severityTier,
@@ -1364,6 +1375,7 @@ export function InterventionCard({
         liveCheckin?.nausea === "severe" ||
         liveCheckin?.digestion === "diarrhea",
       lowSleep: (wearableContext?.sleepHours ?? Infinity) < 6,
+      symptomRecurring7d,
       postDose:
         doseContext?.position === "dose_day" ||
         doseContext?.position === "day_1_post" ||
@@ -1401,6 +1413,7 @@ export function InterventionCard({
     patientContext?.medication.doseChangedRecently,
     wearableContext?.sleepHours,
     historyWeights,
+    symptomCounts,
   ]);
 
   const primaryContent = useMemo<RecContent>(() => {
@@ -1713,8 +1726,8 @@ export function InterventionCard({
 
         {!isEscalationRound && (
           <Text style={styles.adaptiveHint}>
-            {selections?.adjusted.explainWhy ??
-              "Adjusting your support based on your feedback."}
+            {selections?.adjusted.rationale ??
+              "Viva is trying a different approach based on your feedback."}
           </Text>
         )}
 
@@ -1854,28 +1867,30 @@ export function InterventionCard({
         </Text>
       )}
 
-      {/* "Why Viva suggested this" — natural-language signal summary.
-          Shows as a readable sentence so the card explains itself
-          based on the patient's check-in signals. */}
+      {/* "Why Viva suggested this" — layered signal summary:
+          1. contextParagraph: today's symptoms (always present when chips show)
+          2. rationale: why this specific intervention was selected
+          3. patternInsight: pattern observation when real data supports it
+          4. interventionWhyLine: broader patient context (dose, trends) */}
       {contextChips.length > 0 && (
         <View style={styles.noticedSection}>
           <Text style={styles.chipsSectionLabel}>WHY VIVA SUGGESTED THIS</Text>
           <Text style={[styles.noticedText, { color: mutedForeground }]}>
             {contextParagraph}
           </Text>
+          {selections?.initial.rationale && (
+            <Text style={[styles.noticedStrategyHint, { color: mutedForeground }]}>
+              {selections.initial.rationale}
+            </Text>
+          )}
+          {selections?.initial.patternInsight && (
+            <Text style={[styles.noticedStrategyHint, { color: mutedForeground }]}>
+              {selections.initial.patternInsight}
+            </Text>
+          )}
           {interventionWhyLine && (
             <Text style={[styles.noticedStrategyHint, { color: mutedForeground }]}>
               {interventionWhyLine}
-            </Text>
-          )}
-          {selections?.initial.explainWhy && !interventionWhyLine && (
-            <Text style={[styles.noticedStrategyHint, { color: mutedForeground }]}>
-              {selections.initial.explainWhy}
-            </Text>
-          )}
-          {selections?.initial.wasSuccessfulBefore && (
-            <Text style={[styles.noticedStrategyHint, { color: mutedForeground }]}>
-              This type of support helped last time.
             </Text>
           )}
         </View>
