@@ -1888,7 +1888,10 @@ export function InterventionCard({
               {selections.initial.patternInsight}
             </Text>
           )}
-          {interventionWhyLine && (
+          {/* interventionWhyLine is suppressed when the selector is active — rationale
+              already accounts for dose-change, GI, and trend signals. Show it only
+              when there is no library selection (e.g. server-only recommendation). */}
+          {interventionWhyLine && !selections && (
             <Text style={[styles.noticedStrategyHint, { color: mutedForeground }]}>
               {interventionWhyLine}
             </Text>
