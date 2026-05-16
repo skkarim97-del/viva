@@ -1188,7 +1188,9 @@ export function InterventionCard({
   // immediately without waiting for storage.
   const [historyWeights, setHistoryWeights] = useState<DerivedWeights | null>(null);
   useEffect(() => {
-    void deriveWeights().then(setHistoryWeights).catch(() => {/* best-effort */});
+    let active = true;
+    void deriveWeights().then((w) => { if (active) setHistoryWeights(w); }).catch(() => {});
+    return () => { active = false; };
   }, []);
 
   const setEngagedPhase = useCallback(
@@ -1341,11 +1343,13 @@ export function InterventionCard({
     if (!primary || !liveSeverity || liveSeverity === "steady") return null;
     const symptomTarget = categoryToSymptomTarget(primary.category);
     const severityTier = liveSeverityToTier(liveSeverity);
+    // Filter history by the current symptom target so a strategy that failed
+    // for nausea is not suppressed when used for a different symptom (e.g. sleep).
+    const successfulFromHistory = historyWeights?.successfulBySymptom[symptomTarget] ?? [];
+    const failedFromHistory = historyWeights?.failedBySymptom[symptomTarget] ?? [];
     const mergedFailedStrategies = [
       ...failedStrategyTypes,
-      ...(historyWeights?.failedStrategyTypes ?? []).filter(
-        (s) => !failedStrategyTypes.includes(s),
-      ),
+      ...failedFromHistory.filter((s) => !failedStrategyTypes.includes(s)),
     ];
     const ctx = buildLibraryContext({
       primarySymptom: symptomTarget,
@@ -1354,12 +1358,12 @@ export function InterventionCard({
       hasLowAppetite:
         liveCheckin?.appetite === "low" || liveCheckin?.appetite === "very_low",
       hasVeryLowAppetite: liveCheckin?.appetite === "very_low",
+      // Only infer low hydration from direct intake/nausea signals, not step count.
       hydrationLow:
         liveCheckin?.appetite === "very_low" ||
-        (wearableContext?.steps != null && wearableContext.steps < 2000),
-      lowSleep:
-        wearableContext?.sleepHours != null && wearableContext.sleepHours < 6,
-      lowHrv: false,
+        liveCheckin?.nausea === "severe" ||
+        liveCheckin?.digestion === "diarrhea",
+      lowSleep: (wearableContext?.sleepHours ?? Infinity) < 6,
       postDose:
         doseContext?.position === "dose_day" ||
         doseContext?.position === "day_1_post" ||
@@ -1367,7 +1371,7 @@ export function InterventionCard({
       interventionId: intervention.id,
       lastEntryId,
       failedStrategyTypes: mergedFailedStrategies,
-      successfulStrategyTypes: historyWeights?.successfulStrategyTypes ?? [],
+      successfulStrategyTypes: successfulFromHistory,
       doseTier: patientContext?.medication.doseTier ?? null,
       recentDoseChange: patientContext?.medication.doseChangedRecently ?? false,
       priorFailureCount7d: historyWeights?.priorFailureCount7d ?? 0,
@@ -1395,7 +1399,7 @@ export function InterventionCard({
     failedStrategyTypes,
     patientContext?.medication.doseTier,
     patientContext?.medication.doseChangedRecently,
-    wearableContext,
+    wearableContext?.sleepHours,
     historyWeights,
   ]);
 
@@ -1491,7 +1495,9 @@ export function InterventionCard({
       planPriority,
       reason_signals: reasonSignals,
     });
-    // Record "worse" for the active strategy so future sessions can escalate earlier
+    // Record "requested_review" — distinct from "worse" (which means symptoms
+    // explicitly worsened). This contributes to the overall failure count for
+    // escalation scoring without inflating the "worsening" signal.
     const activeStrategy =
       failedStrategyTypes.length > 0
         ? selections?.adjusted.entry.strategyType
@@ -1500,17 +1506,15 @@ export function InterventionCard({
       void recordOutcome(
         activeStrategy,
         categoryToSymptomTarget(primary.category),
-        "worse",
+        "requested_review",
       );
     }
     try {
       if (intervention.status === "shown" && !acceptFiredRef.current) {
         acceptFiredRef.current = true;
-        try {
-          await onAccept(intervention.id);
-        } catch {
+        await onAccept(intervention.id).catch(() => {
           if (intervention.status === "shown") acceptFiredRef.current = false;
-        }
+        });
       }
       await onFeedback(intervention.id, "worse");
     } catch {

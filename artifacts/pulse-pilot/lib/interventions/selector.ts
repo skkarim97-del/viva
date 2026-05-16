@@ -114,9 +114,9 @@ function buildExplainWhy(
 ): string | null {
   if (mode === "adjusted") {
     if (ctx.priorWorseCount7d >= 2) {
-      return "Multiple strategies haven't helped this week — consider reaching out to your care team.";
+      return "Since this hasn't improved after a few tries, your care team may be better positioned to help.";
     }
-    return "Viva switched to a different strategy after the previous step didn't help.";
+    return "Viva is trying a different approach based on your feedback.";
   }
 
   // History-aware: previously successful strategy

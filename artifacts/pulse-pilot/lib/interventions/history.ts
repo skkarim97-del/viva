@@ -22,28 +22,36 @@ import type { StrategyType, SymptomTarget } from "./types";
 const KEY = "@viva_intervention_history";
 const TTL_DAYS = 14;
 
+// "requested_review" means the patient asked for care-team review — not the
+// same as "worse" (symptoms explicitly worsened). It contributes to the overall
+// "things haven't resolved" count but must not inflate the "worsening" signal.
+type Feedback = "better" | "same" | "worse" | "requested_review" | null;
+
 interface StrategyRecord {
   strategyType: StrategyType;
   symptomTarget: SymptomTarget;
   date: string; // YYYY-MM-DD
-  feedback: "better" | "same" | "worse" | null;
+  feedback: Feedback;
 }
 
 export interface DerivedWeights {
-  successfulStrategyTypes: StrategyType[];
-  failedStrategyTypes: StrategyType[];
+  // Per-symptom maps — always filter by the current symptom target so a
+  // strategy that failed for nausea is not suppressed when used for sleep.
+  successfulBySymptom: Partial<Record<SymptomTarget, StrategyType[]>>;
+  failedBySymptom: Partial<Record<SymptomTarget, StrategyType[]>>;
+  // Cross-symptom counts used only as an overall escalation signal.
   priorFailureCount7d: number;
   priorWorseCount7d: number;
 }
 
-function today(): string {
-  return new Date().toISOString().split("T")[0]!;
+function toDateString(d: Date): string {
+  return d.toISOString().split("T")[0]!;
 }
 
-function daysAgo(n: number): string {
+function cutoffDate(daysBack: number): string {
   const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().split("T")[0]!;
+  d.setDate(d.getDate() - daysBack);
+  return toDateString(d);
 }
 
 async function readRecords(): Promise<StrategyRecord[]> {
@@ -51,8 +59,7 @@ async function readRecords(): Promise<StrategyRecord[]> {
     const raw = await AsyncStorage.getItem(KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as StrategyRecord[];
-    if (!Array.isArray(parsed)) return [];
-    return parsed;
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }
@@ -66,50 +73,65 @@ async function writeRecords(records: StrategyRecord[]): Promise<void> {
   }
 }
 
-function pruned(records: StrategyRecord[]): StrategyRecord[] {
-  const cutoff = daysAgo(TTL_DAYS);
-  return records.filter((r) => r.date >= cutoff);
-}
-
 export async function recordOutcome(
   strategyType: StrategyType,
   symptomTarget: SymptomTarget,
-  feedback: "better" | "same" | "worse" | null,
+  feedback: Feedback,
 ): Promise<void> {
-  const records = pruned(await readRecords());
-  records.push({ strategyType, symptomTarget, date: today(), feedback });
+  const cutoff = cutoffDate(TTL_DAYS);
+  const records = (await readRecords()).filter((r) => r.date >= cutoff);
+  records.push({ strategyType, symptomTarget, date: toDateString(new Date()), feedback });
   await writeRecords(records);
 }
 
 export async function deriveWeights(): Promise<DerivedWeights> {
-  const records = pruned(await readRecords());
-  const cutoff7d = daysAgo(7);
-  const recent = records.filter((r) => r.date >= cutoff7d);
+  const cutoff14 = cutoffDate(TTL_DAYS);
+  const cutoff7 = cutoffDate(7);
+  const all = (await readRecords()).filter((r) => r.date >= cutoff14);
+  const recent = all.filter((r) => r.date >= cutoff7);
 
-  const successSet = new Set<StrategyType>();
-  const failSet = new Set<StrategyType>();
+  const successBySymptom: Partial<Record<SymptomTarget, Set<StrategyType>>> = {};
+  const failBySymptom: Partial<Record<SymptomTarget, Set<StrategyType>>> = {};
   let priorFailureCount7d = 0;
   let priorWorseCount7d = 0;
 
   for (const r of recent) {
+    const sym = r.symptomTarget;
     if (r.feedback === "better") {
-      successSet.add(r.strategyType);
+      (successBySymptom[sym] ??= new Set()).add(r.strategyType);
     } else if (r.feedback === "worse") {
-      failSet.add(r.strategyType);
+      (failBySymptom[sym] ??= new Set()).add(r.strategyType);
       priorWorseCount7d++;
       priorFailureCount7d++;
     } else if (r.feedback === "same") {
-      failSet.add(r.strategyType);
+      (failBySymptom[sym] ??= new Set()).add(r.strategyType);
+      priorFailureCount7d++;
+    } else if (r.feedback === "requested_review") {
       priorFailureCount7d++;
     }
   }
 
-  // A strategy that also succeeded later is promoted back out of failSet
-  for (const s of successSet) failSet.delete(s);
+  // A strategy that later succeeded for the same symptom is promoted back out.
+  for (const sym of Object.keys(failBySymptom) as SymptomTarget[]) {
+    const successes = successBySymptom[sym];
+    if (successes) {
+      for (const s of successes) failBySymptom[sym]!.delete(s);
+    }
+  }
+
+  const toArrayMap = (
+    m: Partial<Record<SymptomTarget, Set<StrategyType>>>,
+  ): Partial<Record<SymptomTarget, StrategyType[]>> => {
+    const result: Partial<Record<SymptomTarget, StrategyType[]>> = {};
+    for (const [sym, set] of Object.entries(m) as [SymptomTarget, Set<StrategyType>][]) {
+      result[sym] = Array.from(set);
+    }
+    return result;
+  };
 
   return {
-    successfulStrategyTypes: Array.from(successSet),
-    failedStrategyTypes: Array.from(failSet),
+    successfulBySymptom: toArrayMap(successBySymptom),
+    failedBySymptom: toArrayMap(failBySymptom),
     priorFailureCount7d,
     priorWorseCount7d,
   };
