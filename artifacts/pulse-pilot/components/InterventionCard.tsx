@@ -48,6 +48,11 @@ import {
   liveSeverityToTier,
 } from "@/lib/interventions/selector";
 import type { StrategyType, SelectionResult } from "@/lib/interventions/types";
+import {
+  deriveWeights,
+  recordOutcome,
+  type DerivedWeights,
+} from "@/lib/interventions/history";
 
 // =====================================================================
 // Recommendation parsing
@@ -1178,6 +1183,15 @@ export function InterventionCard({
   // approach on the adjusted step instead of cycling within the same category.
   const [failedStrategyTypes, setFailedStrategyTypes] = useState<StrategyType[]>([]);
   const [lastEntryId, setLastEntryId] = useState<string | null>(null);
+  // Cross-session history weights loaded from AsyncStorage on mount.
+  // Null while loading; defaults to empty weights so the card renders
+  // immediately without waiting for storage.
+  const [historyWeights, setHistoryWeights] = useState<DerivedWeights | null>(null);
+  useEffect(() => {
+    let active = true;
+    void deriveWeights().then((w) => { if (active) setHistoryWeights(w); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   const setEngagedPhase = useCallback(
     (next: InteractionPhase) => {
@@ -1329,6 +1343,25 @@ export function InterventionCard({
     if (!primary || !liveSeverity || liveSeverity === "steady") return null;
     const symptomTarget = categoryToSymptomTarget(primary.category);
     const severityTier = liveSeverityToTier(liveSeverity);
+    // Filter history by the current symptom target so a strategy that failed
+    // for nausea is not suppressed when used for a different symptom (e.g. sleep).
+    const successfulFromHistory = historyWeights?.successfulBySymptom[symptomTarget] ?? [];
+    const failedFromHistory = historyWeights?.failedBySymptom[symptomTarget] ?? [];
+    const mergedFailedStrategies = [
+      ...failedStrategyTypes,
+      ...failedFromHistory.filter((s) => !failedStrategyTypes.includes(s)),
+    ];
+    // True when the primary symptom appeared 3+ times in the past 7 days.
+    const symptomRecurring7d = (() => {
+      if (!symptomCounts) return false;
+      switch (primary.category) {
+        case "nausea":       return symptomCounts.nausea7d >= 3;
+        case "appetite":     return symptomCounts.lowAppetite7d >= 3;
+        case "energy":       return symptomCounts.lowEnergy7d >= 3;
+        case "constipation": return symptomCounts.constipation7d >= 3;
+        default:             return false;
+      }
+    })();
     const ctx = buildLibraryContext({
       primarySymptom: symptomTarget,
       severityTier,
@@ -1336,15 +1369,25 @@ export function InterventionCard({
       hasLowAppetite:
         liveCheckin?.appetite === "low" || liveCheckin?.appetite === "very_low",
       hasVeryLowAppetite: liveCheckin?.appetite === "very_low",
+      // Only infer low hydration from direct intake/nausea signals, not step count.
+      hydrationLow:
+        liveCheckin?.appetite === "very_low" ||
+        liveCheckin?.nausea === "severe" ||
+        liveCheckin?.digestion === "diarrhea",
+      lowSleep: (wearableContext?.sleepHours ?? Infinity) < 6,
+      symptomRecurring7d,
       postDose:
         doseContext?.position === "dose_day" ||
         doseContext?.position === "day_1_post" ||
         doseContext?.position === "day_2_post",
       interventionId: intervention.id,
       lastEntryId,
-      failedStrategyTypes,
+      failedStrategyTypes: mergedFailedStrategies,
+      successfulStrategyTypes: successfulFromHistory,
       doseTier: patientContext?.medication.doseTier ?? null,
       recentDoseChange: patientContext?.medication.doseChangedRecently ?? false,
+      priorFailureCount7d: historyWeights?.priorFailureCount7d ?? 0,
+      priorWorseCount7d: historyWeights?.priorWorseCount7d ?? 0,
     });
     const initial = selectIntervention(ctx, "initial");
     // For adjusted: suppress the initial strategy and mark initial entry as last
@@ -1368,6 +1411,9 @@ export function InterventionCard({
     failedStrategyTypes,
     patientContext?.medication.doseTier,
     patientContext?.medication.doseChangedRecently,
+    wearableContext?.sleepHours,
+    historyWeights,
+    symptomCounts,
   ]);
 
   const primaryContent = useMemo<RecContent>(() => {
@@ -1462,41 +1508,63 @@ export function InterventionCard({
       planPriority,
       reason_signals: reasonSignals,
     });
+    // Record "requested_review" — distinct from "worse" (which means symptoms
+    // explicitly worsened). This contributes to the overall failure count for
+    // escalation scoring without inflating the "worsening" signal.
+    const activeStrategy =
+      failedStrategyTypes.length > 0
+        ? selections?.adjusted.entry.strategyType
+        : selections?.initial.entry.strategyType;
+    if (activeStrategy && primary?.category) {
+      void recordOutcome(
+        activeStrategy,
+        categoryToSymptomTarget(primary.category),
+        "requested_review",
+      );
+    }
     try {
       if (intervention.status === "shown" && !acceptFiredRef.current) {
         acceptFiredRef.current = true;
-        try {
-          await onAccept(intervention.id);
-        } catch {
+        await onAccept(intervention.id).catch(() => {
           if (intervention.status === "shown") acceptFiredRef.current = false;
-        }
+        });
       }
       await onFeedback(intervention.id, "worse");
     } catch {
       escalateFiredRef.current = false;
     }
-  }, [intervention.id, intervention.status, onAccept, onFeedback]);
+  }, [intervention.id, intervention.status, onAccept, onFeedback, failedStrategyTypes, selections, primary, liveSeverity, phase, struggleCount, planPriority, reasonSignals]);
 
   const handleFeedbackBetter = useCallback(async () => {
     tap();
     setEngagedPhase("better");
-    safeLog("intervention_helped", {
-      strategyType: failedStrategyTypes.length > 0
+    const resolvedStrategy =
+      failedStrategyTypes.length > 0
         ? selections?.adjusted.entry.strategyType ?? null
-        : selections?.initial.entry.strategyType ?? null,
+        : selections?.initial.entry.strategyType ?? null;
+    const resolvedTarget = primary?.category ?? null;
+    safeLog("intervention_helped", {
+      strategyType: resolvedStrategy,
       wasInitialOrAdjusted: failedStrategyTypes.length > 0 ? "adjusted" : "initial",
       severityTier: liveSeverity,
-      symptomTarget: primary?.category ?? null,
+      symptomTarget: resolvedTarget,
       struggleCount,
       planPriority,
       reason_signals: reasonSignals,
     });
+    if (resolvedStrategy && resolvedTarget) {
+      void recordOutcome(
+        resolvedStrategy,
+        categoryToSymptomTarget(resolvedTarget),
+        "better",
+      );
+    }
     try {
       await onFeedback(intervention.id, "better");
     } catch {
       /* best-effort */
     }
-  }, [intervention.id, onFeedback, setEngagedPhase]);
+  }, [intervention.id, onFeedback, setEngagedPhase, failedStrategyTypes, selections, primary, liveSeverity, struggleCount, planPriority, reasonSignals]);
 
   const handleFeedbackStruggling = useCallback(() => {
     tap();
@@ -1511,6 +1579,12 @@ export function InterventionCard({
         prev.includes(failedStrategy) ? prev : [...prev, failedStrategy],
       );
       setLastEntryId(selections.initial.entry.id);
+      const symptomTarget = primary?.category
+        ? categoryToSymptomTarget(primary.category)
+        : null;
+      if (symptomTarget) {
+        void recordOutcome(failedStrategy, symptomTarget, "same");
+      }
     }
     safeLog("intervention_still_struggling", {
       strategyType: selections?.initial.entry.strategyType ?? null,
@@ -1520,7 +1594,7 @@ export function InterventionCard({
       planPriority,
       reason_signals: reasonSignals,
     });
-  }, [setEngagedPhase, struggleCount, onStruggleCountChange, selections, primary, liveSeverity]);
+  }, [setEngagedPhase, struggleCount, onStruggleCountChange, selections, primary, liveSeverity, planPriority, reasonSignals]);
 
   // Sends the patient into a second checking loop with the alternate step.
   const handleTryAdjusted = useCallback(() => {
@@ -1652,8 +1726,8 @@ export function InterventionCard({
 
         {!isEscalationRound && (
           <Text style={styles.adaptiveHint}>
-            {selections?.adjusted.explainWhy ??
-              "Adjusting your support based on your feedback."}
+            {selections?.adjusted.rationale ??
+              "Viva is trying a different approach based on your feedback."}
           </Text>
         )}
 
@@ -1793,23 +1867,33 @@ export function InterventionCard({
         </Text>
       )}
 
-      {/* "Why Viva suggested this" — natural-language signal summary.
-          Shows as a readable sentence so the card explains itself
-          based on the patient's check-in signals. */}
+      {/* "Why Viva suggested this" — layered signal summary:
+          1. contextParagraph: today's symptoms (always present when chips show)
+          2. rationale: why this specific intervention was selected
+          3. patternInsight: pattern observation when real data supports it
+          4. interventionWhyLine: broader patient context (dose, trends) */}
       {contextChips.length > 0 && (
         <View style={styles.noticedSection}>
           <Text style={styles.chipsSectionLabel}>WHY VIVA SUGGESTED THIS</Text>
           <Text style={[styles.noticedText, { color: mutedForeground }]}>
             {contextParagraph}
           </Text>
-          {interventionWhyLine && (
+          {selections?.initial.rationale && (
             <Text style={[styles.noticedStrategyHint, { color: mutedForeground }]}>
-              {interventionWhyLine}
+              {selections.initial.rationale}
             </Text>
           )}
-          {selections?.initial.explainWhy && !interventionWhyLine && (
+          {selections?.initial.patternInsight && (
             <Text style={[styles.noticedStrategyHint, { color: mutedForeground }]}>
-              {selections.initial.explainWhy}
+              {selections.initial.patternInsight}
+            </Text>
+          )}
+          {/* interventionWhyLine is suppressed when the selector is active — rationale
+              already accounts for dose-change, GI, and trend signals. Show it only
+              when there is no library selection (e.g. server-only recommendation). */}
+          {interventionWhyLine && !selections && (
+            <Text style={[styles.noticedStrategyHint, { color: mutedForeground }]}>
+              {interventionWhyLine}
             </Text>
           )}
         </View>
@@ -1843,10 +1927,10 @@ export function InterventionCard({
         <Text style={styles.primaryBtnText}>Start support</Text>
       </Pressable>
 
-      {/* Secondary "Ask care team" CTA — visible for moderate/severe symptoms
-          OR when planPriority ≤ 2 (severe/GI burden) so escalation is
-          immediately available, not buried in a feedback flow. */}
-      {(liveSeverity === "moderate" || liveSeverity === "severe" || (planPriority !== null && planPriority <= 2)) && status !== "escalated" && (
+      {/* Secondary "Ask care team" CTA — visible for moderate/severe symptoms,
+          planPriority ≤ 2 (severe/GI burden), or when history signals that
+          multiple interventions have not helped (shouldEscalate). */}
+      {(liveSeverity === "moderate" || liveSeverity === "severe" || (planPriority !== null && planPriority <= 2) || selections?.initial.shouldEscalate) && status !== "escalated" && (
         <Pressable
           style={({ pressed }) => [styles.careTeamSecondaryBtn, { opacity: pressed ? 0.7 : 1 }]}
           onPress={() => void handleAskCareTeam()}

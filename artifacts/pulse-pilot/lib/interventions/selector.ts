@@ -5,22 +5,26 @@
  * from the library. All logic is rule-based and deterministic — no AI,
  * no randomness, no open-ended advice generation.
  *
- * Two modes:
+ * Recommendation ladder (classifyState):
+ *   first_line_support → new or mild symptom, no strong prior history
+ *   repeat_success     → same symptom, prior strategy helped — reuse it
+ *   try_alternative    → prior strategy didn't help — different approach
+ *   escalate           → repeated failure or worsening — care team pathway
+ *
+ * Two selection modes:
  *  - "initial"  → picks the best-fit intervention from the full library
  *  - "adjusted" → excludes all failed strategy types and the last shown
  *                 entry, forcing a meaningfully different strategy
  *
- * Strategy rotation on failure:
- *   hydration-first      → posture-upright-reset or low-stimulation-reset
- *   food-first           → hydration-first
- *   posture-upright-reset→ low-stimulation-reset
- *   low-stimulation-reset→ rest-recovery-reset
- *   gentle-movement      → rest-recovery-reset
- *   warm-fluid-digestion → posture-upright-reset
- *   rest-recovery-reset  → hydration-first
+ * Future AI planner upgrade path:
+ *   Replace selectIntervention() with a server call that accepts LibraryContext
+ *   and returns SelectionResult. The card layer is unchanged — it reads the
+ *   same output shape. The rule-based fallback remains as a safety net when
+ *   the model is unavailable or returns low confidence.
  */
 
 import type {
+  InterventionRecommendationState,
   LibraryContext,
   LibraryEntry,
   SelectionResult,
@@ -38,17 +42,11 @@ function isEligible(
   ctx: LibraryContext,
   mode: "initial" | "adjusted",
 ): boolean {
-  // Never immediately repeat the same entry
   if (entry.id === ctx.lastEntryId) return false;
-  // Safety: suppress food-heavy entries when appetite is very low
   if (entry.avoidIfLowAppetite && ctx.hasVeryLowAppetite) return false;
-  // Safety: suppress food/movement entries when nausea is severe
   if (entry.avoidIfSevereNausea && ctx.hasSevereNausea) return false;
-  // Severity must overlap
   if (!entry.severityTiers.includes(ctx.severityTier)) return false;
-  // At least one symptom target must match the primary concern
   if (!entry.symptomTargets.includes(ctx.primarySymptom)) return false;
-  // Adjusted mode: suppress all previously failed strategies
   if (mode === "adjusted") {
     for (const failed of ctx.failedStrategyTypes) {
       if (entry.strategyType === failed) return false;
@@ -64,30 +62,13 @@ function isEligible(
 function scoreEntry(entry: LibraryEntry, ctx: LibraryContext): number {
   let s = 0;
 
-  // Previously successful strategy → strong preference
   if (ctx.successfulStrategyTypes.includes(entry.strategyType)) s += 4;
-
-  // Hydration bonus when fluid intake is low
   if (entry.hydrationRelated && ctx.hydrationLow) s += 2;
-
-  // Post-dose bonus on day-1/day-2 after dose
   if (entry.postDoseRelevant && ctx.postDose) s += 2;
-
-  // Recovery focus matches low sleep or low HRV signal
   if (entry.recoveryFocused && (ctx.lowSleep || ctx.lowHrv)) s += 2;
-
-  // Low behavioral burden preferred when severity is high
   if (entry.behavioralBurden === "low" && ctx.severityTier === "severe") s += 1;
-
-  // Escalation prevention preferred for severe symptoms
   if (entry.escalationPrevention && ctx.severityTier === "severe") s += 1;
-
-  // Penalize food entries when patient has low appetite (not filtered out,
-  // just de-prioritized — another signal may override the penalty)
   if (entry.foodRelated && ctx.hasLowAppetite) s -= 1;
-
-  // Dose-context scoring: prefer low-burden and hydration-first after a
-  // dose change or at high dose tier. Uses cautious phrasing in copy.
   if (entry.behavioralBurden === "low" && ctx.recentDoseChange) s += 1;
   if (entry.hydrationRelated && ctx.doseTier === "high" && ctx.primarySymptom === "nausea") s += 1;
   if (entry.escalationPrevention && ctx.doseTier === "high" && ctx.severityTier === "severe") s += 1;
@@ -104,50 +85,72 @@ function pickFromTied(entries: LibraryEntry[], seed: number): LibraryEntry {
 }
 
 // ---------------------------------------------------------------------------
-// Explainability
+// Recommendation ladder — pure classification helpers
 // ---------------------------------------------------------------------------
 
-function buildExplainWhy(
+function classifyState(
+  mode: "initial" | "adjusted",
+  wasSuccessfulBefore: boolean,
+  shouldEscalate: boolean,
+): InterventionRecommendationState {
+  if (shouldEscalate) return "escalate";
+  if (mode === "adjusted") return "try_alternative";
+  if (wasSuccessfulBefore) return "repeat_success";
+  return "first_line_support";
+}
+
+function buildRationale(
+  state: InterventionRecommendationState,
   entry: LibraryEntry,
   ctx: LibraryContext,
-  mode: "initial" | "adjusted",
+): string {
+  switch (state) {
+    case "repeat_success":
+      return "This approach helped before, so Viva is starting there again.";
+    case "try_alternative":
+      return "Since the last approach didn't help, Viva is trying something different.";
+    case "escalate":
+      return "Since this hasn't improved after a few tries, your care team may be better positioned to help.";
+    case "first_line_support":
+      if (entry.hydrationRelated && ctx.hydrationLow)
+        return "Viva is starting with hydration because fluid intake appears low.";
+      if (entry.recoveryFocused && ctx.lowSleep)
+        return "Viva is prioritizing rest because sleep was shorter than usual.";
+      if (entry.postDoseRelevant && ctx.postDose)
+        return "This step is timed for the post-dose window, when symptoms often peak.";
+      if (ctx.recentDoseChange)
+        return "Viva is keeping this gentle after your recent dose change.";
+      if (entry.strategyType === "hydration-first" && ctx.hasSevereNausea)
+        return "Viva is prioritizing fluids because severe nausea makes food harder to tolerate.";
+      if (ctx.doseTier === "high" && entry.behavioralBurden === "low")
+        return "Viva is keeping this gentle given your current dose context.";
+      return "Viva selected this step based on today's symptoms.";
+  }
+}
+
+function buildPatternInsight(
+  state: InterventionRecommendationState,
+  entry: LibraryEntry,
+  ctx: LibraryContext,
 ): string | null {
-  if (mode === "adjusted") {
-    // Always explain strategy shift after a failed round
-    return "Viva switched to a different strategy after the previous step didn't help.";
-  }
+  // repeat_success and try_alternative are self-explanatory from rationale — no extra line
+  if (state !== "first_line_support") return null;
+  // Only reference data that actually exists
+  if (ctx.symptomRecurring7d)
+    return "This symptom has appeared across recent check-ins.";
+  // Only reference sleep if it's actually available and the entry matches
+  if (ctx.lowSleep && !entry.recoveryFocused)
+    return "Fatigue may feel heavier after lower sleep.";
+  return null;
+}
 
-  // Initial selection: explain if a non-obvious context signal drove the pick
-  if (entry.strategyType === "hydration-first" && ctx.hydrationLow) {
-    return "Viva prioritized hydration because fluid intake has been low today.";
-  }
-  if (entry.strategyType === "hydration-first" && ctx.hasSevereNausea) {
-    return "Viva prioritized hydration because severe nausea makes solid food harder to tolerate right now.";
-  }
-  if (entry.avoidIfLowAppetite && ctx.hasLowAppetite) {
-    return "Viva avoided food-first support because appetite is very low right now.";
-  }
-  if (entry.strategyType === "rest-recovery-reset" && ctx.lowSleep) {
-    return "Viva suggested rest because sleep quality has been low.";
-  }
-  if (entry.strategyType === "rest-recovery-reset" && ctx.lowHrv) {
-    return "Viva suggested rest because recovery signals indicate low readiness today.";
-  }
-  if (entry.strategyType === "low-stimulation-reset" && ctx.hasSevereNausea) {
-    return "Viva reduced stimulation targets because nausea is elevated and sensory input can make it worse.";
-  }
-  if (entry.postDoseRelevant && ctx.postDose) {
-    return "Viva adjusted support for the post-dose window, when symptoms often peak.";
-  }
-
-  if (ctx.recentDoseChange) {
-    return "Viva is weighting today's symptoms more carefully after your recent dose change.";
-  }
-
-  if (ctx.doseTier === "high" && entry.behavioralBurden === "low") {
-    return "Your current dose context makes gentle support a better first step.";
-  }
-
+function buildEscalationReason(
+  ctx: LibraryContext,
+): SelectionResult["escalationReason"] {
+  if (ctx.priorWorseCount7d >= 1) return "symptoms_reported_worse";
+  // requested_review contributes to priorFailureCount7d via history.ts
+  if (ctx.priorFailureCount7d >= 2) return "care_team_requested";
+  if (ctx.priorFailureCount7d >= 3) return "repeated_no_change";
   return null;
 }
 
@@ -187,10 +190,18 @@ export function selectIntervention(
     );
   }
 
-  // Absolute fallback: first entry in the library (should never reach here)
+  // Absolute fallback: first library entry (should never reach here in practice)
   if (eligible.length === 0) {
     const fallback = LIBRARY[0]!;
-    return { entry: fallback, explainWhy: null };
+    return {
+      entry: fallback,
+      state: "first_line_support",
+      rationale: "Viva selected this step based on today's symptoms.",
+      patternInsight: null,
+      isAlternativeAfterFailure: false,
+      shouldEscalate: false,
+      escalationReason: null,
+    };
   }
 
   const scored = eligible
@@ -201,7 +212,25 @@ export function selectIntervention(
   const tied = scored.filter((x) => x.s === topScore).map((x) => x.e);
   const best = pickFromTied(tied, ctx.seed);
 
-  return { entry: best, explainWhy: buildExplainWhy(best, ctx, mode) };
+  const wasSuccessfulBefore = ctx.successfulStrategyTypes.includes(best.strategyType);
+  // Escalate when symptoms were explicitly reported worse, OR when 2+ total
+  // failed/unresolved attempts (includes "same", "requested_review") in 7 days.
+  const shouldEscalate =
+    ctx.priorWorseCount7d >= 1 || ctx.priorFailureCount7d >= 2;
+  const state = classifyState(mode, wasSuccessfulBefore, shouldEscalate);
+  const rationale = buildRationale(state, best, ctx);
+  const patternInsight = buildPatternInsight(state, best, ctx);
+  const escalationReason = shouldEscalate ? buildEscalationReason(ctx) : null;
+
+  return {
+    entry: best,
+    state,
+    rationale,
+    patternInsight,
+    isAlternativeAfterFailure: mode === "adjusted",
+    shouldEscalate,
+    escalationReason,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -218,12 +247,15 @@ export function buildLibraryContext(opts: {
   postDose?: boolean;
   lowSleep?: boolean;
   lowHrv?: boolean;
+  symptomRecurring7d?: boolean;
   interventionId: number;
   lastEntryId: string | null;
   failedStrategyTypes: StrategyType[];
   successfulStrategyTypes?: StrategyType[];
   doseTier?: "low" | "mid" | "high" | null;
   recentDoseChange?: boolean;
+  priorFailureCount7d?: number;
+  priorWorseCount7d?: number;
 }): LibraryContext {
   const day = Math.floor(Date.now() / 86_400_000);
   return {
@@ -236,12 +268,15 @@ export function buildLibraryContext(opts: {
     postDose: opts.postDose ?? false,
     lowSleep: opts.lowSleep ?? false,
     lowHrv: opts.lowHrv ?? false,
+    symptomRecurring7d: opts.symptomRecurring7d ?? false,
     seed: (opts.interventionId + day) % 97,
     lastEntryId: opts.lastEntryId,
     failedStrategyTypes: opts.failedStrategyTypes,
     successfulStrategyTypes: opts.successfulStrategyTypes ?? [],
     doseTier: opts.doseTier ?? null,
     recentDoseChange: opts.recentDoseChange ?? false,
+    priorFailureCount7d: opts.priorFailureCount7d ?? 0,
+    priorWorseCount7d: opts.priorWorseCount7d ?? 0,
   };
 }
 
