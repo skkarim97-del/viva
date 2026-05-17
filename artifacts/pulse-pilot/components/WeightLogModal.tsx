@@ -2,12 +2,14 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { BlurView } from "expo-blur";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { sessionApi } from "@/lib/api/sessionClient";
@@ -100,6 +102,9 @@ export default function WeightLogModal({
       onRequestClose={onClose}
     >
       <View style={styles.backdrop}>
+        {Platform.OS !== "web" && (
+          <BlurView intensity={14} tint="dark" style={StyleSheet.absoluteFillObject} />
+        )}
         <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
           <View style={styles.header}>
             <View
@@ -192,7 +197,13 @@ export default function WeightLogModal({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    // Native: BlurView handles the frosted effect; keep the tint very light
+    // so it doesn't add a second heavy layer on top of the blur.
+    // Web: no BlurView — use a soft translucent overlay only.
+    backgroundColor: Platform.select({
+      web: "rgba(10,22,40,0.22)",
+      default: "rgba(10,22,40,0.12)",
+    }),
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
@@ -203,6 +214,20 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     padding: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#0A1628",
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.08,
+        shadowRadius: 24,
+      },
+      android: {
+        elevation: 4,
+      },
+      web: {
+        boxShadow: "0 8px 32px rgba(10,22,40,0.10)",
+      },
+    }),
   },
   header: {
     flexDirection: "row",
