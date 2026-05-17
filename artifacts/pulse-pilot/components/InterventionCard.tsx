@@ -187,7 +187,7 @@ const RECOMMENDATIONS: Record<RecCategory, { variants: RecContent[] }> = {
       {
         // Variant 3: pause food, timed sip protocol
         title: "Pause food, sip every 2 minutes",
-        body: "Stop solid food for 15 minutes. Sip water, Pedialyte, or peppermint tea, a few sips every 2\u20133 minutes. After 15 minutes, try one bite of toast or a cracker.",
+        body: "Pause solid food for about 15 minutes. Sip water, Pedialyte, or peppermint tea, a few sips every 2\u20133 minutes. After 15 minutes, try one bite of toast or a cracker.",
         helper:
           "Timed small sips are easier to keep down than a full glass when nausea is active.",
       },
@@ -205,7 +205,7 @@ const RECOMMENDATIONS: Record<RecCategory, { variants: RecContent[] }> = {
       {
         // Primary: micro-portion protein
         title: "2\u20133 bites of protein, then pause",
-        body: "Eat 2\u20133 bites of Greek yogurt, tofu, eggs, or cottage cheese right now. Stop there. Wait 10 minutes, then check how your stomach feels before eating more.",
+        body: "Eat 2\u20133 bites of Greek yogurt, tofu, eggs, or cottage cheese right now. Pause here. Wait 10 minutes, then check how your stomach feels before eating more.",
         helper:
           "Micro-portions keep nutrition coming in without overwhelming a low appetite.",
       },
@@ -226,7 +226,7 @@ const RECOMMENDATIONS: Record<RecCategory, { variants: RecContent[] }> = {
       {
         // Variant 4: ultra-slow timed pacing
         title: "One bite every 5 minutes",
-        body: "Set a 20-minute timer. Every 5 minutes, eat one small bite of a familiar food: Greek yogurt, banana, crackers, or soup. Stop when the timer runs out.",
+        body: "Set a 20-minute timer. Every 5 minutes, eat one small bite of a familiar food: Greek yogurt, banana, crackers, or soup. When the timer finishes, that's enough for now.",
         helper:
           "Ultra-slow pacing takes pressure off the stomach and often leads to more total intake than forcing a full meal.",
       },
@@ -251,7 +251,7 @@ const RECOMMENDATIONS: Record<RecCategory, { variants: RecContent[] }> = {
       {
         // Variant 3: intentional rest
         title: "10-minute low-stimulation reset",
-        body: "Sit or lie down in a quiet spot for 10 minutes. No phone. Breathe slowly. Then reassess whether energy feels steadier before deciding what to do next.",
+        body: "Sit or lie down in a quiet spot for 10 minutes. No phone. Breathe slowly. After resting, check how energy feels before doing anything else.",
         helper:
           "A short intentional rest often restores more energy than pushing through on low reserves.",
       },
@@ -283,7 +283,7 @@ const RECOMMENDATIONS: Record<RecCategory, { variants: RecContent[] }> = {
       {
         // Variant 3: hydration + upright posture
         title: "8 oz of warm water, stay upright for 10 minutes",
-        body: "Drink 8 oz of warm water right now. Stay sitting upright and avoid lying down for at least 10 minutes, then reassess discomfort.",
+        body: "Drink 8 oz of warm water right now. Try staying upright for 10 minutes and let gravity support digestion.",
         helper:
           "Staying upright after fluids lets gravity support digestion and reduces discomfort.",
       },
@@ -639,7 +639,7 @@ function nauseaCopy(
     return {
       title: "Pause food: sip fluids for 15 minutes",
       body:
-        "Stop solid food for now. Take slow sips of water, Pedialyte, or ginger tea, a few sips every 2 minutes, for the next 15 minutes. If nausea eases, try 2\u20133 bites of crackers, toast, or a banana.",
+        "Pause solid food for now. Take slow sips of water, Pedialyte, or ginger tea, a few sips every 2 minutes, for the next 15 minutes. If nausea eases, try 2\u20133 bites of crackers, toast, or a banana.",
       helper:
         "If nausea is getting worse or you can\u2019t keep fluids down, contact your care team.",
     };
@@ -679,7 +679,7 @@ function appetiteCopy(hasNausea: boolean): RecContent {
   return {
     title: "2\u20133 bites of protein, then pause",
     body:
-      "Eat 2\u20133 bites of Greek yogurt, tofu, eggs, or cottage cheese right now. Stop there. Wait 10 minutes, then check how your stomach feels before eating more.",
+      "Eat 2\u20133 bites of Greek yogurt, tofu, eggs, or cottage cheese right now. Pause here. Wait 10 minutes, then check how your stomach feels before eating more.",
     helper:
       "Micro-portions of protein keep nutrition coming in without overwhelming a low appetite.",
   };
@@ -1934,21 +1934,6 @@ export function InterventionCard({
       >
         <Text style={styles.primaryBtnText}>Start support</Text>
       </Pressable>
-
-      {/* Secondary "Ask care team" CTA — visible for moderate/severe symptoms,
-          planPriority ≤ 2 (severe/GI burden), or when history signals that
-          multiple interventions have not helped (shouldEscalate). */}
-      {(liveSeverity === "moderate" || liveSeverity === "severe" || (planPriority !== null && planPriority <= 2) || selections?.initial.shouldEscalate) && status !== "escalated" && (
-        <Pressable
-          style={({ pressed }) => [styles.careTeamSecondaryBtn, { opacity: pressed ? 0.7 : 1 }]}
-          onPress={() => void handleAskCareTeam()}
-          accessibilityRole="button"
-          accessibilityLabel="Ask care team"
-        >
-          <Feather name="message-circle" size={12} color={warning} />
-          <Text style={[styles.careTeamSecondaryBtnText, { color: warning }]}>Ask care team</Text>
-        </Pressable>
-      )}
 
       {status === "escalated" && (
         <View style={styles.escalatedNotice}>

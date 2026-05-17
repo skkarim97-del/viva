@@ -57,7 +57,7 @@ export const LIBRARY: LibraryEntry[] = [
     exampleContextTriggers: ["nausea mild", "nausea moderate", "post-dose window"],
     copy: {
       title: "Warm ginger or peppermint tea, upright",
-      body: "Brew or buy a cup of warm ginger tea or peppermint tea. Sip it slowly over 10–15 minutes while sitting fully upright. Avoid lying down.",
+      body: "Brew or buy a cup of warm ginger tea or peppermint tea. Sip it slowly over 10–15 minutes while sitting fully upright. Try to stay sitting upright.",
       helper: "Warm fluids may calm stomach contractions; staying upright can reduce pressure that worsens nausea.",
     },
   },
@@ -81,7 +81,7 @@ export const LIBRARY: LibraryEntry[] = [
     exampleContextTriggers: ["nausea moderate", "nausea severe", "can't keep food down"],
     copy: {
       title: "Pause food: small sips every 2 minutes",
-      body: "Stop solid food for now. Try ice chips or a chilled electrolyte drink like Pedialyte. Take a few sips every 2 minutes for the next 15 minutes. If nausea eases, try 2–3 plain crackers.",
+      body: "Pause solid food for now. Try ice chips or a chilled electrolyte drink like Pedialyte. Take a few sips every 2 minutes for the next 15 minutes. If nausea eases, try 2–3 plain crackers.",
       helper: "If nausea worsens or you can't keep fluids down, contact your care team.",
     },
   },
@@ -129,7 +129,7 @@ export const LIBRARY: LibraryEntry[] = [
     exampleContextTriggers: ["nausea severe", "nausea moderate", "high activity day", "post-dose"],
     copy: {
       title: "Quiet, cool room for 15 minutes",
-      body: "Move to a quiet, cool spot. Avoid screens, strong smells, and food for 15 minutes. Sip small amounts of water every 3 minutes. Then reassess.",
+      body: "Move to a quiet, cool spot. Step away from screens, strong smells, and food for 15 minutes. Sip small amounts of water every 3 minutes.",
       helper: "Reducing sensory input can lower nausea intensity without needing medication.",
     },
   },
@@ -153,7 +153,7 @@ export const LIBRARY: LibraryEntry[] = [
     exampleContextTriggers: ["nausea mild", "empty stomach"],
     copy: {
       title: "2–3 plain crackers or a slice of toast",
-      body: "Try 2–3 plain crackers or a slice of dry toast now. Eat very slowly. Stop immediately if nausea increases. Don't push through it.",
+      body: "Try 2–3 plain crackers or a slice of dry toast now. Eat very slowly. If nausea increases, stop and rest for a few minutes.",
       helper: "A small amount of bland starch can settle mild nausea better than an empty stomach.",
     },
   },
@@ -179,7 +179,7 @@ export const LIBRARY: LibraryEntry[] = [
     exampleContextTriggers: ["low appetite", "low food intake"],
     copy: {
       title: "2–3 bites of protein, then pause",
-      body: "Eat 2–3 bites of Greek yogurt, soft tofu, a hard-boiled egg, or cottage cheese right now. Stop there. Wait 10 minutes, then check how your stomach feels before eating more.",
+      body: "Eat 2–3 bites of Greek yogurt, soft tofu, a hard-boiled egg, or cottage cheese right now. Pause here. Wait 10 minutes, then check how your stomach feels before eating more.",
       helper: "Micro-portions of protein keep nutrition coming in without overwhelming a low appetite.",
     },
   },
@@ -251,7 +251,7 @@ export const LIBRARY: LibraryEntry[] = [
     exampleContextTriggers: ["low appetite", "skipping meals"],
     copy: {
       title: "One bite every 5 minutes",
-      body: "Set a 20-minute timer. Every 5 minutes, eat one small bite of a familiar food: yogurt, banana, crackers, or soup. Stop when the timer finishes.",
+      body: "Set a 20-minute timer. Every 5 minutes, eat one small bite of a familiar food: yogurt, banana, crackers, or soup. When the timer finishes, that's enough for now.",
       helper: "Ultra-slow pacing takes pressure off the stomach and often leads to more total intake than forcing a full meal.",
     },
   },
@@ -325,7 +325,7 @@ export const LIBRARY: LibraryEntry[] = [
     exampleContextTriggers: ["depleted energy", "severe fatigue", "low HRV", "poor sleep"],
     copy: {
       title: "15-minute intentional rest",
-      body: "Find a quiet spot. Lie down or sit comfortably with no phone or screen. Set a timer for 15 minutes. Breathe slowly. Reassess how you feel after.",
+      body: "Find a quiet spot. Lie down or sit comfortably with no phone or screen. Set a timer for 15 minutes. Breathe slowly. Check how you feel when the timer goes off.",
       helper: "A short intentional rest may restore more energy than pushing through on low reserves.",
     },
   },
@@ -447,7 +447,7 @@ export const LIBRARY: LibraryEntry[] = [
     exampleContextTriggers: ["digestion discomfort", "after eating", "bloating"],
     copy: {
       title: "Sit fully upright for 15 minutes",
-      body: "Sit up straight in a chair, not reclined and not lying down. Drink 6–8 oz of water. Stay upright for at least 15 minutes, then reassess discomfort.",
+      body: "Sit up straight in a chair, not reclined and not lying down. Drink 6–8 oz of water. Try staying upright for 15 minutes and let gravity support digestion.",
       helper: "Gravity supports digestion when you stay upright after a meal or fluids.",
     },
   },
@@ -741,7 +741,7 @@ export const LIBRARY: LibraryEntry[] = [
     exampleContextTriggers: ["severe symptoms", "multiple moderate symptoms", "high symptom burden"],
     copy: {
       title: "10 minutes of quiet rest",
-      body: "Find a quiet spot. Sit or lie down for 10 minutes with no phone or screen. Focus on slow breathing: in for 4, out for 6. Reassess how you feel after.",
+      body: "Find a quiet spot. Sit or lie down for 10 minutes with no phone or screen. Focus on slow breathing: in for 4, out for 6. Check how you feel when the timer goes off.",
       helper: "When symptoms feel like too much, a short rest without stimulation is often the best first step before trying anything else.",
     },
   },
