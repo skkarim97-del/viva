@@ -49,7 +49,7 @@ export function buildPlanLearningLine(
 
   // Dose-day nausea pattern.
   if (medication.recentTitration === false && trends.doseDayPatternLikely && symptoms.nausea !== null && symptoms.nausea !== "none") {
-    return "Nausea tends to peak shortly after your dose — today's plan is adjusted accordingly.";
+    return "Nausea tends to peak shortly after your dose. Today's plan is adjusted accordingly.";
   }
 
   // Within dose window AND recent titration.
@@ -59,15 +59,15 @@ export function buildPlanLearningLine(
 
   // Dose window nausea without titration.
   if (trends.doseDayPatternLikely && medication.daysSinceDose !== null && medication.daysSinceDose <= 2) {
-    return "Nausea tends to peak shortly after your dose — today's plan is adjusted accordingly.";
+    return "Nausea tends to peak shortly after your dose. Today's plan is adjusted accordingly.";
   }
 
   // GI elevated.
   if (symptoms.hasElevatedGI) {
     if (symptoms.overallBurden === "moderate") {
-      return "GI symptoms are a bit elevated today — plan items are lightened to match.";
+      return "GI symptoms are a bit elevated today. Plan items are lightened to match.";
     }
-    return "GI symptoms are present — rest, hydration and bland foods are emphasized today.";
+    return "GI symptoms are present. Rest, hydration, and bland foods are emphasized today.";
   }
 
   // Improving trend — positive reinforcement.
@@ -76,7 +76,7 @@ export function buildPlanLearningLine(
     symptoms.overallBurden !== "none" &&
     engagement.engagementState !== "dropping"
   ) {
-    return "Symptoms are trending better — keep going.";
+    return "Symptoms are trending better. Keep going.";
   }
 
   // Dropping engagement.
@@ -86,7 +86,7 @@ export function buildPlanLearningLine(
 
   // Good streak.
   if (engagement.checkInStreak >= 7) {
-    return `${engagement.checkInStreak} days of check-ins — Viva's plan is getting more precise.`;
+    return `${engagement.checkInStreak} days of check-ins. Viva's plan is getting more precise.`;
   }
   if (engagement.checkInStreak >= 3) {
     return "Consistent check-ins help Viva tailor your plan more accurately.";
@@ -126,7 +126,7 @@ export function buildInterventionWhyLine(
   }
 
   if (medication.doseChangedRecently) {
-    return "Recent dose changes can make symptoms more noticeable — this step uses gentle support.";
+    return "Recent dose changes can make symptoms more noticeable. This step uses gentle support.";
   }
 
   if (trends.doseDayPatternLikely && medication.daysSinceDose !== null && medication.daysSinceDose <= 2) {
@@ -138,15 +138,15 @@ export function buildInterventionWhyLine(
   }
 
   if (symptoms.hasElevatedGI && symptoms.nausea !== null && symptoms.nausea !== "none") {
-    return "Nausea is elevated — this step targets GI comfort directly.";
+    return "Nausea is elevated. This step targets GI comfort directly.";
   }
 
   if (symptoms.hasElevatedGI) {
-    return "GI symptoms are elevated — this step is selected to ease digestive discomfort.";
+    return "GI symptoms are elevated. This step is selected to ease digestive discomfort.";
   }
 
   if (trends.overallTrend === "improving") {
-    return "Symptoms are trending better — this supports continued momentum.";
+    return "Symptoms are trending better. This supports continued momentum.";
   }
 
   if (engagement.checkInStreak >= 5) {
@@ -171,19 +171,19 @@ export function buildWeekSummaryLearningLine(
   // Positive trend over the week.
   if (trends.overallTrend === "improving") {
     if (engagement.planCompletionRate7d >= 0.7) {
-      return "Strong completion and improving symptoms — the plan is working.";
+      return "Strong completion and improving symptoms. The plan is working.";
     }
     return "Symptoms are trending better this week.";
   }
 
   // High completion, stable symptoms.
   if (engagement.planCompletionRate7d >= 0.8 && symptoms.overallBurden !== "high") {
-    return `${Math.round(engagement.planCompletionRate7d * 100)}% plan completion this week — great consistency.`;
+    return `${Math.round(engagement.planCompletionRate7d * 100)}% plan completion this week. Great consistency.`;
   }
 
   // Pattern: dose-day nausea recurring.
   if (trends.doseDayPatternLikely) {
-    return "Nausea pattern linked to dose days — this week's plan accounts for that.";
+    return "Nausea pattern linked to dose days. This week's plan accounts for that.";
   }
 
   // Wearable contributing.
@@ -193,22 +193,22 @@ export function buildWeekSummaryLearningLine(
 
   // Recent dose change (settings-tracked) takes precedence over recentTitration flag.
   if (medication.doseChangedRecently) {
-    return "You're adjusting to a recent dose change — this week's plan accounts for that.";
+    return "You're adjusting to a recent dose change. This week's plan accounts for that.";
   }
 
   // Older recentTitration flag (set during onboarding).
   if (medication.recentTitration) {
-    return "You're adjusting to a new dose — this week's plan is calibrated for that transition.";
+    return "You're adjusting to a new dose. This week's plan is calibrated for that transition.";
   }
 
   // New to program.
   if (engagement.checkInStreak >= 1 && engagement.checkInStreak <= 7) {
-    return "Early days — the plan will sharpen as you add more check-ins.";
+    return "Early days. The plan will sharpen as you add more check-ins.";
   }
 
   // Low completion.
   if (engagement.planCompletionRate7d < 0.4 && engagement.checkInStreak > 0) {
-    return "Fewer completions this week — your plan adjusts automatically as you check in.";
+    return "Fewer completions this week. Your plan adjusts automatically as you check in.";
   }
 
   return null;
@@ -336,7 +336,7 @@ export function buildEngagementAck(
   const { engagement } = ctx;
 
   if (engagement.checkInStreak === 7) {
-    return "One week of check-ins — Viva's plan is now meaningfully personalized.";
+    return "One week of check-ins. Viva's plan is now meaningfully personalized.";
   }
   if (engagement.checkInStreak === 14) {
     return "Two weeks in. Your pattern data is helping Viva refine support timing.";
@@ -346,7 +346,7 @@ export function buildEngagementAck(
   }
 
   if (engagement.planCompletionRate7d >= 0.9 && engagement.checkInStreak >= 5) {
-    return "High consistency — you're giving Viva the data it needs.";
+    return "High consistency. You're giving Viva the data it needs.";
   }
 
   return null;

@@ -250,17 +250,17 @@ function adaptiveWeekSummary(severity: InternalSeverity, drivers: string[], orig
       return "Your dose just changed, and the first few days are often the most intense. This week focuses on rest, hydration, and easy meals. You'll ease back into your regular routine once your body settles.";
     }
     if (drivers.includes("recent_titration")) {
-      return "Your body is still adjusting to the dose change. This week keeps things lighter — rest, steady hydration, and easy-to-digest meals take priority. Strength work resumes once things stabilize.";
+      return "Your body is still adjusting to the dose change. This week keeps things lighter: rest, steady hydration, and easy-to-digest meals take priority. Strength work resumes once things stabilize.";
     }
     if (drivers.includes("multi_day_difficulty")) {
-      return "The last few days have been tougher. This week is scaled back to give your body room to recover. Hydration, gentle movement, and protein-first meals are the focus — this is part of the process, not a setback.";
+      return "The last few days have been tougher. This week is scaled back to give your body room to recover. Hydration, gentle movement, and protein-first meals are the focus. This is part of the process, not a setback.";
     }
     return "This week prioritizes rest, hydration, and comfortable meals. Activity is dialed back so your body can recover. You'll ramp back up when ready.";
   }
 
   if (severity === "orange") {
     if (drivers.includes("nausea") || drivers.includes("digestion_issues")) {
-      return "GI side effects are more noticeable this week, so the plan reduces intensity and leans into hydration, gentle movement, and easy-to-digest meals. Protein stays important — smaller, frequent portions are fine.";
+      return "GI side effects are more noticeable this week, so the plan reduces intensity and leans into hydration, gentle movement, and easy-to-digest meals. Protein stays important. Smaller, frequent portions are fine.";
     }
     if (drivers.includes("mental_burnout") || drivers.includes("mental_low")) {
       return "This week is intentionally lighter to give you breathing room. Walks replace heavier sessions, and consistency takes priority over intensity. Small, steady steps compound.";
@@ -269,7 +269,7 @@ function adaptiveWeekSummary(severity: InternalSeverity, drivers: string[], orig
   }
 
   if (drivers.includes("sleep_low") || drivers.includes("sleep_moderate")) {
-    return "This week stays on track with a bit more recovery emphasis — sleep has been shorter recently. Movement days are slightly lighter, while protein and hydration targets stay the same.";
+    return "This week stays on track with a bit more recovery emphasis (sleep has been shorter recently). Movement days are slightly lighter, while protein and hydration targets stay the same.";
   }
   if (drivers.includes("consecutive_difficulty")) {
     return "This week keeps the same structure with a small buffer built in for the last couple of harder days. Protein and hydration targets stay consistent, and the rhythm stays manageable.";
