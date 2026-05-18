@@ -308,6 +308,16 @@ export default function DashboardScreen() {
     }
   }, [closeSupportSheet]);
 
+  // When the pill says "Support in progress · Check in" the patient has
+  // already started the step; skip the intermediate checking view and open
+  // directly at the feedback prompt ("How are you feeling now?").
+  const handleSupportPillPress = React.useCallback(() => {
+    if (supportPhase === "checking") {
+      setSupportPhase("feedback");
+    }
+    openSupportSheet();
+  }, [supportPhase, openSupportSheet]);
+
   // Fires when the card reaches "better" (resolved). Closes the sheet,
   // shows the persistent green pill, and snapshots the current live severity
   // so we can later detect if symptoms worsen past that baseline.
@@ -2541,7 +2551,7 @@ export default function DashboardScreen() {
             supportPillState === "green" && styles.supportBannerGreen,
             { bottom: sheetBottomOffset + 8 },
           ]}
-          onPress={openSupportSheet}
+          onPress={handleSupportPillPress}
           accessibilityRole="button"
           accessibilityLabel={supportPillText}
         >
