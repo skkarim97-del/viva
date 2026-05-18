@@ -1241,9 +1241,9 @@ export default function DashboardScreen() {
         <View style={[styles.statusCard, { backgroundColor: c.card }]}>
           {streakDays > 0 && (
             <View style={styles.streakRow}>
-              <View style={[styles.streakBadge, { backgroundColor: c.warning + "14" }]}>
-                <Feather name="zap" size={12} color={c.warning} />
-                <Text style={[styles.streakText, { color: c.warning }]}>{streakDays}d streak</Text>
+              <View style={[styles.streakBadge, { backgroundColor: c.info + "14" }]}>
+                <Feather name="zap" size={12} color={c.info} />
+                <Text style={[styles.streakText, { color: c.info }]}>{streakDays}d streak</Text>
               </View>
             </View>
           )}
