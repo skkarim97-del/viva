@@ -368,7 +368,7 @@ export const CATEGORY_OPTIONS: Record<ActionCategory, CategoryOption[]> = {
       title: "Rest day",
       subtitle: "Rest is the plan. Gentle walking only if it feels okay.",
       category: "move", stateTag: "stressed", planTier: "minimal", durationMinutes: 0, intensity: "low",
-      supportText: ["Rest is recovery", "Your body needs this time — it is not falling behind"],
+      supportText: ["Rest is recovery", "Your body needs this time. It is not falling behind."],
     },
   ],
   fuel: [
@@ -449,7 +449,7 @@ export const CATEGORY_OPTIONS: Record<ActionCategory, CategoryOption[]> = {
       title: "Prioritize rest",
       subtitle: "Aim for 7-8 hours. Protect tonight's sleep above other to-dos.",
       category: "recover", stateTag: "tired", planTier: "moderate",
-      supportText: ["Start winding down a little earlier than usual", "Sleep quality matters more than quantity — cool, quiet, dark"],
+      supportText: ["Start winding down a little earlier than usual", "Sleep quality matters more than quantity: cool, quiet, dark"],
     },
     {
       id: "recover_solid",
@@ -463,7 +463,7 @@ export const CATEGORY_OPTIONS: Record<ActionCategory, CategoryOption[]> = {
       title: "Maintain your rhythm",
       subtitle: "Keep a consistent bedtime. Same time each night compounds over time.",
       category: "recover", stateTag: "great", planTier: "minimal",
-      supportText: ["You're in a good routine — protect it", "Sleep consistency is one of the highest-leverage recovery habits on treatment"],
+      supportText: ["You're in a good routine. Protect it.", "Sleep consistency is one of the highest-leverage recovery habits on treatment"],
     },
   ],
   consistent: [

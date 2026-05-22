@@ -550,7 +550,7 @@ export function generateAdaptiveInsights(patterns: UserPatterns): AdaptiveInsigh
     insights.push({
       id: "trend_baseline_building",
       text: maxSampleSize >= 3
-        ? `Keep logging daily — ${daysLeft} more day${daysLeft === 1 ? "" : "s"} unlocks your pattern view`
+        ? `Keep logging daily. ${daysLeft} more day${daysLeft === 1 ? "" : "s"} unlocks your pattern view.`
         : "Keep logging daily so Viva can learn your patterns",
       category: "general",
       confidence: "low",

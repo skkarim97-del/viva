@@ -255,7 +255,7 @@ export default function TrendsScreen() {
               <View style={styles.patternRow}>
                 <Feather name="clock" size={12} color={c.mutedForeground} style={{ marginTop: 2 }} />
                 <Text style={[styles.patternRowText, { color: c.mutedForeground }]}>
-                  Keep checking in daily — patterns appear after a few days of data.
+                  Keep checking in daily. Patterns appear after a few days of data.
                 </Text>
               </View>
             ) : (
