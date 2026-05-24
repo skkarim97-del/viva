@@ -489,7 +489,7 @@ const PAGE_CSS = `
   }
 `;
 
-HTML_ROUTER.get("/:token", async (req: Request, res: Response) => {
+HTML_ROUTER.get("/:token", strictAuthLimiter, async (req: Request, res: Response) => {
   const token = String(req.params.token || "");
   const preview = await loadInvitePreview(token);
   res.setHeader("Content-Type", "text/html; charset=utf-8");
