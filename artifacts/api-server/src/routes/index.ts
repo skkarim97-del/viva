@@ -2,6 +2,12 @@ import { Router, type IRouter } from "express";
 import healthRouter from "./health";
 import coachRouter from "./coach";
 import healthDataRouter from "./healthData";
+
+// Coach (LLM chat) is disabled unless ENABLE_COACH=true is explicitly set.
+// Default (unset) returns 404 for all /coach/* so an unused surface is not
+// publicly reachable. Set ENABLE_COACH=true only once a BAA-covered AI
+// integration is in place.
+const coachEnabled = process.env.ENABLE_COACH === "true";
 import authRouter from "./auth";
 import patientsRouter from "./patients";
 import meRouter from "./me";
@@ -18,7 +24,13 @@ import devRouter, { isDevLoginEnabled } from "./dev";
 const router: IRouter = Router();
 
 router.use(healthRouter);
-router.use("/coach", coachRouter);
+if (coachEnabled) {
+  router.use("/coach", coachRouter);
+} else {
+  router.use("/coach", (_req, res) => {
+    res.status(404).json({ error: "not_found" });
+  });
+}
 router.use("/health", healthDataRouter);
 router.use("/auth", authRouter);
 router.use("/patients", patientsRouter);

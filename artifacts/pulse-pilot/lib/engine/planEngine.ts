@@ -1107,17 +1107,18 @@ export function generateDailyPlan(
     if (appetiteLow) firedSignals.push("appetiteLow");
     if (digestiveDistress) firedSignals.push("digestiveDistress");
     if (stressOverride) firedSignals.push("stressOverride");
-    // eslint-disable-next-line no-console
-    console.log("[planEngine] tier", {
-      dataTier: tier,
-      recommendationConfidence,
-      sufficiency: tierCtx.sufficiency,
-      freshness: tierCtx.freshness,
-      usable: { sleep: tierCtx.usableSleep, steps: tierCtx.usableSteps, rhr: tierCtx.usableRhr, hrv: tierCtx.usableHrv },
-      firedSignals,
-      readinessScore,
-      dailyState,
-    });
+    if (typeof __DEV__ !== "undefined" && __DEV__) {
+      console.log("[planEngine] tier", {
+        dataTier: tier,
+        recommendationConfidence,
+        sufficiency: tierCtx.sufficiency,
+        freshness: tierCtx.freshness,
+        usable: { sleep: tierCtx.usableSleep, steps: tierCtx.usableSteps, rhr: tierCtx.usableRhr, hrv: tierCtx.usableHrv },
+        firedSignals,
+        readinessScore,
+        dailyState,
+      });
+    }
   }
 
   return {

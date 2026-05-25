@@ -246,8 +246,9 @@ export const checkinSync = {
         depthBefore.trendResponses +
         depthBefore.clinicianRequests;
       if (totalBefore > 0) {
-        // eslint-disable-next-line no-console
-        console.log("[checkinSync] flush start", { total: totalBefore, ...depthBefore });
+        if (typeof __DEV__ !== "undefined" && __DEV__) {
+          console.log("[checkinSync] flush start", { total: totalBefore, ...depthBefore });
+        }
       }
       if (!hasAnyPending(s)) {
         s.status = "synced";
