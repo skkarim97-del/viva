@@ -1,6 +1,24 @@
 import type { PatientCheckin } from "@workspace/db";
 import type { SymptomFlag } from "./symptoms";
 import { symptomsRequireFollowup } from "./symptoms";
+import {
+  RISK_WEIGHT_SILENCE,
+  RISK_WEIGHT_LOW_ENERGY,
+  RISK_WEIGHT_SEVERE_NAUSEA,
+  RISK_WEIGHT_MOOD_DECLINE,
+  RISK_BAND_HIGH_THRESHOLD,
+  RISK_BAND_MEDIUM_THRESHOLD,
+  RISK_ACTION_FOLLOWUP_SCORE,
+  RISK_ACTION_MONITOR_SCORE,
+  RISK_SILENCE_FLAG_DAYS,
+  RISK_SILENCE_CRITICAL_DAYS,
+  RISK_ENERGY_WINDOW_DAYS,
+  RISK_ENERGY_MIN_CHECKINS,
+  RISK_ENERGY_WEAK_RATIO,
+  RISK_NAUSEA_WINDOW_DAYS,
+  RISK_MOOD_MIN_WINDOW,
+  RISK_MOOD_DECLINE_DELTA,
+} from "../shared/constants";
 
 /**
  * Lightweight rules-based churn-risk scoring. No persisted scores --
@@ -40,22 +58,22 @@ const RULES = {
   silence3d: {
     code: "silence_3d",
     label: "No check-in (3+ days)",
-    weight: 30,
+    weight: RISK_WEIGHT_SILENCE,
   },
   lowEnergy7d: {
     code: "low_energy_7d",
     label: "Low energy trend (7d)",
-    weight: 20,
+    weight: RISK_WEIGHT_LOW_ENERGY,
   },
   severeNausea3d: {
     code: "severe_nausea_3d",
     label: "Recent nausea spike",
-    weight: 15,
+    weight: RISK_WEIGHT_SEVERE_NAUSEA,
   },
   moodDecline: {
     code: "mood_decline",
     label: "Mood trending down",
-    weight: 10,
+    weight: RISK_WEIGHT_MOOD_DECLINE,
   },
 } as const;
 
@@ -76,7 +94,7 @@ export function computeRisk(
 
   // Rule 1: silence > 3 days
   const last = sorted[sorted.length - 1];
-  if (!last || daysBetween(today, new Date(last.date)) >= 3) {
+  if (!last || daysBetween(today, new Date(last.date)) >= RISK_SILENCE_FLAG_DAYS) {
     fired.push(RULES.silence3d);
   }
 
@@ -85,36 +103,36 @@ export function computeRisk(
     sorted.filter((c) => daysBetween(today, new Date(c.date)) < n);
 
   // Rule 2: avg energy weak across last 7 days
-  const last7 = within(7);
-  if (last7.length >= 3) {
+  const last7 = within(RISK_ENERGY_WINDOW_DAYS);
+  if (last7.length >= RISK_ENERGY_MIN_CHECKINS) {
     const weakCount = last7.filter(
       (c) => c.energy === "depleted" || c.energy === "tired",
     ).length;
-    if (weakCount / last7.length >= 0.5) {
+    if (weakCount / last7.length >= RISK_ENERGY_WEAK_RATIO) {
       fired.push(RULES.lowEnergy7d);
     }
   }
 
   // Rule 3: severe nausea in last 3 days
-  const last3 = within(3);
+  const last3 = within(RISK_NAUSEA_WINDOW_DAYS);
   if (last3.some((c) => c.nausea === "severe")) {
     fired.push(RULES.severeNausea3d);
   }
 
   // Rule 4: mood declining (avg of last 3 vs prior 4)
   const last7Sorted = last7.slice().sort((a, b) => (a.date < b.date ? -1 : 1));
-  if (last7Sorted.length >= 6) {
+  if (last7Sorted.length >= RISK_MOOD_MIN_WINDOW) {
     const prior = last7Sorted.slice(0, last7Sorted.length - 3);
     const recent = last7Sorted.slice(last7Sorted.length - 3);
     const avg = (xs: PatientCheckin[]) =>
       xs.reduce((s, c) => s + c.mood, 0) / xs.length;
-    if (avg(recent) < avg(prior) - 0.5) {
+    if (avg(recent) < avg(prior) - RISK_MOOD_DECLINE_DELTA) {
       fired.push(RULES.moodDecline);
     }
   }
 
   const score = fired.reduce((s, r) => s + r.weight, 0);
-  const band: RiskBand = score >= 51 ? "high" : score >= 26 ? "medium" : "low";
+  const band: RiskBand = score >= RISK_BAND_HIGH_THRESHOLD ? "high" : score >= RISK_BAND_MEDIUM_THRESHOLD ? "medium" : "low";
 
   return {
     score,
@@ -146,14 +164,14 @@ export function deriveAction(
     : Number.POSITIVE_INFINITY;
   const hasSevereNausea = rules.some((r) => r.code === "severe_nausea_3d");
   if (
-    score >= 50 ||
-    days >= 5 ||
+    score >= RISK_ACTION_FOLLOWUP_SCORE ||
+    days >= RISK_SILENCE_CRITICAL_DAYS ||
     hasSevereNausea ||
     symptomsRequireFollowup(symptomFlags)
   ) {
     return "needs_followup";
   }
-  if (score >= 30) return "monitor";
+  if (score >= RISK_ACTION_MONITOR_SCORE) return "monitor";
   return "stable";
 }
 
@@ -204,7 +222,7 @@ export function deriveSuggestedAction(
     const days = lastCheckin
       ? daysBetween(now, new Date(lastCheckin))
       : null;
-    if (days !== null && days >= 5) {
+    if (days !== null && days >= RISK_SILENCE_CRITICAL_DAYS) {
       return `Call patient: no check-in in ${days} days`;
     }
     return "Follow up on missed check-ins";

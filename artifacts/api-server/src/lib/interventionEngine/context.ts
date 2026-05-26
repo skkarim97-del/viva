@@ -26,6 +26,7 @@ import type {
   PatientInterventionFeedbackResult,
   PatientInterventionTriggerType,
 } from "@workspace/db";
+import { ACTIVE_INTERVENTION_STATUSES } from "../../treatment-intelligence/interventions/interventionState";
 
 export interface PatientInterventionContext {
   patientUserId: number;
@@ -360,7 +361,7 @@ export async function buildPatientInterventionContext(
   // distinct trigger-type set (for the orchestrator's de-dupe pass --
   // see comment on `activeTriggerTypes` above).
   const activeRows = priorInterventions.filter((i) =>
-    ["shown", "accepted", "pending_feedback", "escalated"].includes(i.status),
+    (ACTIVE_INTERVENTION_STATUSES as readonly string[]).includes(i.status),
   );
   const activeStatuses = activeRows.map((i) => i.status);
   const activeTriggerTypes = Array.from(

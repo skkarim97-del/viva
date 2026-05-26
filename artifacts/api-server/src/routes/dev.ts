@@ -14,6 +14,7 @@ import { getDemoPlatformId } from "../lib/platforms";
 import { generateRawApiToken, hashApiToken } from "../lib/apiTokens";
 import { generatePersonalizedIntervention } from "../lib/interventionEngine";
 import { logger } from "../lib/logger";
+import { ACTIVE_INTERVENTION_STATUSES } from "../treatment-intelligence/interventions/interventionState";
 
 // Replit-preview-only convenience login. Lets the operator tap a
 // single button on the patient sign-in screen and land in the Today
@@ -343,12 +344,7 @@ async function seedDemoTodaysCheckinAndIntervention(
     .where(
       and(
         eq(patientInterventionsTable.patientUserId, patientUserId),
-        inArray(patientInterventionsTable.status, [
-          "shown",
-          "accepted",
-          "pending_feedback",
-          "escalated",
-        ]),
+        inArray(patientInterventionsTable.status, ACTIVE_INTERVENTION_STATUSES),
       ),
     );
 
@@ -537,12 +533,7 @@ router.post(
         .where(
           and(
             eq(patientInterventionsTable.patientUserId, patient.id),
-            inArray(patientInterventionsTable.status, [
-              "shown",
-              "accepted",
-              "pending_feedback",
-              "escalated",
-            ]),
+            inArray(patientInterventionsTable.status, ACTIVE_INTERVENTION_STATUSES),
           ),
         );
 

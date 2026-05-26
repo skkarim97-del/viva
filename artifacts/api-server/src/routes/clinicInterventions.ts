@@ -24,6 +24,7 @@ import { mediumApiLimiter } from "../middlewares/rateLimit";
 import { phiAudit } from "../middlewares/phiAudit";
 import { canAccessPatient } from "../lib/canAccessPatient";
 import { logger } from "../lib/logger";
+import { ACTIVE_INTERVENTION_STATUSES } from "../treatment-intelligence/interventions/interventionState";
 
 const router: Router = Router();
 
@@ -55,13 +56,6 @@ router.use(
 // Review", "Worsening After Intervention", and "Pending Feedback"
 // buckets.
 
-const WORKLIST_STATUSES = [
-  "shown",
-  "accepted",
-  "pending_feedback",
-  "escalated",
-] as const;
-
 router.get("/", async (req, res: Response) => {
   const doctorId = (req as AuthedRequest).auth.userId;
   try {
@@ -90,7 +84,7 @@ router.get("/", async (req, res: Response) => {
           eq(patientsTable.doctorId, doctorId),
           inArray(
             patientInterventionsTable.status,
-            WORKLIST_STATUSES,
+            ACTIVE_INTERVENTION_STATUSES,
           ),
         ),
       )
