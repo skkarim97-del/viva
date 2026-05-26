@@ -22,18 +22,21 @@ export type CareEventRow = typeof careEventsTable.$inferInsert;
  * Insert one or more care event rows asynchronously. Never throws;
  * logs at warn level on failure so silent data loss is observable.
  *
- * @param rows  One row or an array of rows to insert.
- * @param logLabel  Short label included in the warn log for traceability
- *                  (e.g. "intervention_recommendation_shown").
+ * @param rows        One row or an array of rows to insert.
+ * @param logLabel    Log message emitted on failure (use the same
+ *                    string the call site would have used inline).
+ * @param logContext  Optional extra fields merged into the warn payload
+ *                    (e.g. { interventionId: id }).
  */
 export function writeCareEvents(
   rows: CareEventRow | CareEventRow[],
   logLabel: string,
+  logContext: Record<string, unknown> = {},
 ): void {
   const values = Array.isArray(rows) ? rows : [rows];
   db.insert(careEventsTable)
     .values(values)
     .catch((err) => {
-      logger.warn({ err, logLabel }, "care_event_insert_failed");
+      logger.warn({ err, ...logContext }, logLabel);
     });
 }
