@@ -33,11 +33,12 @@ import {
   computeSymptomFlags,
   summarizeFlagForList,
 } from "../treatment-intelligence/rules/symptomRules";
+import { CARE_EVENT_LOOKBACK_DAYS } from "../shared/constants";
 import {
-  ACTIVITY_THRESHOLD_DAYS,
-  STALE_INVITE_HOURS,
-  CARE_EVENT_LOOKBACK_DAYS,
-} from "../shared/constants";
+  isPatientArchived,
+  isPatientInactive,
+  computeInviteAge,
+} from "../patient-context/engagement.service";
 import { mediumApiLimiter } from "../middlewares/rateLimit";
 import { phiAudit } from "../middlewares/phiAudit";
 
@@ -197,40 +198,20 @@ router.get("/", async (req, res: Response) => {
       if (open) openWorkflowByPatient.set(r.patientUserId, true);
     }
   }
-  const isArchived = (
-    treatmentStatus: string,
-    patientUserId: number,
-  ): boolean =>
-    treatmentStatus === "stopped" && !openWorkflowByPatient.get(patientUserId);
-
-  const activityCutoff = new Date();
-  activityCutoff.setDate(activityCutoff.getDate() - ACTIVITY_THRESHOLD_DAYS);
-  const activityCutoffDateStr = activityCutoff.toISOString().split("T")[0]!;
-  const isInactive12d = (
-    treatmentStatus: string,
-    activatedAt: unknown,
-    lastCheckinDate: string | null | undefined,
-  ): boolean => {
-    if (treatmentStatus !== "active" && treatmentStatus !== "unknown") {
-      return false;
-    }
-    if (!activatedAt) return false;
-    const activatedTs = new Date(activatedAt as string).getTime();
-    if (activatedTs > activityCutoff.getTime()) return false;
-    // Never checked in or last check-in date <= the cutoff date.
-    return !lastCheckinDate || lastCheckinDate <= activityCutoffDateStr;
-  };
-
+  // Capture a single "now" so every patient in this response uses the
+  // same cutoff when computing inactivity and invite age.
+  const now = new Date();
   const result = rows.map((p) => {
     // Pending patients have not yet claimed their account in the
     // mobile app, so risk and signals are not yet meaningful. We
     // surface them in their own dashboard bucket instead of scoring
     // empty data and falsely calling them "Stable".
     const lastCheckinAllTime = lastCheckinAllByPatient.get(p.id) ?? null;
-    const inactive12d = isInactive12d(
+    const inactive12d = isPatientInactive(
       p.treatmentStatus,
       p.activatedAt,
       lastCheckinAllTime,
+      now,
     );
 
     const pending = !p.activatedAt;
@@ -240,17 +221,10 @@ router.get("/", async (req, res: Response) => {
       // hours value is exposed so the UI can render the precise age
       // (e.g. "Sent 3d ago") without re-deriving from the issuance
       // timestamp on the client.
-      const issuedRaw = p.activationTokenIssuedAt
-        ? new Date(p.activationTokenIssuedAt as unknown as string).getTime()
-        : NaN;
-      // Clamp at >= 0 and treat invalid/missing timestamps as null so a
-      // bad row never serializes as NaN or trips the stale chip with a
-      // negative age.
-      const inviteAgeHours = Number.isFinite(issuedRaw)
-        ? Math.max(0, Math.floor((Date.now() - issuedRaw) / (1000 * 60 * 60)))
-        : null;
-      const staleInvite =
-        inviteAgeHours !== null && inviteAgeHours >= STALE_INVITE_HOURS;
+      const { inviteAgeHours, staleInvite } = computeInviteAge(
+        p.activationTokenIssuedAt,
+        now,
+      );
       return {
         id: p.id,
         name: p.name,
@@ -273,7 +247,7 @@ router.get("/", async (req, res: Response) => {
         inactive12d,
         inviteAgeHours,
         staleInvite,
-        archived: isArchived(p.treatmentStatus, p.id),
+        archived: isPatientArchived(p.treatmentStatus, openWorkflowByPatient.get(p.id) ?? false),
       };
     }
     const cks = byPatient.get(p.id) ?? [];
@@ -312,7 +286,7 @@ router.get("/", async (req, res: Response) => {
         treatmentStatus: p.treatmentStatus,
         stopReason: p.stopReason,
         inactive12d,
-        archived: isArchived(p.treatmentStatus, p.id),
+        archived: isPatientArchived(p.treatmentStatus, openWorkflowByPatient.get(p.id) ?? false),
       };
     }
     return {
@@ -350,7 +324,7 @@ router.get("/", async (req, res: Response) => {
       // above, so patients whose last check-in fell outside that
       // window are still counted correctly.
       inactive12d,
-      archived: isArchived(p.treatmentStatus, p.id),
+      archived: isPatientArchived(p.treatmentStatus, openWorkflowByPatient.get(p.id) ?? false),
     };
   });
 
