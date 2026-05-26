@@ -173,21 +173,30 @@ router.post(
       return;
     }
     try {
-      // Find the most-recent escalation for linkage. We pick the
-      // newest escalation regardless of whether it was previously
-      // marked reviewed -- the doctor is following up on it now.
-      const triggerRows = await db
-        .select({ id: careEventsTable.id })
-        .from(careEventsTable)
-        .where(
-          and(
-            eq(careEventsTable.patientUserId, patientId),
-            eq(careEventsTable.type, "escalation_requested"),
-          ),
-        )
-        .orderBy(desc(careEventsTable.occurredAt))
-        .limit(1);
-      const triggerEventId = triggerRows[0]?.id ?? null;
+      // Find the oldest open (unanswered) escalation for linkage.
+      // "Open" means no follow_up_completed row already points at it
+      // via trigger_event_id. This ensures a second escalation before
+      // the first is followed-up does not steal the follow-up credit,
+      // and time-to-follow-up metrics are computed against the correct
+      // (earliest outstanding) escalation. If all escalations have
+      // been followed up (or none exist), trigger_event_id is null and
+      // the event is still logged unlinked — the analytics queries
+      // already gate on trigger_event_id IS NOT NULL.
+      const triggerRows = await db.execute(sql`
+        select ce.id
+        from care_events ce
+        where ce.patient_user_id = ${patientId}
+          and ce.type = 'escalation_requested'
+          and not exists (
+            select 1 from care_events fu
+            where fu.trigger_event_id = ce.id
+              and fu.type = 'follow_up_completed'
+          )
+        order by ce.occurred_at asc
+        limit 1
+      `);
+      const triggerEventId =
+        (triggerRows.rows[0] as { id?: number } | undefined)?.id ?? null;
       const [created] = await db
         .insert(careEventsTable)
         .values({

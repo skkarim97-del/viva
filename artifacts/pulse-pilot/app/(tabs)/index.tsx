@@ -28,6 +28,7 @@ import { shouldInvalidateSupportState } from "@/lib/support/symptomState";
 import { BlurView } from "expo-blur";
 import {
   interventionsApi,
+  InterventionsHttpError,
   type PatientIntervention,
   type FeedbackResult,
 } from "@/lib/api/interventionsClient";
@@ -39,6 +40,7 @@ import { buildPatientContext } from "@/lib/intelligence/patientContext";
 import { buildPlanBannerLine } from "@/lib/intelligence/learningCopy";
 import { logCareEventDeduped, logCareEventImmediate } from "@/lib/care-events/client";
 import { useApp } from "@/context/AppContext";
+import { useAuth } from "@/context/AuthContext";
 import { type SymptomKind } from "@/lib/symptomTips";
 import { generateCoachInsight } from "@/data/insights";
 import { formatDoseDisplay, getDoseOptions, type MedicationBrand } from "@/data/medicationData";
@@ -202,6 +204,8 @@ export default function DashboardScreen() {
     availableMetricTypes,
     glp1InputHistory,
   } = useApp();
+
+  const { signOut } = useAuth();
 
   const symptomCounts = React.useMemo(() => {
     if (glp1InputHistory.length === 0) return null;
@@ -424,16 +428,26 @@ export default function DashboardScreen() {
   // exactly once after the first /active call completes (success OR
   // failure), and gates both auto-generate effects below.
   const [activeLoaded, setActiveLoaded] = useState(false);
+  // Inline error shown to the patient when an intervention API call fails.
+  // Set on failure, cleared on the next successful action or new attempt.
+  const [interventionActionError, setInterventionActionError] = useState<string | null>(null);
+
   const reloadActiveInterventions = React.useCallback(async () => {
     try {
       const items = await interventionsApi.active();
       setActiveInterventions(items);
-    } catch {
-      // Best-effort: leave whatever's currently rendered alone.
+    } catch (err) {
+      // 401 means the session expired — sign out and redirect to login.
+      if (err instanceof InterventionsHttpError && err.status === 401) {
+        await signOut();
+        router.replace("/connect");
+        return;
+      }
+      // Other errors are best-effort: leave whatever's currently rendered.
     } finally {
       setActiveLoaded(true);
     }
-  }, []);
+  }, [signOut]);
   useEffect(() => {
     void reloadActiveInterventions();
   }, [reloadActiveInterventions]);
@@ -470,11 +484,11 @@ export default function DashboardScreen() {
       queuedFollowUpRef.current = false;
       generateInFlightRef.current = true;
       try {
-        let created: PatientIntervention | null = null;
         try {
-          created = await interventionsApi.generate({ source: "checkin" });
+          await interventionsApi.generate({ source: "checkin" });
+          setInterventionActionError(null);
         } catch {
-          /* swallow -- best effort */
+          setInterventionActionError("Couldn't save. Tap to retry.");
         }
         await reloadActiveInterventions();
       } finally {
@@ -592,7 +606,13 @@ export default function DashboardScreen() {
 
   const onInterventionAccept = React.useCallback(
     async (id: number) => {
-      try { await interventionsApi.accept(id); } catch { /* swallow */ }
+      setInterventionActionError(null);
+      try {
+        await interventionsApi.accept(id);
+      } catch (err) {
+        setInterventionActionError("Couldn't save. Tap to retry.");
+        throw err; // let the card reset acceptFiredRef so a retry is possible
+      }
       await reloadActiveInterventions();
     },
     [reloadActiveInterventions],
@@ -617,6 +637,7 @@ export default function DashboardScreen() {
       // THEN refetch -- which drops the now-collected row from the
       // active list. The escalated path still refetches immediately
       // because /active does include escalated rows.
+      setInterventionActionError(null);
       try {
         const resp = await interventionsApi.feedback(id, result);
         const updated = resp?.intervention;
@@ -631,8 +652,9 @@ export default function DashboardScreen() {
             return;
           }
         }
-      } catch {
-        /* swallow */
+      } catch (err) {
+        setInterventionActionError("Couldn't save. Tap to retry.");
+        throw err; // let the card's catch handle phase/ref state
       }
       await reloadActiveInterventions();
     },
@@ -640,9 +662,13 @@ export default function DashboardScreen() {
   );
   const onInterventionEscalate = React.useCallback(
     async (id: number) => {
+      setInterventionActionError(null);
       try {
         await interventionsApi.escalate(id, "want_to_talk_to_doctor");
-      } catch { /* swallow */ }
+      } catch (err) {
+        setInterventionActionError("Couldn't save. Tap to retry.");
+        throw err;
+      }
       await reloadActiveInterventions();
     },
     [reloadActiveInterventions],
@@ -2536,6 +2562,18 @@ export default function DashboardScreen() {
               onFeedback={onInterventionFeedback}
               onEscalate={onInterventionEscalate}
             />
+            {interventionActionError && (
+              <Text style={{
+                color: c.warning,
+                fontFamily: "Montserrat_500Medium",
+                fontSize: 13,
+                textAlign: "center",
+                marginTop: 8,
+                paddingHorizontal: 16,
+              }}>
+                {interventionActionError}
+              </Text>
+            )}
           </ScrollView>
         </Animated.View>
       )}

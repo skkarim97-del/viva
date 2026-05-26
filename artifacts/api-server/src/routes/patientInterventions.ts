@@ -20,6 +20,7 @@ import { z } from "zod";
 import {
   db,
   patientInterventionsTable,
+  careEventsTable,
   analyticsEventsTable,
   patientsTable,
   usersTable,
@@ -611,55 +612,93 @@ router.post("/:id/feedback", async (req, res: Response) => {
     nextStatus = "feedback_collected";
   }
 
-  const [updated] = await db
-    .update(patientInterventionsTable)
-    .set({
-      status: nextStatus,
-      feedbackResult,
-      patientNote: patientNote ?? null,
-      feedbackCollectedAt: now,
-      escalatedAt,
-      resolvedAt,
-      escalationReason,
-      updatedAt: now,
-    })
-    .where(eq(patientInterventionsTable.id, id))
-    .returning();
+  let updated: PatientIntervention | undefined;
 
-  // Mirror to care_events. Always log intervention_feedback;
-  // additionally log escalation_requested when worse (so the
-  // existing dashboard worklist's needs-review bucket surfaces it).
-  const careRows: CareEventRow[] = [
-    {
-      patientUserId: userId,
-      actorUserId: userId,
-      source: "patient",
-      type: "intervention_feedback",
-      metadata: {
-        intervention_id: id,
-        response: feedbackResult,
-        intervention: existing.symptomType ?? existing.triggerType,
-      },
-    },
-  ];
   if (feedbackResult === "worse") {
-    careRows.push({
-      patientUserId: userId,
-      actorUserId: userId,
-      source: "patient",
-      type: "escalation_requested",
-      metadata: {
-        intervention_id: id,
-        reason: "patient_feedback_worse",
-        channel: "intervention",
-      },
+    // For the escalation path, the intervention row update AND the
+    // escalation_requested care_event must both persist. Wrap them in a
+    // transaction: if either write fails, the row stays in pending_feedback
+    // so the patient can retry and the doctor worklist is not silently missed.
+    updated = await db.transaction(async (tx) => {
+      const [u] = await tx
+        .update(patientInterventionsTable)
+        .set({
+          status: "escalated",
+          feedbackResult,
+          patientNote: patientNote ?? null,
+          feedbackCollectedAt: now,
+          escalatedAt: now,
+          resolvedAt: null,
+          escalationReason: "patient_feedback_worse",
+          updatedAt: now,
+        })
+        .where(eq(patientInterventionsTable.id, id))
+        .returning();
+      await tx.insert(careEventsTable).values([
+        {
+          patientUserId: userId,
+          actorUserId: userId,
+          source: "patient" as const,
+          type: "intervention_feedback" as const,
+          metadata: {
+            intervention_id: id,
+            response: feedbackResult,
+            intervention: existing.symptomType ?? existing.triggerType,
+          },
+        },
+        {
+          patientUserId: userId,
+          actorUserId: userId,
+          source: "patient" as const,
+          type: "escalation_requested" as const,
+          metadata: {
+            intervention_id: id,
+            reason: "patient_feedback_worse",
+            channel: "intervention",
+          },
+        },
+      ]);
+      return u;
     });
+  } else {
+    const [u] = await db
+      .update(patientInterventionsTable)
+      .set({
+        status: nextStatus,
+        feedbackResult,
+        patientNote: patientNote ?? null,
+        feedbackCollectedAt: now,
+        escalatedAt,
+        resolvedAt,
+        escalationReason,
+        updatedAt: now,
+      })
+      .where(eq(patientInterventionsTable.id, id))
+      .returning();
+    updated = u;
+    // Mirror intervention_feedback to care_events (best-effort; only the
+    // escalation_requested row drives the doctor worklist, not this one).
+    writeCareEvents(
+      {
+        patientUserId: userId,
+        actorUserId: userId,
+        source: "patient",
+        type: "intervention_feedback",
+        metadata: {
+          intervention_id: id,
+          response: feedbackResult,
+          intervention: existing.symptomType ?? existing.triggerType,
+        },
+      },
+      "intervention_feedback_care_event_insert_failed",
+      { interventionId: id },
+    );
   }
-  writeCareEvents(
-    careRows,
-    "intervention_feedback_care_event_insert_failed",
-    { interventionId: id },
-  );
+
+  if (!updated) {
+    res.status(500).json({ error: "update_failed" });
+    return;
+  }
 
   // Analytics events vary by feedback. Spec Part 9 names are kept
   // verbatim (the feedback variants share a lookup table here so a
@@ -681,11 +720,16 @@ router.post("/:id/feedback", async (req, res: Response) => {
     analyticsEvents.push("intervention_resolved");
   } else if (feedbackResult === "worse") {
     analyticsEvents.push("intervention_escalated");
-    // Fire-and-forget: notify the assigned doctor. Runs after res.json()
-    // so a slow or failing email never delays the patient response.
-    lookupDoctorEmail(userId).then((email) => {
-      if (email) void sendEscalationEmail(email);
-    });
+    // Fire-and-forget: notify the assigned doctor. A failed email must
+    // not crash the process — catch and log so the patient response is
+    // already sent before any email work begins.
+    lookupDoctorEmail(userId)
+      .then((email) => {
+        if (email) void sendEscalationEmail(email);
+      })
+      .catch((err) => {
+        logger.warn({ err }, "escalation_email_dispatch_failed");
+      });
   }
   fireAnalytics(userId, analyticsEvents, {
     intervention_id: id,
@@ -745,11 +789,16 @@ router.post("/:id/escalate", async (req, res: Response) => {
     { interventionId: id },
   );
 
-  // Fire-and-forget: notify the assigned doctor. Runs after res.json()
-  // so email latency is invisible to the patient.
-  lookupDoctorEmail(userId).then((email) => {
-    if (email) void sendEscalationEmail(email);
-  });
+  // Fire-and-forget: notify the assigned doctor. A failed email must
+  // not crash the process — catch and log so the patient response is
+  // already sent before any email work begins.
+  lookupDoctorEmail(userId)
+    .then((email) => {
+      if (email) void sendEscalationEmail(email);
+    })
+    .catch((err) => {
+      logger.warn({ err }, "escalation_email_dispatch_failed");
+    });
 
   fireAnalytics(userId, ["intervention_escalated"], {
     intervention_id: id,
