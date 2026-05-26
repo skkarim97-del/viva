@@ -19,12 +19,16 @@
 #
 # REQUIREMENTS: curl and jq must be installed.
 # USAGE: bash viva_smoke_test.sh
+#
+# BASE defaults to production API unless overridden via env var.
+# Recommended usage for staging:
+#   BASE="https://staging-api-host/api" ./viva_smoke_test.sh
 # =============================================================
 
 set -uo pipefail
 
 # ---- CONFIGURATION (fill these in) --------------------------
-BASE="https://api.itsviva.com/api"
+BASE="${BASE:-https://api.itsviva.com/api}"
 TEST_DOCTOR_EMAIL="FILL_IN"
 TEST_DOCTOR_PASSWORD="FILL_IN"
 INTERNAL_API_KEY="FILL_IN"
