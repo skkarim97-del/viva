@@ -20,7 +20,6 @@ import { z } from "zod";
 import {
   db,
   patientInterventionsTable,
-  careEventsTable,
   analyticsEventsTable,
   patientsTable,
   usersTable,
@@ -28,6 +27,10 @@ import {
   PATIENT_INTERVENTION_FEEDBACK_RESULTS,
   type PatientIntervention,
 } from "@workspace/db";
+import {
+  writeCareEvents,
+  type CareEventRow,
+} from "../treatment-intelligence/escalations/careEventWriter";
 import {
   requirePatient,
   type AuthedRequest,
@@ -391,8 +394,8 @@ router.post("/generate", async (req, res: Response) => {
     // guard the dashboard funnel would over-count impressions every
     // time a slider moved.
     if (!liveUpdated) {
-      db.insert(careEventsTable)
-        .values({
+      writeCareEvents(
+        {
           patientUserId: userId,
           actorUserId: null,
           source: "viva",
@@ -405,13 +408,10 @@ router.post("/generate", async (req, res: Response) => {
             source,
             risk_level: row.riskLevel,
           },
-        })
-        .catch((err) => {
-          logger.warn(
-            { err, interventionId: row.id },
-            "intervention_care_event_insert_failed",
-          );
-        });
+        },
+        "intervention_care_event_insert_failed",
+        { interventionId: row.id },
+      );
     }
 
     // Analytics: always fire AI-payload / fallback / phi-guardrail
@@ -635,7 +635,7 @@ router.post("/:id/feedback", async (req, res: Response) => {
   // Mirror to care_events. Always log intervention_feedback;
   // additionally log escalation_requested when worse (so the
   // existing dashboard worklist's needs-review bucket surfaces it).
-  const careRows: Array<typeof careEventsTable.$inferInsert> = [
+  const careRows: CareEventRow[] = [
     {
       patientUserId: userId,
       actorUserId: userId,
@@ -661,14 +661,11 @@ router.post("/:id/feedback", async (req, res: Response) => {
       },
     });
   }
-  db.insert(careEventsTable)
-    .values(careRows)
-    .catch((err) => {
-      logger.warn(
-        { err, interventionId: id },
-        "intervention_feedback_care_event_insert_failed",
-      );
-    });
+  writeCareEvents(
+    careRows,
+    "intervention_feedback_care_event_insert_failed",
+    { interventionId: id },
+  );
 
   // Analytics events vary by feedback. Spec Part 9 names are kept
   // verbatim (the feedback variants share a lookup table here so a
@@ -742,8 +739,8 @@ router.post("/:id/escalate", async (req, res: Response) => {
 
   // Mirror to care_events. Hooks straight into the existing
   // needs-review worklist on the dashboard.
-  db.insert(careEventsTable)
-    .values({
+  writeCareEvents(
+    {
       patientUserId: userId,
       actorUserId: userId,
       source: "patient",
@@ -753,13 +750,10 @@ router.post("/:id/escalate", async (req, res: Response) => {
         reason: "patient_requested",
         channel: "intervention",
       },
-    })
-    .catch((err) => {
-      logger.warn(
-        { err, interventionId: id },
-        "intervention_escalate_care_event_insert_failed",
-      );
-    });
+    },
+    "intervention_escalate_care_event_insert_failed",
+    { interventionId: id },
+  );
 
   // Fire-and-forget: notify the assigned doctor. Runs after res.json()
   // so email latency is invisible to the patient.
