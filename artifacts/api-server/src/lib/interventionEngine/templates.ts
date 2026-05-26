@@ -216,9 +216,9 @@ export const INTERVENTION_TEMPLATES: ReadonlyArray<InterventionTemplate> = [
     riskLevel: "low",
     recommendationCategory: "tracking",
     whatWeNoticed:
-      "You haven\u2019t checked in recently, so Viva may be missing important updates.",
+      "You have not checked in recently, so your care team may not have a current picture of how you are doing.",
     recommendation:
-      "Take 30 seconds to check in now so your care team has a current picture of how you feel.",
+      "Take 30 seconds to check in now so your care team can see your latest symptoms and progress.",
     followUpQuestion:
       "After checking in, tell us if anything needs attention.",
     escalationRecommended: false,
@@ -262,11 +262,11 @@ export const INTERVENTION_TEMPLATES: ReadonlyArray<InterventionTemplate> = [
     riskLevel: "moderate",
     recommendationCategory: "care_team_review",
     whatWeNoticed:
-      "Your symptoms have not improved over the last few days.",
+      "Your recent check-ins suggest something has been getting harder over the last few days.",
     recommendation:
-      "Request a care team review so your care team can decide the right next step.",
+      "Request a care team review so your care team can look at your recent symptoms and decide the right next step.",
     followUpQuestion:
-      "Would you like to send this to your care team?",
+      "While you wait, tell us if anything changes for better or worse.",
     escalationRecommended: true,
   },
 
@@ -280,9 +280,9 @@ export const INTERVENTION_TEMPLATES: ReadonlyArray<InterventionTemplate> = [
     whatWeNoticed:
       "You\u2019ve reported the same symptom several days in a row.",
     recommendation:
-      "Try the same support that worked before. If it doesn\u2019t help by tomorrow, we\u2019ll suggest the next step.",
+      "Try the support step below today. If it does not help by tomorrow, Viva can suggest a different next step.",
     followUpQuestion:
-      "Tell us if it feels better, the same or worse over the next day.",
+      "After you try it, tell us if this feels better, the same or worse.",
     escalationRecommended: false,
   },
 
