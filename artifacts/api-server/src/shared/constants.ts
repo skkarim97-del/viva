@@ -71,9 +71,18 @@ export const RISK_NAUSEA_WINDOW_DAYS = 3;
 // report "depleted" or "tired".
 export const RISK_ENERGY_WEAK_RATIO = 0.5;
 
+// Minimum check-ins present in the 7-day window to evaluate the energy
+// rule (avoids firing on 1-2 isolated days that don't form a trend).
+export const RISK_ENERGY_MIN_CHECKINS = 3;
+
 // Minimum days in window to compute a mood trend (avoid noise from
 // patients who have just started and have 1-2 data points).
 export const RISK_MOOD_MIN_WINDOW = 6;
+
+// Minimum average mood drop (prior period vs recent period) that fires
+// the mood decline rule. A 0.5-point drop on the 1–5 mood scale is
+// one half-step, e.g. "good" trending toward "okay".
+export const RISK_MOOD_DECLINE_DELTA = 0.5;
 
 // ---- Symptom look-back windows ----------------------------------------
 //
