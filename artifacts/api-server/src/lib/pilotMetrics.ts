@@ -62,7 +62,7 @@ import {
   db,
   patientsTable,
   patientCheckinsTable,
-  interventionEventsTable,
+  patientInterventionsTable,
   careEventsTable,
   telehealthPlatformsTable,
   usersTable,
@@ -85,7 +85,7 @@ import type { RiskBand } from "./risk";
 //   * major: any rule change that can move a number for unchanged data
 //     (e.g. flipping inclusive/exclusive boundary, changing dedupe
 //     window, swapping computeRisk implementation).
-export const PILOT_METRIC_DEFINITION_VERSION = "v1.0.0";
+export const PILOT_METRIC_DEFINITION_VERSION = "v1.1.0";
 
 // ---- Wire types ------------------------------------------------------
 
@@ -335,47 +335,39 @@ export async function computePilotMetrics(
   // upper bound is a no-op; for snapshots it matters.
   const triggeredRows = await db.execute(sql`
     select cast(count(*) as int) as n
-    from intervention_events
+    from patient_interventions
     where patient_user_id = any(${sql.raw(toIntArrayLiteral(cohortIds))})
-      and occurred_at >= ${windowStart}
-      and occurred_at <= ${windowEnd}
+      and created_at >= ${windowStart}
+      and created_at <= ${windowEnd}
   `);
   const triggered = numFromRow(triggeredRows.rows?.[0], "n");
 
-  // Window boundary contract: INCLUSIVE on both ends (>= ie.occurred_at
-  // and <= ie.occurred_at + N hours). "Within 48h" matches conventional
-  // human interpretation; the boundary only differs at exactly +N:00:00
-  // which is statistically unlikely but worth pinning down. Both the
-  // engagement and escalation queries use the same convention.
+  // Engagement: an intervention is engaged when the patient submitted
+  // feedback (feedback_collected_at IS NOT NULL). This is an exact join
+  // on the lifecycle timestamp rather than the prior loose 48h patient-
+  // level cross-join against care_events.
   const engagedRows = await db.execute(sql`
     select cast(count(*) as int) as n
-    from intervention_events ie
-    where ie.patient_user_id = any(${sql.raw(toIntArrayLiteral(cohortIds))})
-      and ie.occurred_at >= ${windowStart}
-      and ie.occurred_at <= ${windowEnd}
-      and exists (
-        select 1 from care_events ce
-        where ce.patient_user_id = ie.patient_user_id
-          and ce.type = 'intervention_feedback'
-          and ce.occurred_at >= ie.occurred_at
-          and ce.occurred_at <= ie.occurred_at + interval '${sql.raw(String(ENGAGEMENT_HOURS))} hours'
-      )
+    from patient_interventions
+    where patient_user_id = any(${sql.raw(toIntArrayLiteral(cohortIds))})
+      and created_at >= ${windowStart}
+      and created_at <= ${windowEnd}
+      and feedback_collected_at is not null
   `);
   const engaged = numFromRow(engagedRows.rows?.[0], "n");
 
+  // Escalated: an intervention is escalated within the auto-resolve window
+  // when escalated_at is set on the row and falls within 48h of creation.
+  // Uses the row's own lifecycle timestamps rather than a correlated
+  // cross-join against care_events.
   const escalatedWithinRows = await db.execute(sql`
     select cast(count(*) as int) as n
-    from intervention_events ie
-    where ie.patient_user_id = any(${sql.raw(toIntArrayLiteral(cohortIds))})
-      and ie.occurred_at >= ${windowStart}
-      and ie.occurred_at <= ${windowEnd}
-      and exists (
-        select 1 from care_events ce
-        where ce.patient_user_id = ie.patient_user_id
-          and ce.type = 'escalation_requested'
-          and ce.occurred_at >= ie.occurred_at
-          and ce.occurred_at <= ie.occurred_at + interval '${sql.raw(String(AUTO_RESOLVE_HOURS))} hours'
-      )
+    from patient_interventions
+    where patient_user_id = any(${sql.raw(toIntArrayLiteral(cohortIds))})
+      and created_at >= ${windowStart}
+      and created_at <= ${windowEnd}
+      and escalated_at is not null
+      and escalated_at <= created_at + interval '${sql.raw(String(AUTO_RESOLVE_HOURS))} hours'
   `);
   const escalatedWithin = numFromRow(escalatedWithinRows.rows?.[0], "n");
   const autoResolved = Math.max(0, triggered - escalatedWithin);
@@ -577,7 +569,7 @@ export async function computePilotMetrics(
       engagementWindowHours: ENGAGEMENT_HOURS,
       escalationDedupeHours: DEDUPE_HOURS,
       riskBandSource: "computed_on_read",
-      engagementJoin: "loose_patient_only_within_48h",
+      engagementJoin: "exact_feedback_collected_at",
       actedOnDefinition: "follow_up_completed_linked_via_trigger",
       reviewedDefinition: "doctor_reviewed_after_escalation_before_next",
     },
@@ -676,7 +668,7 @@ function emptyBlock(
     rules: {
       ...windows,
       riskBandSource: "computed_on_read",
-      engagementJoin: "loose_patient_only_within_48h",
+      engagementJoin: "exact_feedback_collected_at",
       actedOnDefinition: "follow_up_completed_linked_via_trigger",
       reviewedDefinition: "doctor_reviewed_after_escalation_before_next",
     },
