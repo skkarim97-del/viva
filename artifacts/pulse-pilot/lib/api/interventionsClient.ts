@@ -161,6 +161,8 @@ export const interventionsApi = {
   // GET /api/patient/interventions/active
   // Returns currently surface-able interventions (shown / accepted /
   // pending_feedback / escalated). Empty array is a normal state.
+  // Throws InterventionsHttpError(401) on auth failure so the caller
+  // can detect session expiry; all other errors are swallowed (best-effort).
   active: async (): Promise<PatientIntervention[]> => {
     try {
       const r = await request<ActiveResponse>(
@@ -168,7 +170,8 @@ export const interventionsApi = {
         "/patient/interventions/active",
       );
       return r.interventions ?? [];
-    } catch {
+    } catch (err) {
+      if (err instanceof InterventionsHttpError && err.status === 401) throw err;
       return [];
     }
   },
@@ -177,23 +180,20 @@ export const interventionsApi = {
   // Triggered after a daily check-in and from "Ask my care team".
   // Returns null when the engine decided no new intervention was
   // warranted (or duplicated an active one); the caller should treat
-  // null as a no-op.
+  // null as a no-op. Throws on network/server error so callers can
+  // surface a retry prompt.
   generate: async (input?: {
     source?: GenerateSource;
     symptomType?: string | null;
     severity?: number | null;
     triggerType?: InterventionTriggerType | null;
   }): Promise<PatientIntervention | null> => {
-    try {
-      const r = await request<SingleResponse>(
-        "POST",
-        "/patient/interventions/generate",
-        input ?? {},
-      );
-      return r.intervention ?? null;
-    } catch {
-      return null;
-    }
+    const r = await request<SingleResponse>(
+      "POST",
+      "/patient/interventions/generate",
+      input ?? {},
+    );
+    return r.intervention ?? null;
   },
 
   accept: (id: number) =>
