@@ -31,6 +31,7 @@ import {
   writeCareEvents,
   type CareEventRow,
 } from "../treatment-intelligence/escalations/careEventWriter";
+import { ACTIVE_INTERVENTION_STATUSES } from "../treatment-intelligence/interventions/interventionState";
 import {
   requirePatient,
   type AuthedRequest,
@@ -215,7 +216,7 @@ router.post("/generate", async (req, res: Response) => {
       .where(
         and(
           eq(patientInterventionsTable.patientUserId, userId),
-          inArray(patientInterventionsTable.status, ACTIVE_STATUSES),
+          inArray(patientInterventionsTable.status, ACTIVE_INTERVENTION_STATUSES),
         ),
       )
       .orderBy(desc(patientInterventionsTable.createdAt));
@@ -444,13 +445,6 @@ router.post("/generate", async (req, res: Response) => {
 // GET /active -- list active interventions for the caller
 // -----------------------------------------------------------------
 
-const ACTIVE_STATUSES = [
-  "shown",
-  "accepted",
-  "pending_feedback",
-  "escalated",
-] as const;
-
 router.get("/active", async (req, res: Response) => {
   const userId = (req as AuthedRequest).auth.userId;
   try {
@@ -460,7 +454,7 @@ router.get("/active", async (req, res: Response) => {
       .where(
         and(
           eq(patientInterventionsTable.patientUserId, userId),
-          inArray(patientInterventionsTable.status, ACTIVE_STATUSES),
+          inArray(patientInterventionsTable.status, ACTIVE_INTERVENTION_STATUSES),
         ),
       )
       .orderBy(desc(patientInterventionsTable.createdAt))
