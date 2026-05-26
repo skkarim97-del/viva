@@ -31,7 +31,7 @@ import {
   writeCareEvents,
   type CareEventRow,
 } from "../treatment-intelligence/escalations/careEventWriter";
-import { ACTIVE_INTERVENTION_STATUSES } from "../treatment-intelligence/interventions/interventionState";
+import { ACTIVE_INTERVENTION_STATUSES, canTransitionInterventionStatus } from "../treatment-intelligence/interventions/interventionState";
 import {
   requirePatient,
   type AuthedRequest,
@@ -711,11 +711,7 @@ router.post("/:id/escalate", async (req, res: Response) => {
     res.status(404).json({ error: "not_found" });
     return;
   }
-  if (
-    existing.status === "resolved" ||
-    existing.status === "expired" ||
-    existing.status === "escalated"
-  ) {
+  if (!canTransitionInterventionStatus(existing.status, "escalated")) {
     res.status(409).json({ error: "invalid_status_transition" });
     return;
   }
