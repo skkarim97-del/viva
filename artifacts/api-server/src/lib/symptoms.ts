@@ -1,4 +1,14 @@
 import type { PatientCheckin } from "@workspace/db";
+import {
+  NAUSEA_WINDOW_DAYS,
+  CONSTIPATION_WINDOW_DAYS,
+  APPETITE_WINDOW_DAYS,
+  CONSTIPATION_OBJECTIVE_STREAK_MIN,
+  CONSTIPATION_SEVERE_STREAK_MIN,
+  CONSTIPATION_SUBJECTIVE_MODERATE_MIN,
+  APPETITE_SEVERE_MIN_DAYS,
+  APPETITE_MODERATE_MIN_DAYS,
+} from "../shared/constants";
 
 /**
  * Rules-based symptom-management layer for Viva.
@@ -389,7 +399,7 @@ function constipationFlag(
     // bowelMovement == null doesn't reset OR extend the streak.
   }
 
-  const objectiveActive = maxBmStreak >= 3;
+  const objectiveActive = maxBmStreak >= CONSTIPATION_OBJECTIVE_STREAK_MIN;
   const subjectiveActive = subjectiveDays.length >= 1;
   if (!objectiveActive && !subjectiveActive) return null;
 
@@ -397,9 +407,9 @@ function constipationFlag(
   // Severity: any objective ≥3-day streak is moderate; ≥5-day streak is
   // severe. Subjective alone tops out at moderate without escalation.
   let severity: SymptomSeverity = "mild";
-  if (maxBmStreak >= 5) severity = "severe";
+  if (maxBmStreak >= CONSTIPATION_SEVERE_STREAK_MIN) severity = "severe";
   else if (objectiveActive) severity = "moderate";
-  else if (subjectiveDays.length >= 3) severity = "moderate";
+  else if (subjectiveDays.length >= CONSTIPATION_SUBJECTIVE_MODERATE_MIN) severity = "moderate";
 
   const persistence: Persistence =
     daysObserved >= 3 || maxBmStreak >= 3 ? "persistent" : "transient";
@@ -451,7 +461,7 @@ function lowAppetiteFlag(
     (r) => r.appetite === "very_low",
   ).length;
   const severity: SymptomSeverity =
-    veryLowDays >= 3 ? "severe" : veryLowDays >= 1 ? "moderate" : "mild";
+    veryLowDays >= APPETITE_SEVERE_MIN_DAYS ? "severe" : veryLowDays >= APPETITE_MODERATE_MIN_DAYS ? "moderate" : "mild";
 
   // For appetite, "worsening" means more very_low days recently than
   // earlier in the window. Cheap proxy: today's value is "very_low" AND
@@ -524,9 +534,9 @@ export function computeSymptomFlags(
   const ack = todayRow ?? yesterdayRow;
 
   const out: SymptomFlag[] = [];
-  const f1 = nauseaFlag(windowRows(byDate, today, 3), ack);
-  const f2 = constipationFlag(windowRows(byDate, today, 5), ack);
-  const f3 = lowAppetiteFlag(windowRows(byDate, today, 5), ack);
+  const f1 = nauseaFlag(windowRows(byDate, today, NAUSEA_WINDOW_DAYS), ack);
+  const f2 = constipationFlag(windowRows(byDate, today, CONSTIPATION_WINDOW_DAYS), ack);
+  const f3 = lowAppetiteFlag(windowRows(byDate, today, APPETITE_WINDOW_DAYS), ack);
   if (f1) out.push(f1);
   if (f2) out.push(f2);
   if (f3) out.push(f3);
