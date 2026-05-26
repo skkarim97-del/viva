@@ -28,11 +28,16 @@ import {
   deriveAction,
   deriveSignals,
   deriveSuggestedAction,
-} from "../lib/risk";
+} from "../treatment-intelligence/risk/riskScoring.service";
 import {
   computeSymptomFlags,
   summarizeFlagForList,
-} from "../lib/symptoms";
+} from "../treatment-intelligence/rules/symptomRules";
+import {
+  ACTIVITY_THRESHOLD_DAYS,
+  STALE_INVITE_HOURS,
+  CARE_EVENT_LOOKBACK_DAYS,
+} from "../shared/constants";
 import { mediumApiLimiter } from "../middlewares/rateLimit";
 import { phiAudit } from "../middlewares/phiAudit";
 
@@ -198,9 +203,6 @@ router.get("/", async (req, res: Response) => {
   ): boolean =>
     treatmentStatus === "stopped" && !openWorkflowByPatient.get(patientUserId);
 
-  // Single source of truth for the 12-day inactivity rule applied to
-  // every branch below.
-  const ACTIVITY_THRESHOLD_DAYS = 12;
   const activityCutoff = new Date();
   activityCutoff.setDate(activityCutoff.getDate() - ACTIVITY_THRESHOLD_DAYS);
   const activityCutoffDateStr = activityCutoff.toISOString().split("T")[0]!;
@@ -248,7 +250,7 @@ router.get("/", async (req, res: Response) => {
         ? Math.max(0, Math.floor((Date.now() - issuedRaw) / (1000 * 60 * 60)))
         : null;
       const staleInvite =
-        inviteAgeHours !== null && inviteAgeHours >= 48;
+        inviteAgeHours !== null && inviteAgeHours >= STALE_INVITE_HOURS;
       return {
         id: p.id,
         name: p.name,
@@ -399,7 +401,7 @@ router.get("/", async (req, res: Response) => {
 router.get("/stats", async (req, res: Response) => {
   const doctorId = (req as AuthedRequest).auth.userId;
   const now = new Date();
-  const lookbackStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const lookbackStart = new Date(now.getTime() - CARE_EVENT_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
 
   // Patient ids in this doctor's panel; needed to scope
   // patient-initiated escalations to the right doctor and to scope
