@@ -574,6 +574,12 @@ router.post("/invite", async (req, res: Response) => {
     .where(eq(usersTable.id, doctorId))
     .limit(1);
   const platformId = doctorRow?.platformId ?? null;
+  if (platformId === null) {
+    req.log.warn(
+      { doctorId },
+      "invite_created_with_null_platform_id: doctor has no platform assignment — run the platform backfill script to fix legacy null rows",
+    );
+  }
   const inviterIsDemo = /^demo.*@itsviva\.com$/i.test(doctorRow?.email ?? "");
   // HIPAA pilot guardrail: the real pilot DB must not accumulate
   // demo-pattern users. If a demo doctor somehow exists in production

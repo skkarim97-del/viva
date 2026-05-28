@@ -1,5 +1,5 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
-import { and, eq, gte, lte, isNotNull, notInArray, sql, desc } from "drizzle-orm";
+import { and, eq, gte, lte, inArray, isNotNull, notInArray, sql, desc } from "drizzle-orm";
 import { excludeDemoCol, demoUserIdsSelect, DEMO_EMAIL_LIKE, DEMO_VIVAAI_LIKE } from "../lib/demoFilter";
 import { z } from "zod";
 import {
@@ -28,6 +28,7 @@ import {
 import { operatorIpAllowlist } from "../middlewares/ipAllowlist";
 import { mediumApiLimiter } from "../middlewares/rateLimit";
 import { phiAudit } from "../middlewares/phiAudit";
+import { getPlatformBySlug } from "../lib/platforms";
 
 const router: Router = Router();
 
@@ -124,30 +125,79 @@ function ymdDaysAgo(days: number): string {
 // internal dashboard. Each metric below names exactly which row count
 // it comes from so the page can show a "How calculated" line under
 // each stat.
-router.get("/metrics", requireInternalKey, async (_req, res: Response) => {
+//
+// Optional query params for platform scoping:
+//   ?platformId=<integer>   filter by telehealth_platforms.id
+//   ?platformSlug=<string>  filter by telehealth_platforms.slug (e.g. "demo")
+// If both are supplied, platformId wins. If neither is supplied, results
+// are global (all non-demo patients across all platforms).
+router.get("/metrics", requireInternalKey, async (req: Request, res: Response) => {
   try {
+    // ---- Resolve optional platform scope ----------------------------
+    let scopePlatformId: number | null = null;
+    let scopePlatformName: string | null = null;
+    let scopePlatformSlug: string | null = null;
+
+    const rawId = req.query.platformId;
+    const rawSlug = req.query.platformSlug;
+
+    if (typeof rawId === "string" && rawId) {
+      const n = parseInt(rawId, 10);
+      if (Number.isFinite(n) && n > 0) {
+        const [row] = await db
+          .select({ id: telehealthPlatformsTable.id, name: telehealthPlatformsTable.name, slug: telehealthPlatformsTable.slug })
+          .from(telehealthPlatformsTable)
+          .where(eq(telehealthPlatformsTable.id, n))
+          .limit(1);
+        if (!row) {
+          res.status(404).json({ error: "platform_not_found" });
+          return;
+        }
+        scopePlatformId = row.id;
+        scopePlatformName = row.name;
+        scopePlatformSlug = row.slug;
+      }
+    } else if (typeof rawSlug === "string" && rawSlug) {
+      const row = await getPlatformBySlug(rawSlug);
+      if (!row) {
+        res.status(404).json({ error: "platform_not_found" });
+        return;
+      }
+      scopePlatformId = row.id;
+      scopePlatformName = row.name;
+      scopePlatformSlug = row.slug;
+    }
+
+    // Sub-select of patient user_ids belonging to the scoped platform.
+    // Used to filter patientCheckinsTable queries (which have no direct
+    // platformId column) without a per-query join.
+    const scopedPatientIds = scopePlatformId !== null
+      ? db.select({ id: patientsTable.userId }).from(patientsTable).where(eq(patientsTable.platformId, scopePlatformId))
+      : null;
+
+    // Convenience: build the patient-level WHERE for patientsTable queries.
+    const patientWhere = (extra?: Parameters<typeof and>[0]) => {
+      const demo = notInArray(patientsTable.userId, demoUserIdsSelect());
+      const plat = scopePlatformId !== null ? eq(patientsTable.platformId, scopePlatformId) : undefined;
+      return and(demo, plat, extra);
+    };
+    // Convenience: build the checkin-level WHERE for patientCheckinsTable queries.
+    const checkinWhere = (extra?: Parameters<typeof and>[0]) => {
+      const demo = notInArray(patientCheckinsTable.patientUserId, demoUserIdsSelect());
+      const plat = scopedPatientIds !== null ? inArray(patientCheckinsTable.patientUserId, scopedPatientIds) : undefined;
+      return and(demo, plat, extra);
+    };
+
     // ---- Invites & activation ---------------------------------------
-    // Every patient row corresponds to exactly one invite the doctor
-    // sent (patientsTable is created in /patients/invite).
-    // Pre-pilot demo filter applied to every count below: see
-    // ../lib/demoFilter.ts. Real numbers only -- the seeded demo
-    // doctor and any demo-invited patients (matched by email pattern
-    // `demo%@itsviva.com`) are excluded so the operator dashboard
-    // never shows demo activity as pilot signal.
     const [{ count: invitesSent }] = await db
       .select({ count: sql<number>`cast(count(*) as int)` })
       .from(patientsTable)
-      .where(notInArray(patientsTable.userId, demoUserIdsSelect()));
+      .where(patientWhere());
 
     const [{ count: activated }] = await db
       .select({ count: sql<number>`cast(count(*) as int)` })
       .from(patientsTable)
-      .where(
-        and(
-          isNotNull(patientsTable.activatedAt),
-          notInArray(patientsTable.userId, demoUserIdsSelect()),
-        ),
-      );
+      .where(patientWhere(isNotNull(patientsTable.activatedAt)));
 
     // ---- Check-in coverage ------------------------------------------
     const [{ count: completedFirstCheckin }] = await db
@@ -155,7 +205,7 @@ router.get("/metrics", requireInternalKey, async (_req, res: Response) => {
         count: sql<number>`cast(count(distinct ${patientCheckinsTable.patientUserId}) as int)`,
       })
       .from(patientCheckinsTable)
-      .where(notInArray(patientCheckinsTable.patientUserId, demoUserIdsSelect()));
+      .where(checkinWhere());
 
     const sevenDaysAgo = ymdDaysAgo(6); // inclusive 7-day window
     const [{ count: checkedInLast7 }] = await db
@@ -163,26 +213,15 @@ router.get("/metrics", requireInternalKey, async (_req, res: Response) => {
         count: sql<number>`cast(count(distinct ${patientCheckinsTable.patientUserId}) as int)`,
       })
       .from(patientCheckinsTable)
-      .where(
-        and(
-          gte(patientCheckinsTable.date, sevenDaysAgo),
-          notInArray(patientCheckinsTable.patientUserId, demoUserIdsSelect()),
-        ),
-      );
+      .where(checkinWhere(gte(patientCheckinsTable.date, sevenDaysAgo)));
 
     const [{ count: checkinsLast7Total }] = await db
       .select({ count: sql<number>`cast(count(*) as int)` })
       .from(patientCheckinsTable)
-      .where(
-        and(
-          gte(patientCheckinsTable.date, sevenDaysAgo),
-          notInArray(patientCheckinsTable.patientUserId, demoUserIdsSelect()),
-        ),
-      );
+      .where(checkinWhere(gte(patientCheckinsTable.date, sevenDaysAgo)));
 
-    // No-check-in-after-invite:
-    //   any patient row whose userId never appears in patientCheckinsTable.
-    // Computed in SQL with NOT EXISTS so we don't pull every row.
+    // No-check-in-after-invite: any patient row whose userId never
+    // appears in patientCheckinsTable. Computed in SQL with NOT EXISTS.
     const noCheckinAfterInviteRows = await db.execute(sql`
       select cast(count(*) as int) as count
       from ${patientsTable} p
@@ -191,6 +230,7 @@ router.get("/metrics", requireInternalKey, async (_req, res: Response) => {
         where c.patient_user_id = p.user_id
       )
         and ${excludeDemoCol("p.user_id")}
+        ${scopePlatformId !== null ? sql`and p.platform_id = ${scopePlatformId}` : sql``}
     `);
     const noCheckinAfterInvite =
       Number(
@@ -199,20 +239,13 @@ router.get("/metrics", requireInternalKey, async (_req, res: Response) => {
       );
 
     // ---- Drop-off buckets -------------------------------------------
-    // A patient is in the "N+ days silent" bucket if their MOST RECENT
-    // check-in is N or more days ago. We compute max(date) per patient
-    // and then count buckets in JS rather than three separate queries.
-    // Patients who never checked in are counted separately above
-    // (noCheckinAfterInvite) and intentionally NOT included here, so
-    // the buckets answer "of patients who used the app, who has gone
-    // quiet recently".
     const lastDateRows = await db
       .select({
         patientUserId: patientCheckinsTable.patientUserId,
         last: sql<string>`max(${patientCheckinsTable.date})`,
       })
       .from(patientCheckinsTable)
-      .where(notInArray(patientCheckinsTable.patientUserId, demoUserIdsSelect()))
+      .where(checkinWhere())
       .groupBy(patientCheckinsTable.patientUserId);
 
     const today = new Date();
@@ -232,34 +265,18 @@ router.get("/metrics", requireInternalKey, async (_req, res: Response) => {
     }
 
     // ---- Needs follow-up (live risk) --------------------------------
-    // We re-run the same risk computation the doctor dashboard uses,
-    // across every activated patient, and count those whose action is
-    // "needs_followup". Done in app code (not SQL) so a single source
-    // of truth -- lib/risk -- governs the count.
     const activatedPatients = await db
       .select({ id: patientsTable.userId })
       .from(patientsTable)
-      .where(
-        and(
-          isNotNull(patientsTable.activatedAt),
-          notInArray(patientsTable.userId, demoUserIdsSelect()),
-        ),
-      );
+      .where(patientWhere(isNotNull(patientsTable.activatedAt)));
 
     let needsFollowup = 0;
     if (activatedPatients.length > 0) {
-      // Pull last 14 days of check-ins for all activated patients in one
-      // query, then group in memory -- mirrors what /patients does.
       const cutoff = ymdDaysAgo(13);
       const cks = await db
         .select()
         .from(patientCheckinsTable)
-        .where(
-          and(
-            gte(patientCheckinsTable.date, cutoff),
-            notInArray(patientCheckinsTable.patientUserId, demoUserIdsSelect()),
-          ),
-        )
+        .where(checkinWhere(gte(patientCheckinsTable.date, cutoff)))
         .orderBy(desc(patientCheckinsTable.date));
       const byPatient = new Map<number, typeof cks>();
       for (const c of cks) {
@@ -284,6 +301,10 @@ router.get("/metrics", requireInternalKey, async (_req, res: Response) => {
 
     res.json({
       generatedAt: new Date().toISOString(),
+      scope: scopePlatformId !== null ? "platform" : "global",
+      platformId: scopePlatformId,
+      platformSlug: scopePlatformSlug,
+      platformName: scopePlatformName,
       invitesSent,
       activated,
       activationRate,
@@ -2604,6 +2625,121 @@ router.get(
     } catch (e) {
       req.log.error({ err: e }, "pilot_scopes_failed");
       res.status(500).json({ error: "scopes_failed" });
+    }
+  },
+);
+
+// ----- Platform provisioning ----------------------------------------
+//
+// Minimal operator routes to create platforms and assign doctors to
+// them without touching the DB directly. Protected by INTERNAL_API_KEY
+// like all /api/internal/* endpoints.
+
+const createPlatformSchema = z.object({
+  name: z.string().min(1).max(120),
+  slug: z.string().min(1).max(80).regex(/^[a-z0-9-]+$/, "slug must be lowercase alphanumeric with hyphens"),
+  status: z.enum(["active", "paused", "archived"]).default("active"),
+});
+
+// POST /api/internal/platforms
+// Create a new telehealth platform (Viva customer). 409 on slug conflict.
+router.post("/platforms", requireInternalKey, async (req: Request, res: Response) => {
+  const parsed = createPlatformSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_input", issues: parsed.error.issues });
+    return;
+  }
+  try {
+    const [created] = await db
+      .insert(telehealthPlatformsTable)
+      .values({
+        name: parsed.data.name.trim(),
+        slug: parsed.data.slug,
+        status: parsed.data.status,
+      })
+      .returning();
+    res.status(201).json(created);
+  } catch (err: unknown) {
+    if (
+      typeof err === "object" &&
+      err !== null &&
+      "code" in err &&
+      (err as { code?: string }).code === "23505"
+    ) {
+      res.status(409).json({ error: "slug_in_use" });
+      return;
+    }
+    logger.error({ err }, "create_platform_failed");
+    res.status(500).json({ error: "create_failed" });
+  }
+});
+
+const assignDoctorSchema = z.object({
+  email: z.string().email(),
+});
+
+// POST /api/internal/platforms/:platformId/doctors
+// Assign an existing doctor (by email) to a platform. Updates
+// users.platform_id for that doctor row.
+//
+// WARNING: this does NOT cascade to the doctor's existing patients.
+// patients.platform_id is set at invite creation time and retained
+// until an explicit backfill. If you are moving a doctor to a new
+// platform, run the backfill script afterwards to align their
+// existing patient rows.
+router.post(
+  "/platforms/:platformId/doctors",
+  requireInternalKey,
+  async (req: Request, res: Response) => {
+    const platformId = parseInt(String(req.params.platformId ?? ""), 10);
+    if (!Number.isFinite(platformId) || platformId <= 0) {
+      res.status(400).json({ error: "invalid_platform_id" });
+      return;
+    }
+    const parsed = assignDoctorSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "invalid_input", issues: parsed.error.issues });
+      return;
+    }
+    try {
+      const [platform] = await db
+        .select({ id: telehealthPlatformsTable.id, name: telehealthPlatformsTable.name })
+        .from(telehealthPlatformsTable)
+        .where(eq(telehealthPlatformsTable.id, platformId))
+        .limit(1);
+      if (!platform) {
+        res.status(404).json({ error: "platform_not_found" });
+        return;
+      }
+      const [doctor] = await db
+        .select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, role: usersTable.role, platformId: usersTable.platformId })
+        .from(usersTable)
+        .where(eq(usersTable.email, parsed.data.email.toLowerCase()))
+        .limit(1);
+      if (!doctor) {
+        res.status(404).json({ error: "doctor_not_found" });
+        return;
+      }
+      if (doctor.role !== "doctor") {
+        res.status(422).json({ error: "user_is_not_a_doctor" });
+        return;
+      }
+      const [updated] = await db
+        .update(usersTable)
+        .set({ platformId })
+        .where(eq(usersTable.id, doctor.id))
+        .returning({ id: usersTable.id, name: usersTable.name, email: usersTable.email, role: usersTable.role, platformId: usersTable.platformId });
+      res.json({
+        doctor: updated,
+        platform: { id: platform.id, name: platform.name },
+        warning:
+          "Doctor platform updated. Existing patient rows for this doctor retain " +
+          "their previous platformId. Run the backfill script " +
+          "(pnpm --filter @workspace/api-server run backfill) to align them.",
+      });
+    } catch (err) {
+      logger.error({ err }, "assign_doctor_platform_failed");
+      res.status(500).json({ error: "assign_failed" });
     }
   },
 );

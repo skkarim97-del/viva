@@ -9,7 +9,7 @@ import {
 } from "@workspace/db";
 import { z } from "zod";
 import { isInviteTokenExpired } from "../lib/inviteTokens";
-import { getDemoPlatformId } from "../lib/platforms";
+import { ensureDemoPlatformId } from "../lib/platforms";
 import { generateRawApiToken, hashApiToken } from "../lib/apiTokens";
 import { strictAuthLimiter } from "../middlewares/rateLimit";
 import { requireAuth, type AuthedRequest } from "../middlewares/auth";
@@ -68,12 +68,21 @@ router.post("/signup", strictAuthLimiter, async (req: Request, res: Response) =>
     return;
   }
   const passwordHash = await bcrypt.hash(parsed.data.password, 10);
-  // Every freshly-created doctor lands on the default ("demo")
-  // platform during the demo phase. Once Viva onboards a second
-  // customer this becomes a runtime decision (signup picker or admin
-  // assignment); until then keeping the assignment implicit avoids
-  // making every doctor pick from a list of one.
-  const platformId = await getDemoPlatformId();
+  // Assign the doctor to the demo platform. ensureDemoPlatformId()
+  // auto-creates the platform row in dev/staging if missing, and
+  // throws a clear error in production so a missing row is never
+  // silently swallowed.
+  let platformId: number;
+  try {
+    platformId = await ensureDemoPlatformId();
+  } catch (err) {
+    req.log.error({ err }, "doctor_signup_platform_missing");
+    res.status(503).json({
+      error: "platform_unavailable",
+      detail: "Demo platform is not configured. Contact Viva support.",
+    });
+    return;
+  }
   const [user] = await db
     .insert(usersTable)
     .values({
