@@ -17,8 +17,10 @@ import {
   careEventsTable,
   patientPlanItemsTable,
   patientIntegrationsTable,
+  telehealthPlatformsTable,
   type InsertPatientCheckin,
 } from "@workspace/db";
+import { DEMO_PLATFORM_SLUG, clearDemoPlatformIdCache } from "../src/lib/platforms";
 
 const SEED_PASSWORD = "viva-demo-2026";
 
@@ -336,6 +338,7 @@ async function seedPatient(
   spec: PatientSpec,
   doctorId: number,
   passwordHash: string,
+  platformId: number | null,
   // Optional override for the check-in stream. When provided, this
   // replaces the random tone-based generator -- used by the demo
   // doctor seeding so its 12 patients land in fixed buckets.
@@ -362,6 +365,7 @@ async function seedPatient(
   await db.insert(patientsTable).values({
     userId: user!.id,
     doctorId,
+    platformId,
     glp1Drug: spec.glp1Drug,
     dose: spec.dose,
     startedOn: startedOn.toISOString().split("T")[0]!,
@@ -395,6 +399,24 @@ function assertSeedAllowed(): void {
 
 async function main(): Promise<void> {
   assertSeedAllowed();
+
+  // Upsert the demo platform row first. Every doctor and patient the
+  // seed creates must be associated with this platform so analytics
+  // queries, backfills, and multi-tenant routing all work correctly.
+  // ON CONFLICT (slug) DO UPDATE is idempotent -- re-running the seed
+  // leaves an existing demo platform row unchanged.
+  clearDemoPlatformIdCache();
+  const [demoPlatform] = await db
+    .insert(telehealthPlatformsTable)
+    .values({ name: "Demo Platform", slug: DEMO_PLATFORM_SLUG, status: "active" })
+    .onConflictDoUpdate({
+      target: telehealthPlatformsTable.slug,
+      set: { name: "Demo Platform", status: "active", updatedAt: new Date() },
+    })
+    .returning({ id: telehealthPlatformsTable.id });
+  const demoPlatformId = demoPlatform!.id;
+  console.log(`[seed] demo platform id=${demoPlatformId}`);
+
   const allEmails = [
     DOCTOR_EMAIL,
     ...PATIENTS.map((p) => p.email),
@@ -437,12 +459,13 @@ async function main(): Promise<void> {
       passwordHash,
       role: "doctor",
       name: "Dr. Riley Kim",
+      platformId: demoPlatformId,
     })
     .returning();
   console.log(`[seed] created doctor ${doctor!.email} (id=${doctor!.id})`);
 
   for (const p of PATIENTS) {
-    await seedPatient(p, doctor!.id, passwordHash);
+    await seedPatient(p, doctor!.id, passwordHash, demoPlatformId);
     console.log(`[seed] patient ${p.name} (${p.tone})`);
   }
 
@@ -455,6 +478,7 @@ async function main(): Promise<void> {
       passwordHash: demoPasswordHash,
       role: "doctor",
       name: DEMO_DOCTOR_NAME,
+      platformId: demoPlatformId,
       // Stamp clinicName up front so /api/auth/me returns
       // needsOnboarding=false for this account; without it the dashboard
       // bounces the demo login to /onboarding even though we already
@@ -472,7 +496,7 @@ async function main(): Promise<void> {
   for (const p of DEMO_PATIENTS) {
     // Pass [] so seedPatient skips its random generator; we insert the
     // deterministic stream below once we have the real user id.
-    const patientUserId = await seedPatient(p, demoDoctor!.id, passwordHash, []);
+    const patientUserId = await seedPatient(p, demoDoctor!.id, passwordHash, demoPlatformId, []);
     const stream = demoCheckinsFor(patientUserId, p.bucket);
     if (stream.length > 0) {
       await db.insert(patientCheckinsTable).values(stream);
