@@ -332,6 +332,20 @@ export interface AnalyticsSummary {
   openEscalations?: OpenEscalationsBlock;
 }
 
+// ---------------------------------------------------------- pilot live response
+//
+// Wire format for GET /api/internal/analytics/pilot/live.
+// Returns just the pilot block scoped to one platform (or global),
+// without the overhead of the full analytics/summary computation.
+export interface PilotLiveResponse {
+  generatedAt: string;
+  scope: "global" | "platform";
+  platformId: number | null;
+  platformSlug: string | null;
+  platformName: string | null;
+  pilot: PilotBlock;
+}
+
 // ---------------------------------------------------------- platform scope metrics
 //
 // Wire format for GET /api/internal/metrics. Mirrors the platform-scoped
