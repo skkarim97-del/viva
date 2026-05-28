@@ -27,7 +27,7 @@ export function PlatformScopePage() {
   return (
     <>
       <PageHeader
-        title="Platform Scope"
+        title="Platform Metrics"
         subtitle="View key metrics globally or filtered to a single telehealth platform. Internal-only."
         right={
           <ScopeSelector

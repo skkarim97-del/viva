@@ -34,7 +34,7 @@ const NAV: ReadonlyArray<NavItem> = [
   { href: "/usage", label: "Usage", hint: "Sessions, hours, event flow" },
   { href: "/patients", label: "Patients", hint: "Per-patient drill-down" },
   { href: "/doctors", label: "Doctors", hint: "Per-doctor drill-down" },
-  { href: "/platforms", label: "Platform scope", hint: "Metrics by telehealth platform" },
+  { href: "/platforms", label: "Platform Metrics", hint: "Metrics by telehealth platform" },
 ];
 
 function NavRow({
