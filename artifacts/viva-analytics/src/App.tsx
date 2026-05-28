@@ -13,6 +13,7 @@ import { DoctorsPage } from "@/pages/DoctorsPage";
 import { CareLoopPage } from "@/pages/CareLoopPage";
 import { UsagePage } from "@/pages/UsagePage";
 import { PilotMetricsPage } from "@/pages/PilotMetricsPage";
+import { PlatformScopePage } from "@/pages/PlatformScopePage";
 import NotFound from "@/pages/not-found";
 
 import { KEY_STORAGE } from "@/lib/api";
@@ -99,12 +100,12 @@ function GatedApp() {
           {q.error?.detail || q.error?.message || "Failed to load analytics."}
         </div>
       )}
-      {q.data && <Routes data={q.data} />}
+      {q.data && <Routes data={q.data} apiKey={savedKey} />}
     </Shell>
   );
 }
 
-function Routes({ data }: { data: AnalyticsSummary }) {
+function Routes({ data, apiKey: _apiKey }: { data: AnalyticsSummary; apiKey: string | null }) {
   return (
     <Switch>
       <Route path="/" component={() => <OverviewPage data={data} />} />
@@ -116,6 +117,7 @@ function Routes({ data }: { data: AnalyticsSummary }) {
       <Route path="/care-loop" component={() => <CareLoopPage />} />
       <Route path="/pilot" component={() => <PilotMetricsPage data={data} />} />
       <Route path="/usage" component={() => <UsagePage />} />
+      <Route path="/platforms" component={() => <PlatformScopePage />} />
       <Route component={NotFound} />
     </Switch>
   );
