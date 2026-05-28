@@ -33,7 +33,7 @@ export function PlatformScopePage() {
           <ScopeSelector
             slug={selectedSlug}
             onChange={setSelectedSlug}
-            options={platforms.data ?? []}
+            options={Array.isArray(platforms.data) ? platforms.data : []}
             loading={platforms.isLoading}
           />
         }
