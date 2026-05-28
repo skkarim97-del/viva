@@ -2629,6 +2629,70 @@ router.get(
   },
 );
 
+// GET /api/internal/analytics/pilot/live
+// Lightweight live pilot metrics scoped to a single platform or global.
+// Accepts ?platformSlug=<string> (preferred) or ?platformId=<int>.
+// If both are supplied, platformId wins.
+// Returns 404 when the requested platform does not exist.
+// Global (no params) matches the whole-cohort block embedded in /analytics/summary.
+router.get(
+  "/analytics/pilot/live",
+  requireInternalKey,
+  async (req: Request, res: Response) => {
+    try {
+      let resolvedPlatformId: number | null = null;
+      let resolvedPlatformName: string | null = null;
+      let resolvedPlatformSlug: string | null = null;
+
+      const rawId = req.query.platformId;
+      const rawSlug = req.query.platformSlug;
+
+      if (typeof rawId === "string" && rawId) {
+        const n = parseInt(rawId, 10);
+        if (Number.isFinite(n) && n > 0) {
+          const [row] = await db
+            .select({ id: telehealthPlatformsTable.id, name: telehealthPlatformsTable.name, slug: telehealthPlatformsTable.slug })
+            .from(telehealthPlatformsTable)
+            .where(eq(telehealthPlatformsTable.id, n))
+            .limit(1);
+          if (!row) {
+            res.status(404).json({ error: "platform_not_found" });
+            return;
+          }
+          resolvedPlatformId = row.id;
+          resolvedPlatformName = row.name;
+          resolvedPlatformSlug = row.slug;
+        }
+      } else if (typeof rawSlug === "string" && rawSlug) {
+        const row = await getPlatformBySlug(rawSlug);
+        if (!row) {
+          res.status(404).json({ error: "platform_not_found" });
+          return;
+        }
+        resolvedPlatformId = row.id;
+        resolvedPlatformName = row.name;
+        resolvedPlatformSlug = row.slug;
+      }
+
+      const pilot = await computePilotMetrics({
+        platformId: resolvedPlatformId ?? undefined,
+      });
+
+      res.json({
+        generatedAt: new Date().toISOString(),
+        scope: resolvedPlatformId !== null ? "platform" : "global",
+        platformId: resolvedPlatformId,
+        platformSlug: resolvedPlatformSlug,
+        platformName: resolvedPlatformName,
+        pilot,
+      });
+    } catch (err) {
+      logger.error({ err }, "pilot_live_failed");
+      res.status(500).json({ error: "pilot_live_failed" });
+    }
+  },
+);
+
 // GET /api/internal/platforms
 // List all telehealth platforms, ordered by name. Used by the Viva
 // Analytics platform scope selector.

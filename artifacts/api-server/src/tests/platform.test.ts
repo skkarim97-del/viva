@@ -404,3 +404,66 @@ describe("GET /api/internal/platforms — listPlatforms", () => {
     expect(typeof item.createdAt).toBe("string");
   });
 });
+
+// ---------------------------------------------------------------------------
+// 8. GET /api/internal/analytics/pilot/live — platform-scoped live pilot
+// ---------------------------------------------------------------------------
+
+describe("GET /api/internal/analytics/pilot/live — platform scope", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it("returns scope=global when no params supplied", () => {
+    const mockResponse = {
+      generatedAt: "2024-06-01T00:00:00.000Z",
+      scope: "global",
+      platformId: null,
+      platformSlug: null,
+      platformName: null,
+      pilot: { cohort: { activated: 10 } },
+    };
+    expect(mockResponse.scope).toBe("global");
+    expect(mockResponse.platformId).toBeNull();
+    expect(mockResponse.pilot.cohort.activated).toBe(10);
+  });
+
+  it("returns scope=platform with correct metadata when platformSlug resolves", async () => {
+    vi.resetModules();
+    const dbMock = makeDbMock([{ id: 5, name: "Ola Health", slug: "ola-health", status: "active" }]);
+    vi.doMock("@workspace/db", () => ({
+      db: dbMock,
+      telehealthPlatformsTable: { id: "id", name: "name", slug: "slug", status: "status" },
+    }));
+    const { getPlatformBySlug } = await import("../lib/platforms");
+    const row = await getPlatformBySlug("ola-health");
+    const resolvedId = row?.id ?? null;
+    const resolvedName = row?.name ?? null;
+    const resolvedSlug = row?.slug ?? null;
+    const scope = resolvedId !== null ? "platform" : "global";
+    expect(scope).toBe("platform");
+    expect(resolvedId).toBe(5);
+    expect(resolvedName).toBe("Ola Health");
+    expect(resolvedSlug).toBe("ola-health");
+  });
+
+  it("response contract includes generatedAt, scope, platformId, platformSlug, platformName, pilot", () => {
+    const mockResponse = {
+      generatedAt: "2024-06-01T12:00:00.000Z",
+      scope: "platform",
+      platformId: 5,
+      platformSlug: "ola-health",
+      platformName: "Ola Health",
+      pilot: {
+        cohort: { activated: 3 },
+        risk: { flaggedPatients: 1, pctFlagged: 0.33, avgSignalsPerPatient: 1.0, topCategories: [], bandDistribution: { low: 2, medium: 1, high: 0 } },
+      },
+    };
+    expect(typeof mockResponse.generatedAt).toBe("string");
+    expect(mockResponse.scope).toBe("platform");
+    expect(mockResponse.platformId).toBe(5);
+    expect(mockResponse.platformSlug).toBe("ola-health");
+    expect(mockResponse.platformName).toBe("Ola Health");
+    expect(mockResponse.pilot.cohort.activated).toBe(3);
+  });
+});

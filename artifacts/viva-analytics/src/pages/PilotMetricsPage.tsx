@@ -14,6 +14,8 @@ import {
   useCreatePilotSnapshot,
   usePilotScopes,
 } from "@/hooks/usePilotSnapshots";
+import { usePlatforms } from "@/hooks/usePlatforms";
+import { usePilotLive } from "@/hooks/usePilotLive";
 import {
   Card,
   Chip,
@@ -42,6 +44,7 @@ import {
  */
 export function PilotMetricsPage({ data }: { data: AnalyticsSummary }) {
   const [mode, setMode] = useState<"live" | "snapshots">("live");
+  const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const operatorKey =
     typeof window !== "undefined"
       ? window.localStorage.getItem(KEY_STORAGE)
@@ -59,7 +62,12 @@ export function PilotMetricsPage({ data }: { data: AnalyticsSummary }) {
         right={<ModeToggle mode={mode} onChange={setMode} />}
       />
       {mode === "live" ? (
-        <LiveView pilot={data.pilot} />
+        <LiveView
+          globalPilot={data.pilot}
+          operatorKey={operatorKey}
+          selectedSlug={selectedSlug}
+          onSlugChange={setSelectedSlug}
+        />
       ) : (
         <SnapshotsView operatorKey={operatorKey} />
       )}
@@ -123,23 +131,87 @@ function ToggleBtn({
 
 // ------------------------------------------------------- live view
 
-function LiveView({ pilot }: { pilot: PilotBlock | undefined }) {
-  if (!pilot) {
-    return (
-      <Card>
-        <Empty>
-          Pilot metrics are temporarily unavailable. The rest of the
-          dashboard is still up. Try refreshing in a minute.
-        </Empty>
-      </Card>
-    );
-  }
+function LiveView({
+  globalPilot,
+  operatorKey,
+  selectedSlug,
+  onSlugChange,
+}: {
+  globalPilot: PilotBlock | undefined;
+  operatorKey: string | null;
+  selectedSlug: string | null;
+  onSlugChange: (slug: string | null) => void;
+}) {
+  const platforms = usePlatforms(operatorKey);
+  const scopedQuery = usePilotLive(
+    selectedSlug !== null ? operatorKey : null,
+    selectedSlug,
+  );
+
+  const pilot = selectedSlug !== null ? scopedQuery.data?.pilot : globalPilot;
+  const isLoading = selectedSlug !== null && scopedQuery.isLoading;
+  const isError = selectedSlug !== null && scopedQuery.isError;
+
   return (
     <>
-      <div className="mb-3">
-        <Chip tone="muted">Cohort {pilot.cohort.activated} activated</Chip>
+      {/* Platform selector */}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-[12px] text-muted-foreground font-semibold uppercase tracking-wide">
+            Platform
+          </span>
+          <select
+            value={selectedSlug ?? ""}
+            onChange={(e) => onSlugChange(e.target.value || null)}
+            disabled={platforms.isLoading}
+            className="text-sm border border-border rounded-lg px-3 py-1.5 bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+          >
+            <option value="">All Platforms</option>
+            {(Array.isArray(platforms.data) ? platforms.data : []).map((p) => (
+              <option key={p.slug} value={p.slug}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        {selectedSlug !== null && scopedQuery.data ? (
+          <Chip tone="accent">{scopedQuery.data.platformName ?? selectedSlug}</Chip>
+        ) : (
+          <Chip tone="neutral">All Platforms</Chip>
+        )}
+        <span className="text-[11px] text-muted-foreground">
+          Filter pilot readout metrics by telehealth platform.
+        </span>
       </div>
-      <PilotSections pilot={pilot} />
+
+      {isLoading && (
+        <Card>
+          <Empty>Loading pilot metrics…</Empty>
+        </Card>
+      )}
+      {isError && (
+        <Card>
+          <Empty>
+            {scopedQuery.error?.detail || scopedQuery.error?.message || "Failed to load platform metrics."}
+          </Empty>
+        </Card>
+      )}
+      {!isLoading && !isError && !pilot && (
+        <Card>
+          <Empty>
+            Pilot metrics are temporarily unavailable. The rest of the
+            dashboard is still up. Try refreshing in a minute.
+          </Empty>
+        </Card>
+      )}
+      {!isLoading && !isError && pilot && (
+        <>
+          <div className="mb-3">
+            <Chip tone="muted">Cohort {pilot.cohort.activated} activated</Chip>
+          </div>
+          <PilotSections pilot={pilot} />
+        </>
+      )}
     </>
   );
 }
