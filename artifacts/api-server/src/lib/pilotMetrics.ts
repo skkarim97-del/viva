@@ -156,7 +156,7 @@ export interface PilotMetricsBlock {
     engagementWindowHours: number;
     escalationDedupeHours: number;
     riskBandSource: "computed_on_read";
-    engagementJoin: "loose_patient_only_within_48h";
+    engagementJoin: "exact_feedback_collected_at";
     actedOnDefinition: "follow_up_completed_linked_via_trigger";
     reviewedDefinition: "doctor_reviewed_after_escalation_before_next";
   };
