@@ -56,8 +56,8 @@ router.use(
 // Review", "Worsening After Intervention", and "Pending Feedback"
 // buckets.
 
-router.get("/", async (req, res: Response) => {
-  const doctorId = (req as AuthedRequest).auth.userId;
+router.get("/", async (req: AuthedRequest, res: Response) => {
+  const doctorId = req.auth.userId;
   try {
     // Join patientInterventions to patients (via patientUserId) so we
     // only return rows for patients this doctor owns. We use the
@@ -114,8 +114,8 @@ router.get("/", async (req, res: Response) => {
 // GET /patients/:patientId -- one patient's intervention history
 // -----------------------------------------------------------------
 
-router.get("/patients/:patientId", async (req, res: Response) => {
-  const doctorId = (req as AuthedRequest).auth.userId;
+router.get("/patients/:patientId", async (req: AuthedRequest, res: Response) => {
+  const doctorId = req.auth.userId;
   const patientId = Number(req.params.patientId);
   if (!Number.isFinite(patientId)) {
     res.status(400).json({ error: "invalid_id" });
