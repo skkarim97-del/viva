@@ -62,6 +62,23 @@ export async function ensureDemoPlatformId(): Promise<number> {
   );
 }
 
+// Return all platforms ordered by name. Used by the internal operator
+// list endpoint so the analytics UI can populate a scope selector.
+export async function listPlatforms(): Promise<
+  { id: number; name: string; slug: string; status: string; createdAt: Date }[]
+> {
+  return db
+    .select({
+      id: telehealthPlatformsTable.id,
+      name: telehealthPlatformsTable.name,
+      slug: telehealthPlatformsTable.slug,
+      status: telehealthPlatformsTable.status,
+      createdAt: telehealthPlatformsTable.createdAt,
+    })
+    .from(telehealthPlatformsTable)
+    .orderBy(telehealthPlatformsTable.name);
+}
+
 // Resolve any platform by slug. Returns null when the slug is not found.
 // Used by the internal analytics endpoints that accept ?platformSlug=.
 export async function getPlatformBySlug(

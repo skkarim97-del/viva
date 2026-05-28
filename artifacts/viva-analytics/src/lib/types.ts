@@ -332,6 +332,29 @@ export interface AnalyticsSummary {
   openEscalations?: OpenEscalationsBlock;
 }
 
+// ---------------------------------------------------------- platform scope metrics
+//
+// Wire format for GET /api/internal/metrics. Mirrors the platform-scoped
+// response shape added in the multi-tenancy work. scope="global" means
+// no platform filter was applied; scope="platform" means the numbers
+// describe a single platform.
+export interface PlatformScopeMetrics {
+  generatedAt: string;
+  scope: "global" | "platform";
+  platformId: number | null;
+  platformSlug: string | null;
+  platformName: string | null;
+  invitesSent: number;
+  activated: number;
+  activationRate: number;
+  completedFirstCheckin: number;
+  checkedInLast7: number;
+  noCheckinAfterInvite: number;
+  dropoff: { threeDaysPlus: number; fiveDaysPlus: number; sevenDaysPlus: number };
+  avgCheckinsPerActive: number;
+  needsFollowup: number;
+}
+
 // ---------------------------------------------------------- display maps
 
 export const STOP_REASON_DISPLAY: Record<string, string> = {

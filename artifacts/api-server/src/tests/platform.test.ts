@@ -31,7 +31,7 @@ function makeDbMock(rows: unknown[] = []) {
   self.onConflictDoUpdate = vi.fn(chain);
   self.returning = vi.fn(() => Promise.resolve(rows));
   self.execute = vi.fn(() => Promise.resolve({ rows }));
-  self.orderBy = vi.fn(chain);
+  self.orderBy = vi.fn(() => Promise.resolve(rows));
   self.groupBy = vi.fn(chain);
   self.innerJoin = vi.fn(chain);
   self.leftJoin = vi.fn(chain);
@@ -349,5 +349,58 @@ describe("/api/internal/metrics — platform scope metadata", () => {
     expect(row?.id).toBe(4);
     // The where() call should have received the lowercased slug.
     expect(dbMock.where).toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7. GET /api/internal/platforms — listPlatforms()
+// ---------------------------------------------------------------------------
+
+describe("GET /api/internal/platforms — listPlatforms", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it("returns all platform rows ordered by name", async () => {
+    const rows = [
+      { id: 1, name: "Demo Platform", slug: "demo", status: "active", createdAt: new Date("2024-01-01") },
+      { id: 2, name: "Ola Health", slug: "ola-health", status: "active", createdAt: new Date("2024-02-01") },
+    ];
+    // orderBy is the terminal — the mock resolves with rows when awaited.
+    const dbMock = makeDbMock(rows);
+    vi.doMock("@workspace/db", () => ({
+      db: dbMock,
+      telehealthPlatformsTable: { id: "id", name: "name", slug: "slug", status: "status", createdAt: "created_at" },
+    }));
+    const { listPlatforms } = await import("../lib/platforms");
+    const result = await listPlatforms();
+    expect(result).toHaveLength(2);
+    expect(result[0]).toMatchObject({ id: 1, name: "Demo Platform", slug: "demo" });
+    expect(result[1]).toMatchObject({ id: 2, name: "Ola Health", slug: "ola-health" });
+    expect(dbMock.orderBy).toHaveBeenCalled();
+  });
+
+  it("returns an empty array when no platforms exist", async () => {
+    const dbMock = makeDbMock([]);
+    vi.doMock("@workspace/db", () => ({
+      db: dbMock,
+      telehealthPlatformsTable: { id: "id", name: "name", slug: "slug", status: "status", createdAt: "created_at" },
+    }));
+    const { listPlatforms } = await import("../lib/platforms");
+    const result = await listPlatforms();
+    expect(result).toHaveLength(0);
+  });
+
+  it("GET /api/internal/platforms response contract: array of id/name/slug/status/createdAt", () => {
+    const mockResponse = [
+      { id: 1, name: "Demo Platform", slug: "demo", status: "active", createdAt: "2024-01-01T00:00:00.000Z" },
+    ];
+    expect(Array.isArray(mockResponse)).toBe(true);
+    const item = mockResponse[0];
+    expect(typeof item.id).toBe("number");
+    expect(typeof item.name).toBe("string");
+    expect(typeof item.slug).toBe("string");
+    expect(typeof item.status).toBe("string");
+    expect(typeof item.createdAt).toBe("string");
   });
 });

@@ -28,7 +28,7 @@ import {
 import { operatorIpAllowlist } from "../middlewares/ipAllowlist";
 import { mediumApiLimiter } from "../middlewares/rateLimit";
 import { phiAudit } from "../middlewares/phiAudit";
-import { getPlatformBySlug } from "../lib/platforms";
+import { getPlatformBySlug, listPlatforms } from "../lib/platforms";
 
 const router: Router = Router();
 
@@ -2628,6 +2628,19 @@ router.get(
     }
   },
 );
+
+// GET /api/internal/platforms
+// List all telehealth platforms, ordered by name. Used by the Viva
+// Analytics platform scope selector.
+router.get("/platforms", requireInternalKey, async (_req: Request, res: Response) => {
+  try {
+    const rows = await listPlatforms();
+    res.json(rows);
+  } catch (err) {
+    logger.error({ err }, "list_platforms_failed");
+    res.status(500).json({ error: "list_failed" });
+  }
+});
 
 // ----- Platform provisioning ----------------------------------------
 //
