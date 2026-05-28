@@ -160,8 +160,8 @@ const generateSchema = z.object({
   triggerType: z.enum(PATIENT_INTERVENTION_TRIGGER_TYPES).nullish(),
 });
 
-router.post("/generate", async (req, res: Response) => {
-  const userId = (req as AuthedRequest).auth.userId;
+router.post("/generate", async (req: AuthedRequest, res: Response) => {
+  const userId = req.auth.userId;
   const parsed = generateSchema.safeParse(req.body ?? {});
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_input" });
@@ -451,8 +451,8 @@ const ACTIVE_STATUSES = [
   "escalated",
 ] as const;
 
-router.get("/active", async (req, res: Response) => {
-  const userId = (req as AuthedRequest).auth.userId;
+router.get("/active", async (req: AuthedRequest, res: Response) => {
+  const userId = req.auth.userId;
   try {
     const rows = await db
       .select()
@@ -476,8 +476,8 @@ router.get("/active", async (req, res: Response) => {
 // POST /:id/accept -- shown -> pending_feedback
 // -----------------------------------------------------------------
 
-router.post("/:id/accept", async (req, res: Response) => {
-  const userId = (req as AuthedRequest).auth.userId;
+router.post("/:id/accept", async (req: AuthedRequest, res: Response) => {
+  const userId = req.auth.userId;
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) {
     res.status(400).json({ error: "invalid_id" });
@@ -522,8 +522,8 @@ const dismissSchema = z.object({
   reason: z.enum(["not_relevant", "not_now", "other"]).default("other"),
 });
 
-router.post("/:id/dismiss", async (req, res: Response) => {
-  const userId = (req as AuthedRequest).auth.userId;
+router.post("/:id/dismiss", async (req: AuthedRequest, res: Response) => {
+  const userId = req.auth.userId;
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) {
     res.status(400).json({ error: "invalid_id" });
@@ -570,8 +570,8 @@ const feedbackSchema = z.object({
   patientNote: z.string().max(1000).nullish(),
 });
 
-router.post("/:id/feedback", async (req, res: Response) => {
-  const userId = (req as AuthedRequest).auth.userId;
+router.post("/:id/feedback", async (req: AuthedRequest, res: Response) => {
+  const userId = req.auth.userId;
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) {
     res.status(400).json({ error: "invalid_id" });
@@ -708,8 +708,8 @@ router.post("/:id/feedback", async (req, res: Response) => {
 // POST /:id/escalate -- patient explicitly asks the care team
 // -----------------------------------------------------------------
 
-router.post("/:id/escalate", async (req, res: Response) => {
-  const userId = (req as AuthedRequest).auth.userId;
+router.post("/:id/escalate", async (req: AuthedRequest, res: Response) => {
+  const userId = req.auth.userId;
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) {
     res.status(400).json({ error: "invalid_id" });

@@ -68,8 +68,8 @@ router.use(
 // GET /patients -- list every patient assigned to the calling doctor, with
 // last-checkin date and computed risk band so the dashboard list view can
 // render risk badges without N+1 round trips.
-router.get("/", async (req, res: Response) => {
-  const doctorId = (req as AuthedRequest).auth.userId;
+router.get("/", async (req: AuthedRequest, res: Response) => {
+  const doctorId = req.auth.userId;
   // Default behavior: stopped patients with no unresolved workflow are
   // considered "archived" and removed from the active dashboard. They
   // remain accessible via patient detail by id, and can be re-included
@@ -134,7 +134,7 @@ router.get("/", async (req, res: Response) => {
           .groupBy(doctorNotesTable.patientUserId);
   const lastNoteByPatient = new Map<number, string>();
   for (const r of lastNoteRows) {
-    if (r.last) lastNoteByPatient.set(r.patientUserId, r.last as string);
+    if (r.last) lastNoteByPatient.set(r.patientUserId, r.last instanceof Date ? r.last.toISOString() : String(r.last));
   }
 
   // All-time most recent check-in per patient. Distinct from the
@@ -396,8 +396,8 @@ router.get("/", async (req, res: Response) => {
 // patients or no escalations in the last 30 days). The client renders
 // a placeholder in that case so we never display a misleading
 // "0%" / "100%" against an empty sample.
-router.get("/stats", async (req, res: Response) => {
-  const doctorId = (req as AuthedRequest).auth.userId;
+router.get("/stats", async (req: AuthedRequest, res: Response) => {
+  const doctorId = req.auth.userId;
   const now = new Date();
   const lookbackStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
@@ -515,8 +515,8 @@ router.get("/stats", async (req, res: Response) => {
 // PUT /patients/clinic -- set the calling doctor's clinic name. Captured
 // once during the onboarding wizard, but editable later.
 const clinicSchema = z.object({ clinicName: z.string().min(1).max(160) });
-router.put("/clinic", async (req, res: Response) => {
-  const doctorId = (req as AuthedRequest).auth.userId;
+router.put("/clinic", async (req: AuthedRequest, res: Response) => {
+  const doctorId = req.auth.userId;
   const parsed = clinicSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_input" });
@@ -555,8 +555,8 @@ function buildInviteLink(req: AuthedRequest, token: string): string {
   const host = req.get("host") || "api.itsviva.com";
   return `${proto}://${host}/invite/${token}`;
 }
-router.post("/invite", async (req, res: Response) => {
-  const doctorId = (req as AuthedRequest).auth.userId;
+router.post("/invite", async (req: AuthedRequest, res: Response) => {
+  const doctorId = req.auth.userId;
   const parsed = inviteSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_input" });
@@ -659,15 +659,15 @@ router.post("/invite", async (req, res: Response) => {
     id: user.id,
     name: user.name,
     phone: user.phone,
-    inviteLink: buildInviteLink(req as AuthedRequest, token),
+    inviteLink: buildInviteLink(req, token),
   });
 });
 
 // POST /patients/:id/resend -- rotate the activation token for a still-
 // pending patient and return the fresh link. No-op (409) if already
 // activated, since a real session has already been established.
-router.post("/:id/resend", async (req, res: Response) => {
-  const doctorId = (req as AuthedRequest).auth.userId;
+router.post("/:id/resend", async (req: AuthedRequest, res: Response) => {
+  const doctorId = req.auth.userId;
   const patientId = Number(req.params.id);
   if (!Number.isFinite(patientId)) {
     res.status(400).json({ error: "invalid_id" });
@@ -719,7 +719,7 @@ router.post("/:id/resend", async (req, res: Response) => {
     res.status(409).json({ error: "already_activated" });
     return;
   }
-  res.json({ inviteLink: buildInviteLink(req as AuthedRequest, token) });
+  res.json({ inviteLink: buildInviteLink(req, token) });
 });
 
 // Helper: ensure a patient belongs to the calling doctor; throws 403 if not.
@@ -821,8 +821,8 @@ const treatmentStatusBody = z
     }
   });
 
-router.patch("/:id/treatment-status", async (req, res: Response) => {
-  const doctorId = (req as AuthedRequest).auth.userId;
+router.patch("/:id/treatment-status", async (req: AuthedRequest, res: Response) => {
+  const doctorId = req.auth.userId;
   const patientId = Number(req.params.id);
   if (!Number.isFinite(patientId)) {
     res.status(400).json({ error: "invalid_id" });
@@ -901,8 +901,8 @@ router.patch("/:id/treatment-status", async (req, res: Response) => {
   res.json(fresh);
 });
 
-router.get("/:id", async (req, res: Response) => {
-  const doctorId = (req as AuthedRequest).auth.userId;
+router.get("/:id", async (req: AuthedRequest, res: Response) => {
+  const doctorId = req.auth.userId;
   const patientId = Number(req.params.id);
   if (!Number.isFinite(patientId)) {
     res.status(400).json({ error: "invalid_id" });
@@ -916,8 +916,8 @@ router.get("/:id", async (req, res: Response) => {
   res.json(patient);
 });
 
-router.get("/:id/checkins", async (req, res: Response) => {
-  const doctorId = (req as AuthedRequest).auth.userId;
+router.get("/:id/checkins", async (req: AuthedRequest, res: Response) => {
+  const doctorId = req.auth.userId;
   const patientId = Number(req.params.id);
   if (!Number.isFinite(patientId)) {
     res.status(400).json({ error: "invalid_id" });
@@ -937,8 +937,8 @@ router.get("/:id/checkins", async (req, res: Response) => {
   res.json(cks);
 });
 
-router.get("/:id/risk", async (req, res: Response) => {
-  const doctorId = (req as AuthedRequest).auth.userId;
+router.get("/:id/risk", async (req: AuthedRequest, res: Response) => {
+  const doctorId = req.auth.userId;
   const patientId = Number(req.params.id);
   if (!Number.isFinite(patientId)) {
     res.status(400).json({ error: "invalid_id" });
@@ -981,8 +981,8 @@ router.get("/:id/risk", async (req, res: Response) => {
 // trend-vs-prior-entry indicator (up/down/flat). Subtle, MVP-only --
 // kept as its own endpoint so the queue list query stays cheap and
 // the dashboard's PatientDetailPage opts in to the small extra read.
-router.get("/:id/weight", async (req, res: Response) => {
-  const doctorId = (req as AuthedRequest).auth.userId;
+router.get("/:id/weight", async (req: AuthedRequest, res: Response) => {
+  const doctorId = req.auth.userId;
   const patientId = Number(req.params.id);
   if (!Number.isFinite(patientId)) {
     res.status(400).json({ error: "invalid_id" });
@@ -1031,8 +1031,8 @@ router.get("/:id/weight", async (req, res: Response) => {
   });
 });
 
-router.get("/:id/notes", async (req, res: Response) => {
-  const doctorId = (req as AuthedRequest).auth.userId;
+router.get("/:id/notes", async (req: AuthedRequest, res: Response) => {
+  const doctorId = req.auth.userId;
   const patientId = Number(req.params.id);
   if (!Number.isFinite(patientId)) {
     res.status(400).json({ error: "invalid_id" });
@@ -1069,8 +1069,8 @@ const noteSchema = z.object({
   resolved: z.boolean().nullable().optional(),
 });
 
-router.post("/:id/notes", async (req, res: Response) => {
-  const doctorId = (req as AuthedRequest).auth.userId;
+router.post("/:id/notes", async (req: AuthedRequest, res: Response) => {
+  const doctorId = req.auth.userId;
   const patientId = Number(req.params.id);
   if (!Number.isFinite(patientId)) {
     res.status(400).json({ error: "invalid_id" });
@@ -1117,8 +1117,8 @@ router.post("/:id/notes", async (req, res: Response) => {
   res.status(201).json({ ...created!, doctorName: author?.name ?? "" });
 });
 
-router.delete("/:patientId/notes/:noteId", async (req, res: Response) => {
-  const doctorId = (req as AuthedRequest).auth.userId;
+router.delete("/:patientId/notes/:noteId", async (req: AuthedRequest, res: Response) => {
+  const doctorId = req.auth.userId;
   const patientId = Number(req.params.patientId);
   const noteId = Number(req.params.noteId);
   if (!Number.isFinite(patientId) || !Number.isFinite(noteId)) {
@@ -1154,8 +1154,8 @@ router.delete("/:patientId/notes/:noteId", async (req, res: Response) => {
 // the same loadOwnedPatient guard as the rest of /patients/:id/* so a
 // doctor cannot peek at another doctor's roster.
 // ---------------------------------------------------------------------
-router.get("/:id/health/daily-summary", async (req, res: Response) => {
-  const doctorId = (req as AuthedRequest).auth.userId;
+router.get("/:id/health/daily-summary", async (req: AuthedRequest, res: Response) => {
+  const doctorId = req.auth.userId;
   const patientId = Number(req.params.id);
   if (!Number.isFinite(patientId)) {
     res.status(400).json({ error: "invalid_id" });
@@ -1175,8 +1175,8 @@ router.get("/:id/health/daily-summary", async (req, res: Response) => {
   res.json(rows);
 });
 
-router.get("/:id/treatment-log", async (req, res: Response) => {
-  const doctorId = (req as AuthedRequest).auth.userId;
+router.get("/:id/treatment-log", async (req: AuthedRequest, res: Response) => {
+  const doctorId = req.auth.userId;
   const patientId = Number(req.params.id);
   if (!Number.isFinite(patientId)) {
     res.status(400).json({ error: "invalid_id" });
