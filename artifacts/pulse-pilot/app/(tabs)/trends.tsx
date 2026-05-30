@@ -1,457 +1,505 @@
 import { Feather } from "@expo/vector-icons";
-import { router } from "expo-router";
-import * as Haptics from "expo-haptics";
 import React, { useMemo } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  Platform,
-  Pressable,
 } from "react-native";
 
-import Svg, { Polyline } from "react-native-svg";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { useApp } from "@/context/AppContext";
 import { computeHabitStats } from "@/data/insights";
-import { formatDoseDisplay, getDoseTier } from "@/data/medicationData";
-import {
-  buildCorrelations,
-  detectPatterns,
-  buildGLP1Insights,
-  buildKeyInsights,
-  weeklyAverages,
-  computeHabitWeeklyRates,
-} from "@/lib/engine/trendsEngine";
-import type { TrendCorrelation, GLP1Insight } from "@/lib/engine/trendsEngine";
+import { buildKeyInsights } from "@/lib/engine/trendsEngine";
 import { useColors } from "@/hooks/useColors";
-import type { MetricKey, HealthMetrics } from "@/types";
+import type { MedicationProfile, MedicationLogEntry, AdaptiveInsight } from "@/types";
 
-const metricKeyMap: Record<string, MetricKey> = {
-  Weight: "weight",
-  HRV: "hrv",
-  "Resting HR": "restingHR",
-  Sleep: "sleep",
-  Steps: "steps",
-  "Active Days": "activeDays",
-  "Active Cal": "activeCalories",
-};
+// ---------------------------------------------------------------- helpers
 
-interface SparkMetric {
+const TAG_COLORS = {
+  Dose: "#38B6FF",
+  Progress: "#34C759",
+  Symptom: "#FF9500",
+} as const;
+
+type TagType = keyof typeof TAG_COLORS;
+
+interface TimelineEvent {
+  date: string;
+  title: string;
+  tag: TagType;
+}
+
+function fmtDate(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00`);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function weeksAgoDate(weeks: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - weeks * 7);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function weekLabel(med: MedicationProfile): string {
+  if (med.weekOnCurrentDose && med.weekOnCurrentDose > 0) {
+    return `Week ${med.weekOnCurrentDose} on ${med.doseValue}${med.doseUnit}`;
+  }
+  const MAP: Record<string, string> = {
+    less_30_days: "Week 1–4 of treatment",
+    "30_60_days": "Week 5–8 of treatment",
+    "60_90_days": "Week 9–12 of treatment",
+    "3_6_months": "Month 3–6 of treatment",
+    "6_12_months": "Month 6–12 of treatment",
+    "1_2_years": "Year 1–2 of treatment",
+    "2_plus_years": "2+ years of treatment",
+  };
+  return MAP[med.timeOnMedicationBucket] ?? "In treatment";
+}
+
+function computeAdherenceLabel(
+  log: MedicationLogEntry[],
+  frequency: "weekly" | "daily",
+  weekOnCurrentDose?: number,
+): string | null {
+  const window28ms = 28 * 86_400_000;
+  const recent = log.filter(e => Date.now() - e.timestamp < window28ms);
+  if (recent.length === 0) {
+    // No logged doses yet — use onboarding-reported week count as proxy
+    return weekOnCurrentDose && weekOnCurrentDose > 0 ? "On track" : null;
+  }
+  const taken = recent.filter(e => e.status === "taken").length;
+  const expected = frequency === "weekly" ? 4 : 28;
+  return `${Math.min(100, Math.round((taken / expected) * 100))}%`;
+}
+
+function deriveSymptomStatus(
+  insights: AdaptiveInsight[],
+): "Improving" | "Stable" | "Managing" | null {
+  if (insights.length === 0) return null;
+  const hasTrendUp = insights.some(
+    i => i.type === "trend" && /improv|better|easier|declin|reduc/i.test(i.text),
+  );
+  const hasPostDoseIssue = insights.some(
+    i => i.type === "post_dose" && /peak|worsen|difficult|hard/i.test(i.text),
+  );
+  if (hasTrendUp) return "Improving";
+  if (hasPostDoseIssue) return "Managing";
+  return "Stable";
+}
+
+function buildDemoTimeline(med: MedicationProfile): TimelineEvent[] {
+  const BUCKET_WEEKS: Record<string, number> = {
+    less_30_days: 3,
+    "30_60_days": 7,
+    "60_90_days": 11,
+    "3_6_months": 18,
+    "6_12_months": 30,
+    "1_2_years": 60,
+    "2_plus_years": 100,
+  };
+  const total = BUCKET_WEEKS[med.timeOnMedicationBucket] ?? 7;
+  const events: TimelineEvent[] = [];
+
+  events.push({
+    date: weeksAgoDate(total),
+    title: `Started ${med.medicationBrand} · 2.5mg`,
+    tag: "Dose",
+  });
+
+  if (total >= 7) {
+    events.push({
+      date: weeksAgoDate(Math.round(total * 0.65)),
+      title: "Appetite control improving",
+      tag: "Progress",
+    });
+  }
+
+  if (med.doseValue >= 5 && total >= 5) {
+    events.push({
+      date: weeksAgoDate(Math.round(total * 0.5)),
+      title: `Increased to 5mg`,
+      tag: "Dose",
+    });
+  }
+
+  if (med.doseValue >= 7.5 && total >= 8) {
+    events.push({
+      date: weeksAgoDate(Math.round(total * 0.2)),
+      title: `Increased to ${med.doseValue}${med.doseUnit}`,
+      tag: "Dose",
+    });
+  }
+
+  if (total >= 6) {
+    events.push({
+      date: weeksAgoDate(1),
+      title: "Digestion symptoms improving",
+      tag: "Progress",
+    });
+  }
+
+  return events;
+}
+
+function buildTimeline(
+  log: MedicationLogEntry[],
+  insights: AdaptiveInsight[],
+  med: MedicationProfile | undefined,
+): TimelineEvent[] {
+  const events: TimelineEvent[] = [];
+
+  // Real dose-change events from medication log
+  const sorted = [...log]
+    .filter(e => e.status === "taken")
+    .sort((a, b) => a.timestamp - b.timestamp);
+  let lastDose: number | null = null;
+  for (const entry of sorted) {
+    if (entry.doseValue !== lastDose) {
+      events.push({
+        date: fmtDate(entry.date),
+        title:
+          lastDose === null
+            ? `Started ${entry.doseValue}${entry.doseUnit}`
+            : `Increased to ${entry.doseValue}${entry.doseUnit}`,
+        tag: "Dose",
+      });
+      lastDose = entry.doseValue;
+    }
+  }
+
+  // Progress events from trend insights
+  for (const insight of insights) {
+    if (insight.type === "trend") {
+      events.push({ date: "Recently", title: insight.text, tag: "Progress" });
+    }
+  }
+
+  if (events.length === 0 && med) {
+    return buildDemoTimeline(med);
+  }
+
+  return events;
+}
+
+// ---------------------------------------------------------------- sub-components
+
+function EmptyState({ text, subtext }: { text: string; subtext: string }) {
+  const c = useColors();
+  return (
+    <View style={emptyStyles.wrap}>
+      <View style={[emptyStyles.iconWrap, { backgroundColor: c.accent + "12" }]}>
+        <Feather name="clock" size={16} color={c.accent} />
+      </View>
+      <Text style={[emptyStyles.text, { color: c.foreground }]}>{text}</Text>
+      <Text style={[emptyStyles.subtext, { color: c.mutedForeground }]}>{subtext}</Text>
+    </View>
+  );
+}
+
+const emptyStyles = StyleSheet.create({
+  wrap: { alignItems: "center", paddingVertical: 20, gap: 8 },
+  iconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  text: {
+    fontSize: 14,
+    fontFamily: "Montserrat_600SemiBold",
+    textAlign: "center",
+    letterSpacing: -0.1,
+  },
+  subtext: {
+    fontSize: 13,
+    fontFamily: "Montserrat_400Regular",
+    textAlign: "center",
+    lineHeight: 19,
+    opacity: 0.75,
+    paddingHorizontal: 8,
+  },
+});
+
+// ---------------------------------------------------------------- ChipCard
+
+function ChipCard({
+  label,
+  value,
+  color,
+}: {
   label: string;
   value: string;
-  unit: string;
-  data: number[];
   color: string;
-  detailKey?: string;
+}) {
+  const c = useColors();
+  return (
+    <View style={[styles.chip, { backgroundColor: color + "12", borderColor: color + "30" }]}>
+      <Text style={[styles.chipLabel, { color: c.mutedForeground }]}>{label}</Text>
+      <Text style={[styles.chipValue, { color }]}>{value}</Text>
+    </View>
+  );
 }
 
-function buildSparkPoints(data: number[], width: number, height: number): string {
-  if (data.length < 2) return "";
-  const min = Math.min(...data);
-  const max = Math.max(...data);
-  const range = max - min || 1;
-  const pad = 2;
-  return data
-    .map((v, i) => {
-      const x = (i / (data.length - 1)) * width;
-      const y = height - pad - ((v - min) / range) * (height - pad * 2);
-      return `${x},${y}`;
-    })
-    .join(" ");
-}
+// ---------------------------------------------------------------- screen
 
 export default function TrendsScreen() {
   const c = useColors();
-  const { insights, metrics, completionHistory, weeklyConsistency, weeklyDaysCompleted, streakDays, todayCompletionRate, dailyPlan, profile, medicationLog, inputAnalytics, hasHealthData, availableMetricTypes, adaptiveInsights } = useApp();
+  const {
+    metrics,
+    completionHistory,
+    profile,
+    medicationLog,
+    inputAnalytics,
+    hasHealthData,
+    availableMetricTypes,
+    adaptiveInsights,
+  } = useApp();
 
-  const correlations = useMemo(() => {
-    if (!hasHealthData) return [];
-    try { return buildCorrelations(metrics); } catch { return []; }
-  }, [metrics, hasHealthData]);
-  const patterns = useMemo(() => {
-    if (!hasHealthData) return [];
-    try { return detectPatterns(metrics, availableMetricTypes); } catch { return []; }
-  }, [metrics, hasHealthData, availableMetricTypes]);
-  const habitStats = useMemo(() => computeHabitStats(completionHistory), [completionHistory]);
-  const baseInsights = useMemo(() => hasHealthData ? buildKeyInsights(metrics, habitStats, availableMetricTypes) : [], [metrics, habitStats, hasHealthData, availableMetricTypes]);
-  // Merge adaptive (check-in pattern) and key (wearable/habit) insights
-  // into one deduplicated list, capped at 4. adaptiveInsights are already
-  // sorted by clinical priority (post_dose → correlation → trend) inside
-  // generateAdaptiveInsights, so we prepend them before wearable signals.
+  const med = profile.medicationProfile;
+
+  // ---- "What Viva Has Learned" insight list (reuse existing merge logic)
+  const habitStats = useMemo(
+    () => computeHabitStats(completionHistory),
+    [completionHistory],
+  );
+  const baseInsights = useMemo(
+    () =>
+      hasHealthData
+        ? buildKeyInsights(metrics, habitStats, availableMetricTypes)
+        : [],
+    [metrics, habitStats, hasHealthData, availableMetricTypes],
+  );
   const mergedInsights = useMemo(() => {
     const seen = new Set<string>();
-    const result: Array<{ id: string; text: string; type: "post_dose" | "correlation" | "trend" | "pattern" | "wearable" }> = [];
+    const result: Array<{
+      id: string;
+      text: string;
+      type: "post_dose" | "correlation" | "trend" | "pattern" | "wearable";
+    }> = [];
     for (const a of adaptiveInsights) {
       if (!seen.has(a.text)) {
         seen.add(a.text);
         result.push({ id: a.id, text: a.text, type: a.type });
       }
     }
-    const analyticsInsights = inputAnalytics?.insights ?? [];
-    const supplemental = [...baseInsights];
-    for (const ai of analyticsInsights) {
-      if (!supplemental.includes(ai)) supplemental.push(ai);
-    }
-    for (const s of supplemental) {
+    const supplement = [
+      ...baseInsights,
+      ...(inputAnalytics?.insights ?? []),
+    ];
+    for (const s of supplement) {
       if (!seen.has(s)) {
         seen.add(s);
-        result.push({ id: `wearable_${s.slice(0, 20)}`, text: s, type: "wearable" });
+        result.push({
+          id: `wearable_${s.slice(0, 20)}`,
+          text: s,
+          type: "wearable",
+        });
       }
     }
     return result.slice(0, 4);
   }, [adaptiveInsights, baseInsights, inputAnalytics]);
-  const glp1Insights = useMemo(() => hasHealthData ? buildGLP1Insights(metrics, profile.medicationProfile, medicationLog, completionHistory) : [], [metrics, profile.medicationProfile, medicationLog, completionHistory, hasHealthData]);
 
-  const openDetail = (label: string) => {
-    const key = metricKeyMap[label];
-    if (!key) return;
-    if (Platform.OS !== "web") {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-    router.push({ pathname: "/metric-detail", params: { key } });
-  };
+  // ---- Treatment Snapshot chips
+  const symptomStatus = useMemo(
+    () => deriveSymptomStatus(adaptiveInsights),
+    [adaptiveInsights],
+  );
+  const adherenceLabel = useMemo(
+    () =>
+      med
+        ? computeAdherenceLabel(medicationLog, med.frequency, med.weekOnCurrentDose)
+        : null,
+    [medicationLog, med],
+  );
+  const riskLabel: "Low" | "Moderate" | null = useMemo(() => {
+    if (!med) return null;
+    const postDoseCount = adaptiveInsights.filter(i => i.type === "post_dose").length;
+    return postDoseCount >= 3 ? "Moderate" : "Low";
+  }, [adaptiveInsights, med]);
 
-  const strengthLabel = (s: TrendCorrelation["strength"]) => {
-    if (s === "strong") return "Strong link";
-    if (s === "moderate") return "Moderate link";
-    return "Weak link";
-  };
+  // ---- Treatment Timeline
+  const timeline = useMemo(
+    () => buildTimeline(medicationLog, adaptiveInsights, med),
+    [medicationLog, adaptiveInsights, med],
+  );
 
-  const last28 = metrics.slice(-28);
-  const avg = (arr: number[]) => arr.length > 0 ? arr.reduce((s, v) => s + v, 0) / arr.length : 0;
-  const avgNullable = (arr: (number | null | undefined)[]) => {
-    const f = arr.filter((v): v is number => typeof v === "number");
-    return f.length > 0 ? f.reduce((s, v) => s + v, 0) / f.length : 0;
-  };
-
-  const avgSleep = +(avg(last28.map(m => m.sleepDuration))).toFixed(1);
-  const avgHrv = Math.round(avgNullable(last28.map(m => m.hrv)));
-  const avgRHR = Math.round(avgNullable(last28.map(m => m.restingHeartRate)));
-  const avgSteps = Math.round(avg(last28.map(m => m.steps)));
-  const avgActiveCalories = Math.round(avg(last28.map(m => m.activeCalories || 0)));
-  const activeDays = last28.filter(m => (m.activeCalories || 0) > 200 || m.steps > 8000).length;
-  const activeDaysPerWeek = last28.length > 0 ? +((activeDays / last28.length) * 7).toFixed(1) : 0;
-
-  const sleepData = weeklyAverages(last28.map(m => m.sleepDuration));
-  const hrvData = weeklyAverages(last28.map(m => m.hrv));
-  const rhrData = weeklyAverages(last28.map(m => m.restingHeartRate));
-  const stepsData = weeklyAverages(last28.map(m => m.steps));
-  const activityData = weeklyAverages(last28.map(m => ((m.activeCalories || 0) > 200 || m.steps > 8000) ? 1 : 0));
-  const activeCalData = weeklyAverages(last28.map(m => m.activeCalories || 0));
-  const habitRateData = computeHabitWeeklyRates(completionHistory);
-
-  const planActionsFiltered = dailyPlan ? dailyPlan.actions.filter(a => a.category !== "consistent") : [];
-  const completedCount = planActionsFiltered.filter(a => a.completed).length;
-  const totalActions = planActionsFiltered.length;
-
-  const allRecoveryMetrics: (SparkMetric & { requiredType: string })[] = [
-    { label: "Sleep", value: `${avgSleep}`, unit: "hrs", data: sleepData, color: "#AF52DE", detailKey: "Sleep", requiredType: "sleep" },
-    { label: "HRV", value: `${avgHrv}`, unit: "ms", data: hrvData, color: "#5AC8FA", detailKey: "HRV", requiredType: "hrv" },
-    { label: "Resting HR", value: `${avgRHR}`, unit: "bpm", data: rhrData, color: "#FF6B6B", detailKey: "Resting HR", requiredType: "heartRate" },
-  ];
-  const recoveryMetrics = allRecoveryMetrics.filter(m => availableMetricTypes.includes(m.requiredType as any));
-
-  const allActivityMetrics: (SparkMetric & { requiredType: string })[] = [
-    { label: "Steps", value: avgSteps >= 1000 ? `${(avgSteps / 1000).toFixed(1)}k` : `${avgSteps}`, unit: "avg", data: stepsData, color: "#34C759", detailKey: "Steps", requiredType: "steps" },
-    { label: "Active Days", value: `${activeDaysPerWeek}`, unit: "/week", data: activityData.map(v => v * 7), color: "#142240", detailKey: "Active Days", requiredType: "steps" },
-    { label: "Active Cal", value: `${avgActiveCalories}`, unit: "avg", data: activeCalData, color: "#FF9500", detailKey: "Active Cal", requiredType: "calories" },
-  ];
-  const activityMetrics = allActivityMetrics.filter(m => availableMetricTypes.includes(m.requiredType as any));
-
-  const habitsMetrics: SparkMetric[] = [
-    { label: "Weekly", value: `${weeklyDaysCompleted}/7`, unit: "days", data: habitRateData, color: "#142240" },
-    { label: "Streak", value: `${streakDays}`, unit: "days", data: [streakDays], color: "#FF9500" },
-    { label: "Today", value: `${completedCount}/${totalActions}`, unit: "done", data: [completedCount], color: "#34C759" },
-  ];
+  const hasSnapshotChips = !!(symptomStatus || adherenceLabel || riskLabel);
 
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: c.background }]}
-      contentContainerStyle={[styles.content, { paddingTop: 0 }]}
+      contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
       <ScreenHeader />
 
-      {insights && (
-        <View style={[styles.summaryCard, { backgroundColor: c.card, marginTop: 18 }]}>
-          <Text style={[styles.summaryHeader, { color: c.foreground }]}>How You're Doing</Text>
-          {insights.weekSummary.split("\n\n").map((line, i) => (
-            <Text key={i} style={[styles.summaryText, { color: c.foreground }]}>{line}</Text>
-          ))}
-          {!hasHealthData && (
-            <Text style={[styles.dataSourceNote, { color: c.mutedForeground }]}>Based on your daily check-ins and plan activity</Text>
-          )}
-        </View>
-      )}
+      {/* ── Section 1: Treatment Snapshot ───────────────────── */}
+      <View style={[styles.card, { backgroundColor: c.card }]}>
+        <Text style={[styles.sectionTitle, { color: c.foreground }]}>
+          Treatment Snapshot
+        </Text>
 
-      {profile.medicationProfile && (
-        <View style={[styles.medSection, { backgroundColor: c.card, ...(!insights && { marginTop: 18 }) }]}>
-          <View style={styles.medSectionHeader}>
-            <Feather name="package" size={16} color={c.accent} />
-            <Text style={[styles.medSectionTitle, { color: c.foreground }]}>Medication</Text>
-          </View>
-          <Text style={[styles.medDoseText, { color: c.foreground }]}>
-            {formatDoseDisplay(
-              profile.medicationProfile.medicationBrand,
-              profile.medicationProfile.doseValue,
-              profile.medicationProfile.doseUnit,
-              profile.medicationProfile.frequency as "weekly" | "daily"
-            )}
-          </Text>
-          <View style={styles.medStatsRow}>
-            {(() => {
-              const last7 = medicationLog.filter(e => {
-                const d = new Date(e.date);
-                const now = new Date();
-                return (now.getTime() - d.getTime()) < 7 * 86400000;
-              });
-              const taken = last7.filter(e => e.status === "taken").length;
-              const total = profile.medicationProfile?.frequency === "daily" ? 7 : 1;
-              return (
-                <View style={[styles.medStatItem, { backgroundColor: c.background }]}>
-                  <Text style={[styles.medStatValue, { color: c.foreground }]}>{taken}/{total}</Text>
-                  <Text style={[styles.medStatLabel, { color: c.mutedForeground }]}>doses this week</Text>
-                </View>
-              );
-            })()}
-            <View style={[styles.medStatItem, { backgroundColor: c.background }]}>
-              <Text style={[styles.medStatValue, { color: c.foreground }]}>
-                {getDoseTier(profile.medicationProfile.medicationBrand, profile.medicationProfile.doseValue)}
-              </Text>
-              <Text style={[styles.medStatLabel, { color: c.mutedForeground }]}>dose tier</Text>
-            </View>
-            {profile.medicationProfile.recentTitration && (
-              <View style={[styles.medStatItem, { backgroundColor: "#FF950010" }]}>
-                <Text style={[styles.medStatValue, { color: "#FF9500" }]}>Yes</Text>
-                <Text style={[styles.medStatLabel, { color: "#FF9500" }]}>dose changed</Text>
-              </View>
-            )}
-          </View>
-          {medicationLog.length > 0 && (
-            <View style={styles.medLogPreview}>
-              <Text style={[styles.medLogTitle, { color: c.mutedForeground }]}>Recent doses</Text>
-              {medicationLog.slice(-5).reverse().map((entry) => (
-                <View key={entry.id} style={styles.medLogRow}>
-                  <Feather name={entry.status === "taken" ? "check-circle" : entry.status === "skipped" ? "x-circle" : "clock"} size={13} color={entry.status === "taken" ? "#34C759" : entry.status === "skipped" ? "#FF6B6B" : c.mutedForeground} />
-                  <Text style={[styles.medLogDate, { color: c.mutedForeground }]}>{entry.date}</Text>
-                  <Text style={[styles.medLogStatus, { color: entry.status === "taken" ? "#34C759" : entry.status === "skipped" ? "#FF6B6B" : c.mutedForeground }]}>{entry.status}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
-      )}
-
-      {(mergedInsights.length > 0 || hasHealthData) && (
-        <View style={styles.sectionWrap}>
-          <View style={[styles.patternsCard, { backgroundColor: c.card }]}>
-            <View style={styles.patternsHeader}>
-              <Feather name="activity" size={13} color={c.accent} />
-              <Text style={[styles.patternsTitle, { color: c.foreground }]}>Recent patterns</Text>
-            </View>
-            {mergedInsights.length === 0 ? (
-              <View style={styles.patternRow}>
-                <Feather name="clock" size={12} color={c.mutedForeground} style={{ marginTop: 2 }} />
-                <Text style={[styles.patternRowText, { color: c.mutedForeground }]}>
-                  Keep checking in daily. Patterns appear after a few days of data.
-                </Text>
-              </View>
-            ) : (
-              mergedInsights.map((insight) => {
-                const iconName =
-                  insight.type === "post_dose" ? "clock" :
-                  insight.type === "correlation" ? "git-merge" :
-                  insight.type === "trend" ? "trending-up" :
-                  "zap";
-                return (
-                  <View key={insight.id} style={styles.patternRow}>
-                    <Feather name={iconName as any} size={11} color={c.accent} style={{ marginTop: 3 }} />
-                    <Text style={[styles.patternRowText, { color: c.foreground }]}>{insight.text}</Text>
-                  </View>
-                );
-              })
-            )}
-          </View>
-        </View>
-      )}
-
-      {glp1Insights.length > 0 && (
-        <View style={styles.sectionWrap}>
-          <Text style={[styles.sectionTitle, { color: c.foreground }]}>Treatment Patterns</Text>
-          <Text style={[styles.sectionSub, { color: c.mutedForeground }]}>What we are noticing about your medication journey</Text>
-          {glp1Insights.map((insight, i) => (
-            <View key={i} style={[styles.glp1InsightCard, { backgroundColor: c.card }]}>
-              <View style={[styles.glp1InsightIcon, { backgroundColor: insight.color + "14" }]}>
-                <Feather name={insight.icon as any} size={14} color={insight.color} />
-              </View>
-              <Text style={[styles.glp1InsightText, { color: c.foreground }]}>{insight.text}</Text>
-            </View>
-          ))}
-        </View>
-      )}
-
-      {correlations.length > 0 && (
-        <View style={styles.sectionWrap}>
-          <Text style={[styles.sectionTitle, { color: c.foreground }]}>Correlations</Text>
-          <Text style={[styles.sectionSub, { color: c.mutedForeground }]}>How your body signals connect</Text>
-          {correlations.map((corr, i) => (
-            <View key={i} style={[styles.corrCard, { backgroundColor: c.card }]}>
-              <View style={styles.corrHeader}>
-                <View style={[styles.corrIconWrap, { backgroundColor: corr.color + "14" }]}>
-                  <Feather name={corr.icon as any} size={16} color={corr.color} />
-                </View>
-                <View style={styles.corrMeta}>
-                  <Text style={[styles.corrTitle, { color: c.foreground }]}>{corr.title}</Text>
-                  <View style={styles.corrBadgeRow}>
-                    <View style={[styles.corrBadge, { backgroundColor: corr.strength === "strong" ? c.success + "18" : corr.strength === "moderate" ? c.warning + "18" : c.muted }]}>
-                      <Text style={[styles.corrBadgeText, { color: corr.strength === "strong" ? c.success : corr.strength === "moderate" ? c.warning : c.mutedForeground }]}>
-                        {strengthLabel(corr.strength)}
-                      </Text>
-                    </View>
-                    <View style={[styles.corrBadge, { backgroundColor: corr.direction === "positive" ? c.success + "18" : corr.direction === "negative" ? "#FF6B6B18" : c.muted }]}>
-                      <Feather
-                        name={corr.direction === "positive" ? "trending-up" : corr.direction === "negative" ? "trending-down" : "minus"}
-                        size={10}
-                        color={corr.direction === "positive" ? c.success : corr.direction === "negative" ? "#FF6B6B" : c.mutedForeground}
-                      />
-                    </View>
-                  </View>
-                </View>
-              </View>
-              <Text style={[styles.corrInsight, { color: c.mutedForeground }]}>{corr.insight}</Text>
-            </View>
-          ))}
-        </View>
-      )}
-
-      {patterns.length > 0 && (
-        <View style={styles.sectionWrap}>
-          <Text style={[styles.sectionTitle, { color: c.foreground }]}>Patterns During Treatment</Text>
-          {patterns.map((p, i) => (
-            <View key={i} style={[styles.patternCard, { backgroundColor: c.card }]}>
-              <Feather name="eye" size={14} color={c.accent} />
-              <Text style={[styles.patternText, { color: c.foreground }]}>{p}</Text>
-            </View>
-          ))}
-        </View>
-      )}
-
-      <View style={styles.sectionWrap}>
-        <Text style={[styles.sectionTitle, { color: c.foreground }]}>Key Metrics</Text>
-        <Text style={[styles.sectionSub, { color: c.mutedForeground }]}>{hasHealthData ? "Rolling 4-week averages. Mini chart shows weekly averages across the last 4 weeks." : "Connect Apple Health for health metrics"}</Text>
-
-        {hasHealthData && (recoveryMetrics.length > 0 || activityMetrics.length > 0) ? (
+        {med ? (
           <>
-            {recoveryMetrics.length > 0 && (
-              <>
-                <Text style={[styles.categoryLabel, { color: c.mutedForeground }]}>Recovery / Body</Text>
-                <View style={styles.metricsRow}>
-                  {recoveryMetrics.map((m) => (
-                    <Pressable
-                      key={m.label}
-                      onPress={() => m.detailKey && openDetail(m.detailKey)}
-                      style={({ pressed }) => [styles.metricTile, { backgroundColor: c.card, opacity: pressed ? 0.8 : 1 }]}
-                    >
-                      <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>{m.label}</Text>
-                      <View style={styles.metricValueRow}>
-                        <Text style={[styles.metricValue, { color: c.foreground }]}>{m.value}</Text>
-                        <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>{m.unit}</Text>
-                      </View>
-                      {m.data.length >= 2 && (
-                        <Svg width={60} height={20} style={styles.spark}>
-                          <Polyline
-                            points={buildSparkPoints(m.data, 60, 20)}
-                            fill="none"
-                            stroke={m.color}
-                            strokeWidth={1.5}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </Svg>
-                      )}
-                    </Pressable>
-                  ))}
-                </View>
-              </>
-            )}
-
-            {activityMetrics.length > 0 && (
-              <>
-                <Text style={[styles.categoryLabel, { color: c.mutedForeground }]}>Movement</Text>
-                <View style={styles.metricsRow}>
-                  {activityMetrics.map((m) => (
-                    <Pressable
-                      key={m.label}
-                      onPress={() => m.detailKey && openDetail(m.detailKey)}
-                      style={({ pressed }) => [styles.metricTile, { backgroundColor: c.card, opacity: pressed ? 0.8 : 1 }]}
-                    >
-                      <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>{m.label}</Text>
-                      <View style={styles.metricValueRow}>
-                        <Text style={[styles.metricValue, { color: c.foreground }]}>{m.value}</Text>
-                        <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>{m.unit}</Text>
-                      </View>
-                      {m.data.length >= 2 && (
-                        <Svg width={60} height={20} style={styles.spark}>
-                          <Polyline
-                            points={buildSparkPoints(m.data, 60, 20)}
-                            fill="none"
-                            stroke={m.color}
-                            strokeWidth={1.5}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </Svg>
-                      )}
-                    </Pressable>
-                  ))}
-                </View>
-              </>
-            )}
-
-            {(recoveryMetrics.length < allRecoveryMetrics.length || activityMetrics.length < allActivityMetrics.length) && (
-              <Text style={[styles.partialDataNote, { color: c.mutedForeground }]}>
-                Some metrics require Apple Watch or manual entry
+            <View style={styles.medLine}>
+              <View style={[styles.medDot, { backgroundColor: c.accent }]} />
+              <Text style={[styles.medName, { color: c.foreground }]}>
+                {med.medicationBrand} · {med.doseValue}
+                {med.doseUnit} {med.frequency}
               </Text>
+            </View>
+            <Text style={[styles.weekLabel, { color: c.mutedForeground }]}>
+              {weekLabel(med)}
+            </Text>
+
+            {hasSnapshotChips && (
+              <>
+                <View style={styles.chipsRow}>
+                  {symptomStatus && (
+                    <ChipCard
+                      label="Symptoms"
+                      value={symptomStatus}
+                      color={
+                        symptomStatus === "Improving"
+                          ? "#34C759"
+                          : symptomStatus === "Managing"
+                          ? "#FF9500"
+                          : c.accent
+                      }
+                    />
+                  )}
+                  {adherenceLabel && (
+                    <ChipCard
+                      label="Adherence"
+                      value={adherenceLabel}
+                      color={c.accent}
+                    />
+                  )}
+                  {riskLabel && (
+                    <ChipCard
+                      label="Risk"
+                      value={riskLabel}
+                      color={riskLabel === "Low" ? "#34C759" : "#FF9500"}
+                    />
+                  )}
+                </View>
+                <Text style={[styles.sourceNote, { color: c.mutedForeground }]}>
+                  Based on your recent check-ins and treatment history.
+                </Text>
+              </>
             )}
           </>
         ) : (
-          <View style={[styles.emptyMetricsCard, { backgroundColor: c.card }]}>
-            <View style={[styles.emptyMetricsIconWrap, { backgroundColor: c.accent + "12" }]}>
-              <Feather name="activity" size={18} color={c.accent} />
-            </View>
-            <Text style={[styles.emptyMetricsTitle, { color: c.foreground }]}>Health metrics unavailable</Text>
-            <Text style={[styles.emptyMetricsText, { color: c.mutedForeground }]}>
-              Connect Apple Health in Settings to see recovery, sleep, and movement trends. Your consistency data below is based on daily check-ins.
-            </Text>
-          </View>
+          <EmptyState
+            text="Check in to personalize your plan."
+            subtext="Viva will use your medication updates, symptoms and health signals to summarize your treatment progress."
+          />
         )}
+      </View>
 
-        <Text style={[styles.categoryLabel, { color: c.mutedForeground }]}>Consistency</Text>
-        <View style={styles.metricsRow}>
-          {habitsMetrics.map((m) => (
-            <View key={m.label} style={[styles.metricTile, { backgroundColor: c.card }]}>
-              <Text style={[styles.metricLabel, { color: c.mutedForeground }]}>{m.label}</Text>
-              <View style={styles.metricValueRow}>
-                <Text style={[styles.metricValue, { color: c.foreground }]}>{m.value}</Text>
-                <Text style={[styles.metricUnit, { color: c.mutedForeground }]}>{m.unit}</Text>
+      {/* ── Section 2: What Viva Has Learned ────────────────── */}
+      <View style={[styles.card, { backgroundColor: c.card }]}>
+        <Text style={[styles.sectionTitle, { color: c.foreground }]}>
+          What Viva Has Learned
+        </Text>
+        <Text style={[styles.sectionSub, { color: c.mutedForeground }]}>
+          Based on your medication timing, check-ins and recent patterns.
+        </Text>
+
+        {mergedInsights.length > 0 ? (
+          <View style={styles.insightList}>
+            {mergedInsights.map(insight => (
+              <View key={insight.id} style={styles.insightRow}>
+                <View
+                  style={[styles.insightDot, { backgroundColor: c.accent }]}
+                />
+                <Text style={[styles.insightText, { color: c.foreground }]}>
+                  {insight.text}
+                </Text>
               </View>
-              {m.data.length >= 2 && (
-                <Svg width={60} height={20} style={styles.spark}>
-                  <Polyline
-                    points={buildSparkPoints(m.data, 60, 20)}
-                    fill="none"
-                    stroke={m.color}
-                    strokeWidth={1.5}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </Svg>
-              )}
-            </View>
-          ))}
-        </View>
+            ))}
+          </View>
+        ) : (
+          <EmptyState
+            text="Complete a few check-ins so Viva can identify your patterns."
+            subtext="Your insights will connect symptoms, medication timing and health signals over time."
+          />
+        )}
+      </View>
+
+      {/* ── Section 3: Treatment Timeline ───────────────────── */}
+      <View style={[styles.card, { backgroundColor: c.card }]}>
+        <Text style={[styles.sectionTitle, { color: c.foreground }]}>
+          Treatment Timeline
+        </Text>
+        <Text style={[styles.sectionSub, { color: c.mutedForeground }]}>
+          Key moments from your recent treatment journey.
+        </Text>
+
+        {timeline.length > 0 ? (
+          <View style={styles.timelineWrap}>
+            {timeline.map((event, i) => {
+              const tagColor = TAG_COLORS[event.tag];
+              const isLast = i === timeline.length - 1;
+              return (
+                <View key={i} style={styles.timelineItem}>
+                  <View style={styles.timelineLeft}>
+                    <View
+                      style={[
+                        styles.timelineNode,
+                        { backgroundColor: tagColor },
+                      ]}
+                    />
+                    {!isLast && (
+                      <View
+                        style={[
+                          styles.timelineLine,
+                          { backgroundColor: c.border },
+                        ]}
+                      />
+                    )}
+                  </View>
+                  <View style={[styles.timelineBody, isLast && styles.timelineBodyLast]}>
+                    <View style={styles.timelineMetaRow}>
+                      <Text
+                        style={[
+                          styles.timelineDate,
+                          { color: c.mutedForeground },
+                        ]}
+                      >
+                        {event.date}
+                      </Text>
+                      <View
+                        style={[
+                          styles.timelineTag,
+                          { backgroundColor: tagColor + "18" },
+                        ]}
+                      >
+                        <Text
+                          style={[styles.timelineTagText, { color: tagColor }]}
+                        >
+                          {event.tag}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text
+                      style={[styles.timelineTitle, { color: c.foreground }]}
+                    >
+                      {event.title}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        ) : (
+          <EmptyState
+            text="Your timeline will build as you check in."
+            subtext="Viva will connect dose changes, symptoms and progress over time."
+          />
+        )}
       </View>
 
       <View style={{ height: 110 }} />
@@ -459,99 +507,114 @@ export default function TrendsScreen() {
   );
 }
 
+// ---------------------------------------------------------------- styles
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: {
-    paddingHorizontal: 24,
-    gap: 12,
+    paddingHorizontal: 20,
+    paddingTop: 0,
+    gap: 14,
   },
-  title: {
-    fontSize: 28,
-    fontFamily: "Montserrat_700Bold",
-    letterSpacing: -0.5,
-    marginBottom: 4,
-  },
-  summaryCard: {
+
+  // Cards
+  card: {
+    borderRadius: 20,
     padding: 20,
-    borderRadius: 20,
     gap: 12,
+    shadowColor: "#142240",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  emptyMetricsCard: {
-    borderRadius: 20,
-    padding: 24,
-    alignItems: "center",
-    gap: 10,
-  },
-  emptyMetricsIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 2,
-  },
-  emptyMetricsTitle: {
-    fontSize: 15,
-    fontFamily: "Montserrat_600SemiBold",
-    textAlign: "center",
-    letterSpacing: -0.2,
-  },
-  emptyMetricsText: {
-    fontSize: 13,
-    fontFamily: "Montserrat_400Regular",
-    textAlign: "center",
-    lineHeight: 20,
-    opacity: 0.7,
-    paddingHorizontal: 8,
-  },
-  summaryHeader: {
-    fontSize: 18,
-    fontFamily: "Montserrat_600SemiBold",
-    letterSpacing: -0.3,
-  },
-  summaryText: {
-    fontSize: 14,
-    fontFamily: "Montserrat_400Regular",
-    lineHeight: 22,
-    opacity: 0.75,
-    letterSpacing: -0.1,
-  },
-  dataSourceNote: {
-    fontSize: 11,
-    fontFamily: "Montserrat_400Regular",
-    opacity: 0.5,
-    fontStyle: "italic",
-    marginTop: 2,
-  },
-  partialDataNote: {
-    fontSize: 11,
-    fontFamily: "Montserrat_400Regular",
-    textAlign: "center",
-    opacity: 0.5,
-    marginTop: 8,
-    fontStyle: "italic",
-  },
-  sectionWrap: {
-    gap: 10,
-    marginTop: 8,
-  },
+
+  // Section headers
   sectionTitle: {
-    fontSize: 18,
-    fontFamily: "Montserrat_600SemiBold",
+    fontSize: 17,
+    fontFamily: "Montserrat_700Bold",
     letterSpacing: -0.3,
   },
   sectionSub: {
     fontSize: 13,
     fontFamily: "Montserrat_400Regular",
-    marginBottom: 2,
+    lineHeight: 19,
+    marginTop: -4,
+    opacity: 0.8,
+  },
+
+  // Treatment Snapshot
+  medLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 2,
+  },
+  medDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  medName: {
+    fontSize: 16,
+    fontFamily: "Montserrat_700Bold",
+    letterSpacing: -0.3,
+  },
+  weekLabel: {
+    fontSize: 13,
+    fontFamily: "Montserrat_400Regular",
+    marginTop: -4,
+  },
+  chipsRow: {
+    flexDirection: "row",
+    gap: 8,
+    flexWrap: "wrap",
+    marginTop: 4,
+  },
+  chip: {
+    flex: 1,
+    minWidth: 80,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignItems: "flex-start",
+    gap: 3,
+  },
+  chipLabel: {
+    fontSize: 10,
+    fontFamily: "Montserrat_600SemiBold",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
     opacity: 0.7,
   },
-  insightCard: {
+  chipValue: {
+    fontSize: 15,
+    fontFamily: "Montserrat_700Bold",
+    letterSpacing: -0.2,
+  },
+  sourceNote: {
+    fontSize: 11,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 16,
+    opacity: 0.6,
+    fontStyle: "italic",
+    marginTop: -2,
+  },
+
+  // What Viva Has Learned
+  insightList: { gap: 12, marginTop: 4 },
+  insightRow: {
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 10,
-    padding: 14,
-    borderRadius: 16,
+  },
+  insightDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    marginTop: 6,
+    flexShrink: 0,
   },
   insightText: {
     flex: 1,
@@ -559,228 +622,64 @@ const styles = StyleSheet.create({
     fontFamily: "Montserrat_400Regular",
     lineHeight: 21,
   },
-  corrCard: {
-    padding: 16,
-    borderRadius: 18,
-    gap: 10,
-  },
-  corrHeader: {
+
+  // Treatment Timeline
+  timelineWrap: { gap: 0, marginTop: 4 },
+  timelineItem: {
     flexDirection: "row",
-    alignItems: "center",
     gap: 12,
   },
-  corrIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+  timelineLeft: {
     alignItems: "center",
-    justifyContent: "center",
+    width: 14,
   },
-  corrMeta: {
+  timelineNode: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginTop: 4,
+    flexShrink: 0,
+  },
+  timelineLine: {
+    width: 1.5,
     flex: 1,
+    marginTop: 3,
+    marginBottom: -2,
+    borderRadius: 1,
+  },
+  timelineBody: {
+    flex: 1,
+    paddingBottom: 16,
     gap: 4,
   },
-  corrTitle: {
-    fontSize: 15,
-    fontFamily: "Montserrat_600SemiBold",
-    letterSpacing: -0.2,
+  timelineBodyLast: {
+    paddingBottom: 0,
   },
-  corrBadgeRow: {
-    flexDirection: "row",
-    gap: 6,
-  },
-  corrBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
+  timelineMetaRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: 8,
   },
-  corrBadgeText: {
-    fontSize: 11,
+  timelineDate: {
+    fontSize: 12,
     fontFamily: "Montserrat_500Medium",
+    letterSpacing: 0.1,
   },
-  corrInsight: {
-    fontSize: 13,
-    fontFamily: "Montserrat_400Regular",
-    lineHeight: 20,
-    opacity: 0.8,
+  timelineTag: {
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
   },
-  patternCard: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-    padding: 14,
-    borderRadius: 16,
-  },
-  patternText: {
-    flex: 1,
-    fontSize: 13,
-    fontFamily: "Montserrat_400Regular",
-    lineHeight: 20,
-  },
-  categoryLabel: {
-    fontSize: 13,
-    fontFamily: "Montserrat_600SemiBold",
+  timelineTagText: {
+    fontSize: 10,
+    fontFamily: "Montserrat_700Bold",
     letterSpacing: 0.3,
     textTransform: "uppercase",
-    marginTop: 8,
-    marginBottom: -2,
   },
-  metricsRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  metricTile: {
-    flex: 1,
-    padding: 14,
-    borderRadius: 20,
-    alignItems: "center",
-    gap: 4,
-  },
-  metricLabel: {
-    fontSize: 11,
-    fontFamily: "Montserrat_500Medium",
-    letterSpacing: 0.1,
-  },
-  metricValueRow: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    gap: 3,
-  },
-  metricValue: {
-    fontSize: 20,
-    fontFamily: "Montserrat_700Bold",
-    letterSpacing: -0.3,
-  },
-  metricUnit: {
-    fontSize: 11,
-    fontFamily: "Montserrat_400Regular",
-  },
-  spark: {
-    marginTop: 2,
-  },
-  medSection: {
-    padding: 20,
-    borderRadius: 20,
-    gap: 12,
-  },
-  medSectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  medSectionTitle: {
-    fontSize: 16,
-    fontFamily: "Montserrat_600SemiBold",
-    letterSpacing: -0.2,
-  },
-  medDoseText: {
-    fontSize: 15,
-    fontFamily: "Montserrat_600SemiBold",
-  },
-  medStatsRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  medStatItem: {
-    flex: 1,
-    padding: 10,
-    borderRadius: 12,
-    alignItems: "center",
-    gap: 2,
-  },
-  medStatValue: {
-    fontSize: 16,
-    fontFamily: "Montserrat_700Bold",
-    textTransform: "capitalize",
-  },
-  medStatLabel: {
-    fontSize: 10,
-    fontFamily: "Montserrat_400Regular",
-  },
-  medLogPreview: {
-    gap: 6,
-    paddingTop: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "rgba(128,128,128,0.15)",
-  },
-  medLogTitle: {
-    fontSize: 12,
-    fontFamily: "Montserrat_500Medium",
-  },
-  medLogRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  medLogDate: {
-    fontSize: 12,
-    fontFamily: "Montserrat_400Regular",
-    flex: 1,
-  },
-  medLogStatus: {
-    fontSize: 12,
-    fontFamily: "Montserrat_500Medium",
-    textTransform: "capitalize",
-  },
-  patternsCard: {
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 16,
-    gap: 8,
-  },
-  patternsHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    marginBottom: 2,
-  },
-  patternsTitle: {
-    fontSize: 13,
-    fontFamily: "Montserrat_600SemiBold",
-    letterSpacing: 0.1,
-  },
-  patternsSubtitle: {
-    fontSize: 12,
-    lineHeight: 16,
-    fontFamily: "Montserrat_500Medium",
-    marginBottom: 2,
-  },
-  patternRow: {
-    flexDirection: "row",
-    gap: 9,
-    alignItems: "flex-start",
-    paddingVertical: 3,
-  },
-  patternRowText: {
-    fontSize: 13,
-    fontFamily: "Montserrat_400Regular",
-    lineHeight: 19,
-    flex: 1,
-    letterSpacing: -0.1,
-  },
-  glp1InsightCard: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-    padding: 16,
-    borderRadius: 16,
-  },
-  glp1InsightIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 1,
-  },
-  glp1InsightText: {
-    flex: 1,
+  timelineTitle: {
     fontSize: 14,
-    fontFamily: "Montserrat_400Regular",
-    lineHeight: 21,
+    fontFamily: "Montserrat_500Medium",
+    lineHeight: 20,
+    letterSpacing: -0.1,
   },
 });
