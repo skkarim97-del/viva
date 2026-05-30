@@ -1233,6 +1233,8 @@ export function InterventionCard({
   // Null while loading; defaults to empty weights so the card renders
   // immediately without waiting for storage.
   const [historyWeights, setHistoryWeights] = useState<DerivedWeights | null>(null);
+  const [primaryHelperOpen, setPrimaryHelperOpen] = useState(false);
+  const [alternateHelperOpen, setAlternateHelperOpen] = useState(false);
   useEffect(() => {
     let active = true;
     void deriveWeights().then((w) => { if (active) setHistoryWeights(w); }).catch(() => {});
@@ -1775,12 +1777,22 @@ export function InterventionCard({
                 {alternateContent.body}
               </Text>
               {alternateContent.helper.trim().length > 0 && (
-                <View style={styles.helperRow}>
-                  <View style={styles.infoCircle}>
-                    <Text style={styles.infoCircleLabel}>i</Text>
+                <Pressable
+                  style={({ pressed }) => [styles.helperTrigger, { opacity: pressed ? 0.7 : 1 }]}
+                  onPress={() => setAlternateHelperOpen((o) => !o)}
+                  accessibilityRole="button"
+                  accessibilityLabel={alternateHelperOpen ? "Collapse why this helps" : "Why this helps"}
+                >
+                  <View style={styles.helperRow}>
+                    <View style={styles.infoCircle}>
+                      <Text style={styles.infoCircleLabel}>i</Text>
+                    </View>
+                    <Text style={styles.helperTriggerLabel}>Why this helps</Text>
                   </View>
-                  <Text style={styles.helperText}>{alternateContent.helper}</Text>
-                </View>
+                  {alternateHelperOpen && (
+                    <Text style={[styles.helperText, { marginTop: 4 }]}>{alternateContent.helper}</Text>
+                  )}
+                </Pressable>
               )}
             </View>
             <Pressable
@@ -1919,12 +1931,22 @@ export function InterventionCard({
           {primaryContent.body}
         </Text>
         {primaryContent.helper.trim().length > 0 && (
-          <View style={styles.helperRow}>
-            <View style={styles.infoCircle}>
-              <Text style={styles.infoCircleLabel}>i</Text>
+          <Pressable
+            style={({ pressed }) => [styles.helperTrigger, { opacity: pressed ? 0.7 : 1 }]}
+            onPress={() => setPrimaryHelperOpen((o) => !o)}
+            accessibilityRole="button"
+            accessibilityLabel={primaryHelperOpen ? "Collapse why this helps" : "Why this helps"}
+          >
+            <View style={styles.helperRow}>
+              <View style={styles.infoCircle}>
+                <Text style={styles.infoCircleLabel}>i</Text>
+              </View>
+              <Text style={styles.helperTriggerLabel}>Why this helps</Text>
             </View>
-            <Text style={styles.helperText}>{primaryContent.helper}</Text>
-          </View>
+            {primaryHelperOpen && (
+              <Text style={[styles.helperText, { marginTop: 4 }]}>{primaryContent.helper}</Text>
+            )}
+          </Pressable>
         )}
       </View>
 
@@ -1990,11 +2012,18 @@ const styles = StyleSheet.create({
     color: CARD_TEXT,
     marginBottom: 12,
   },
+  helperTrigger: {
+    marginTop: 8,
+  },
   helperRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     gap: 6,
-    marginTop: 6,
+  },
+  helperTriggerLabel: {
+    fontSize: 12,
+    fontFamily: "Montserrat_600SemiBold",
+    color: CARD_MUTED,
   },
   infoCircle: {
     width: 15,
