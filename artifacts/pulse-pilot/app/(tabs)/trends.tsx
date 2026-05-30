@@ -65,7 +65,6 @@ function computeAdherenceLabel(
   const window28ms = 28 * 86_400_000;
   const recent = log.filter(e => Date.now() - e.timestamp < window28ms);
   if (recent.length === 0) {
-    // No logged doses yet — use onboarding-reported week count as proxy
     return weekOnCurrentDose && weekOnCurrentDose > 0 ? "On track" : null;
   }
   const taken = recent.filter(e => e.status === "taken").length;
@@ -86,6 +85,22 @@ function deriveSymptomStatus(
   if (hasTrendUp) return "Improving";
   if (hasPostDoseIssue) return "Managing";
   return "Stable";
+}
+
+function insightLabel(insight: { type: string; text: string }): string {
+  const t = insight.text.toLowerCase();
+  if (/energy|fatigue|tired|depleted/.test(t)) return "Energy";
+  if (/appetite|hunger|eating|food/.test(t)) return "Appetite";
+  if (/nausea|sick|vomit/.test(t)) return "Nausea";
+  if (/sleep|rest/.test(t)) return "Sleep";
+  if (/weight|lb|pound|kg/.test(t)) return "Weight";
+  if (/digest|stomach|bowel|constip|diarr/.test(t)) return "Digestion";
+  if (/step|walk|activ|exercise|movement/.test(t)) return "Activity";
+  if (/dose|inject|medic/.test(t)) return "Dose Timing";
+  if (insight.type === "post_dose") return "After Dose";
+  if (insight.type === "trend") return "Trend";
+  if (insight.type === "correlation") return "Correlation";
+  return "Insight";
 }
 
 function buildDemoTimeline(med: MedicationProfile): TimelineEvent[] {
@@ -149,7 +164,6 @@ function buildTimeline(
 ): TimelineEvent[] {
   const events: TimelineEvent[] = [];
 
-  // Real dose-change events from medication log
   const sorted = [...log]
     .filter(e => e.status === "taken")
     .sort((a, b) => a.timestamp - b.timestamp);
@@ -168,7 +182,6 @@ function buildTimeline(
     }
   }
 
-  // Progress events from trend insights
   for (const insight of insights) {
     if (insight.type === "trend") {
       events.push({ date: "Recently", title: insight.text, tag: "Progress" });
@@ -198,11 +211,11 @@ function EmptyState({ text, subtext }: { text: string; subtext: string }) {
 }
 
 const emptyStyles = StyleSheet.create({
-  wrap: { alignItems: "center", paddingVertical: 20, gap: 8 },
+  wrap: { alignItems: "center", paddingVertical: 24, gap: 8 },
   iconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -216,9 +229,9 @@ const emptyStyles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Montserrat_400Regular",
     textAlign: "center",
-    lineHeight: 19,
-    opacity: 0.75,
-    paddingHorizontal: 8,
+    lineHeight: 20,
+    opacity: 0.7,
+    paddingHorizontal: 12,
   },
 });
 
@@ -235,7 +248,7 @@ function ChipCard({
 }) {
   const c = useColors();
   return (
-    <View style={[styles.chip, { backgroundColor: color + "12", borderColor: color + "30" }]}>
+    <View style={[styles.chip, { backgroundColor: color + "10", borderColor: color + "28" }]}>
       <Text style={[styles.chipLabel, { color: c.mutedForeground }]}>{label}</Text>
       <Text style={[styles.chipValue, { color }]}>{value}</Text>
     </View>
@@ -259,7 +272,6 @@ export default function TrendsScreen() {
 
   const med = profile.medicationProfile;
 
-  // ---- "What Viva Has Learned" insight list (reuse existing merge logic)
   const habitStats = useMemo(
     () => computeHabitStats(completionHistory),
     [completionHistory],
@@ -301,7 +313,6 @@ export default function TrendsScreen() {
     return result.slice(0, 4);
   }, [adaptiveInsights, baseInsights, inputAnalytics]);
 
-  // ---- Treatment Snapshot chips
   const symptomStatus = useMemo(
     () => deriveSymptomStatus(adaptiveInsights),
     [adaptiveInsights],
@@ -319,7 +330,6 @@ export default function TrendsScreen() {
     return postDoseCount >= 3 ? "Moderate" : "Low";
   }, [adaptiveInsights, med]);
 
-  // ---- Treatment Timeline
   const timeline = useMemo(
     () => buildTimeline(medicationLog, adaptiveInsights, med),
     [medicationLog, adaptiveInsights, med],
@@ -335,24 +345,25 @@ export default function TrendsScreen() {
     >
       <ScreenHeader />
 
-      {/* ── Section 1: Treatment Snapshot ───────────────────── */}
-      <View style={[styles.card, { backgroundColor: c.card }]}>
+      {/* ── Section 1: Treatment Snapshot (hero) ────────────── */}
+      <View style={[styles.heroCard, { backgroundColor: c.card }]}>
         <Text style={[styles.sectionTitle, { color: c.foreground }]}>
           Treatment Snapshot
         </Text>
 
         {med ? (
           <>
-            <View style={styles.medLine}>
-              <View style={[styles.medDot, { backgroundColor: c.accent }]} />
-              <Text style={[styles.medName, { color: c.foreground }]}>
-                {med.medicationBrand} · {med.doseValue}
-                {med.doseUnit} {med.frequency}
+            <View style={styles.medBlock}>
+              <Text style={[styles.medHeroName, { color: c.foreground }]}>
+                {med.medicationBrand}
+              </Text>
+              <Text style={[styles.medHeroDose, { color: c.mutedForeground }]}>
+                {med.doseValue}{med.doseUnit} · {med.frequency}
+              </Text>
+              <Text style={[styles.medHeroWeek, { color: c.mutedForeground }]}>
+                {weekLabel(med)}
               </Text>
             </View>
-            <Text style={[styles.weekLabel, { color: c.mutedForeground }]}>
-              {weekLabel(med)}
-            </Text>
 
             {hasSnapshotChips && (
               <>
@@ -399,31 +410,36 @@ export default function TrendsScreen() {
         )}
       </View>
 
-      {/* ── Section 2: What Viva Has Learned ────────────────── */}
+      {/* ── Section 2: Treatment Insights ───────────────────── */}
       <View style={[styles.card, { backgroundColor: c.card }]}>
-        <Text style={[styles.sectionTitle, { color: c.foreground }]}>
-          What Viva Has Learned
-        </Text>
-        <Text style={[styles.sectionSub, { color: c.mutedForeground }]}>
-          Based on your medication timing, check-ins and recent patterns.
-        </Text>
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: c.foreground }]}>
+            Treatment Insights
+          </Text>
+          <Text style={[styles.sectionSub, { color: c.mutedForeground }]}>
+            Patterns from your check-ins, medication timing and health signals.
+          </Text>
+        </View>
 
         {mergedInsights.length > 0 ? (
           <View style={styles.insightList}>
             {mergedInsights.map(insight => (
               <View key={insight.id} style={styles.insightRow}>
-                <View
-                  style={[styles.insightDot, { backgroundColor: c.accent }]}
-                />
-                <Text style={[styles.insightText, { color: c.foreground }]}>
-                  {insight.text}
-                </Text>
+                <View style={[styles.insightDot, { backgroundColor: c.accent }]} />
+                <View style={styles.insightContent}>
+                  <Text style={[styles.insightCategory, { color: c.accent }]}>
+                    {insightLabel(insight)}
+                  </Text>
+                  <Text style={[styles.insightText, { color: c.foreground }]}>
+                    {insight.text}
+                  </Text>
+                </View>
               </View>
             ))}
           </View>
         ) : (
           <EmptyState
-            text="Complete a few check-ins so Viva can identify your patterns."
+            text="Complete a few check-ins so Viva can identify your treatment patterns."
             subtext="Your insights will connect symptoms, medication timing and health signals over time."
           />
         )}
@@ -431,12 +447,14 @@ export default function TrendsScreen() {
 
       {/* ── Section 3: Treatment Timeline ───────────────────── */}
       <View style={[styles.card, { backgroundColor: c.card }]}>
-        <Text style={[styles.sectionTitle, { color: c.foreground }]}>
-          Treatment Timeline
-        </Text>
-        <Text style={[styles.sectionSub, { color: c.mutedForeground }]}>
-          Key moments from your recent treatment journey.
-        </Text>
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: c.foreground }]}>
+            Treatment Timeline
+          </Text>
+          <Text style={[styles.sectionSub, { color: c.mutedForeground }]}>
+            Key moments from your recent treatment journey.
+          </Text>
+        </View>
 
         {timeline.length > 0 ? (
           <View style={styles.timelineWrap}>
@@ -446,47 +464,23 @@ export default function TrendsScreen() {
               return (
                 <View key={i} style={styles.timelineItem}>
                   <View style={styles.timelineLeft}>
-                    <View
-                      style={[
-                        styles.timelineNode,
-                        { backgroundColor: tagColor },
-                      ]}
-                    />
+                    <View style={[styles.timelineNode, { backgroundColor: tagColor }]} />
                     {!isLast && (
-                      <View
-                        style={[
-                          styles.timelineLine,
-                          { backgroundColor: c.border },
-                        ]}
-                      />
+                      <View style={[styles.timelineLine, { backgroundColor: c.border }]} />
                     )}
                   </View>
                   <View style={[styles.timelineBody, isLast && styles.timelineBodyLast]}>
                     <View style={styles.timelineMetaRow}>
-                      <Text
-                        style={[
-                          styles.timelineDate,
-                          { color: c.mutedForeground },
-                        ]}
-                      >
+                      <Text style={[styles.timelineDate, { color: c.mutedForeground }]}>
                         {event.date}
                       </Text>
-                      <View
-                        style={[
-                          styles.timelineTag,
-                          { backgroundColor: tagColor + "18" },
-                        ]}
-                      >
-                        <Text
-                          style={[styles.timelineTagText, { color: tagColor }]}
-                        >
+                      <View style={[styles.timelineTag, { backgroundColor: tagColor + "18" }]}>
+                        <Text style={[styles.timelineTagText, { color: tagColor }]}>
                           {event.tag}
                         </Text>
                       </View>
                     </View>
-                    <Text
-                      style={[styles.timelineTitle, { color: c.foreground }]}
-                    >
+                    <Text style={[styles.timelineTitle, { color: c.foreground }]}>
                       {event.title}
                     </Text>
                   </View>
@@ -514,14 +508,26 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 20,
     paddingTop: 0,
-    gap: 14,
+    gap: 16,
   },
 
-  // Cards
+  // Hero card (Treatment Snapshot) — more padding for visual dominance
+  heroCard: {
+    borderRadius: 22,
+    padding: 24,
+    gap: 16,
+    shadowColor: "#142240",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+
+  // Section cards (Insights, Timeline)
   card: {
     borderRadius: 20,
     padding: 20,
-    gap: 12,
+    gap: 14,
     shadowColor: "#142240",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
@@ -529,7 +535,11 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
 
-  // Section headers
+  // Section header group (title + subtitle together)
+  sectionHeader: {
+    gap: 4,
+  },
+
   sectionTitle: {
     fontSize: 17,
     fontFamily: "Montserrat_700Bold",
@@ -539,118 +549,134 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Montserrat_400Regular",
     lineHeight: 19,
-    marginTop: -4,
-    opacity: 0.8,
+    opacity: 0.72,
   },
 
-  // Treatment Snapshot
-  medLine: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+  // ── Treatment Snapshot hero ──────────────────────────────
+  medBlock: {
+    gap: 3,
     marginTop: 2,
   },
-  medDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  medName: {
-    fontSize: 16,
+  medHeroName: {
+    fontSize: 26,
     fontFamily: "Montserrat_700Bold",
-    letterSpacing: -0.3,
+    letterSpacing: -0.6,
+    lineHeight: 30,
   },
-  weekLabel: {
-    fontSize: 13,
+  medHeroDose: {
+    fontSize: 15,
+    fontFamily: "Montserrat_500Medium",
+    letterSpacing: -0.2,
+    marginTop: 2,
+  },
+  medHeroWeek: {
+    fontSize: 12,
     fontFamily: "Montserrat_400Regular",
-    marginTop: -4,
+    marginTop: 4,
+    opacity: 0.7,
   },
+
+  // Status chips
   chipsRow: {
     flexDirection: "row",
     gap: 8,
     flexWrap: "wrap",
-    marginTop: 4,
   },
   chip: {
     flex: 1,
-    minWidth: 80,
-    borderRadius: 12,
+    minWidth: 84,
+    borderRadius: 14,
     borderWidth: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     alignItems: "flex-start",
-    gap: 3,
+    gap: 4,
   },
   chipLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontFamily: "Montserrat_600SemiBold",
     textTransform: "uppercase",
     letterSpacing: 0.4,
-    opacity: 0.7,
+    opacity: 0.65,
   },
   chipValue: {
-    fontSize: 15,
+    fontSize: 16,
     fontFamily: "Montserrat_700Bold",
-    letterSpacing: -0.2,
+    letterSpacing: -0.3,
   },
   sourceNote: {
     fontSize: 11,
     fontFamily: "Montserrat_400Regular",
     lineHeight: 16,
-    opacity: 0.6,
+    opacity: 0.55,
     fontStyle: "italic",
-    marginTop: -2,
+    marginTop: -4,
   },
 
-  // What Viva Has Learned
-  insightList: { gap: 12, marginTop: 4 },
+  // ── Treatment Insights ───────────────────────────────────
+  insightList: {
+    gap: 14,
+    marginTop: 2,
+  },
   insightRow: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 10,
+    gap: 12,
   },
   insightDot: {
-    width: 7,
-    height: 7,
+    width: 8,
+    height: 8,
     borderRadius: 4,
-    marginTop: 6,
+    marginTop: 4,
     flexShrink: 0,
   },
-  insightText: {
+  insightContent: {
     flex: 1,
+    gap: 2,
+  },
+  insightCategory: {
+    fontSize: 11,
+    fontFamily: "Montserrat_600SemiBold",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  insightText: {
     fontSize: 14,
     fontFamily: "Montserrat_400Regular",
     lineHeight: 21,
   },
 
-  // Treatment Timeline
-  timelineWrap: { gap: 0, marginTop: 4 },
+  // ── Treatment Timeline ───────────────────────────────────
+  timelineWrap: {
+    gap: 0,
+    marginTop: 2,
+  },
   timelineItem: {
     flexDirection: "row",
-    gap: 12,
+    gap: 14,
   },
   timelineLeft: {
     alignItems: "center",
-    width: 14,
+    width: 18,
   },
   timelineNode: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginTop: 4,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginTop: 3,
     flexShrink: 0,
   },
   timelineLine: {
     width: 1.5,
     flex: 1,
-    marginTop: 3,
-    marginBottom: -2,
+    marginTop: 4,
+    marginBottom: -3,
     borderRadius: 1,
   },
   timelineBody: {
     flex: 1,
-    paddingBottom: 16,
-    gap: 4,
+    paddingBottom: 22,
+    gap: 5,
   },
   timelineBodyLast: {
     paddingBottom: 0,
@@ -661,25 +687,25 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   timelineDate: {
-    fontSize: 12,
-    fontFamily: "Montserrat_500Medium",
+    fontSize: 13,
+    fontFamily: "Montserrat_600SemiBold",
     letterSpacing: 0.1,
   },
   timelineTag: {
     borderRadius: 6,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
   timelineTagText: {
-    fontSize: 10,
-    fontFamily: "Montserrat_700Bold",
+    fontSize: 11,
+    fontFamily: "Montserrat_600SemiBold",
     letterSpacing: 0.3,
     textTransform: "uppercase",
   },
   timelineTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: "Montserrat_500Medium",
-    lineHeight: 20,
+    lineHeight: 22,
     letterSpacing: -0.1,
   },
 });
