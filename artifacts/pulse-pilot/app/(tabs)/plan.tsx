@@ -135,22 +135,17 @@ export default function PlanScreen({ isModal = false, onClose }: { isModal?: boo
         showsVerticalScrollIndicator={false}
       >
         {isModal ? (
-          <View style={[styles.weekSheetHeader, { paddingTop: Math.max(insets.top, 20), borderBottomColor: c.border + "20" }]}>
-            <View style={{ flex: 1, gap: 4 }}>
-              <Text style={[styles.weekSheetTitle, { color: c.foreground }]}>Weekly Support Plan</Text>
-              <Text style={[styles.weekSheetSub, { color: c.mutedForeground }]}>
-                Personalized actions Viva is tracking this week to support your treatment and improve future recommendations.
-              </Text>
-            </View>
-            <Pressable onPress={onClose} hitSlop={12} style={{ marginTop: 4 }}>
-              <Feather name="x" size={22} color={c.mutedForeground} />
+          <View style={[styles.weekSheetHeader, { paddingTop: Math.max(insets.top, 12), borderBottomColor: c.border + "20" }]}>
+            <Text style={[styles.weekSheetTitle, { color: c.foreground }]}>Weekly Support Plan</Text>
+            <Pressable onPress={onClose} hitSlop={12}>
+              <Feather name="x" size={20} color={c.mutedForeground} />
             </Pressable>
           </View>
         ) : (
           <ScreenHeader />
         )}
 
-        <View style={[styles.summaryCard, { backgroundColor: c.card, marginTop: 18 }]}>
+        <View style={[styles.summaryCard, { backgroundColor: c.card, marginTop: isModal ? 8 : 18 }]}>
           <Text style={[styles.summaryHeader, { color: c.foreground }]}>This Week</Text>
           {weeklyPlan.weekSummary.split("\n\n").map((line, i) => (
             <Text key={i} style={[styles.summaryText, { color: c.foreground }, i > 0 && { marginTop: 10 }]}>{line}</Text>
@@ -340,7 +335,7 @@ export default function PlanScreen({ isModal = false, onClose }: { isModal?: boo
           </View>
         )}
 
-        <View style={{ height: 110 }} />
+        <View style={{ height: isModal ? 40 : 110 }} />
       </ScrollView>
 
       <Modal visible={!!editingDay && !!editingCategory} animationType="slide" transparent>
@@ -719,22 +714,16 @@ const styles = StyleSheet.create({
   },
   weekSheetHeader: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    paddingHorizontal: 24,
-    paddingBottom: 20,
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    marginBottom: 4,
-    gap: 12,
+    marginBottom: 0,
   },
   weekSheetTitle: {
-    fontSize: 20,
-    fontFamily: "Montserrat_700Bold",
-    letterSpacing: -0.3,
-  },
-  weekSheetSub: {
-    fontSize: 13,
-    fontFamily: "Montserrat_400Regular",
-    lineHeight: 19,
-    opacity: 0.75,
+    fontSize: 15,
+    fontFamily: "Montserrat_600SemiBold",
+    letterSpacing: -0.2,
   },
 });
