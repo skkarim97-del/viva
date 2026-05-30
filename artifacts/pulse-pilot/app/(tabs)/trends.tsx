@@ -314,8 +314,12 @@ export default function TrendsScreen() {
   }, [adaptiveInsights, baseInsights, inputAnalytics]);
 
   const symptomStatus = useMemo(
-    () => deriveSymptomStatus(adaptiveInsights),
-    [adaptiveInsights],
+    // Default to "Stable" when the patient has a med profile but no
+    // check-in history yet. deriveSymptomStatus returns null on an
+    // empty insights array, which hides the chip on a fresh device
+    // while still showing it on a device with prior check-ins.
+    () => med ? (deriveSymptomStatus(adaptiveInsights) ?? "Stable") : null,
+    [adaptiveInsights, med],
   );
   const adherenceLabel = useMemo(
     () =>
