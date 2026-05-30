@@ -1772,7 +1772,7 @@ export default function DashboardScreen() {
             onPress={() => { haptic(); setShowWeekPlan(true); }}
             style={({ pressed }) => [
               styles.weekPlanLink,
-              { borderTopColor: c.border + "30", opacity: pressed ? 0.7 : 1 },
+              { backgroundColor: c.accent + "09", opacity: pressed ? 0.7 : 1 },
             ]}
           >
             <Text style={[styles.weekPlanLinkText, { color: c.accent }]}>
@@ -3610,9 +3610,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingTop: 14,
-    marginTop: 4,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+    marginTop: 8,
+    borderRadius: 10,
   },
   weekPlanLinkText: {
     fontSize: 13,
