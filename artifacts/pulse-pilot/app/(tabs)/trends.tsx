@@ -328,18 +328,12 @@ export default function TrendsScreen() {
         : null,
     [medicationLog, med],
   );
-  const riskLabel: "Low" | "Moderate" | null = useMemo(() => {
-    if (!med) return null;
-    const postDoseCount = adaptiveInsights.filter(i => i.type === "post_dose").length;
-    return postDoseCount >= 3 ? "Moderate" : "Low";
-  }, [adaptiveInsights, med]);
-
   const timeline = useMemo(
     () => buildTimeline(medicationLog, adaptiveInsights, med),
     [medicationLog, adaptiveInsights, med],
   );
 
-  const hasSnapshotChips = !!(symptomStatus || adherenceLabel || riskLabel);
+  const hasSnapshotChips = !!(symptomStatus || adherenceLabel);
 
   return (
     <ScrollView
@@ -390,13 +384,6 @@ export default function TrendsScreen() {
                       label="Adherence"
                       value={adherenceLabel}
                       color={c.accent}
-                    />
-                  )}
-                  {riskLabel && (
-                    <ChipCard
-                      label="Risk"
-                      value={riskLabel}
-                      color={riskLabel === "Low" ? "#34C759" : "#FF9500"}
                     />
                   )}
                 </View>
@@ -588,11 +575,10 @@ const styles = StyleSheet.create({
   },
   chip: {
     flex: 1,
-    minWidth: 84,
     borderRadius: 14,
     borderWidth: 1,
     paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     alignItems: "flex-start",
     gap: 4,
   },
