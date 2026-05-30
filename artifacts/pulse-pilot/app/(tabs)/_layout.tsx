@@ -16,10 +16,6 @@ function NativeTabLayout() {
         <Icon sf={{ default: "house", selected: "house.fill" }} />
         <Label>Today</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="plan">
-        <Icon sf={{ default: "calendar", selected: "calendar" }} />
-        <Label>Week</Label>
-      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="trends">
         <Icon sf={{ default: "chart.line.uptrend.xyaxis", selected: "chart.line.uptrend.xyaxis" }} />
         <Label>Trends</Label>
@@ -94,13 +90,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="plan"
         options={{
-          title: "Week",
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="calendar" tintColor={color} size={24} />
-            ) : (
-              <Feather name="calendar" size={22} color={color} />
-            ),
+          href: null,
         }}
       />
       <Tabs.Screen
