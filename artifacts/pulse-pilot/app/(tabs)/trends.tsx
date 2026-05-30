@@ -222,6 +222,26 @@ const emptyStyles = StyleSheet.create({
   },
 });
 
+// ---------------------------------------------------------------- ChipCard
+
+function ChipCard({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: string;
+  color: string;
+}) {
+  const c = useColors();
+  return (
+    <View style={[styles.chip, { backgroundColor: color + "12", borderColor: color + "30" }]}>
+      <Text style={[styles.chipLabel, { color: c.mutedForeground }]}>{label}</Text>
+      <Text style={[styles.chipValue, { color }]}>{value}</Text>
+    </View>
+  );
+}
+
 // ---------------------------------------------------------------- screen
 
 export default function TrendsScreen() {
@@ -335,41 +355,40 @@ export default function TrendsScreen() {
             </Text>
 
             {hasSnapshotChips && (
-              <View style={styles.chipsRow}>
-                {symptomStatus && (
-                  <ChipCard
-                    label="Symptoms"
-                    value={symptomStatus}
-                    color={
-                      symptomStatus === "Improving"
-                        ? "#34C759"
-                        : symptomStatus === "Managing"
-                        ? "#FF9500"
-                        : c.accent
-                    }
-                  />
-                )}
-                {adherenceLabel && (
-                  <ChipCard
-                    label="Adherence"
-                    value={adherenceLabel}
-                    color={c.accent}
-                  />
-                )}
-                {riskLabel && (
-                  <ChipCard
-                    label="Risk"
-                    value={riskLabel}
-                    color={riskLabel === "Low" ? "#34C759" : "#FF9500"}
-                  />
-                )}
-              </View>
-            )}
-
-            {hasSnapshotChips && (
-              <Text style={[styles.sourceNote, { color: c.mutedForeground }]}>
-                Based on your recent check-ins and treatment history.
-              </Text>
+              <>
+                <View style={styles.chipsRow}>
+                  {symptomStatus && (
+                    <ChipCard
+                      label="Symptoms"
+                      value={symptomStatus}
+                      color={
+                        symptomStatus === "Improving"
+                          ? "#34C759"
+                          : symptomStatus === "Managing"
+                          ? "#FF9500"
+                          : c.accent
+                      }
+                    />
+                  )}
+                  {adherenceLabel && (
+                    <ChipCard
+                      label="Adherence"
+                      value={adherenceLabel}
+                      color={c.accent}
+                    />
+                  )}
+                  {riskLabel && (
+                    <ChipCard
+                      label="Risk"
+                      value={riskLabel}
+                      color={riskLabel === "Low" ? "#34C759" : "#FF9500"}
+                    />
+                  )}
+                </View>
+                <Text style={[styles.sourceNote, { color: c.mutedForeground }]}>
+                  Based on your recent check-ins and treatment history.
+                </Text>
+              </>
             )}
           </>
         ) : (
@@ -485,26 +504,6 @@ export default function TrendsScreen() {
 
       <View style={{ height: 110 }} />
     </ScrollView>
-  );
-}
-
-// ---------------------------------------------------------------- ChipCard
-
-function ChipCard({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: string;
-  color: string;
-}) {
-  const c = useColors();
-  return (
-    <View style={[styles.chip, { backgroundColor: color + "12", borderColor: color + "30" }]}>
-      <Text style={[styles.chipLabel, { color: c.mutedForeground }]}>{label}</Text>
-      <Text style={[styles.chipValue, { color }]}>{value}</Text>
-    </View>
   );
 }
 
