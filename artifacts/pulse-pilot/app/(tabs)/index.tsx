@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { InputRow } from "@/components/InputRow";
 import { ScreenHeader } from "@/components/ScreenHeader";
+import PlanScreen from "./plan";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SymptomTipCard } from "@/components/SymptomTipCard";
 import { InterventionCard, deriveLiveSeverity, type InteractionPhase } from "@/components/InterventionCard";
@@ -674,6 +675,7 @@ export default function DashboardScreen() {
     [reloadActiveInterventions],
   );
 
+  const [showWeekPlan, setShowWeekPlan] = useState(false);
   const [askInput, setAskInput] = useState("");
   const [askMessages, setAskMessages] = useState<ChatMessage[]>([]);
   const [isTyping, setIsTyping] = useState(false);
@@ -1766,6 +1768,18 @@ export default function DashboardScreen() {
               </View>
             );
           })}
+          <Pressable
+            onPress={() => { haptic(); setShowWeekPlan(true); }}
+            style={({ pressed }) => [
+              styles.weekPlanLink,
+              { borderTopColor: c.border + "30", opacity: pressed ? 0.7 : 1 },
+            ]}
+          >
+            <Text style={[styles.weekPlanLinkText, { color: c.accent }]}>
+              View weekly support plan
+            </Text>
+            <Feather name="arrow-right" size={13} color={c.accent} />
+          </Pressable>
         </View>
         </Animated.View>
 
@@ -2577,6 +2591,14 @@ export default function DashboardScreen() {
           </ScrollView>
         </Animated.View>
       )}
+      <Modal
+        visible={showWeekPlan}
+        animationType="slide"
+        onRequestClose={() => setShowWeekPlan(false)}
+      >
+        <PlanScreen isModal onClose={() => setShowWeekPlan(false)} />
+      </Modal>
+
       {/* Floating support pill — ambient entry point for symptom management.
           Shown when an intervention is ready, in progress, or recently
           resolved. Hidden while the sheet is open. Colour signals state. */}
@@ -3583,5 +3605,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Montserrat_400Regular",
     fontStyle: "italic",
+  },
+  weekPlanLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: 14,
+    marginTop: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  weekPlanLinkText: {
+    fontSize: 13,
+    fontFamily: "Montserrat_600SemiBold",
+    letterSpacing: -0.1,
   },
 });

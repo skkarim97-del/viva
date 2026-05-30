@@ -32,7 +32,7 @@ const CATEGORY_META: Record<ActionCategory, { label: string; icon: keyof typeof 
   consistent: { label: "Medication", icon: "shield", color: "#34D399" },
 };
 
-export default function PlanScreen() {
+export default function PlanScreen({ isModal = false, onClose }: { isModal?: boolean; onClose?: () => void } = {}) {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const {
@@ -134,7 +134,21 @@ export default function PlanScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <ScreenHeader />
+        {isModal ? (
+          <View style={[styles.weekSheetHeader, { paddingTop: Math.max(insets.top, 20), borderBottomColor: c.border + "20" }]}>
+            <View style={{ flex: 1, gap: 4 }}>
+              <Text style={[styles.weekSheetTitle, { color: c.foreground }]}>Weekly Support Plan</Text>
+              <Text style={[styles.weekSheetSub, { color: c.mutedForeground }]}>
+                Personalized actions Viva is tracking this week to support your treatment and improve future recommendations.
+              </Text>
+            </View>
+            <Pressable onPress={onClose} hitSlop={12} style={{ marginTop: 4 }}>
+              <Feather name="x" size={22} color={c.mutedForeground} />
+            </Pressable>
+          </View>
+        ) : (
+          <ScreenHeader />
+        )}
 
         <View style={[styles.summaryCard, { backgroundColor: c.card, marginTop: 18 }]}>
           <Text style={[styles.summaryHeader, { color: c.foreground }]}>This Week</Text>
@@ -702,5 +716,25 @@ const styles = StyleSheet.create({
   supportTip: {
     fontSize: 13,
     fontFamily: "Montserrat_400Regular",
+  },
+  weekSheetHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    paddingHorizontal: 24,
+    paddingBottom: 20,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginBottom: 4,
+    gap: 12,
+  },
+  weekSheetTitle: {
+    fontSize: 20,
+    fontFamily: "Montserrat_700Bold",
+    letterSpacing: -0.3,
+  },
+  weekSheetSub: {
+    fontSize: 13,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 19,
+    opacity: 0.75,
   },
 });
