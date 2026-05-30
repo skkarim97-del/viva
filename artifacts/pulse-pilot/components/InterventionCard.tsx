@@ -1775,9 +1775,12 @@ export function InterventionCard({
                 {alternateContent.body}
               </Text>
               {alternateContent.helper.trim().length > 0 && (
-                <Text style={[styles.cardSubtitle, { marginBottom: 0, marginTop: 4 }]}>
-                  {alternateContent.helper}
-                </Text>
+                <View style={styles.helperRow}>
+                  <View style={styles.infoCircle}>
+                    <Text style={styles.infoCircleLabel}>i</Text>
+                  </View>
+                  <Text style={styles.helperText}>{alternateContent.helper}</Text>
+                </View>
               )}
             </View>
             <Pressable
@@ -1916,9 +1919,12 @@ export function InterventionCard({
           {primaryContent.body}
         </Text>
         {primaryContent.helper.trim().length > 0 && (
-          <Text style={[styles.cardSubtitle, { marginBottom: 0, marginTop: 4 }]}>
-            {primaryContent.helper}
-          </Text>
+          <View style={styles.helperRow}>
+            <View style={styles.infoCircle}>
+              <Text style={styles.infoCircleLabel}>i</Text>
+            </View>
+            <Text style={styles.helperText}>{primaryContent.helper}</Text>
+          </View>
         )}
       </View>
 
@@ -1983,6 +1989,36 @@ const styles = StyleSheet.create({
     lineHeight: 31,
     color: CARD_TEXT,
     marginBottom: 12,
+  },
+  helperRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    marginTop: 6,
+  },
+  infoCircle: {
+    width: 15,
+    height: 15,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: CARD_MUTED,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 2,
+    flexShrink: 0,
+  },
+  infoCircleLabel: {
+    fontSize: 9,
+    fontFamily: "Montserrat_700Bold",
+    color: CARD_MUTED,
+    lineHeight: 12,
+  },
+  helperText: {
+    fontSize: 12,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 17,
+    color: CARD_MUTED,
+    flex: 1,
   },
   cardSubtitle: {
     fontSize: 14,
