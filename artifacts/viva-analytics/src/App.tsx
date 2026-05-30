@@ -88,19 +88,29 @@ function GatedApp() {
     setSavedKey(null);
   }
 
+  // PlatformScopePage fetches its own data and must render even when the
+  // summary is loading or has failed. Route it before the summary gate so
+  // it's always accessible once the key is valid.
   return (
     <Shell generatedAt={q.data?.generatedAt ?? null} onSignOut={signOut}>
-      {q.isLoading && (
-        <div className="text-muted-foreground py-16 text-center">
-          Loading analytics…
-        </div>
-      )}
-      {q.isError && (
-        <div className="text-destructive py-16 text-center">
-          {q.error?.detail || q.error?.message || "Failed to load analytics."}
-        </div>
-      )}
-      {q.data && <Routes data={q.data} apiKey={savedKey} />}
+      <Switch>
+        <Route path="/platforms" component={() => <PlatformScopePage />} />
+        <Route component={() => (
+          <>
+            {q.isLoading && (
+              <div className="text-muted-foreground py-16 text-center">
+                Loading analytics…
+              </div>
+            )}
+            {q.isError && (
+              <div className="text-destructive py-16 text-center">
+                {q.error?.detail || q.error?.message || "Failed to load analytics."}
+              </div>
+            )}
+            {q.data && <Routes data={q.data} apiKey={savedKey} />}
+          </>
+        )} />
+      </Switch>
     </Shell>
   );
 }
@@ -117,7 +127,6 @@ function Routes({ data, apiKey: _apiKey }: { data: AnalyticsSummary; apiKey: str
       <Route path="/care-loop" component={() => <CareLoopPage />} />
       <Route path="/pilot" component={() => <PilotMetricsPage data={data} />} />
       <Route path="/usage" component={() => <UsagePage />} />
-      <Route path="/platforms" component={() => <PlatformScopePage />} />
       <Route component={NotFound} />
     </Switch>
   );
