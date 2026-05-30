@@ -135,9 +135,8 @@ export default function PlanScreen({ isModal = false, onClose }: { isModal?: boo
         showsVerticalScrollIndicator={false}
       >
         {isModal ? (
-          <View style={[styles.weekSheetHeader, { paddingTop: Math.max(insets.top, 12), borderBottomColor: c.border + "20" }]}>
-            <Text style={[styles.weekSheetTitle, { color: c.foreground }]}>Weekly Support Plan</Text>
-            <Pressable onPress={onClose} hitSlop={12}>
+          <View style={[styles.weekSheetHeader, { paddingTop: Math.max(insets.top, 10) }]}>
+            <Pressable onPress={onClose} hitSlop={16}>
               <Feather name="x" size={20} color={c.mutedForeground} />
             </Pressable>
           </View>
@@ -145,7 +144,7 @@ export default function PlanScreen({ isModal = false, onClose }: { isModal?: boo
           <ScreenHeader />
         )}
 
-        <View style={[styles.summaryCard, { backgroundColor: c.card, marginTop: isModal ? 8 : 18 }]}>
+        <View style={[styles.summaryCard, { backgroundColor: c.card, marginTop: isModal ? 4 : 18 }]}>
           <Text style={[styles.summaryHeader, { color: c.foreground }]}>This Week</Text>
           {weeklyPlan.weekSummary.split("\n\n").map((line, i) => (
             <Text key={i} style={[styles.summaryText, { color: c.foreground }, i > 0 && { marginTop: 10 }]}>{line}</Text>
@@ -713,17 +712,8 @@ const styles = StyleSheet.create({
     fontFamily: "Montserrat_400Regular",
   },
   weekSheetHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    marginBottom: 0,
-  },
-  weekSheetTitle: {
-    fontSize: 15,
-    fontFamily: "Montserrat_600SemiBold",
-    letterSpacing: -0.2,
+    alignItems: "flex-end",
+    paddingHorizontal: 16,
+    paddingBottom: 8,
   },
 });
