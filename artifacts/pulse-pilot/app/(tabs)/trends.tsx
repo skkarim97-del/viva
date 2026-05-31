@@ -10,9 +10,16 @@ import {
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { useApp } from "@/context/AppContext";
 import { computeHabitStats } from "@/data/insights";
+import { scoreInput } from "@/data/inputScoring";
 import { buildKeyInsights } from "@/lib/engine/trendsEngine";
 import { useColors } from "@/hooks/useColors";
-import type { MedicationProfile, MedicationLogEntry, AdaptiveInsight } from "@/types";
+import type {
+  MedicationProfile,
+  MedicationLogEntry,
+  AdaptiveInsight,
+  GLP1DailyInputs,
+  CompletionRecord,
+} from "@/types";
 
 // ---------------------------------------------------------------- helpers
 
@@ -35,10 +42,23 @@ function fmtDate(dateStr: string): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function weeksAgoDate(weeks: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - weeks * 7);
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+// Composite wellbeing score using nausea, digestion, and energy.
+// Scale: 1 (worst) to 4 (best). Returns 0 when no data is present.
+function symptomBurdenAvg(days: GLP1DailyInputs[]): number {
+  const dayScores: number[] = [];
+  for (const d of days) {
+    const vals = [
+      scoreInput("nausea", d),
+      scoreInput("digestion", d),
+      scoreInput("energy", d),
+    ].filter(v => v > 0);
+    if (vals.length > 0) {
+      dayScores.push(vals.reduce((s, v) => s + v, 0) / vals.length);
+    }
+  }
+  return dayScores.length > 0
+    ? dayScores.reduce((s, v) => s + v, 0) / dayScores.length
+    : 0;
 }
 
 function weekLabel(med: MedicationProfile): string {
@@ -57,142 +77,184 @@ function weekLabel(med: MedicationProfile): string {
   return MAP[med.timeOnMedicationBucket] ?? "In treatment";
 }
 
+// "Excellent" / "On track" / "Needs attention" based on medication
+// log adherence combined with recent action completion rate.
 function computeAdherenceLabel(
   log: MedicationLogEntry[],
+  completionHistory: CompletionRecord[],
   frequency: "weekly" | "daily",
   weekOnCurrentDose?: number,
 ): string | null {
   const window28ms = 28 * 86_400_000;
-  const recent = log.filter(e => Date.now() - e.timestamp < window28ms);
-  if (recent.length === 0) {
-    return weekOnCurrentDose && weekOnCurrentDose > 0 ? "On track" : null;
+  const recentLog = log.filter(e => Date.now() - e.timestamp < window28ms);
+
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 7);
+  const recentCompletions = completionHistory.filter(r => new Date(r.date) >= cutoff);
+  const avgCompletion = recentCompletions.length > 0
+    ? recentCompletions.reduce((s, r) => s + r.completionRate, 0) / recentCompletions.length
+    : null;
+
+  if (recentLog.length === 0) {
+    if (!(weekOnCurrentDose && weekOnCurrentDose > 0)) return null;
+    if (avgCompletion !== null && avgCompletion >= 80) return "Excellent";
+    if (avgCompletion !== null && avgCompletion < 40) return "Needs attention";
+    return "On track";
   }
-  const taken = recent.filter(e => e.status === "taken").length;
+
+  const taken = recentLog.filter(e => e.status === "taken").length;
   const expected = frequency === "weekly" ? 4 : 28;
-  return `${Math.min(100, Math.round((taken / expected) * 100))}%`;
+  const medRate = Math.min(100, Math.round((taken / expected) * 100));
+  const overallRate = avgCompletion !== null
+    ? Math.round((medRate + avgCompletion) / 2)
+    : medRate;
+
+  if (overallRate >= 85) return "Excellent";
+  if (overallRate >= 55) return "On track";
+  return "Needs attention";
 }
 
+// Derives symptom direction from GLP-1 check-in history only.
+//   0–2 days  → "Stable" (insufficient data to infer direction)
+//   3–6 days  → absolute burden score (< 2.5 = Managing)
+//   7+ days   → compare recent 7d vs prior 7d period
 function deriveSymptomStatus(
-  insights: AdaptiveInsight[],
-): "Improving" | "Stable" | "Managing" | null {
-  if (insights.length === 0) return null;
-  const hasTrendUp = insights.some(
-    i => i.type === "trend" && /improv|better|easier|declin|reduc/i.test(i.text),
-  );
-  const hasPostDoseIssue = insights.some(
-    i => i.type === "post_dose" && /peak|worsen|difficult|hard/i.test(i.text),
-  );
-  if (hasTrendUp) return "Improving";
-  if (hasPostDoseIssue) return "Managing";
+  glp1History: GLP1DailyInputs[],
+): "Improving" | "Stable" | "Managing" {
+  if (glp1History.length >= 7) {
+    const recent = glp1History.slice(-7);
+    const prior = glp1History.slice(-14, -7);
+    const recentScore = symptomBurdenAvg(recent);
+
+    if (prior.length >= 3) {
+      const priorScore = symptomBurdenAvg(prior);
+      if (recentScore > 0 && priorScore > 0) {
+        if (recentScore - priorScore > 0.35) return "Improving";
+        if (priorScore - recentScore > 0.35) return "Managing";
+      }
+    }
+    if (recentScore > 0) return recentScore < 2.5 ? "Managing" : "Stable";
+  } else if (glp1History.length >= 3) {
+    const score = symptomBurdenAvg(glp1History);
+    if (score > 0) return score < 2.5 ? "Managing" : "Stable";
+  }
+
+  // 0–2 days or no scoreable data: not enough history to infer direction
   return "Stable";
 }
 
 function insightLabel(insight: { type: string; text: string }): string {
   const t = insight.text.toLowerCase();
-  if (/energy|fatigue|tired|depleted/.test(t)) return "Energy";
-  if (/appetite|hunger|eating|food/.test(t)) return "Appetite";
-  if (/nausea|sick|vomit/.test(t)) return "Nausea";
-  if (/sleep|rest/.test(t)) return "Sleep";
-  if (/weight|lb|pound|kg/.test(t)) return "Weight";
-  if (/digest|stomach|bowel|constip|diarr/.test(t)) return "Digestion";
-  if (/step|walk|activ|exercise|movement/.test(t)) return "Activity";
-  if (/dose|inject|medic/.test(t)) return "Dose Timing";
-  if (insight.type === "post_dose") return "After Dose";
-  if (insight.type === "trend") return "Trend";
-  if (insight.type === "correlation") return "Correlation";
-  return "Insight";
+  if (/energy|fatigue|tired|depleted/.test(t)) return "Energy Pattern";
+  if (/appetite|hunger|eating|food/.test(t)) return "Appetite Pattern";
+  if (/nausea|sick|vomit/.test(t)) return "Nausea Pattern";
+  if (/digest|stomach|bowel|constip|diarr/.test(t)) return "Digestion Pattern";
+  if (/sleep|rest/.test(t)) return "Sleep Context";
+  if (/step|walk|activ|exercise|movement/.test(t)) return "Activity Context";
+  if (/dose|inject|medic/.test(t) || insight.type === "post_dose") return "Dose Response";
+  if (/weight|lb|pound|kg/.test(t)) return "Weight Progress";
+  if (/streak|complet|check.in|consistent/.test(t)) return "Check-in Pattern";
+  if (insight.type === "trend" || insight.type === "correlation") return "Treatment Trend";
+  return "Check-in Pattern";
 }
 
-function buildDemoTimeline(med: MedicationProfile): TimelineEvent[] {
-  const BUCKET_WEEKS: Record<string, number> = {
-    less_30_days: 3,
-    "30_60_days": 7,
-    "60_90_days": 11,
-    "3_6_months": 18,
-    "6_12_months": 30,
-    "1_2_years": 60,
-    "2_plus_years": 100,
-  };
-  const total = BUCKET_WEEKS[med.timeOnMedicationBucket] ?? 7;
-  const events: TimelineEvent[] = [];
-
-  events.push({
-    date: weeksAgoDate(total),
-    title: `Started ${med.medicationBrand} · 2.5mg`,
-    tag: "Dose",
-  });
-
-  if (total >= 7) {
-    events.push({
-      date: weeksAgoDate(Math.round(total * 0.65)),
-      title: "Appetite control improving",
-      tag: "Progress",
-    });
-  }
-
-  if (med.doseValue >= 5 && total >= 5) {
-    events.push({
-      date: weeksAgoDate(Math.round(total * 0.5)),
-      title: `Increased to 5mg`,
-      tag: "Dose",
-    });
-  }
-
-  if (med.doseValue >= 7.5 && total >= 8) {
-    events.push({
-      date: weeksAgoDate(Math.round(total * 0.2)),
-      title: `Increased to ${med.doseValue}${med.doseUnit}`,
-      tag: "Dose",
-    });
-  }
-
-  if (total >= 6) {
-    events.push({
-      date: weeksAgoDate(1),
-      title: "Digestion symptoms improving",
-      tag: "Progress",
-    });
-  }
-
-  return events;
-}
-
+// Builds timeline from real patient events only. Falls back to
+// relative date labels when no start date or log exists.
 function buildTimeline(
   log: MedicationLogEntry[],
-  insights: AdaptiveInsight[],
   med: MedicationProfile | undefined,
+  glp1History: GLP1DailyInputs[],
+  completionHistory: CompletionRecord[],
 ): TimelineEvent[] {
-  const events: TimelineEvent[] = [];
+  if (!med) return [];
 
-  const sorted = [...log]
+  const events: TimelineEvent[] = [];
+  const takenLog = [...log]
     .filter(e => e.status === "taken")
-    .sort((a, b) => a.timestamp - b.timestamp);
-  let lastDose: number | null = null;
-  for (const entry of sorted) {
-    if (entry.doseValue !== lastDose) {
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  // 1. Started treatment
+  const BUCKET_RELATIVE: Record<string, string> = {
+    less_30_days: "~1 month ago",
+    "30_60_days": "~2 months ago",
+    "60_90_days": "~3 months ago",
+    "3_6_months": "4–6 months ago",
+    "6_12_months": "~9 months ago",
+    "1_2_years": "~1 year ago",
+    "2_plus_years": "2+ years ago",
+  };
+
+  if (med.startDate) {
+    const startDose = takenLog.length > 0
+      ? `${takenLog[0].doseValue}${takenLog[0].doseUnit}`
+      : `${med.doseValue}${med.doseUnit}`;
+    events.push({
+      date: fmtDate(med.startDate),
+      title: `Started ${med.medicationBrand} · ${startDose}`,
+      tag: "Dose",
+    });
+  } else if (takenLog.length > 0) {
+    events.push({
+      date: fmtDate(takenLog[0].date),
+      title: `Started ${med.medicationBrand} · ${takenLog[0].doseValue}${takenLog[0].doseUnit}`,
+      tag: "Dose",
+    });
+  } else {
+    events.push({
+      date: BUCKET_RELATIVE[med.timeOnMedicationBucket] ?? "Earlier",
+      title: `Started ${med.medicationBrand} · ${med.doseValue}${med.doseUnit}`,
+      tag: "Dose",
+    });
+  }
+
+  // 2. Dose changes from medication log
+  let prevDose = takenLog.length > 0 ? takenLog[0].doseValue : null;
+  for (let i = 1; i < takenLog.length; i++) {
+    const entry = takenLog[i];
+    if (prevDose !== null && entry.doseValue !== prevDose) {
       events.push({
         date: fmtDate(entry.date),
-        title:
-          lastDose === null
-            ? `Started ${entry.doseValue}${entry.doseUnit}`
-            : `Increased to ${entry.doseValue}${entry.doseUnit}`,
+        title: `Dose increased to ${entry.doseValue}${entry.doseUnit}`,
         tag: "Dose",
       });
-      lastDose = entry.doseValue;
+    }
+    prevDose = entry.doseValue;
+  }
+
+  // 3. Dynamic: symptom direction (requires 7+ days with a prior period)
+  if (glp1History.length >= 7) {
+    const recent = glp1History.slice(-7);
+    const prior = glp1History.slice(-14, -7);
+    if (prior.length >= 3) {
+      const recentScore = symptomBurdenAvg(recent);
+      const priorScore = symptomBurdenAvg(prior);
+      if (recentScore > 0 && priorScore > 0) {
+        if (recentScore - priorScore > 0.4) {
+          events.push({ date: "Recently", title: "Symptoms trending better", tag: "Progress" });
+        } else if (priorScore - recentScore > 0.4) {
+          events.push({ date: "Recently", title: "Elevated symptom burden", tag: "Symptom" });
+        }
+      }
     }
   }
 
-  for (const insight of insights) {
-    if (insight.type === "trend") {
-      events.push({ date: "Recently", title: insight.text, tag: "Progress" });
+  // 4. Dynamic: adherence milestone (requires 5+ completions in last 7 days)
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 7);
+  const recentCompletions = completionHistory.filter(r => new Date(r.date) >= cutoff);
+  if (recentCompletions.length >= 5) {
+    const avgRate = recentCompletions.reduce((s, r) => s + r.completionRate, 0) / recentCompletions.length;
+    if (avgRate >= 75) {
+      events.push({ date: "This week", title: "Strong plan adherence", tag: "Progress" });
     }
   }
 
-  if (events.length === 0 && med) {
-    return buildDemoTimeline(med);
-  }
-
-  return events;
+  // Fixed-date events first (chronological), then relative strings
+  const isRelative = (d: string) => /ago|Recently|week/i.test(d);
+  return [
+    ...events.filter(e => !isRelative(e.date)),
+    ...events.filter(e => isRelative(e.date)),
+  ].slice(0, 6);
 }
 
 // ---------------------------------------------------------------- sub-components
@@ -268,6 +330,7 @@ export default function TrendsScreen() {
     hasHealthData,
     availableMetricTypes,
     adaptiveInsights,
+    glp1InputHistory,
   } = useApp();
 
   const med = profile.medicationProfile;
@@ -283,54 +346,59 @@ export default function TrendsScreen() {
         : [],
     [metrics, habitStats, hasHealthData, availableMetricTypes],
   );
+
+  // Merge insights: adaptive patterns first (always), then GLP-1 analytics
+  // (always), then wearable signals (only when real data exists). Cap at 3.
+  // Dedup by both text and derived category label.
   const mergedInsights = useMemo(() => {
-    const seen = new Set<string>();
+    const seenText = new Set<string>();
+    const seenCategory = new Set<string>();
     const result: Array<{
       id: string;
       text: string;
       type: "post_dose" | "correlation" | "trend" | "pattern" | "wearable";
     }> = [];
+
+    const tryAdd = (id: string, text: string, type: typeof result[0]["type"]) => {
+      if (result.length >= 3) return;
+      if (seenText.has(text)) return;
+      const cat = insightLabel({ type, text });
+      if (seenCategory.has(cat)) return;
+      seenText.add(text);
+      seenCategory.add(cat);
+      result.push({ id, text, type });
+    };
+
     for (const a of adaptiveInsights) {
-      if (!seen.has(a.text)) {
-        seen.add(a.text);
-        result.push({ id: a.id, text: a.text, type: a.type });
+      tryAdd(a.id, a.text, a.type);
+    }
+    for (const s of (inputAnalytics?.insights ?? [])) {
+      tryAdd(`analytics_${s.slice(0, 20)}`, s, "pattern");
+    }
+    if (hasHealthData) {
+      for (const s of baseInsights) {
+        tryAdd(`wearable_${s.slice(0, 20)}`, s, "wearable");
       }
     }
-    const supplement = [
-      ...baseInsights,
-      ...(inputAnalytics?.insights ?? []),
-    ];
-    for (const s of supplement) {
-      if (!seen.has(s)) {
-        seen.add(s);
-        result.push({
-          id: `wearable_${s.slice(0, 20)}`,
-          text: s,
-          type: "wearable",
-        });
-      }
-    }
-    return result.slice(0, 4);
-  }, [adaptiveInsights, baseInsights, inputAnalytics]);
+
+    return result;
+  }, [adaptiveInsights, baseInsights, inputAnalytics, hasHealthData]);
 
   const symptomStatus = useMemo(
-    // Default to "Stable" when the patient has a med profile but no
-    // check-in history yet. deriveSymptomStatus returns null on an
-    // empty insights array, which hides the chip on a fresh device
-    // while still showing it on a device with prior check-ins.
-    () => med ? (deriveSymptomStatus(adaptiveInsights) ?? "Stable") : null,
-    [adaptiveInsights, med],
+    () => med ? deriveSymptomStatus(glp1InputHistory) : null,
+    [glp1InputHistory, med],
   );
   const adherenceLabel = useMemo(
     () =>
       med
-        ? computeAdherenceLabel(medicationLog, med.frequency, med.weekOnCurrentDose)
+        ? computeAdherenceLabel(medicationLog, completionHistory, med.frequency, med.weekOnCurrentDose)
         : null,
-    [medicationLog, med],
+    [medicationLog, completionHistory, med],
   );
+
   const timeline = useMemo(
-    () => buildTimeline(medicationLog, adaptiveInsights, med),
-    [medicationLog, adaptiveInsights, med],
+    () => buildTimeline(medicationLog, med, glp1InputHistory, completionHistory),
+    [medicationLog, med, glp1InputHistory, completionHistory],
   );
 
   const hasSnapshotChips = !!(symptomStatus || adherenceLabel);
@@ -383,7 +451,13 @@ export default function TrendsScreen() {
                     <ChipCard
                       label="Adherence"
                       value={adherenceLabel}
-                      color={c.accent}
+                      color={
+                        adherenceLabel === "Excellent"
+                          ? "#34C759"
+                          : adherenceLabel === "Needs attention"
+                          ? "#FF9500"
+                          : c.accent
+                      }
                     />
                   )}
                 </View>
@@ -481,7 +555,7 @@ export default function TrendsScreen() {
           </View>
         ) : (
           <EmptyState
-            text="Your timeline will build as you check in."
+            text="Your timeline will build as you log medication and check-ins."
             subtext="Viva will connect dose changes, symptoms and progress over time."
           />
         )}
