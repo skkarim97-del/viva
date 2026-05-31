@@ -319,63 +319,11 @@ export async function computePilotMetrics(
     .sort((a, b) => b.patients - a.patients)
     .slice(0, 5);
 
-  // -------- Interventions: triggered, engaged, auto-resolved,
-  // escalated. Single SQL pass per metric; all gated to cohort and
-  // window.
-  // Drizzle doesn't expose interval arithmetic ergonomically across
-  // dialects, so we use raw SQL for the EXISTS subqueries -- mirrors
-  // the existing pattern in routes/internal.ts.
-  // Note on the upper bound: `ie.occurred_at <= windowEnd` constrains
-  // the *intervention* to live in the metrics window. The follow-on
-  // engagement/escalation event in the EXISTS subquery is intentionally
-  // NOT bounded by windowEnd -- if an intervention happened at the very
-  // end of the window we still want to credit a feedback that arrives
-  // shortly after, otherwise the engagement KPI would be biased
-  // downward at the trailing edge. For live view (windowEnd = now) the
-  // upper bound is a no-op; for snapshots it matters.
-  const triggeredRows = await db.execute(sql`
-    select cast(count(*) as int) as n
-    from patient_interventions
-    where patient_user_id = any(${sql.raw(toIntArrayLiteral(cohortIds))})
-      and created_at >= ${windowStart}
-      and created_at <= ${windowEnd}
-  `);
-  const triggered = numFromRow(triggeredRows.rows?.[0], "n");
-
-  // Engagement: an intervention is engaged when the patient submitted
-  // feedback (feedback_collected_at IS NOT NULL). This is an exact join
-  // on the lifecycle timestamp rather than the prior loose 48h patient-
-  // level cross-join against care_events.
-  const engagedRows = await db.execute(sql`
-    select cast(count(*) as int) as n
-    from patient_interventions
-    where patient_user_id = any(${sql.raw(toIntArrayLiteral(cohortIds))})
-      and created_at >= ${windowStart}
-      and created_at <= ${windowEnd}
-      and feedback_collected_at is not null
-  `);
-  const engaged = numFromRow(engagedRows.rows?.[0], "n");
-
-  // Escalated: an intervention is escalated within the auto-resolve window
-  // when escalated_at is set on the row and falls within 48h of creation.
-  // Uses the row's own lifecycle timestamps rather than a correlated
-  // cross-join against care_events.
-  const escalatedWithinRows = await db.execute(sql`
-    select cast(count(*) as int) as n
-    from patient_interventions
-    where patient_user_id = any(${sql.raw(toIntArrayLiteral(cohortIds))})
-      and created_at >= ${windowStart}
-      and created_at <= ${windowEnd}
-      and escalated_at is not null
-      and escalated_at <= created_at + interval '${sql.raw(String(AUTO_RESOLVE_HOURS))} hours'
-  `);
-  const escalatedWithin = numFromRow(escalatedWithinRows.rows?.[0], "n");
-  const autoResolved = Math.max(0, triggered - escalatedWithin);
-
-  // -------- Escalations (Provider Leverage). Pull raw escalations,
-  // dedupe per patient per 24h in app code (one pass, sorted), then
-  // join to follow_up_completed via trigger_event_id and to
-  // doctor_reviewed via the next-escalation boundary window.
+  // -------- Escalations: pull from care_events as the single canonical
+  // source. Done here (before the intervention counts) so both the
+  // interventions block and the provider block draw from the same data.
+  // Prevents the same escalation event from being counted under two
+  // different metrics with different denominators.
   const rawEscalations = await db
     .select({
       id: careEventsTable.id,
@@ -397,6 +345,34 @@ export async function computePilotMetrics(
     cohortIdSet.has(e.patientUserId),
   );
   const escalationsRaw = inCohort.length;
+
+  // -------- Interventions: triggered and engaged. Use patient_interventions
+  // lifecycle timestamps — exact joins on the row's own columns, no
+  // correlated subqueries needed.
+  const triggeredRows = await db.execute(sql`
+    select cast(count(*) as int) as n
+    from patient_interventions
+    where patient_user_id = any(${sql.raw(toIntArrayLiteral(cohortIds))})
+      and created_at >= ${windowStart}
+      and created_at <= ${windowEnd}
+  `);
+  const triggered = numFromRow(triggeredRows.rows?.[0], "n");
+
+  // Engagement: exact lifecycle timestamp join (feedback_collected_at IS NOT
+  // NULL). No 48h loose join against care_events needed.
+  const engagedRows = await db.execute(sql`
+    select cast(count(*) as int) as n
+    from patient_interventions
+    where patient_user_id = any(${sql.raw(toIntArrayLiteral(cohortIds))})
+      and created_at >= ${windowStart}
+      and created_at <= ${windowEnd}
+      and feedback_collected_at is not null
+  `);
+  const engaged = numFromRow(engagedRows.rows?.[0], "n");
+
+  // autoResolved = interventions delivered minus escalations in window.
+  // Both counts now draw from canonical sources (no cross-join double-count).
+  const autoResolved = Math.max(0, triggered - escalationsRaw);
 
   // Dedupe: walk patient-grouped, keep an event only if it's >= 24h
   // after the previously kept event for that patient.
@@ -552,8 +528,8 @@ export async function computePilotMetrics(
       pctEngaged: triggered > 0 ? engaged / triggered : 0,
       autoResolved,
       pctAutoResolved: triggered > 0 ? autoResolved / triggered : 0,
-      escalated: escalatedWithin,
-      pctEscalated: triggered > 0 ? escalatedWithin / triggered : 0,
+      escalated: escalationsRaw,
+      pctEscalated: triggered > 0 ? escalationsRaw / triggered : 0,
     },
     provider: {
       patientsEscalated,

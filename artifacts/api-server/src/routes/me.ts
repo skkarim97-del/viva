@@ -602,13 +602,18 @@ router.patch("/checkins/escalate", async (req, res: Response) => {
         metadata: careEventMetadata,
       });
     } catch (err) {
-      // Care-event emission MUST NOT block the patient's UI flow.
-      // The sticky flag itself is already persisted above; a missing
-      // analytics row is a degraded-but-acceptable outcome.
-      req.log.warn(
+      // The escalation_requested care_event is the signal the doctor's
+      // worklist depends on. A silent failure here means the doctor never
+      // sees the escalation. Surface 500 so the client's offline queue
+      // retries rather than silently losing the event. The sticky flag is
+      // already persisted; the retry will hit wasAlreadyRequested=true and
+      // skip the DB update but still emit the care_event.
+      req.log.error(
         { err, userId, date, symptom },
         "escalate_care_event_insert_failed",
       );
+      res.status(500).json({ error: "escalation_failed" });
+      return;
     }
   }
 
