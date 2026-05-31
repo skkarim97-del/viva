@@ -38,6 +38,11 @@ interface TimelineEvent {
   tag: TagType;
 }
 
+interface WatchingItem {
+  label: string;
+  status: "Watching" | "Tracking" | "Learning";
+}
+
 function fmtDate(dateStr: string): string {
   const d = new Date(`${dateStr}T00:00:00`);
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -60,6 +65,14 @@ function symptomBurdenAvg(days: GLP1DailyInputs[]): number {
   return dayScores.length > 0
     ? dayScores.reduce((s, v) => s + v, 0) / dayScores.length
     : 0;
+}
+
+function scoreAvg(
+  category: "nausea" | "digestion" | "energy" | "appetite",
+  days: GLP1DailyInputs[],
+): number {
+  const vals = days.map(d => scoreInput(category, d)).filter(v => v > 0);
+  return vals.length > 0 ? vals.reduce((s, v) => s + v, 0) / vals.length : 0;
 }
 
 function displayBrand(name: string): string {
@@ -150,6 +163,129 @@ function deriveSymptomStatus(
   return "Stable";
 }
 
+// Returns a short personalized takeaway sentence for the snapshot card.
+// Checks post-dose nausea correlation, appetite/energy trend, then
+// overall symptom stability. Falls back gracefully with sparse data.
+function computeWeeklyTakeaway(
+  glp1History: GLP1DailyInputs[],
+  log: MedicationLogEntry[],
+  completionHistory: CompletionRecord[],
+): string {
+  if (glp1History.length < 3) return "Building your treatment profile.";
+
+  const takenDates = new Set(log.filter(e => e.status === "taken").map(e => e.date));
+
+  // Post-dose nausea pattern (requires weekly med + a few check-ins)
+  if (takenDates.size >= 2 && glp1History.length >= 5) {
+    const postDoseNausea: number[] = [];
+    const otherDayNausea: number[] = [];
+    for (const day of glp1History) {
+      if (!day.date) continue;
+      const d = new Date(`${day.date}T00:00:00`);
+      const prev1 = new Date(d);
+      prev1.setDate(d.getDate() - 1);
+      const prev2 = new Date(d);
+      prev2.setDate(d.getDate() - 2);
+      const fmt = (dt: Date) => dt.toISOString().slice(0, 10);
+      const isPostDose = takenDates.has(fmt(prev1)) || takenDates.has(fmt(prev2));
+      const nausea = scoreInput("nausea", day);
+      if (nausea > 0) {
+        if (isPostDose) postDoseNausea.push(nausea);
+        else otherDayNausea.push(nausea);
+      }
+    }
+    if (postDoseNausea.length >= 2 && otherDayNausea.length >= 2) {
+      const avgPost = postDoseNausea.reduce((s, v) => s + v, 0) / postDoseNausea.length;
+      const avgOther = otherDayNausea.reduce((s, v) => s + v, 0) / otherDayNausea.length;
+      // lower nausea score = more nausea (1 = severe, 4 = none)
+      if (avgPost < avgOther - 0.5) {
+        return "Most symptoms appeared 1–2 days after your dose day.";
+      }
+    }
+  }
+
+  // Appetite or energy improvement over last two weeks
+  if (glp1History.length >= 14) {
+    const recent = glp1History.slice(-7);
+    const prior = glp1History.slice(-14, -7);
+    const ra = scoreAvg("appetite", recent);
+    const pa = scoreAvg("appetite", prior);
+    if (ra > 0 && pa > 0 && ra - pa > 0.3) {
+      return "Appetite control has been improving this week.";
+    }
+    const re = scoreAvg("energy", recent);
+    const pe = scoreAvg("energy", prior);
+    if (re > 0 && pe > 0 && re - pe > 0.3) {
+      return "Your energy levels have been improving this week.";
+    }
+  }
+
+  // Stable or well-managed symptoms with consistent check-ins
+  const cutoff7 = new Date();
+  cutoff7.setDate(cutoff7.getDate() - 7);
+  const recentCompletions = completionHistory.filter(r => new Date(r.date) >= cutoff7);
+  if (recentCompletions.length >= 4) {
+    const avgRate = recentCompletions.reduce((s, r) => s + r.completionRate, 0) / recentCompletions.length;
+    if (avgRate >= 65) {
+      const recentScore = symptomBurdenAvg(glp1History.slice(-7));
+      if (recentScore >= 3.0) return "Your check-ins show well-managed symptoms this week.";
+      if (recentScore > 0) return "Your check-ins show stable symptoms this week.";
+    }
+  }
+
+  // Overall symptom trend improvement
+  if (glp1History.length >= 14) {
+    const recentScore = symptomBurdenAvg(glp1History.slice(-7));
+    const priorScore = symptomBurdenAvg(glp1History.slice(-14, -7));
+    if (recentScore > 0 && priorScore > 0 && recentScore - priorScore > 0.35) {
+      return "Overall symptoms have improved compared to last week.";
+    }
+  }
+
+  return "Keep checking in so Viva can start building your profile.";
+}
+
+// Confidence tier based on how much check-in history backs the insight.
+function computeInsightConfidence(
+  glp1History: GLP1DailyInputs[],
+): "Strong pattern" | "Emerging pattern" | "Early signal" {
+  if (glp1History.length >= 14) return "Strong pattern";
+  if (glp1History.length >= 7) return "Emerging pattern";
+  return "Early signal";
+}
+
+// Items Viva is actively tracking — shown even before strong patterns form.
+function computeWatchingItems(
+  glp1History: GLP1DailyInputs[],
+  completionHistory: CompletionRecord[],
+  log: MedicationLogEntry[],
+): WatchingItem[] {
+  if (glp1History.length < 2 && completionHistory.length < 3) return [];
+
+  const items: WatchingItem[] = [];
+  const takenDates = new Set(log.filter(e => e.status === "taken").map(e => e.date));
+
+  if (takenDates.size > 0) {
+    items.push({ label: "Energy after dose day", status: "Watching" });
+  }
+
+  const hasDigestion = glp1History.some(d => scoreInput("digestion", d) > 0);
+  if (hasDigestion && items.length < 3) {
+    items.push({ label: "Digestion consistency", status: "Tracking" });
+  }
+
+  const hasAppetite = glp1History.some(d => scoreInput("appetite", d) > 0);
+  if (hasAppetite && items.length < 3) {
+    items.push({ label: "Appetite control", status: "Tracking" });
+  }
+
+  if (items.length < 3) {
+    items.push({ label: "Check-in consistency", status: "Learning" });
+  }
+
+  return items.slice(0, 3);
+}
+
 function insightLabel(insight: { type: string; text: string }): string {
   const t = insight.text.toLowerCase();
   if (/energy|fatigue|tired|depleted/.test(t)) return "Energy Pattern";
@@ -228,7 +364,7 @@ function buildTimeline(
     prevDose = entry.doseValue;
   }
 
-  // 3. Dynamic: symptom direction (requires 7+ days with a prior period)
+  // 3. Dynamic: overall symptom direction (requires 7+ days with a prior period)
   if (glp1History.length >= 7) {
     const recent = glp1History.slice(-7);
     const prior = glp1History.slice(-14, -7);
@@ -242,17 +378,52 @@ function buildTimeline(
           events.push({ date: "Recently", title: "Elevated symptom burden", tag: "Symptom" });
         }
       }
+
+      // Nausea easing
+      const recentNausea = scoreAvg("nausea", recent);
+      const priorNausea = scoreAvg("nausea", prior);
+      if (recentNausea > 0 && priorNausea > 0 && recentNausea - priorNausea > 0.4) {
+        events.push({ date: "Recently", title: "Nausea easing", tag: "Progress" });
+      }
+
+      // Appetite improving
+      const recentAppetite = scoreAvg("appetite", recent);
+      const priorAppetite = scoreAvg("appetite", prior);
+      if (recentAppetite > 0 && priorAppetite > 0 && recentAppetite - priorAppetite > 0.4) {
+        events.push({ date: "Recently", title: "Appetite control improving", tag: "Progress" });
+      }
     }
   }
 
-  // 4. Dynamic: adherence milestone (requires 5+ completions in last 7 days)
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 7);
-  const recentCompletions = completionHistory.filter(r => new Date(r.date) >= cutoff);
+  // 4. Dynamic: strong adherence this week
+  const cutoff7 = new Date();
+  cutoff7.setDate(cutoff7.getDate() - 7);
+  const recentCompletions = completionHistory.filter(r => new Date(r.date) >= cutoff7);
   if (recentCompletions.length >= 5) {
     const avgRate = recentCompletions.reduce((s, r) => s + r.completionRate, 0) / recentCompletions.length;
     if (avgRate >= 75) {
       events.push({ date: "This week", title: "Strong plan adherence", tag: "Progress" });
+    }
+  }
+
+  // 5. Dynamic: check-in consistency improving (requires two 14-day windows)
+  const cutoff14 = new Date();
+  cutoff14.setDate(cutoff14.getDate() - 14);
+  const cutoff28 = new Date();
+  cutoff28.setDate(cutoff28.getDate() - 28);
+  const recent14 = completionHistory.filter(r => {
+    const d = new Date(r.date);
+    return d >= cutoff14;
+  });
+  const prev14 = completionHistory.filter(r => {
+    const d = new Date(r.date);
+    return d >= cutoff28 && d < cutoff14;
+  });
+  if (recent14.length >= 8 && prev14.length >= 8) {
+    const recentAvg = recent14.reduce((s, r) => s + r.completionRate, 0) / recent14.length;
+    const prevAvg = prev14.reduce((s, r) => s + r.completionRate, 0) / prev14.length;
+    if (recentAvg - prevAvg > 15) {
+      events.push({ date: "Recently", title: "Check-in consistency improving", tag: "Progress" });
     }
   }
 
@@ -360,10 +531,12 @@ export default function TrendsScreen() {
   const mergedInsights = useMemo(() => {
     const seenText = new Set<string>();
     const seenCategory = new Set<string>();
+    const confidence = computeInsightConfidence(glp1InputHistory);
     const result: Array<{
       id: string;
       text: string;
       type: "post_dose" | "correlation" | "trend" | "pattern" | "wearable";
+      confidence: string;
     }> = [];
 
     const tryAdd = (id: string, text: string, type: typeof result[0]["type"]) => {
@@ -373,7 +546,7 @@ export default function TrendsScreen() {
       if (seenCategory.has(cat)) return;
       seenText.add(text);
       seenCategory.add(cat);
-      result.push({ id, text, type });
+      result.push({ id, text, type, confidence });
     };
 
     for (const a of adaptiveInsights) {
@@ -389,7 +562,7 @@ export default function TrendsScreen() {
     }
 
     return result;
-  }, [adaptiveInsights, baseInsights, inputAnalytics, hasHealthData]);
+  }, [adaptiveInsights, baseInsights, inputAnalytics, hasHealthData, glp1InputHistory]);
 
   const symptomStatus = useMemo(
     () => med ? deriveSymptomStatus(glp1InputHistory) : null,
@@ -403,12 +576,28 @@ export default function TrendsScreen() {
     [medicationLog, completionHistory, med],
   );
 
+  const weeklyTakeaway = useMemo(
+    () => med ? computeWeeklyTakeaway(glp1InputHistory, medicationLog, completionHistory) : null,
+    [glp1InputHistory, medicationLog, completionHistory, med],
+  );
+
+  const watchingItems = useMemo(
+    () => med ? computeWatchingItems(glp1InputHistory, completionHistory, medicationLog) : [],
+    [glp1InputHistory, completionHistory, medicationLog, med],
+  );
+
   const timeline = useMemo(
     () => buildTimeline(medicationLog, med, glp1InputHistory, completionHistory),
     [medicationLog, med, glp1InputHistory, completionHistory],
   );
 
   const hasSnapshotChips = !!(symptomStatus || adherenceLabel);
+
+  const WATCHING_COLORS: Record<WatchingItem["status"], string> = {
+    Watching: "#38B6FF",
+    Tracking: "#34C759",
+    Learning: "#FF9500",
+  };
 
   return (
     <ScrollView
@@ -439,39 +628,42 @@ export default function TrendsScreen() {
             </View>
 
             {hasSnapshotChips && (
-              <>
-                <View style={styles.chipsRow}>
-                  {symptomStatus && (
-                    <ChipCard
-                      label="Symptoms"
-                      value={symptomStatus}
-                      color={
-                        symptomStatus === "Improving"
-                          ? "#34C759"
-                          : symptomStatus === "Managing"
-                          ? "#FF9500"
-                          : c.accent
-                      }
-                    />
-                  )}
-                  {adherenceLabel && (
-                    <ChipCard
-                      label="Adherence"
-                      value={adherenceLabel}
-                      color={
-                        adherenceLabel === "Excellent"
-                          ? "#34C759"
-                          : adherenceLabel === "Needs attention"
-                          ? "#FF9500"
-                          : c.accent
-                      }
-                    />
-                  )}
-                </View>
-                <Text style={[styles.sourceNote, { color: c.mutedForeground }]}>
-                  Based on your recent check-ins and treatment history.
+              <View style={styles.chipsRow}>
+                {symptomStatus && (
+                  <ChipCard
+                    label="Symptoms"
+                    value={symptomStatus}
+                    color={
+                      symptomStatus === "Improving"
+                        ? "#34C759"
+                        : symptomStatus === "Managing"
+                        ? "#FF9500"
+                        : c.accent
+                    }
+                  />
+                )}
+                {adherenceLabel && (
+                  <ChipCard
+                    label="Adherence"
+                    value={adherenceLabel}
+                    color={
+                      adherenceLabel === "Excellent"
+                        ? "#34C759"
+                        : adherenceLabel === "Needs attention"
+                        ? "#FF9500"
+                        : c.accent
+                    }
+                  />
+                )}
+              </View>
+            )}
+
+            {weeklyTakeaway && (
+              <View style={[styles.takeawayBox, { backgroundColor: c.accent + "0D", borderColor: c.accent + "22" }]}>
+                <Text style={[styles.takeawayText, { color: c.foreground }]}>
+                  {weeklyTakeaway}
                 </Text>
-              </>
+              </View>
             )}
           </>
         ) : (
@@ -499,9 +691,14 @@ export default function TrendsScreen() {
               <View key={insight.id} style={styles.insightRow}>
                 <View style={[styles.insightDot, { backgroundColor: c.accent }]} />
                 <View style={styles.insightContent}>
-                  <Text style={[styles.insightCategory, { color: c.accent }]}>
-                    {insightLabel(insight)}
-                  </Text>
+                  <View style={styles.insightMeta}>
+                    <Text style={[styles.insightCategory, { color: c.accent }]}>
+                      {insightLabel(insight)}
+                    </Text>
+                    <Text style={[styles.insightConfidence, { color: c.mutedForeground }]}>
+                      {insight.confidence}
+                    </Text>
+                  </View>
                   <Text style={[styles.insightText, { color: c.foreground }]}>
                     {insight.text}
                   </Text>
@@ -517,14 +714,54 @@ export default function TrendsScreen() {
         )}
       </View>
 
-      {/* ── Section 3: Treatment Timeline ───────────────────── */}
+      {/* ── Section 3: Things We're Watching ────────────────── */}
       <View style={[styles.card, { backgroundColor: c.card }]}>
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: c.foreground }]}>
-            Treatment Timeline
+            Things We're Watching
           </Text>
           <Text style={[styles.sectionSub, { color: c.mutedForeground }]}>
-            Key moments from your recent treatment journey.
+            Signals Viva is still learning about your treatment.
+          </Text>
+        </View>
+
+        {watchingItems.length > 0 ? (
+          <View style={styles.watchingList}>
+            {watchingItems.map((item, i) => {
+              const badgeColor = WATCHING_COLORS[item.status];
+              return (
+                <View
+                  key={i}
+                  style={[styles.watchingItem, { borderBottomColor: c.border, borderBottomWidth: i < watchingItems.length - 1 ? StyleSheet.hairlineWidth : 0 }]}
+                >
+                  <Text style={[styles.watchingLabel, { color: c.foreground }]}>
+                    {item.label}
+                  </Text>
+                  <View style={[styles.watchingBadge, { backgroundColor: badgeColor + "14", borderColor: badgeColor + "30" }]}>
+                    <Text style={[styles.watchingBadgeText, { color: badgeColor }]}>
+                      {item.status}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        ) : (
+          <EmptyState
+            text="Complete a few check-ins so Viva can start tracking your patterns."
+            subtext="You'll see what Viva is actively learning as your data builds."
+          />
+        )}
+      </View>
+
+      {/* ── Section 4: Key Treatment Moments ────────────────── */}
+      <View style={[styles.card, { backgroundColor: c.card }]}>
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: c.foreground }]}>
+            Key Treatment Moments
+          </Text>
+          <Text style={[styles.sectionSub, { color: c.mutedForeground }]}>
+            Fixed milestones and recent patterns from your journey.
           </Text>
         </View>
 
@@ -595,7 +832,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
 
-  // Section cards (Insights, Timeline)
+  // Section cards (Insights, Watching, Timeline)
   card: {
     borderRadius: 20,
     padding: 20,
@@ -675,13 +912,19 @@ const styles = StyleSheet.create({
     fontFamily: "Montserrat_700Bold",
     letterSpacing: -0.3,
   },
-  sourceNote: {
-    fontSize: 11,
-    fontFamily: "Montserrat_400Regular",
-    lineHeight: 16,
-    opacity: 0.55,
-    fontStyle: "italic",
-    marginTop: -4,
+
+  // Weekly takeaway sentence
+  takeawayBox: {
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  takeawayText: {
+    fontSize: 13,
+    fontFamily: "Montserrat_500Medium",
+    lineHeight: 20,
+    letterSpacing: -0.1,
   },
 
   // ── Treatment Insights ───────────────────────────────────
@@ -698,12 +941,18 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginTop: 4,
+    marginTop: 5,
     flexShrink: 0,
   },
   insightContent: {
     flex: 1,
-    gap: 2,
+    gap: 3,
+  },
+  insightMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap",
   },
   insightCategory: {
     fontSize: 11,
@@ -711,13 +960,48 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
+  insightConfidence: {
+    fontSize: 11,
+    fontFamily: "Montserrat_400Regular",
+    letterSpacing: 0.1,
+    opacity: 0.65,
+  },
   insightText: {
     fontSize: 14,
     fontFamily: "Montserrat_400Regular",
     lineHeight: 21,
   },
 
-  // ── Treatment Timeline ───────────────────────────────────
+  // ── Things We're Watching ────────────────────────────────
+  watchingList: {
+    gap: 0,
+    marginTop: 2,
+  },
+  watchingItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 11,
+  },
+  watchingLabel: {
+    fontSize: 14,
+    fontFamily: "Montserrat_500Medium",
+    letterSpacing: -0.1,
+    flex: 1,
+  },
+  watchingBadge: {
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  watchingBadgeText: {
+    fontSize: 11,
+    fontFamily: "Montserrat_600SemiBold",
+    letterSpacing: 0.3,
+  },
+
+  // ── Key Treatment Moments ────────────────────────────────
   timelineWrap: {
     gap: 0,
     marginTop: 2,
