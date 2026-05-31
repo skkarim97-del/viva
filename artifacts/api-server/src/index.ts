@@ -17,6 +17,9 @@ import { logger } from "./lib/logger";
 //   * Stale / weak / unset SESSION_SECRET (cookie forgery surface)
 //   * Falling back to the local DATABASE_URL (Replit Postgres) when
 //     the BAA-covered AWS_DATABASE_URL is missing
+//   * Silent magic-link auth failure when RESEND_API_KEY is missing --
+//     unlike escalation emails, the magic link IS the login flow; if no
+//     email is delivered, the doctor cannot sign in at all
 // ----------------------------------------------------------------------
 function assertProductionSafety(): void {
   if (process.env.NODE_ENV !== "production") return;
@@ -48,6 +51,12 @@ function assertProductionSafety(): void {
   if (!process.env.AWS_DATABASE_URL) {
     violations.push(
       "AWS_DATABASE_URL must be set in production (BAA-covered RDS); refusing to fall back to DATABASE_URL",
+    );
+  }
+  if (!process.env.RESEND_API_KEY) {
+    violations.push(
+      "RESEND_API_KEY must be set in production (magic-link auth depends on email delivery; " +
+      "without it every sign-in attempt silently fails — no doctor can log in)",
     );
   }
 

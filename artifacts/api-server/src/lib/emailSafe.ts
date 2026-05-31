@@ -156,8 +156,13 @@ export async function sendMagicLinkEmail(
 
   const config = getConfig();
   if (!config) {
-    logger.debug(
-      "emailSafe: RESEND_API_KEY not set — skipping magic-link email (set the key to enable)",
+    // warn, not debug: unlike escalation emails, the magic link IS the
+    // login flow. A missing key means no doctor can sign in. In production
+    // the startup assert catches this before any request is served; this
+    // warn is the safety net for dev/staging environments.
+    logger.warn(
+      "emailSafe: RESEND_API_KEY not set — magic-link email not sent. " +
+      "Doctors cannot sign in without a working email provider. Set RESEND_API_KEY to enable.",
     );
     return;
   }
@@ -231,6 +236,14 @@ if (process.env["NODE_ENV"] !== "production") {
   if (!cfg) {
     logger.debug(
       "emailSafe: RESEND_API_KEY not set — escalation emails disabled (expected in dev without email config)",
+    );
+    // Magic-link auth is non-functional without the key. This is a warn so
+    // it surfaces in dev logs even at the default log level (info). It does
+    // not crash the server: local dev often runs without email config and
+    // the startup assert already blocks the gap in production.
+    logger.warn(
+      "emailSafe: RESEND_API_KEY not set — magic-link login is non-functional in this environment. " +
+      "Set RESEND_API_KEY (Resend API key) to test the sign-in flow end-to-end.",
     );
   }
 
