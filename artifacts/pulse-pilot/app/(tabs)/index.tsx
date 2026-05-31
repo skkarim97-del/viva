@@ -1151,6 +1151,30 @@ export default function DashboardScreen() {
     [patientCtx, dailyPlan.dailyState],
   );
 
+  const taglineText = React.useMemo(() => {
+    const n = glp1InputHistory.length;
+    if (n === 0) return greetingText;
+    const dosesTaken = medicationLog.filter(e => e.status === "taken").length;
+    if (symptomCounts && dosesTaken >= 2) {
+      if (symptomCounts.nausea7d >= 3)
+        return "You tend to notice symptoms around dose day. How is today going?";
+      if (symptomCounts.lowAppetite7d >= 4)
+        return "Your appetite patterns are becoming clearer. How is today going?";
+    }
+    if (n >= 7) return "Welcome back. Let's see how this week compares.";
+    if (n >= 3) return "Your check-ins are helping personalize today's support.";
+    return "You've started building your treatment profile. How are you feeling today?";
+  }, [glp1InputHistory, symptomCounts, medicationLog, greetingText]);
+
+  const planRationale = React.useMemo(() => {
+    const n = glp1InputHistory.length;
+    if (n < 2) return "Complete a few check-ins to personalize your plan.";
+    if (patientCtx.symptoms.hasElevatedGI) return "Adjusted for your recent symptoms.";
+    if (profile.medicationProfile?.recentTitration) return "Focused on recovery after your recent dose change.";
+    if (n >= 7) return "Built around your recent symptoms and treatment stage.";
+    return "Based on your check-ins and treatment patterns.";
+  }, [glp1InputHistory, patientCtx.symptoms.hasElevatedGI, profile.medicationProfile?.recentTitration]);
+
   // Fallback to lastInterventionRef when supportResolved so the sheet can
   // reopen in the "better" phase even after /active drops the completed row.
   const sheetIntervention = activeInterventions[0] ?? (supportResolved ? lastInterventionRef.current : null);
@@ -1246,7 +1270,7 @@ export default function DashboardScreen() {
       >
         <ScreenHeader />
 
-        <Text style={[styles.tagline, { color: c.mutedForeground }]}>{greetingText}</Text>
+        <Text style={[styles.tagline, { color: c.mutedForeground }]}>{taglineText}</Text>
 
         <Animated.View style={{ opacity: surroundingOpacity }}>
         <View style={[styles.statusCard, { backgroundColor: c.card }]}>
@@ -1668,7 +1692,7 @@ export default function DashboardScreen() {
             </Text>
           </View>
           <Text style={[styles.sectionSubtitle, { color: c.mutedForeground }]}>
-            Small actions that support progress
+            {planRationale}
           </Text>
           {planLearningLine && (
             <View style={[styles.symptomAwareBanner, { backgroundColor: c.warning + "12", borderColor: c.warning + "30" }]}>

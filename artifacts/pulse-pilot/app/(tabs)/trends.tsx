@@ -171,7 +171,11 @@ function computeWeeklyTakeaway(
   log: MedicationLogEntry[],
   completionHistory: CompletionRecord[],
 ): string {
-  if (glp1History.length < 3) return "Building your treatment profile.";
+  if (glp1History.length === 0) return "Complete your first check-in to start building your profile.";
+  if (glp1History.length < 3) {
+    const n = glp1History.length;
+    return `You've completed ${n} check-in${n === 1 ? "" : "s"}. Viva is starting to learn your treatment patterns.`;
+  }
 
   const takenDates = new Set(log.filter(e => e.status === "taken").map(e => e.date));
 
@@ -242,7 +246,7 @@ function computeWeeklyTakeaway(
     }
   }
 
-  return "Keep checking in so Viva can start building your profile.";
+  return "Keep checking in — Viva learns more about your treatment with each entry.";
 }
 
 // Confidence tier based on how much check-in history backs the insight.
@@ -328,24 +332,21 @@ function buildTimeline(
   };
 
   if (med.startDate) {
-    const startDose = takenLog.length > 0
-      ? `${takenLog[0].doseValue}${takenLog[0].doseUnit}`
-      : `${med.doseValue}${med.doseUnit}`;
     events.push({
       date: fmtDate(med.startDate),
-      title: `Started ${displayBrand(med.medicationBrand)} · ${startDose}`,
+      title: `Started ${displayBrand(med.medicationBrand)}`,
       tag: "Dose",
     });
   } else if (takenLog.length > 0) {
     events.push({
       date: fmtDate(takenLog[0].date),
-      title: `Started ${displayBrand(med.medicationBrand)} · ${takenLog[0].doseValue}${takenLog[0].doseUnit}`,
+      title: `Started ${displayBrand(med.medicationBrand)}`,
       tag: "Dose",
     });
   } else {
     events.push({
       date: BUCKET_RELATIVE[med.timeOnMedicationBucket] ?? "Earlier",
-      title: `Started ${displayBrand(med.medicationBrand)} · ${med.doseValue}${med.doseUnit}`,
+      title: `Started ${displayBrand(med.medicationBrand)}`,
       tag: "Dose",
     });
   }
@@ -373,9 +374,9 @@ function buildTimeline(
       const priorScore = symptomBurdenAvg(prior);
       if (recentScore > 0 && priorScore > 0) {
         if (recentScore - priorScore > 0.4) {
-          events.push({ date: "Recently", title: "Symptoms trending better", tag: "Progress" });
+          events.push({ date: "Recently", title: "Symptoms improving", tag: "Progress" });
         } else if (priorScore - recentScore > 0.4) {
-          events.push({ date: "Recently", title: "Elevated symptom burden", tag: "Symptom" });
+          events.push({ date: "Recently", title: "Elevated symptoms", tag: "Symptom" });
         }
       }
 
@@ -383,7 +384,7 @@ function buildTimeline(
       const recentNausea = scoreAvg("nausea", recent);
       const priorNausea = scoreAvg("nausea", prior);
       if (recentNausea > 0 && priorNausea > 0 && recentNausea - priorNausea > 0.4) {
-        events.push({ date: "Recently", title: "Nausea easing", tag: "Progress" });
+        events.push({ date: "Recently", title: "Nausea improving", tag: "Progress" });
       }
 
       // Appetite improving
@@ -402,7 +403,7 @@ function buildTimeline(
   if (recentCompletions.length >= 5) {
     const avgRate = recentCompletions.reduce((s, r) => s + r.completionRate, 0) / recentCompletions.length;
     if (avgRate >= 75) {
-      events.push({ date: "This week", title: "Strong plan adherence", tag: "Progress" });
+      events.push({ date: "This week", title: "Strong check-in consistency", tag: "Progress" });
     }
   }
 
@@ -617,13 +618,10 @@ export default function TrendsScreen() {
           <>
             <View style={styles.medBlock}>
               <Text style={[styles.medHeroName, { color: c.foreground }]}>
-                {displayBrand(med.medicationBrand)}
+                {weekLabel(med)}
               </Text>
               <Text style={[styles.medHeroDose, { color: c.mutedForeground }]}>
-                {med.doseValue}{med.doseUnit} · {med.frequency}
-              </Text>
-              <Text style={[styles.medHeroWeek, { color: c.mutedForeground }]}>
-                {weekLabel(med)}
+                {displayBrand(med.medicationBrand)} · {med.doseValue}{med.doseUnit}
               </Text>
             </View>
 
@@ -720,11 +718,11 @@ export default function TrendsScreen() {
         )}
       </View>
 
-      {/* ── Section 3: Things We're Watching ────────────────── */}
+      {/* ── Section 3: What We're Learning ──────────────────── */}
       <View style={[styles.card, { backgroundColor: c.card }]}>
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: c.foreground }]}>
-            Things We're Watching
+            What We're Learning
           </Text>
           <Text style={[styles.sectionSub, { color: c.mutedForeground }]}>
             Signals Viva is still learning about your treatment.
