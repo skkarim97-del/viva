@@ -23,6 +23,7 @@ import { logIntervention, type InterventionType } from "@/lib/intervention/logge
 import { logCareEventDeduped } from "@/lib/care-events/client";
 import { buildPatientContext } from "@/lib/intelligence/patientContext";
 import { buildWeekSummaryLearningLine } from "@/lib/intelligence/learningCopy";
+import { GI_OVERRIDES } from "@/lib/giOverrides";
 
 const CATEGORY_META: Record<ActionCategory, { label: string; icon: keyof typeof Feather.glyphMap; color: string }> = {
   move: { label: "Move", icon: "activity", color: "#FF6B6B" },
@@ -221,16 +222,6 @@ export default function PlanScreen({ isModal = false, onClose }: { isModal?: boo
 
               <View style={styles.actionsGrid}>
                 {(() => {
-                  // GI-aware display overrides apply only on Today's row when
-                  // patientCtx shows elevated GI symptoms. Underlying plan
-                  // data is unchanged; this is a display-layer adaptation
-                  // consistent with the Today tab's plan section.
-                  const GI_OVERRIDES: Partial<Record<ActionCategory, { title: string; subtitle: string }>> = {
-                    move: { title: "Gentle walk", subtitle: "5–10 min after food if tolerated." },
-                    fuel: { title: "Small bland meals", subtitle: "Crackers, toast, rice or soup in small portions." },
-                    hydrate: { title: "Slow fluids", subtitle: "Small sips every few minutes. Avoid large amounts at once." },
-                    recover: { title: "Lower intensity", subtitle: "Keep today light while symptoms settle." },
-                  };
                   return day.actions.filter(a => a.category !== "consistent").map((action) => {
                     const meta = CATEGORY_META[action.category];
                     const giOverride = (isToday && patientCtx.symptoms.hasElevatedGI)
