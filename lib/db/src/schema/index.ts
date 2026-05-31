@@ -19,3 +19,4 @@ export * from "./sessions";
 export * from "./patientInterventions";
 export * from "./patientPlanItems";
 export * from "./patientIntegrations";
+export * from "./magicLinkTokens";

@@ -139,6 +139,91 @@ export async function sendEscalationEmail(
   }
 }
 
+// Sends a magic-link sign-in email to the given doctor address. The link
+// embeds a single-use high-entropy token; no PHI is included. Fire-and-
+// forget safe: always resolves (never throws).
+export async function sendMagicLinkEmail(
+  doctorEmail: string,
+  magicLink: string,
+): Promise<void> {
+  if (isDemoEmail(doctorEmail)) {
+    logger.debug(
+      { doctorEmail: "[demo]" },
+      "emailSafe: suppressed magic-link email for demo account",
+    );
+    return;
+  }
+
+  const config = getConfig();
+  if (!config) {
+    logger.debug(
+      "emailSafe: RESEND_API_KEY not set — skipping magic-link email (set the key to enable)",
+    );
+    return;
+  }
+
+  const subject = "Sign in to Viva Clinic";
+  const text = [
+    "Click the link below to sign in to Viva Clinic.",
+    "This link expires in 15 minutes and can only be used once.",
+    "",
+    magicLink,
+    "",
+    "If you didn't request this, you can safely ignore this email.",
+    "—",
+    "Viva Clinic",
+  ].join("\n");
+
+  const html = `<!doctype html>
+<html><head><meta charset="utf-8"></head>
+<body style="font-family:sans-serif;color:#1a1a1a;max-width:520px;margin:40px auto;padding:0 24px">
+  <p style="font-size:20px;font-weight:700;margin-bottom:8px">Sign in to Viva Clinic</p>
+  <p style="color:#555;line-height:1.6;margin-bottom:24px">
+    Click the button below to sign in. This link expires in 15 minutes and can only be used once.
+  </p>
+  <a href="${magicLink}"
+     style="display:inline-block;background:#0F1923;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">
+    Sign in to Viva Clinic →
+  </a>
+  <p style="color:#999;font-size:12px;margin-top:32px;line-height:1.5">
+    If you didn't request this email, you can safely ignore it.<br>
+    Questions? Contact <a href="mailto:support@itsviva.com" style="color:#999">support@itsviva.com</a>
+  </p>
+</body>
+</html>`;
+
+  try {
+    const res = await fetch(RESEND_ENDPOINT, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: config.from,
+        to: [doctorEmail],
+        subject,
+        text,
+        html,
+      }),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "(unreadable)");
+      logger.warn(
+        { status: res.status, body },
+        "emailSafe: magic-link email rejected by Resend",
+      );
+    } else {
+      logger.info(
+        { doctorEmail: doctorEmail.replace(/^[^@]+/, "***") },
+        "emailSafe: magic-link email sent",
+      );
+    }
+  } catch (err) {
+    logger.warn({ err }, "emailSafe: magic-link email delivery failed");
+  }
+}
+
 // Self-check at load time to surface misconfigured env early (dev only).
 // Does NOT send any email.
 if (process.env["NODE_ENV"] !== "production") {

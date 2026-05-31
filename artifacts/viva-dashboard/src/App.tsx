@@ -18,6 +18,7 @@ import { InternalDashboardPage } from "@/pages/InternalDashboardPage";
 import { InternalAnalyticsPage } from "@/pages/InternalAnalyticsPage";
 import { MfaEnrollPage } from "@/pages/MfaEnrollPage";
 import { MfaVerifyPage } from "@/pages/MfaVerifyPage";
+import { MagicLinkCallbackPage } from "@/pages/MagicLinkCallbackPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -81,7 +82,10 @@ function Gate() {
   // here in viva-dashboard for it.
 
   // Routes that don't require an authenticated doctor session.
-  const isPublic = location === "/login" || location === "/signup";
+  const isPublic =
+    location === "/login" ||
+    location === "/signup" ||
+    location.startsWith("/auth/callback");
   const isOnboarding = location === "/onboarding";
 
   useEffect(() => {
@@ -130,6 +134,7 @@ function Gate() {
       <Switch>
         <Route path="/signup" component={SignUpPage} />
         <Route path="/login" component={LoginPage} />
+        <Route path="/auth/callback" component={MagicLinkCallbackPage} />
         <Route component={LoginPage} />
       </Switch>
     );
@@ -187,8 +192,12 @@ function MfaGate({ me }: { me: { needsOnboarding: boolean } }) {
     );
   }
   if (!data) return null;
-  if (!data.enrolled) return <MfaEnrollPage />;
-  if (!data.sessionVerified) return <MfaVerifyPage />;
+  // Magic link verify sets session.mfaVerified = true server-side, which makes
+  // sessionVerified true here. In that case skip enrollment and TOTP verify
+  // gates entirely -- the link itself is the high-entropy second factor.
+  if (!data.sessionVerified) {
+    return data.enrolled ? <MfaVerifyPage /> : <MfaEnrollPage />;
+  }
   if (me.needsOnboarding) {
     return (
       <Switch>
