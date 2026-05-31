@@ -61,9 +61,23 @@ function symptomBurdenAvg(days: GLP1DailyInputs[]): number {
     : 0;
 }
 
+const KNOWN_BRANDS: Record<string, string> = {
+  mounjaro: "Mounjaro",
+  ozempic: "Ozempic",
+  wegovy: "Wegovy",
+  zepbound: "Zepbound",
+  saxenda: "Saxenda",
+  rybelsus: "Rybelsus",
+};
+
+function normalizeBrand(name: string): string {
+  const key = name.trim().toLowerCase();
+  return KNOWN_BRANDS[key] ?? name.trim().replace(/\b\w/g, c => c.toUpperCase());
+}
+
 function weekLabel(med: MedicationProfile): string {
   if (med.weekOnCurrentDose && med.weekOnCurrentDose > 0) {
-    return `Week ${med.weekOnCurrentDose} on ${med.doseValue}${med.doseUnit}`;
+    return `Week ${med.weekOnCurrentDose} on current dose`;
   }
   const MAP: Record<string, string> = {
     less_30_days: "Week 1–4 of treatment",
@@ -190,19 +204,19 @@ function buildTimeline(
       : `${med.doseValue}${med.doseUnit}`;
     events.push({
       date: fmtDate(med.startDate),
-      title: `Started ${med.medicationBrand} · ${startDose}`,
+      title: `Started ${normalizeBrand(med.medicationBrand)} · ${startDose}`,
       tag: "Dose",
     });
   } else if (takenLog.length > 0) {
     events.push({
       date: fmtDate(takenLog[0].date),
-      title: `Started ${med.medicationBrand} · ${takenLog[0].doseValue}${takenLog[0].doseUnit}`,
+      title: `Started ${normalizeBrand(med.medicationBrand)} · ${takenLog[0].doseValue}${takenLog[0].doseUnit}`,
       tag: "Dose",
     });
   } else {
     events.push({
       date: BUCKET_RELATIVE[med.timeOnMedicationBucket] ?? "Earlier",
-      title: `Started ${med.medicationBrand} · ${med.doseValue}${med.doseUnit}`,
+      title: `Started ${normalizeBrand(med.medicationBrand)} · ${med.doseValue}${med.doseUnit}`,
       tag: "Dose",
     });
   }
@@ -421,7 +435,7 @@ export default function TrendsScreen() {
           <>
             <View style={styles.medBlock}>
               <Text style={[styles.medHeroName, { color: c.foreground }]}>
-                {med.medicationBrand}
+                {normalizeBrand(med.medicationBrand)}
               </Text>
               <Text style={[styles.medHeroDose, { color: c.mutedForeground }]}>
                 {med.doseValue}{med.doseUnit} · {med.frequency}
