@@ -1328,7 +1328,7 @@ export default function DashboardScreen() {
             elsewhere later without rewiring. */}
 
 
-        {profile.medicationProfile && (() => {
+        {profile.medicationProfile ? (() => {
           const mp = profile.medicationProfile!;
           const isWeekly = mp.frequency !== "daily";
           const isDaily = mp.frequency === "daily";
@@ -1519,7 +1519,16 @@ export default function DashboardScreen() {
               </View>
             </View>
           );
-        })()}
+        })() : (
+          <View style={[styles.dayCard, { backgroundColor: c.card }]}>
+            <Text style={[styles.dayTitle, { color: c.foreground, marginBottom: 6 }]}>
+              Medication
+            </Text>
+            <Text style={{ color: c.mutedForeground, lineHeight: 20 }}>
+              Add your medication details to personalize recommendations.
+            </Text>
+          </View>
+        )}
 
         {lastCompletionFeedback && (
           <Animated.View style={[styles.feedbackToast, { backgroundColor: c.success + "14", opacity: feedbackOpacity }]}>

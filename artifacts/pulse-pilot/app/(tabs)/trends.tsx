@@ -665,11 +665,17 @@ export default function TrendsScreen() {
                 </Text>
               </View>
             )}
+
+            {!hasHealthData && (
+              <Text style={[styles.wearableHint, { color: c.mutedForeground }]}>
+                Connect health data to add more context.
+              </Text>
+            )}
           </>
         ) : (
           <EmptyState
-            text="Check in to personalize your plan."
-            subtext="Viva will use your medication updates, symptoms and health signals to summarize your treatment progress."
+            text="Add your medication details to personalize this view."
+            subtext="Viva will use your medication, symptoms and check-ins to summarize your treatment progress."
           />
         )}
       </View>
@@ -924,6 +930,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Montserrat_500Medium",
     lineHeight: 20,
+    letterSpacing: -0.1,
+  },
+  wearableHint: {
+    fontSize: 12,
+    fontFamily: "Montserrat_400Regular",
+    lineHeight: 18,
+    marginTop: 10,
     letterSpacing: -0.1,
   },
 
