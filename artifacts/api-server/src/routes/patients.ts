@@ -113,7 +113,12 @@ router.get("/", async (req: AuthedRequest, res: Response) => {
       : await db
           .select()
           .from(patientCheckinsTable)
-          .where(gte(patientCheckinsTable.date, cutoff));
+          .where(
+            and(
+              gte(patientCheckinsTable.date, cutoff),
+              inArray(patientCheckinsTable.patientUserId, patientIds),
+            ),
+          );
 
   const byPatient = new Map<number, typeof checkins>();
   for (const c of checkins) {
