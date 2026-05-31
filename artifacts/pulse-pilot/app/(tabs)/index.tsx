@@ -61,6 +61,7 @@ import { summarizeCoachThread } from "@/lib/coachSummary";
 import { useColors } from "@/hooks/useColors";
 import { CATEGORY_OPTIONS } from "@/types";
 import type { MetricKey, FeelingType, ChatMessage, DailyState, ActionCategory, AppetiteLevel, NauseaLevel, DigestionStatus, EnergyDaily, MedicationLogEntry, MentalState } from "@/types";
+import { GI_OVERRIDES } from "@/lib/giOverrides";
 
 // Persistent "last day we surfaced the weekly prompt" key. We only
 // auto-pop the modal once per calendar day even if the patient cold-
@@ -159,24 +160,6 @@ const TONE_COLOR: Record<StatusChip["tone"], (c: ReturnType<typeof useColors>) =
   muted: (c) => c.mutedForeground,
 };
 
-const GI_OVERRIDES: Partial<Record<ActionCategory, { title: string; subtitle: string }>> = {
-  move: {
-    title: "Gentle walk",
-    subtitle: "5–10 min after food if tolerated.",
-  },
-  fuel: {
-    title: "Small bland meals",
-    subtitle: "Crackers, toast, rice or soup in small portions.",
-  },
-  hydrate: {
-    title: "Slow fluids",
-    subtitle: "Small sips every few minutes. Avoid large amounts at once.",
-  },
-  recover: {
-    title: "Lower intensity",
-    subtitle: "Keep today light while symptoms settle.",
-  },
-};
 
 export default function DashboardScreen() {
   const c = useColors();
@@ -1328,7 +1311,7 @@ export default function DashboardScreen() {
             elsewhere later without rewiring. */}
 
 
-        {profile.medicationProfile && (() => {
+        {profile.medicationProfile ? (() => {
           const mp = profile.medicationProfile!;
           const isWeekly = mp.frequency !== "daily";
           const isDaily = mp.frequency === "daily";
@@ -1519,7 +1502,16 @@ export default function DashboardScreen() {
               </View>
             </View>
           );
-        })()}
+        })() : (
+          <View style={[styles.dayCard, { backgroundColor: c.card }]}>
+            <Text style={[styles.dayTitle, { color: c.foreground, marginBottom: 6 }]}>
+              Medication
+            </Text>
+            <Text style={{ color: c.mutedForeground, lineHeight: 20 }}>
+              Add your medication details to personalize recommendations.
+            </Text>
+          </View>
+        )}
 
         {lastCompletionFeedback && (
           <Animated.View style={[styles.feedbackToast, { backgroundColor: c.success + "14", opacity: feedbackOpacity }]}>

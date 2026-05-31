@@ -3,7 +3,6 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 
 import {
   defaultProfile,
-  generateTrendDataFromMetrics,
   integrations as defaultIntegrations,
 } from "@/data/mockData";
 import {
@@ -11,7 +10,6 @@ import {
   generateWeeklyPlan,
   calculateDropoutRisk,
   computeInputAnalytics,
-  buildPatientSummary,
   computeUserPatterns,
   generateAdaptiveInsights,
   computeInternalSeverity,
@@ -30,7 +28,6 @@ import type {
   WeeklyPlan,
   WeeklyPlanDay,
   WeeklyDayAction,
-  TrendData,
   WorkoutEntry,
   ChatMessage,
   IntegrationStatus,
@@ -52,7 +49,6 @@ import type {
   MedicationLogEntry,
   MedicationProfile,
   InputAnalytics,
-  PatientSummary,
 } from "@/types";
 
 import { API_BASE } from "@/lib/apiConfig";
@@ -151,7 +147,6 @@ interface AppContextType {
   // this-plan modal) keep working without changes.
   dailyState: DailyTreatmentState | null;
   weeklyPlan: WeeklyPlan | null;
-  trends: TrendData[];
   workouts: WorkoutEntry[];
   chatMessages: ChatMessage[];
   addChatMessage: (msg: ChatMessage) => void;
@@ -250,7 +245,6 @@ interface AppContextType {
   logMedicationDose: (entry: MedicationLogEntry) => void;
   removeMedicationDose: (entryId: string) => void;
   inputAnalytics: InputAnalytics | null;
-  patientSummary: PatientSummary | null;
   userPatterns: UserPatterns | null;
   adaptiveInsights: AdaptiveInsight[];
 }
@@ -291,7 +285,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [availableMetricTypes, setAvailableMetricTypes] = useState<AvailableMetricType[]>([]);
   const [dailyPlan, setDailyPlan] = useState<DailyPlan | null>(null);
   const [weeklyPlan, setWeeklyPlan] = useState<WeeklyPlan | null>(null);
-  const [trends, setTrends] = useState<TrendData[]>([]);
   const [workouts, setWorkouts] = useState<WorkoutEntry[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [integrationsState, setIntegrationsState] = useState<IntegrationStatus[]>(defaultIntegrations);
@@ -317,7 +310,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [glp1InputHistory, setGlp1InputHistory] = useState<GLP1DailyInputs[]>([]);
   const [medicationLog, setMedicationLog] = useState<MedicationLogEntry[]>([]);
   const [inputAnalytics, setInputAnalytics] = useState<InputAnalytics | null>(null);
-  const [patientSummary, setPatientSummary] = useState<PatientSummary | null>(null);
   const [userPatterns, setUserPatterns] = useState<UserPatterns | null>(null);
   const [adaptiveInsights, setAdaptiveInsights] = useState<AdaptiveInsight[]>([]);
   const baselineWeeklyPlanRef = useRef<WeeklyPlan | null>(null);
@@ -676,8 +668,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setUserPatterns(patterns);
       const insights = generateAdaptiveInsights(patterns);
       setAdaptiveInsights(insights);
-      const summary = buildPatientSummary(inputHistory, medProfile, medLog ?? [], completions ?? [], patterns);
-      setPatientSummary(summary);
       return patterns;
     } catch {}
     return null;
@@ -1002,10 +992,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       if (healthDataFound) {
         fetchAIWeeklyPlan(allMetrics, savedProfileData, loadedHistory);
-        setTrends(generateTrendDataFromMetrics(allMetrics));
         setInsights(computeInsights(allMetrics, today, [], savedProfileData, loadedHistory));
       } else {
-        setTrends([]);
         setInsights(null);
       }
       setWorkouts([]);
@@ -1536,7 +1524,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setMetrics([]);
       setHasHealthData(false);
       setAvailableMetricTypes([]);
-      setTrends([]);
       return;
     }
     try {
@@ -1557,7 +1544,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setHasHealthData(true);
         setAvailableMetricTypes(result.availableTypes);
         setTodayMetrics(result.metrics[result.metrics.length - 1]);
-        setTrends(generateTrendDataFromMetrics(result.metrics));
         if (result.source) {
           setIntegrationsState((prev) =>
             prev.map((i) =>
@@ -1570,7 +1556,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       } else {
         setHasHealthData(false);
         setAvailableMetricTypes([]);
-        setTrends([]);
       }
     } catch {
     }
@@ -1660,7 +1645,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setHasHealthData(true);
         setAvailableMetricTypes(data.availableTypes);
         setTodayMetrics(data.metrics[data.metrics.length - 1]);
-        setTrends(generateTrendDataFromMetrics(data.metrics));
       } else {
         setHasHealthData(false);
         setAvailableMetricTypes([]);
@@ -2010,7 +1994,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         dailyPlan,
         dailyState,
         weeklyPlan,
-        trends,
         workouts,
         chatMessages,
         addChatMessage,
@@ -2070,7 +2053,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         logMedicationDose,
         removeMedicationDose,
         inputAnalytics,
-        patientSummary,
         userPatterns,
         adaptiveInsights,
       }}
