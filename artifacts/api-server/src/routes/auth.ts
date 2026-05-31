@@ -393,8 +393,11 @@ const magicLinkVerifySchema = z.object({
 
 // POST /auth/magic-link/verify -- exchange a raw token for a session. The
 // token is hashed before any DB read; the raw value is never persisted or
-// logged. A successful claim sets session.mfaVerified = true so the client
-// passes requireDoctorMfa without TOTP.
+// logged. For doctors without TOTP enrolled, a successful claim sets
+// session.mfaVerified = true (magic link is the second factor). For doctors
+// who already enrolled TOTP, the session is established but mfaVerified is
+// NOT set -- the client MfaGate will prompt for a TOTP code before any PHI
+// route is accessible, preserving the stronger setting.
 router.post(
   "/magic-link/verify",
   strictAuthLimiter,
@@ -461,10 +464,15 @@ router.post(
       }
       req.session.userId = user.id;
       req.session.role = user.role;
-      // Magic link is equivalent to a second-factor OTP: mark the session
-      // as MFA-verified so requireDoctorMfa gates pass without TOTP.
-      req.session.mfaVerified = true;
-      req.session.mfaVerifiedAt = Date.now();
+      // Magic link counts as step-up (mfaVerified = true) ONLY when the
+      // doctor has not enrolled TOTP. If TOTP is already configured, the
+      // link establishes identity but the session is not yet MFA-verified;
+      // the client's MfaGate will prompt for the TOTP code before any PHI
+      // route is accessible.
+      if (!user.mfaEnrolledAt) {
+        req.session.mfaVerified = true;
+        req.session.mfaVerifiedAt = Date.now();
+      }
       req.session.save((err) => {
         if (err) {
           req.log.error({ err }, "magic_link_verify: session save failed");
