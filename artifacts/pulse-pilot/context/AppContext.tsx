@@ -226,6 +226,12 @@ interface AppContextType {
   // queued (network down, server 5xx, timeout).
   checkinSyncStatus: SyncStatus;
   checkinLastSyncAt: string | null;
+  // True when the patient has a local check-in for today but the
+  // required energy/nausea fields weren't set, so the snapshot was
+  // never enqueued for server sync. The Today tab uses this to prompt
+  // the patient to complete those fields rather than silently leaving
+  // their data local-only.
+  checkinSyncIncomplete: boolean;
   // Manual retry hook. Wired to AppState "active" transitions and
   // can be exposed via a "Retry sync" UI affordance later.
   flushCheckinSync: () => Promise<void>;
@@ -1981,6 +1987,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return null;
   })();
 
+  const checkinSyncIncomplete = (() => {
+    const todayDate = new Date().toISOString().split("T")[0];
+    return checkInHistory.some(c => c.date === todayDate) && !(glp1Energy && nausea);
+  })();
+
   return (
     <AppContext.Provider
       value={{
@@ -2035,6 +2046,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         clinicianRequestedToday,
         checkinSyncStatus,
         checkinLastSyncAt,
+        checkinSyncIncomplete,
         flushCheckinSync,
         todayCheckIn,
         glp1Energy,

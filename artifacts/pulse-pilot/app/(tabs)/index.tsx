@@ -177,7 +177,7 @@ export default function DashboardScreen() {
     saveDailyCheckIn, todayCheckIn, acknowledgeSymptomTip, guidanceAckTitleHistory,
     recordSymptomTrend, requestClinicianForSymptom,
     guidanceAckHistory, clinicianRequestedToday,
-    checkinSyncStatus, flushCheckinSync,
+    checkinSyncStatus, checkinSyncIncomplete, flushCheckinSync,
     appetite, setAppetite,
     nausea, setNausea,
     digestion, setDigestion,
@@ -1966,21 +1966,23 @@ export default function DashboardScreen() {
           </Pressable>
         )}
 
-        {todayCheckIn && (
+        {(todayCheckIn || checkinSyncIncomplete) && (
           <View style={[styles.checkInDone, { backgroundColor: c.card }]}>
             <Feather
-              name={checkinSyncStatus === "failed" ? "wifi-off" : "check-circle"}
+              name={checkinSyncIncomplete ? "alert-circle" : checkinSyncStatus === "failed" ? "wifi-off" : "check-circle"}
               size={14}
-              color={checkinSyncStatus === "failed" ? c.mutedForeground : c.success}
+              color={checkinSyncIncomplete ? c.warning : checkinSyncStatus === "failed" ? c.mutedForeground : c.success}
             />
             <Text style={[styles.checkInDoneText, { color: c.mutedForeground }]}>
-              {checkinSyncStatus === "failed"
+              {checkinSyncIncomplete
+                ? "Add energy and nausea levels to sync with your care team"
+                : checkinSyncStatus === "failed"
                 ? "Saved on this device. We'll sync when you're back online"
                 : checkinSyncStatus === "pending"
                 ? "Reflection saved · syncing…"
                 : "Reflection saved"}
             </Text>
-            {checkinSyncStatus === "failed" && (
+            {checkinSyncStatus === "failed" && !checkinSyncIncomplete && (
               <Pressable
                 onPress={() => { haptic(); void flushCheckinSync(); }}
                 hitSlop={8}
