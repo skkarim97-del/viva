@@ -11,6 +11,7 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 import { useApp } from "@/context/AppContext";
 import { computeHabitStats } from "@/data/insights";
 import { scoreInput } from "@/data/inputScoring";
+import { getBrandDisplayName, normalizeBrand as toBrandKey } from "@/data/medicationData";
 import { buildKeyInsights } from "@/lib/engine/trendsEngine";
 import { useColors } from "@/hooks/useColors";
 import type {
@@ -61,18 +62,10 @@ function symptomBurdenAvg(days: GLP1DailyInputs[]): number {
     : 0;
 }
 
-const KNOWN_BRANDS: Record<string, string> = {
-  mounjaro: "Mounjaro",
-  ozempic: "Ozempic",
-  wegovy: "Wegovy",
-  zepbound: "Zepbound",
-  saxenda: "Saxenda",
-  rybelsus: "Rybelsus",
-};
-
-function normalizeBrand(name: string): string {
-  const key = name.trim().toLowerCase();
-  return KNOWN_BRANDS[key] ?? name.trim().replace(/\b\w/g, c => c.toUpperCase());
+function displayBrand(name: string): string {
+  const key = toBrandKey(name);
+  if (key !== "other") return getBrandDisplayName(key);
+  return name.trim().replace(/\b\w/g, c => c.toUpperCase()) || "Unknown";
 }
 
 function weekLabel(med: MedicationProfile): string {
@@ -204,19 +197,19 @@ function buildTimeline(
       : `${med.doseValue}${med.doseUnit}`;
     events.push({
       date: fmtDate(med.startDate),
-      title: `Started ${normalizeBrand(med.medicationBrand)} · ${startDose}`,
+      title: `Started ${displayBrand(med.medicationBrand)} · ${startDose}`,
       tag: "Dose",
     });
   } else if (takenLog.length > 0) {
     events.push({
       date: fmtDate(takenLog[0].date),
-      title: `Started ${normalizeBrand(med.medicationBrand)} · ${takenLog[0].doseValue}${takenLog[0].doseUnit}`,
+      title: `Started ${displayBrand(med.medicationBrand)} · ${takenLog[0].doseValue}${takenLog[0].doseUnit}`,
       tag: "Dose",
     });
   } else {
     events.push({
       date: BUCKET_RELATIVE[med.timeOnMedicationBucket] ?? "Earlier",
-      title: `Started ${normalizeBrand(med.medicationBrand)} · ${med.doseValue}${med.doseUnit}`,
+      title: `Started ${displayBrand(med.medicationBrand)} · ${med.doseValue}${med.doseUnit}`,
       tag: "Dose",
     });
   }
@@ -435,7 +428,7 @@ export default function TrendsScreen() {
           <>
             <View style={styles.medBlock}>
               <Text style={[styles.medHeroName, { color: c.foreground }]}>
-                {normalizeBrand(med.medicationBrand)}
+                {displayBrand(med.medicationBrand)}
               </Text>
               <Text style={[styles.medHeroDose, { color: c.mutedForeground }]}>
                 {med.doseValue}{med.doseUnit} · {med.frequency}
