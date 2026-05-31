@@ -688,9 +688,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const savedProfile = await AsyncStorage.getItem(PROFILE_KEY);
       if (savedProfile) {
         const parsed = JSON.parse(savedProfile);
-        if (parsed.onboardingComplete && !parsed.medicationProfile && defaultProfile.medicationProfile) {
-          parsed.medicationProfile = defaultProfile.medicationProfile;
-        }
         setProfile(parsed);
       }
 
@@ -928,9 +925,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
 
       let savedProfileData = savedProfile ? JSON.parse(savedProfile) : defaultProfile;
-      if (savedProfileData.onboardingComplete && !savedProfileData.medicationProfile && defaultProfile.medicationProfile) {
-        savedProfileData = { ...savedProfileData, medicationProfile: defaultProfile.medicationProfile };
-      }
 
       // Nullable fields MUST be null when no wearable data exists. Using 0
       // causes downstream engines, detail views, and correlation cards to
