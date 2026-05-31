@@ -6,11 +6,19 @@ import {
   usersTable,
   patientsTable,
   apiTokensTable,
+  magicLinkTokensTable,
 } from "@workspace/db";
 import { z } from "zod";
 import { isInviteTokenExpired } from "../lib/inviteTokens";
 import { ensureDemoPlatformId } from "../lib/platforms";
 import { generateRawApiToken, hashApiToken } from "../lib/apiTokens";
+import {
+  generateMagicLinkToken,
+  hashMagicLinkToken,
+  magicLinkExpiresAt,
+  isMagicLinkExpired,
+} from "../lib/magicLink";
+import { sendMagicLinkEmail } from "../lib/emailSafe";
 import { strictAuthLimiter } from "../middlewares/rateLimit";
 import { requireAuth, type AuthedRequest } from "../middlewares/auth";
 
@@ -322,6 +330,164 @@ router.post("/login", strictAuthLimiter, async (req: Request, res: Response) => 
     });
   });
 });
+
+const magicLinkRequestSchema = z.object({
+  email: z.string().email(),
+});
+
+// POST /auth/magic-link -- request a sign-in link. Always returns { ok: true }
+// regardless of whether the email matches a doctor account so we don't leak
+// which addresses are registered (enumeration prevention).
+router.post(
+  "/magic-link",
+  strictAuthLimiter,
+  async (req: Request, res: Response) => {
+    const parsed = magicLinkRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "invalid_input" });
+      return;
+    }
+    const email = parsed.data.email.toLowerCase();
+    const [user] = await db
+      .select({ id: usersTable.id, role: usersTable.role })
+      .from(usersTable)
+      .where(eq(usersTable.email, email))
+      .limit(1);
+
+    // Respond early regardless of outcome so timing doesn't reveal existence.
+    res.json({ ok: true });
+
+    // Only issue a token for doctor accounts. Patients sign in via the mobile
+    // app with their bearer token; they have no clinic dashboard to reach.
+    if (!user || user.role !== "doctor") {
+      req.log.info(
+        { email: email.replace(/^[^@]+/, "***") },
+        "magic_link_request: no matching doctor account",
+      );
+      return;
+    }
+
+    const { raw, hash } = generateMagicLinkToken();
+    const expiresAt = magicLinkExpiresAt();
+    await db
+      .insert(magicLinkTokensTable)
+      .values({ tokenHash: hash, userId: user.id, expiresAt });
+
+    const clinicUrl =
+      process.env.VIVA_CLINIC_URL ?? "https://clinic.itsviva.com";
+    const link = `${clinicUrl}/auth/callback?token=${encodeURIComponent(raw)}`;
+
+    // Fire-and-forget -- response is already sent; email delivery failure
+    // must not affect the client.
+    void sendMagicLinkEmail(email, link);
+    req.log.info(
+      { email: email.replace(/^[^@]+/, "***") },
+      "magic_link_request: token issued",
+    );
+  },
+);
+
+const magicLinkVerifySchema = z.object({
+  token: z.string().min(1).max(300),
+});
+
+// POST /auth/magic-link/verify -- exchange a raw token for a session. The
+// token is hashed before any DB read; the raw value is never persisted or
+// logged. A successful claim sets session.mfaVerified = true so the client
+// passes requireDoctorMfa without TOTP.
+router.post(
+  "/magic-link/verify",
+  strictAuthLimiter,
+  async (req: Request, res: Response) => {
+    const parsed = magicLinkVerifySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "invalid_input" });
+      return;
+    }
+
+    const tokenHash = hashMagicLinkToken(parsed.data.token);
+    const [row] = await db
+      .select()
+      .from(magicLinkTokensTable)
+      .where(eq(magicLinkTokensTable.tokenHash, tokenHash))
+      .limit(1);
+
+    if (!row) {
+      res.status(401).json({ error: "invalid_token" });
+      return;
+    }
+    if (row.usedAt) {
+      res.status(409).json({ error: "token_already_used" });
+      return;
+    }
+    if (isMagicLinkExpired(row.expiresAt)) {
+      res.status(410).json({ error: "token_expired" });
+      return;
+    }
+
+    // Atomic single-use claim: only the first concurrent request wins.
+    const claimed = await db
+      .update(magicLinkTokensTable)
+      .set({ usedAt: new Date() })
+      .where(
+        and(
+          eq(magicLinkTokensTable.tokenHash, tokenHash),
+          isNull(magicLinkTokensTable.usedAt),
+        ),
+      )
+      .returning({ id: magicLinkTokensTable.id });
+
+    if (claimed.length === 0) {
+      res.status(409).json({ error: "token_already_used" });
+      return;
+    }
+
+    const [user] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.id, row.userId))
+      .limit(1);
+
+    if (!user) {
+      res.status(500).json({ error: "user_not_found" });
+      return;
+    }
+
+    req.session.regenerate((regenErr) => {
+      if (regenErr) {
+        req.log.error({ err: regenErr }, "magic_link_verify: session regenerate failed");
+        res.status(500).json({ error: "session_regenerate_failed" });
+        return;
+      }
+      req.session.userId = user.id;
+      req.session.role = user.role;
+      // Magic link is equivalent to a second-factor OTP: mark the session
+      // as MFA-verified so requireDoctorMfa gates pass without TOTP.
+      req.session.mfaVerified = true;
+      req.session.mfaVerifiedAt = Date.now();
+      req.session.save((err) => {
+        if (err) {
+          req.log.error({ err }, "magic_link_verify: session save failed");
+          res.status(500).json({ error: "session_save_failed" });
+          return;
+        }
+        req.log.info(
+          { userId: user.id },
+          "magic_link_verify: session established",
+        );
+        const needsOnboarding = user.role === "doctor" ? !user.clinicName : false;
+        res.json({
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          clinicName: user.clinicName,
+          needsOnboarding,
+        });
+      });
+    });
+  },
+);
 
 router.post("/logout", (req: Request, res: Response) => {
   req.session.destroy(() => {

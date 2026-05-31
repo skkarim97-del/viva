@@ -402,6 +402,10 @@ export const api = {
     request<Me>("POST", "/auth/signup", { name, email, password }),
   logout: () => request<{ ok: true }>("POST", "/auth/logout"),
   me: () => request<Me>("GET", "/auth/me"),
+  requestMagicLink: (email: string) =>
+    request<{ ok: true }>("POST", "/auth/magic-link", { email }),
+  verifyMagicLink: (token: string) =>
+    request<Me>("POST", "/auth/magic-link/verify", { token }),
 
   // doctor onboarding
   setClinic: (clinicName: string) =>
