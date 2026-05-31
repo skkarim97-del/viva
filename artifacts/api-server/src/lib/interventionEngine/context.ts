@@ -98,6 +98,18 @@ function ymd(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+// Check-ins are stored using the patient's local date (set by the app).
+// The server runs UTC; on US West Coast at 11 PM the UTC date is already
+// the next day, so a pure ymd(now) "today" mismatches the patient's date
+// and falsely counts today as a missed check-in. Apply a fixed UTC-8 offset
+// (Pacific Standard, the westernmost continental US pilot timezone) so the
+// server's "today" always stays on or behind the patient's local date.
+// This is intentionally conservative: at worst we fetch one extra day of data.
+const PILOT_TZ_OFFSET_MS = -8 * 60 * 60 * 1000; // UTC-8
+function ymdPilotTz(d: Date): string {
+  return new Date(d.getTime() + PILOT_TZ_OFFSET_MS).toISOString().slice(0, 10);
+}
+
 function avg(nums: ReadonlyArray<number>): number | null {
   if (nums.length === 0) return null;
   return nums.reduce((s, n) => s + n, 0) / nums.length;
@@ -109,13 +121,13 @@ export async function buildPatientInterventionContext(
   patientUserId: number,
 ): Promise<PatientInterventionContext> {
   const now = new Date();
-  const todayStr = ymd(now);
+  const todayStr = ymdPilotTz(now);
   const sevenDaysAgo = new Date(now);
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const sevenDaysAgoStr = ymd(sevenDaysAgo);
+  const sevenDaysAgoStr = ymdPilotTz(sevenDaysAgo);
   const fourteenDaysAgo = new Date(now);
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
-  const fourteenDaysAgoStr = ymd(fourteenDaysAgo);
+  const fourteenDaysAgoStr = ymdPilotTz(fourteenDaysAgo);
 
   // Fan out reads in parallel. Every query is independent -- no
   // cross-table joins needed in this snapshot.
@@ -269,12 +281,14 @@ export async function buildPatientInterventionContext(
   ).length;
 
   // Missed check-ins: 7 expected dates - distinct dates seen.
+  // Use ymdPilotTz so the generated dates match the patient-local dates
+  // stored in the check-in rows (check-ins use the device's local date).
   const seenDates = new Set(checkins7.map((c) => c.date));
   let missedCheckins = 0;
   for (let i = 0; i < 7; i++) {
     const d = new Date(now);
     d.setDate(d.getDate() - i);
-    if (!seenDates.has(ymd(d))) missedCheckins++;
+    if (!seenDates.has(ymdPilotTz(d))) missedCheckins++;
   }
 
   // Steps: avg over last 7 days vs 14-day baseline.

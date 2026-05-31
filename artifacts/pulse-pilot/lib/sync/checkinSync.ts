@@ -288,11 +288,23 @@ export const checkinSync = {
           await sessionApi.submitCheckin(payload);
           delete s.pendingCheckins[date];
         } catch (e) {
+          if (e instanceof HttpError && e.status === 401) {
+            // Token expired mid-flush. Clear the cached token so the
+            // next request doesn't repeat the 401. Keep every pending
+            // check-in in the queue; they drain on the next flush after
+            // the patient re-authenticates.
+            await sessionApi.setStoredToken(null);
+            s.status = "pending";
+            s.lastError = "auth_expired_mid_flush";
+            await persist();
+            notify(s);
+            return "pending";
+          }
           if (isRetriable(e)) {
             anyRetriable = true;
             lastErr = (e as Error)?.message ?? "unknown";
           } else {
-            // Non-retriable (400 invalid input, 401 auth dead, ...).
+            // Non-retriable (400 invalid input, ...).
             // Drop it so the queue doesn't poison subsequent flushes.
             // The local AsyncStorage check-in history still holds the
             // patient's data; this only means "stop trying to sync
