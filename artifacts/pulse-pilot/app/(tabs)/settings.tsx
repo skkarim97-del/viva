@@ -22,6 +22,7 @@ import {
   rescheduleReminders,
   requestPermission,
   setRemindersEnabled,
+  REMINDER_TIMES,
   type PermissionState,
 } from "@/lib/reminders";
 import { useEffect } from "react";
@@ -666,7 +667,7 @@ export default function SettingsScreen() {
           {LEGAL.CORE_CLINICAL_RESPONSIBILITY}
         </Text>
       </View>
-      <View style={{ height: 24 }} />
+      <View style={{ height: 56 }} />
       <WeightLogModal
         visible={weightLogOpen}
         daysSinceLast={serverWeight.daysSinceLast}
@@ -778,7 +779,7 @@ function RemindersSection() {
               Daily check-in reminders
             </Text>
             <Text style={{ fontSize: 13, fontFamily: "Montserrat_400Regular", color: c.mutedForeground, marginTop: 2 }}>
-              12:00 PM and 7:00 PM
+              {REMINDER_TIMES.map(t => t.label).join(" and ")}
             </Text>
           </View>
           <View
@@ -880,8 +881,8 @@ function CareTeamReviewSection() {
             { opacity: pressed || busy ? 0.7 : 1 },
           ]}
         >
-          <View style={[styles.settingIcon, { backgroundColor: c.accent + "10" }]}>
-            <Feather name="life-buoy" size={16} color={c.accent} />
+          <View style={[styles.settingIcon, { backgroundColor: c.warning + "18" }]}>
+            <Feather name="life-buoy" size={16} color={c.warning} />
           </View>
           <Text style={[styles.settingLabel, { color: c.foreground }]}>
             {busy ? "Sending..." : "Request care-team review"}

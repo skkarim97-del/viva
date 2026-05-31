@@ -1,8 +1,8 @@
 // Local-only daily check-in reminders.
 //
 // Patient app posts at most two reminders per day:
-//   12:00 PM  -- "Log your daily check-in"
-//    7:00 PM  -- "Don't forget your check-in today"
+//    9:00 AM  -- "Time for your Viva check-in"
+//    6:00 PM  -- "Still need today's check-in?" (only if not yet checked in)
 //
 // The product rule is: don't fire either reminder if the patient has
 // already submitted today's check-in. We achieve that with one-off
@@ -31,9 +31,21 @@ const TAG = "viva-reminder";
 const STORAGE_KEY = "viva.reminders.enabled";
 const FORWARD_DAYS = 7;
 
-export const REMINDER_TIMES: { hour: number; minute: number; label: string; body: string }[] = [
-  { hour: 12, minute: 0, label: "12:00 PM", body: "Log your daily check-in" },
-  { hour: 19, minute: 0, label: "7:00 PM", body: "Don't forget your check-in today" },
+export const REMINDER_TIMES: { hour: number; minute: number; label: string; title: string; body: string }[] = [
+  {
+    hour: 9,
+    minute: 0,
+    label: "9:00 AM",
+    title: "Time for your Viva check-in",
+    body: "Take 30 seconds to update today's symptoms and personalize your plan.",
+  },
+  {
+    hour: 18,
+    minute: 0,
+    label: "6:00 PM",
+    title: "Still need today's check-in?",
+    body: "Complete your Viva check-in so your care team has the latest context.",
+  },
 ];
 
 // True on platforms where local notifications are actually supported.
@@ -190,7 +202,7 @@ export async function rescheduleReminders(input: RescheduleInput): Promise<numbe
       try {
         await Notifications.scheduleNotificationAsync({
           content: {
-            title: "Viva",
+            title: t.title,
             body: t.body,
             data: { tag: TAG, slot: `${t.hour}:${t.minute}` },
           },
