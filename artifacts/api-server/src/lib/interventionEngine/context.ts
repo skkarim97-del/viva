@@ -12,7 +12,7 @@
 // the trigger engine and templates have catchalls for the unknown
 // case.
 
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, sql } from "drizzle-orm";
 import {
   db,
   patientCheckinsTable,
@@ -21,12 +21,14 @@ import {
   patientTreatmentLogsTable,
   patientsTable,
   patientInterventionsTable,
+  analyticsEventsTable,
 } from "@workspace/db";
 import type {
   PatientInterventionFeedbackResult,
   PatientInterventionTriggerType,
 } from "@workspace/db";
 import { ACTIVE_INTERVENTION_STATUSES } from "../../treatment-intelligence/interventions/interventionState";
+import { ymdInTz, ymdPilotFallback } from "./tzUtils";
 
 export interface PatientInterventionContext {
   patientUserId: number;
@@ -98,17 +100,9 @@ function ymd(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-// Check-ins are stored using the patient's local date (set by the app).
-// The server runs UTC; on US West Coast at 11 PM the UTC date is already
-// the next day, so a pure ymd(now) "today" mismatches the patient's date
-// and falsely counts today as a missed check-in. Apply a fixed UTC-8 offset
-// (Pacific Standard, the westernmost continental US pilot timezone) so the
-// server's "today" always stays on or behind the patient's local date.
-// This is intentionally conservative: at worst we fetch one extra day of data.
-const PILOT_TZ_OFFSET_MS = -8 * 60 * 60 * 1000; // UTC-8
-function ymdPilotTz(d: Date): string {
-  return new Date(d.getTime() + PILOT_TZ_OFFSET_MS).toISOString().slice(0, 10);
-}
+// ymdInTz and the UTC-8 fallback live in tzUtils.ts (no DB imports) so
+// they can be unit-tested without bootstrapping a database connection.
+const ymdPilotTz = ymdPilotFallback;
 
 function avg(nums: ReadonlyArray<number>): number | null {
   if (nums.length === 0) return null;
@@ -120,14 +114,50 @@ function avg(nums: ReadonlyArray<number>): number | null {
 export async function buildPatientInterventionContext(
   patientUserId: number,
 ): Promise<PatientInterventionContext> {
+  // Resolve the patient's IANA timezone from their most recent analytics event.
+  // analytics_events.timezone is set by the mobile client on every event via
+  // Intl.DateTimeFormat().resolvedOptions().timeZone, so it reflects the
+  // device's actual local timezone at interaction time.
+  //
+  // The byUserCreated index (userType, userId, createdAt) makes this a fast
+  // point query. Falls back to ymdPilotTz (America/Los_Angeles) when no
+  // timezone has been recorded yet (new patient, privacy-restricted device).
+  const tzRows = await db
+    .select({ timezone: analyticsEventsTable.timezone })
+    .from(analyticsEventsTable)
+    .where(
+      and(
+        eq(analyticsEventsTable.userType, "patient"),
+        eq(analyticsEventsTable.userId, patientUserId),
+        isNotNull(analyticsEventsTable.timezone),
+      ),
+    )
+    .orderBy(desc(analyticsEventsTable.createdAt))
+    .limit(1);
+  const patientTz = tzRows[0]?.timezone ?? null;
+
+  // ymdLocal converts a UTC Date to YYYY-MM-DD in the patient's local timezone.
+  // Check-ins are stored using the device's local date, so all date boundary
+  // logic here must use the same frame of reference.
+  const ymdLocal = (d: Date): string => {
+    if (patientTz) {
+      try {
+        return ymdInTz(d, patientTz);
+      } catch {
+        // Invalid IANA string in analytics row — fall back silently.
+      }
+    }
+    return ymdPilotTz(d);
+  };
+
   const now = new Date();
-  const todayStr = ymdPilotTz(now);
+  const todayStr = ymdLocal(now);
   const sevenDaysAgo = new Date(now);
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const sevenDaysAgoStr = ymdPilotTz(sevenDaysAgo);
+  const sevenDaysAgoStr = ymdLocal(sevenDaysAgo);
   const fourteenDaysAgo = new Date(now);
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
-  const fourteenDaysAgoStr = ymdPilotTz(fourteenDaysAgo);
+  const fourteenDaysAgoStr = ymdLocal(fourteenDaysAgo);
 
   // Fan out reads in parallel. Every query is independent -- no
   // cross-table joins needed in this snapshot.
@@ -281,14 +311,14 @@ export async function buildPatientInterventionContext(
   ).length;
 
   // Missed check-ins: 7 expected dates - distinct dates seen.
-  // Use ymdPilotTz so the generated dates match the patient-local dates
+  // Use ymdLocal so the generated dates match the patient-local dates
   // stored in the check-in rows (check-ins use the device's local date).
   const seenDates = new Set(checkins7.map((c) => c.date));
   let missedCheckins = 0;
   for (let i = 0; i < 7; i++) {
     const d = new Date(now);
     d.setDate(d.getDate() - i);
-    if (!seenDates.has(ymdPilotTz(d))) missedCheckins++;
+    if (!seenDates.has(ymdLocal(d))) missedCheckins++;
   }
 
   // Steps: avg over last 7 days vs 14-day baseline.
