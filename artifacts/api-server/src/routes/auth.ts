@@ -296,6 +296,15 @@ router.post("/login", strictAuthLimiter, async (req: Request, res: Response) => 
     }
     req.session.userId = user.id;
     req.session.role = user.role;
+    // Password login counts as step-up for doctors who have not yet
+    // enrolled TOTP — same policy as the magic link flow (line 472).
+    // A doctor with no enrolled secret has nothing to verify; blocking
+    // them on MfaEnrollPage before the dashboard is reachable makes the
+    // demo/onboarding flow unusable.
+    if (user.role === "doctor" && !user.mfaEnrolledAt) {
+      req.session.mfaVerified = true;
+      req.session.mfaVerifiedAt = Date.now();
+    }
     // Wait for the session row to land in Postgres before responding,
     // otherwise the next request can race ahead of connect-pg-simple's
     // async write and look unauthenticated.
