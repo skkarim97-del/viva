@@ -667,7 +667,7 @@ export default function SettingsScreen() {
           {LEGAL.CORE_CLINICAL_RESPONSIBILITY}
         </Text>
       </View>
-      <View style={{ height: 56 }} />
+      <View style={{ height: 88 }} />
       <WeightLogModal
         visible={weightLogOpen}
         daysSinceLast={serverWeight.daysSinceLast}

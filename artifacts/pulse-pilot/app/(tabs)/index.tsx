@@ -1270,9 +1270,7 @@ export default function DashboardScreen() {
       >
         <ScreenHeader />
 
-        <Text style={[styles.tagline, { color: c.mutedForeground }]}>{taglineText}</Text>
-
-        <Animated.View style={{ opacity: surroundingOpacity }}>
+        <Animated.View style={{ opacity: surroundingOpacity, marginTop: 16 }}>
         <View style={[styles.statusCard, { backgroundColor: c.card }]}>
           {streakDays > 0 && (
             <View style={styles.streakRow}>
@@ -1705,8 +1703,9 @@ export default function DashboardScreen() {
           {planActions.map((action) => {
             const meta = ACTION_META[action.category];
             const giOverride = patientCtx.symptoms.hasElevatedGI ? GI_OVERRIDES[action.category as ActionCategory] : undefined;
-            const displayTitle = giOverride?.title ?? action.text;
-            const displaySubtitle = giOverride?.subtitle;
+            const userHasChosen = action.recommended != null && action.text !== action.recommended;
+            const displayTitle = userHasChosen ? action.text : (giOverride?.title ?? action.text);
+            const displaySubtitle = userHasChosen ? undefined : giOverride?.subtitle;
             return (
               <View key={action.id} style={[
                 styles.actionRow,
