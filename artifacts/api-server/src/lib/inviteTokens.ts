@@ -12,15 +12,18 @@
 export const INVITE_TOKEN_TTL_DAYS = 14;
 const INVITE_TOKEN_TTL_MS = INVITE_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000;
 
-// Expired iff a stamp exists AND it is older than the TTL window.
-// `null` issuedAt is intentionally treated as "no expiry" -- it
-// represents legacy rows that pre-date the issuedAt column. We do
-// not retroactively expire those; a follow-up backfill can stamp
-// them once the column has been live for a release.
+// Cutoff date after which legacy rows (null issuedAt) are treated as
+// expired. Rows created before the issuedAt column was added pre-date
+// the pilot and should no longer be claimable.
+const LEGACY_TOKEN_CUTOFF = new Date("2025-01-01T00:00:00Z");
+
+// Expired iff the token is older than the TTL window. Legacy rows with
+// a null issuedAt are treated as expired once we are past LEGACY_TOKEN_CUTOFF
+// so that pre-pilot invite URLs cannot be used to claim accounts.
 export function isInviteTokenExpired(
   issuedAt: Date | null | undefined,
   now: Date = new Date(),
 ): boolean {
-  if (!issuedAt) return false;
+  if (!issuedAt) return now > LEGACY_TOKEN_CUTOFF;
   return now.getTime() - issuedAt.getTime() > INVITE_TOKEN_TTL_MS;
 }

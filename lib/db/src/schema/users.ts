@@ -41,6 +41,12 @@ export const usersTable = pgTable("users", {
   mfaEnrolledAt: timestamp("mfa_enrolled_at"),
   mfaRecoveryCodesHashed: text("mfa_recovery_codes_hashed").array(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  // Soft-delete / account suspension. Non-null means the account is
+  // deactivated and must be rejected at every auth gate. The bearer
+  // token path joins this column; the session path re-queries it on
+  // every authenticated request so revocation takes effect immediately
+  // without waiting for the session to expire.
+  deactivatedAt: timestamp("deactivated_at"),
 });
 
 export const insertUserSchema = createInsertSchema(usersTable).omit({

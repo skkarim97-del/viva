@@ -28,6 +28,10 @@ router.use(
     getPatientId: (req) => (req as AuthedRequest).auth?.userId ?? null,
   }),
 );
+// Backstop: every route on this router requires authentication. Individual
+// routes add requirePatient or requireAuth as appropriate, but this
+// ensures an uncovered route path can never serve unauthenticated requests.
+router.use(requireAuth);
 
 // ----- POST /interventions/log -------------------------------------
 // Patient client batches the interventions it has rendered (Today,

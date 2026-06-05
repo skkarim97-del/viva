@@ -51,3 +51,8 @@ Thumbs.db
 # Local AWS RDS exports (may contain PHI / patient data / auth+session data;
 # never commit or deploy)
 backups/
+
+# Environment / secrets (never commit .env files)
+.env
+.env.*
+!.env.*.template

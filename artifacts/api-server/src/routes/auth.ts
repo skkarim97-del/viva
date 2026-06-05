@@ -331,6 +331,7 @@ router.post("/login", strictAuthLimiter, async (req: Request, res: Response) => 
       // (deleted, archived, etc.) back through the wizard.
       const needsOnboarding =
         user.role === "doctor" ? !user.clinicName : false;
+      req.log.info({ userId: user.id, role: user.role }, "auth_login");
       // Always issue a bearer token. The dashboard ignores it (uses
       // its session cookie); the mobile patient app stores it in
       // AsyncStorage so it can authenticate subsequent requests.
@@ -504,8 +505,8 @@ router.post(
           return;
         }
         req.log.info(
-          { userId: user.id },
-          "magic_link_verify: session established",
+          { userId: user.id, role: user.role },
+          "auth_magic_link_verify",
         );
         const needsOnboarding = user.role === "doctor" ? !user.clinicName : false;
         res.json({
@@ -522,7 +523,9 @@ router.post(
 );
 
 router.post("/logout", (req: Request, res: Response) => {
+  const userId = req.session.userId;
   req.session.destroy(() => {
+    if (userId) req.log.info({ userId }, "auth_logout");
     res.clearCookie("connect.sid");
     res.json({ ok: true });
   });

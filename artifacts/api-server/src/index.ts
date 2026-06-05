@@ -67,6 +67,19 @@ function assertProductionSafety(): void {
     );
     process.exit(1);
   }
+
+  // Non-blocking: warn if RDS TLS certificate pinning is not configured.
+  // The DB library falls back to sslmode=no-verify when the CA bundle is
+  // absent, meaning the connection is encrypted but the server certificate
+  // is not verified. This is acceptable for the pilot but should be
+  // resolved before general availability.
+  if (process.env.AWS_DATABASE_URL && !process.env.AWS_DB_SSL_CA_PATH) {
+    logger.warn(
+      "AWS_DATABASE_URL is set but AWS_DB_SSL_CA_PATH is missing — " +
+      "connecting with sslmode=no-verify (server certificate not verified); " +
+      "set AWS_DB_SSL_CA_PATH to pin the RDS CA bundle.",
+    );
+  }
 }
 
 assertProductionSafety();
