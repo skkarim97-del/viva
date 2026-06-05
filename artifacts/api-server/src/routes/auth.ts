@@ -273,7 +273,15 @@ router.post("/login", strictAuthLimiter, async (req: Request, res: Response) => 
   }
   const { email, password } = parsed.data;
   const [user] = await db
-    .select()
+    .select({
+      id: usersTable.id,
+      email: usersTable.email,
+      name: usersTable.name,
+      role: usersTable.role,
+      clinicName: usersTable.clinicName,
+      passwordHash: usersTable.passwordHash,
+      mfaEnrolledAt: usersTable.mfaEnrolledAt,
+    })
     .from(usersTable)
     .where(eq(usersTable.email, email.toLowerCase()))
     .limit(1);
@@ -455,7 +463,14 @@ router.post(
     }
 
     const [user] = await db
-      .select()
+      .select({
+        id: usersTable.id,
+        email: usersTable.email,
+        name: usersTable.name,
+        role: usersTable.role,
+        clinicName: usersTable.clinicName,
+        mfaEnrolledAt: usersTable.mfaEnrolledAt,
+      })
       .from(usersTable)
       .where(eq(usersTable.id, row.userId))
       .limit(1);
@@ -525,7 +540,13 @@ router.post("/logout", (req: Request, res: Response) => {
 router.get("/me", requireAuth, async (req: Request, res: Response) => {
   const auth = (req as AuthedRequest).auth;
   const [user] = await db
-    .select()
+    .select({
+      id: usersTable.id,
+      email: usersTable.email,
+      name: usersTable.name,
+      role: usersTable.role,
+      clinicName: usersTable.clinicName,
+    })
     .from(usersTable)
     .where(eq(usersTable.id, auth.userId))
     .limit(1);

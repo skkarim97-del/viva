@@ -273,8 +273,6 @@ ${HEAD_LINKS}
     </p>
   </main>
   <script>
-    try { localStorage.setItem("viva.invite.token", ${JSON.stringify(token)}); } catch (e) {}
-
     var fired = sessionStorage.getItem("viva.invite.fired") === "1";
     if (!fired) {
       sessionStorage.setItem("viva.invite.fired", "1");

@@ -614,11 +614,7 @@ const INVITE_TTL_DAYS = 14;
 
 function PendingCard({ p }: { p: PatientRow }) {
   const qc = useQueryClient();
-  const [link, setLink] = useState<string | null>(
-    p.activationToken
-      ? `${window.location.origin}/invite/${p.activationToken}`
-      : null,
-  );
+  const [link, setLink] = useState<string | null>(p.inviteUrl ?? null);
   const [copied, setCopied] = useState(false);
   const [smsCopied, setSmsCopied] = useState(false);
   const resend = useMutation({
