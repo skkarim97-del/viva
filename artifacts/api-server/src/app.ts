@@ -56,6 +56,13 @@ const allowedOriginList = (process.env.ALLOWED_ORIGINS || "")
   .map((s) => s.trim().replace(/\/$/, ""))
   .filter(Boolean);
 const allowedOriginSet = new Set(allowedOriginList);
+if (process.env.NODE_ENV === "production" && allowedOriginSet.size === 0) {
+  throw new Error(
+    "ALLOWED_ORIGINS must be set in production. " +
+      "Set it to a comma-separated list of approved browser origins " +
+      "(e.g. https://dashboard.itsviva.com,https://viva-ai.replit.app).",
+  );
+}
 const corsOriginCheck: CorsOptions["origin"] =
   allowedOriginSet.size === 0
     ? true

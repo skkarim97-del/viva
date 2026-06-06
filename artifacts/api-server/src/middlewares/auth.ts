@@ -30,18 +30,33 @@ export async function requireAuth(
     // (see lib/apiTokens.ts). We hash the incoming value before the
     // lookup so the raw token never leaves the request handler.
     const tokenHash = hashApiToken(m[1]!);
+    const now = new Date();
+    const TOKEN_TTL_MS = 90 * 24 * 60 * 60 * 1000;
     const [row] = await db
-      .select()
+      .select({
+        token: apiTokensTable.token,
+        userId: apiTokensTable.userId,
+        role: apiTokensTable.role,
+        lastUsedAt: apiTokensTable.lastUsedAt,
+        deactivatedAt: usersTable.deactivatedAt,
+      })
       .from(apiTokensTable)
+      .innerJoin(usersTable, eq(usersTable.id, apiTokensTable.userId))
       .where(eq(apiTokensTable.token, tokenHash))
       .limit(1);
     if (row) {
+      if (row.deactivatedAt) {
+        res.status(401).json({ error: "account_deactivated" });
+        return;
+      }
+      if (now.getTime() - row.lastUsedAt.getTime() > TOKEN_TTL_MS) {
+        res.status(401).json({ error: "token_expired" });
+        return;
+      }
       (req as AuthedRequest).auth = { userId: row.userId, role: row.role };
-      // Best-effort touch so an idle audit could later expire stale tokens.
-      // row.token is already the hash, so this update keys on the same
-      // value we just looked up by.
+      // Slide the 90-day window on every successful use.
       db.update(apiTokensTable)
-        .set({ lastUsedAt: new Date() })
+        .set({ lastUsedAt: now })
         .where(eq(apiTokensTable.token, row.token))
         .catch(() => {});
       next();
@@ -57,6 +72,18 @@ export async function requireAuth(
   const userId = req.session.userId;
   const role = req.session.role;
   if (userId && role) {
+    // Re-query deactivated_at on every session-authenticated request so
+    // account suspension takes effect immediately without waiting for
+    // the session to expire.
+    const [user] = await db
+      .select({ deactivatedAt: usersTable.deactivatedAt })
+      .from(usersTable)
+      .where(eq(usersTable.id, userId))
+      .limit(1);
+    if (user?.deactivatedAt) {
+      res.status(401).json({ error: "account_deactivated" });
+      return;
+    }
     (req as AuthedRequest).auth = { userId, role };
     next();
     return;

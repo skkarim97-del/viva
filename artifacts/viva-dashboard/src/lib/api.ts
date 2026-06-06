@@ -55,9 +55,9 @@ export interface PatientRow {
   // While pending, riskScore/signals are placeholders and the queue
   // routes the row into the dedicated "Pending activation" bucket.
   pending: boolean;
-  // Single-use activation token for pending patients so the dashboard
-  // can render a copyable invite link inline. Null after activation.
-  activationToken: string | null;
+  // Server-constructed invite URL for pending patients so the dashboard
+  // can render a copyable link inline. Null after activation.
+  inviteUrl: string | null;
   // Soft outreach signal: activated patient (active or unknown status)
   // with no check-in in 12+ days. Always false for pending or stopped.
   // Does not affect risk score or treatment status.
