@@ -1212,8 +1212,12 @@ export function generateWeeklyPlan(): WeeklyPlan {
 
   return {
     weekStartDate: monday.toISOString().split("T")[0],
-    weekSummary: "Your plan this week focuses on consistent protein, steady hydration, and two strength sessions to support muscle retention on treatment. Recovery days are built in to keep the week sustainable.",
+    // weekSummary is intentionally empty here — the dynamic weekLearningLine
+    // in plan.tsx is the primary summary for GLP-1 patients. AI-generated
+    // plans (wearable users) overwrite this field with personalized content.
+    weekSummary: "",
     days: planDays,
-    adjustmentNote: "If side effects are heavier after a dose change, swap any strength day for a gentle walk and prioritize rest and hydration instead.",
+    // adjustmentNote omitted — dose-change context is covered by
+    // weekLearningLine via buildWeekSummaryLearningLine.
   };
 }

@@ -147,12 +147,15 @@ export default function PlanScreen({ isModal = false, onClose }: { isModal?: boo
 
         <View style={[styles.summaryCard, { backgroundColor: c.card, marginTop: isModal ? 4 : 18 }]}>
           <Text style={[styles.summaryHeader, { color: c.foreground }]}>This Week</Text>
-          {weeklyPlan.weekSummary.split("\n\n").map((line, i) => (
-            <Text key={i} style={[styles.summaryText, { color: c.foreground }, i > 0 && { marginTop: 10 }]}>{line}</Text>
-          ))}
-          {weekLearningLine && (
-            <Text style={[styles.summaryText, { color: c.mutedForeground, marginTop: 10, fontStyle: "italic" }]}>
-              {weekLearningLine}
+          {weekLearningLine ? (
+            <Text style={[styles.summaryText, { color: c.foreground }]}>{weekLearningLine}</Text>
+          ) : weeklyPlan.weekSummary ? (
+            weeklyPlan.weekSummary.split("\n\n").map((line, i) => (
+              <Text key={i} style={[styles.summaryText, { color: c.foreground }, i > 0 && { marginTop: 10 }]}>{line}</Text>
+            ))
+          ) : (
+            <Text style={[styles.summaryText, { color: c.mutedForeground }]}>
+              Complete a few check-ins so Viva can personalize your weekly support plan.
             </Text>
           )}
         </View>
